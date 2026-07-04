@@ -10,6 +10,20 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: me
+    description: Current user
+  - name: plans
+    description: Subscription plans
+  - name: payments
+    description: Payments
+  - name: subscriptions
+    description: Subscriptions
+  - name: vpn-keys
+    description: VPN keys
+  - name: vpn-nodes
+    description: VPN nodes
+  - name: admin
+    description: Admin operations
 paths:
   /healthz:
     get:
@@ -24,6 +38,437 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /me:
+    get:
+      operationId: getMe
+      tags: [me]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [plans]
+      summary: List subscription plans
+      responses:
+        "200":
+          description: List of plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+
+  /payment-settings:
+    get:
+      operationId: getPaymentSettings
+      tags: [payments]
+      summary: Get payment instructions (SBP details)
+      responses:
+        "200":
+          description: Payment settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentSettings"
+
+  /vpn-nodes:
+    get:
+      operationId: listVpnNodes
+      tags: [vpn-nodes]
+      summary: List available VPN nodes/locations
+      responses:
+        "200":
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VpnNode"
+
+  /subscriptions/me:
+    get:
+      operationId: listMySubscriptions
+      tags: [subscriptions]
+      summary: List current user's subscriptions
+      responses:
+        "200":
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscription"
+
+  /subscriptions:
+    post:
+      operationId: createSubscription
+      tags: [subscriptions]
+      summary: Start a subscription checkout (creates pending subscription + payment)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionInput"
+      responses:
+        "201":
+          description: Created checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResult"
+
+  /payments/me:
+    get:
+      operationId: listMyPayments
+      tags: [payments]
+      summary: List current user's payments
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+  /payments/{paymentId}/note:
+    patch:
+      operationId: updatePaymentNote
+      tags: [payments]
+      summary: Attach a transfer note/reference to a pending payment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentNoteUpdate"
+      responses:
+        "200":
+          description: Updated payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /vpn-keys/me:
+    get:
+      operationId: listMyVpnKeys
+      tags: [vpn-keys]
+      summary: List current user's VPN keys
+      responses:
+        "200":
+          description: List of VPN keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VpnKey"
+
+  /vpn-keys:
+    post:
+      operationId: createVpnKey
+      tags: [vpn-keys]
+      summary: Issue a new VPN key on a node (requires an active subscription)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VpnKeyInput"
+      responses:
+        "201":
+          description: Issued VPN key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnKey"
+
+  /vpn-keys/{keyId}:
+    delete:
+      operationId: revokeVpnKey
+      tags: [vpn-keys]
+      summary: Revoke a VPN key
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Revoked
+
+  /admin/dashboard/summary:
+    get:
+      operationId: getAdminDashboardSummary
+      tags: [admin]
+      summary: Admin dashboard summary metrics
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /admin/plans:
+    post:
+      operationId: createPlan
+      tags: [admin]
+      summary: Create a plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanInput"
+      responses:
+        "201":
+          description: Created plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /admin/plans/{planId}:
+    patch:
+      operationId: updatePlan
+      tags: [admin]
+      summary: Update a plan
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanUpdate"
+      responses:
+        "200":
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+    delete:
+      operationId: deletePlan
+      tags: [admin]
+      summary: Delete a plan
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/payment-settings:
+    patch:
+      operationId: updatePaymentSettings
+      tags: [admin]
+      summary: Update SBP payment instructions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentSettings"
+
+  /admin/payments:
+    get:
+      operationId: listAdminPayments
+      tags: [admin]
+      summary: List payments (optionally filtered by status)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PaymentStatus"
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminPayment"
+
+  /admin/payments/{paymentId}/confirm:
+    post:
+      operationId: confirmPayment
+      tags: [admin]
+      summary: Confirm a payment and activate the subscription
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Confirmed payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /admin/payments/{paymentId}/reject:
+    post:
+      operationId: rejectPayment
+      tags: [admin]
+      summary: Reject a payment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentReject"
+      responses:
+        "200":
+          description: Rejected payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /admin/vpn-nodes:
+    post:
+      operationId: createVpnNode
+      tags: [admin]
+      summary: Register a VPN node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VpnNodeInput"
+      responses:
+        "201":
+          description: Created node
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNode"
+
+  /admin/vpn-nodes/{nodeId}:
+    patch:
+      operationId: updateVpnNode
+      tags: [admin]
+      summary: Update a VPN node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VpnNodeUpdate"
+      responses:
+        "200":
+          description: Updated node
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNode"
+    delete:
+      operationId: deleteVpnNode
+      tags: [admin]
+      summary: Delete a VPN node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{userId}/role:
+    patch:
+      operationId: updateUserRole
+      tags: [admin]
+      summary: Update a user's role
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRoleUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +479,248 @@ components:
       required:
         - status
 
+    UserRole:
+      type: string
+      enum: [user, admin]
+
+    Me:
+      type: object
+      required: [id, email, role, hasActiveSubscription]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        name: { type: ["string", "null"] }
+        role:
+          $ref: "#/components/schemas/UserRole"
+        hasActiveSubscription: { type: boolean }
+        currentPlanName: { type: ["string", "null"] }
+        subscriptionEndsAt: { type: ["string", "null"], format: date-time }
+
+    Plan:
+      type: object
+      required: [id, name, priceRub, durationDays, isActive]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        priceRub: { type: integer }
+        durationDays: { type: integer }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    PlanInput:
+      type: object
+      required: [name, priceRub, durationDays]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        priceRub: { type: integer, minimum: 0 }
+        durationDays: { type: integer, minimum: 1 }
+        isActive: { type: boolean }
+
+    PlanUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        priceRub: { type: integer, minimum: 0 }
+        durationDays: { type: integer, minimum: 1 }
+        isActive: { type: boolean }
+
+    PaymentSettings:
+      type: object
+      required: [sbpPhone, sbpBank, sbpRecipientName]
+      properties:
+        sbpPhone: { type: string }
+        sbpBank: { type: string }
+        sbpRecipientName: { type: string }
+        instructions: { type: ["string", "null"] }
+        yookassaEnabled: { type: boolean }
+
+    PaymentSettingsUpdate:
+      type: object
+      properties:
+        sbpPhone: { type: string }
+        sbpBank: { type: string }
+        sbpRecipientName: { type: string }
+        instructions: { type: string }
+        yookassaEnabled: { type: boolean }
+
+    SubscriptionStatus:
+      type: string
+      enum: [pending_payment, active, expired, cancelled, rejected]
+
+    Subscription:
+      type: object
+      required: [id, planId, plan, status, createdAt]
+      properties:
+        id: { type: integer }
+        planId: { type: integer }
+        plan:
+          $ref: "#/components/schemas/Plan"
+        status:
+          $ref: "#/components/schemas/SubscriptionStatus"
+        startsAt: { type: ["string", "null"], format: date-time }
+        endsAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    SubscriptionInput:
+      type: object
+      required: [planId]
+      properties:
+        planId: { type: integer }
+        provider:
+          $ref: "#/components/schemas/PaymentProvider"
+
+    PaymentProvider:
+      type: string
+      enum: [manual_sbp, yookassa]
+
+    PaymentStatus:
+      type: string
+      enum: [pending, confirmed, rejected]
+
+    Payment:
+      type: object
+      required: [id, subscriptionId, provider, amountRub, status, reference, createdAt]
+      properties:
+        id: { type: integer }
+        subscriptionId: { type: integer }
+        provider:
+          $ref: "#/components/schemas/PaymentProvider"
+        amountRub: { type: integer }
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        reference: { type: string }
+        userNote: { type: ["string", "null"] }
+        rejectionReason: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        confirmedAt: { type: ["string", "null"], format: date-time }
+
+    AdminPayment:
+      type: object
+      required: [id, subscriptionId, userEmail, planName, provider, amountRub, status, reference, createdAt]
+      properties:
+        id: { type: integer }
+        subscriptionId: { type: integer }
+        userEmail: { type: string }
+        planName: { type: string }
+        provider:
+          $ref: "#/components/schemas/PaymentProvider"
+        amountRub: { type: integer }
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        reference: { type: string }
+        userNote: { type: ["string", "null"] }
+        rejectionReason: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        confirmedAt: { type: ["string", "null"], format: date-time }
+
+    PaymentNoteUpdate:
+      type: object
+      required: [userNote]
+      properties:
+        userNote: { type: string, minLength: 1 }
+
+    PaymentReject:
+      type: object
+      properties:
+        reason: { type: string }
+
+    CheckoutResult:
+      type: object
+      required: [subscription, payment]
+      properties:
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+        payment:
+          $ref: "#/components/schemas/Payment"
+
+    VpnNode:
+      type: object
+      required: [id, name, region, sni, isActive]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        region: { type: string }
+        host: { type: ["string", "null"] }
+        sni: { type: string }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    VpnNodeInput:
+      type: object
+      required: [name, region, sni]
+      properties:
+        name: { type: string, minLength: 1 }
+        region: { type: string, minLength: 1 }
+        host: { type: string }
+        panelUrl: { type: string }
+        panelLogin: { type: string }
+        panelPassword: { type: string }
+        publicKey: { type: string }
+        shortId: { type: string }
+        sni: { type: string, minLength: 1 }
+        isActive: { type: boolean }
+
+    VpnNodeUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        region: { type: string, minLength: 1 }
+        host: { type: string }
+        panelUrl: { type: string }
+        panelLogin: { type: string }
+        panelPassword: { type: string }
+        publicKey: { type: string }
+        shortId: { type: string }
+        sni: { type: string, minLength: 1 }
+        isActive: { type: boolean }
+
+    VpnKey:
+      type: object
+      required: [id, nodeId, nodeName, label, vlessLink, deepLink, createdAt]
+      properties:
+        id: { type: integer }
+        nodeId: { type: integer }
+        nodeName: { type: string }
+        label: { type: string }
+        vlessLink: { type: string }
+        deepLink: { type: string }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: ["string", "null"], format: date-time }
+
+    VpnKeyInput:
+      type: object
+      properties:
+        nodeId: { type: integer }
+        label: { type: string }
+
+    AdminUser:
+      type: object
+      required: [id, email, role, createdAt]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        name: { type: ["string", "null"] }
+        role:
+          $ref: "#/components/schemas/UserRole"
+        createdAt: { type: string, format: date-time }
+        activeSubscriptions: { type: integer }
+
+    UserRoleUpdate:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/UserRole"
+
+    DashboardSummary:
+      type: object
+      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, totalVpnKeys]
+      properties:
+        totalUsers: { type: integer }
+        activeSubscriptions: { type: integer }
+        pendingPayments: { type: integer }
+        monthlyRevenueRub: { type: integer }
+        totalVpnKeys: { type: integer }
