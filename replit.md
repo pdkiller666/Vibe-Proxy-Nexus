@@ -30,10 +30,10 @@
 
 ## Architecture decisions
 
-- Split architecture: monetization/business layer (auth, payments, key issuance dashboard) lives in this Replit project; the actual VPN node (Xray-core) deploys separately to Amvera Cloud since Replit cannot host raw TCP VPN traffic.
+- **Deployment target is Amvera Cloud, all-in-one**: the whole project (React frontend + Express API + Xray-core VPN) ships as a single Docker image and runs in one Amvera container. Replit is the dev environment only. Postgres and Clerk stay external. See `deploy/amvera-all-in-one/`.
+- All-in-one wiring: in production the Express process serves BOTH `/api/*` and the built React SPA (gated by `STATIC_DIR`). Because Xray runs in the same container, the backend manages the Xray client list directly on disk (gated by `XRAY_CONFIG_PATH`) and reloads via `supervisorctl restart xray` — no separate management API. Both gates are unset in Replit dev, so dev behavior is unchanged (Vite serves the frontend; keys are generated locally but not connectable).
 - Payment MVP is manual SBP (Russian bank transfer): users mark a payment as paid with a note, an admin manually confirms/rejects it in `/admin`, no automatic payment gateway.
-- Skipped the full 3X-UI panel on the VPN node — the Replit web app already is the admin/user dashboard, so the node only exposes a minimal secured management API (`X-Management-Secret` header) for provisioning Xray clients.
-- **Not yet wired**: the Replit backend's key-issuance route generates a UUID/VLESS link locally but does not yet call the deployed node's management API to actually register the client with Xray. Follow-up once a node is deployed and its URL/secret are known.
+- `deploy/amvera-vpn-node/` (Xray + secured management API, `X-Management-Secret`) is kept for a FUTURE multi-region setup where VPN nodes live on separate machines and the panel stays central. Not used by the all-in-one deployment.
 
 ## Product
 

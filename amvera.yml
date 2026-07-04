@@ -1,0 +1,36 @@
+meta:
+  environment: docker
+  toolchain:
+    name: docker
+
+build:
+  dockerfile: Dockerfile
+  # Frontend build-time keys (baked into the static bundle by Vite).
+  # Set VITE_CLERK_PUBLISHABLE_KEY to your Clerk publishable key.
+  dockerBuildArgs:
+    - name: VITE_CLERK_PUBLISHABLE_KEY
+      value: ""
+    - name: VITE_CLERK_PROXY_URL
+      value: /api/__clerk
+
+run:
+  ports:
+    - 8080
+    - 443
+  # Persist the live Xray config (issued clients) across restarts/redeploys.
+  persistenceMount: /etc/xray
+  env:
+    - name: DATABASE_URL
+      secret: true
+    - name: CLERK_SECRET_KEY
+      secret: true
+    - name: CLERK_PUBLISHABLE_KEY
+      secret: true
+    - name: REALITY_PRIVATE_KEY
+      secret: true
+    - name: REALITY_PUBLIC_KEY
+      secret: true
+    - name: REALITY_SHORT_ID
+      secret: true
+    - name: REALITY_SNI
+      value: www.microsoft.com

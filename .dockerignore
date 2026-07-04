@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+.git
+.gitignore
+.agents
+.local
+.replit
+replit.md
+**/.env
+**/.env.*
+deploy/amvera-vpn-node
+attached_assets/screenshots
