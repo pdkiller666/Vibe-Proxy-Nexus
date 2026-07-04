@@ -1,0 +1,28 @@
+meta:
+  environment: docker
+  toolchain:
+    name: docker
+
+build:
+  dockerfile: Dockerfile
+
+run:
+  ports:
+    - 443
+    - 8443
+  persistenceMount: /etc/xray
+  env:
+    - name: MGMT_API_SECRET
+      secret: true
+    - name: REALITY_PRIVATE_KEY
+      secret: true
+    - name: REALITY_PUBLIC_KEY
+      secret: true
+    - name: REALITY_SHORT_ID
+      secret: true
+    - name: REALITY_SNI
+      value: www.microsoft.com
+    - name: TELEGRAM_BOT_TOKEN
+      secret: true
+    - name: TELEGRAM_ADMIN_CHAT_ID
+      secret: true

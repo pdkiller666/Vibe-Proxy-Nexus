@@ -1,10 +1,11 @@
-# [Project name]
+# Vibe Proxy Nexus
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Приватный VPN-сервис по приглашениям (VLESS-XTLS-Reality на Xray-core) — веб-панель для управления подписками, оплатой через СБП и выдачей ключей доступа.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/vpn-portal run dev` — run the web portal (frontend)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -19,26 +20,34 @@ _Replace the heading above with the project's name, and this line with one sente
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
+- Frontend: React + Vite, wouter, TanStack Query, Clerk (auth)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/api-server` — Express backend: routes under `src/routes/`, auth in `src/lib/auth.ts`, VLESS link generation in `src/lib/vless.ts`.
+- `artifacts/vpn-portal` — React/Vite frontend. Pages in `src/pages/` (dashboard, plans, checkout, payments, keys, admin). Shared query client in `src/lib/query-client.ts`.
+- `deploy/amvera-vpn-node/` — self-contained Docker deployment package for the actual VPN node (Xray-core + secured management API + optional Telegram status bot), meant to be deployed to Amvera Cloud, not run in this Replit workspace. See its README for details.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Split architecture: monetization/business layer (auth, payments, key issuance dashboard) lives in this Replit project; the actual VPN node (Xray-core) deploys separately to Amvera Cloud since Replit cannot host raw TCP VPN traffic.
+- Payment MVP is manual SBP (Russian bank transfer): users mark a payment as paid with a note, an admin manually confirms/rejects it in `/admin`, no automatic payment gateway.
+- Skipped the full 3X-UI panel on the VPN node — the Replit web app already is the admin/user dashboard, so the node only exposes a minimal secured management API (`X-Management-Secret` header) for provisioning Xray clients.
+- **Not yet wired**: the Replit backend's key-issuance route generates a UUID/VLESS link locally but does not yet call the deployed node's management API to actually register the client with Xray. Follow-up once a node is deployed and its URL/secret are known.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Invite-only VPN reselling: users sign up (Clerk), pick a plan, pay via SBP transfer, get a subscription activated by an admin, then issue/revoke VLESS-XTLS-Reality keys from a dashboard.
+- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject), plans CRUD, VPN nodes CRUD, user role management, SBP payment settings.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- All UI copy must be in Russian.
+- Visual identity: technical, precise, quietly confident — not corporate SaaS blue, not playful. Bold, deliberate color choice (industrial orange accent). No emojis.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Clerk's built-in `<SignIn>`/`<SignUp>` components default to English even when you pass custom `localization` overrides for just a couple of strings — you must import and spread the official `ruRU` dict from `@clerk/localizations` as the base, then merge in custom title/subtitle overrides on top.
 
 ## Pointers
 

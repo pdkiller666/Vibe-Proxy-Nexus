@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
+import { ruRU } from "@clerk/localizations";
 import { useEffect, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { useGetMe } from "@workspace/api-client-react";
@@ -77,20 +78,24 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 const clerkLocalization = {
-  locale: "ru-RU",
+  ...ruRU,
   signIn: {
+    ...ruRU.signIn,
     start: {
+      ...ruRU.signIn?.start,
       title: "Вход в Vibe Proxy Nexus",
       subtitle: "Доступ только по приглашению",
     },
   },
   signUp: {
+    ...ruRU.signUp,
     start: {
+      ...ruRU.signUp?.start,
       title: "Регистрация в Vibe Proxy Nexus",
       subtitle: "Создайте аккаунт для доступа к сервису",
     },
   },
-} as const;
+};
 
 function SignInPage() {
   return (

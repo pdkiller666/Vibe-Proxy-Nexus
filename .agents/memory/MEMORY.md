@@ -1,0 +1,1 @@
+- [Clerk Russian localization](clerk-localization.md) — custom `localization` prop overrides alone leave most Clerk UI in English; must spread `ruRU` from `@clerk/localizations` as base.
