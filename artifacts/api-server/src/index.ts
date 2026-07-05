@@ -28,15 +28,41 @@ const XRAY_WS_HOST = "127.0.0.1";
 
 const server = http.createServer(app);
 
+// Bound how long we wait to reach the local Xray inbound before giving up, so a
+// stuck/down Xray can't leak half-open client sockets.
+const XRAY_CONNECT_TIMEOUT_MS = 10000;
+
 server.on("upgrade", (req, socket, head) => {
   const pathOnly = (req.url ?? "").split("?")[0];
+  const upgradeHeader = (req.headers["upgrade"] ?? "").toLowerCase();
+  const connectionHeader = (req.headers["connection"] ?? "").toLowerCase();
 
-  if (pathOnly !== VPN_WS_PATH) {
+  // Only relay genuine WebSocket handshakes for the VPN path; reject anything
+  // else immediately to keep the relay surface minimal.
+  if (
+    pathOnly !== VPN_WS_PATH ||
+    req.method !== "GET" ||
+    upgradeHeader !== "websocket" ||
+    !connectionHeader.includes("upgrade")
+  ) {
     socket.destroy();
     return;
   }
 
-  const upstream = net.connect(XRAY_WS_PORT, XRAY_WS_HOST, () => {
+  const upstream = net.connect(XRAY_WS_PORT, XRAY_WS_HOST);
+
+  const cleanup = () => {
+    socket.destroy();
+    upstream.destroy();
+  };
+
+  upstream.setTimeout(XRAY_CONNECT_TIMEOUT_MS, cleanup);
+
+  upstream.once("connect", () => {
+    // Relaying has begun; drop the connect timeout so long-lived tunnels aren't
+    // torn down for being idle.
+    upstream.setTimeout(0);
+
     const headerLines: string[] = [];
     const raw = req.rawHeaders;
     for (let i = 0; i < raw.length; i += 2) {
@@ -53,11 +79,6 @@ server.on("upgrade", (req, socket, head) => {
     socket.pipe(upstream);
     upstream.pipe(socket);
   });
-
-  const cleanup = () => {
-    socket.destroy();
-    upstream.destroy();
-  };
 
   upstream.on("error", cleanup);
   socket.on("error", cleanup);

@@ -40,3 +40,34 @@ something that tolerates edge TLS termination — e.g. VLESS over WebSocket
 with TLS handled by Amvera's own cert (client TLS terminates at Amvera,
 plaintext WS forwarded to the container) — trading away Reality's
 active-probing resistance for actually working within Amvera's free tier.
+
+---
+
+## RESOLVED — VLESS over WebSocket through the HTTP(S) web domain works
+
+Confirmed end-to-end working solution (tunnel verified: traffic exits from
+the Amvera node IP, not the client IP):
+
+- **Two DIFFERENT edges.** The `waw0.amvera.tech` web domain is fronted by
+  **Envoy** (`server: envoy`, HTTP/2), NOT Traefik. The `tcp-waw0.amvera.tech`
+  TCP domain is fronted by **Traefik**. Both terminate TLS.
+- **Raw-TCP VLESS over the Traefik TCP domain fails**: Traefik treats the
+  TLS-terminated stream as HTTP (via ALPN) and returns plaintext, corrupting a
+  raw VLESS payload (client sees TLS "wrong version number" / connection reset).
+  `acceptProxyProtocol` does not fix it.
+- **VLESS + WebSocket over the Envoy web domain WORKS.** WS is a legitimate
+  HTTP upgrade, so Envoy forwards it. Architecture: Xray runs a VLESS+WS inbound
+  on container-internal loopback (127.0.0.1:10000, security "none",
+  wsSettings.path=`/vpnws`); the Node/Express server does `http.createServer`
+  and, on the `upgrade` event for that path, raw-pipes the socket to Xray. One
+  public port (8080) serves web + API + VPN. Client link:
+  `type=ws&security=tls&sni=<web domain>&host=<web domain>&path=/vpnws&encryption=none`.
+  Both `fp=chrome` (ALPN h2,http/1.1) and forced `alpn=http/1.1` connect fine.
+- **Why:** protocols that look like normal HTTPS (WS upgrade, XHTTP) ride
+  through TLS-terminating edges; anything needing raw TLS or raw TCP does not.
+
+**Amvera build latency:** a `./deploy.sh` push can take up to ~8 minutes to go
+live (full Docker image: Vite + xray download + node build), and the old
+container keeps serving until it does. Do not judge a change from a timed wait
+alone — confirm the live build with a deterministic marker (a temporary endpoint
+returning a known string, or the served vless-link format) before any prod test.
