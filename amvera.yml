@@ -9,15 +9,17 @@ build:
 run:
   # IMPORTANT: there is no `ports` (list) field in Amvera's schema — that was
   # always invalid ("Configuration error ... unknown fields: ports"). The
-  # supported field is `containerPort`, and per the Amvera dashboard's own
-  # config UI it accepts a *comma-separated list* of internal ports (e.g.
-  # "5000,3000,80"), each exposed externally. Trying "8080,443" here so both
-  # the web/API (8080) and Xray's raw VLESS-XTLS-Reality port (443) are
-  # reachable without the paid "Dedicated IPv4" add-on. Verify externally
-  # after deploy — if 443 still answers with Amvera's own TLS cert instead of
-  # a raw Reality handshake, this multi-port syntax doesn't do true TCP
-  # passthrough for non-HTTP(S) ports and the add-on is required after all.
-  containerPort: "8080,443"
+  # supported field is `containerPort`, which does accept a comma-separated
+  # list per the dashboard's own config UI (e.g. "5000,3000,80") — but this
+  # was TESTED with "8080,443" and it does NOT expose raw Reality traffic:
+  # Amvera's edge always terminates TLS itself on the public 443 and expects
+  # plain HTTP behind every listed port, regardless of the list. External
+  # port 443 keeps answering with Amvera's own *.waw0.amvera.tech cert no
+  # matter the SNI sent — confirmed via direct openssl s_client probes.
+  # Xray's raw VLESS-XTLS-Reality port is NOT reachable through containerPort
+  # at all; it needs the paid "Dedicated IPv4" add-on / a genuine TCP port
+  # mapping in the Amvera dashboard's networking settings (not amvera.yml).
+  containerPort: 8080
   # Persist the live Xray config (issued clients) across restarts/redeploys.
   persistenceMount: /etc/xray
   # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required
