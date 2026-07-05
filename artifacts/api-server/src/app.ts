@@ -14,7 +14,12 @@ const app: Express = express();
 // Without trusting the proxy, req.protocol/req.secure would always report
 // "http" even though the public-facing request was HTTPS — which would leak
 // into things like the generated subscription URL.
-app.set("trust proxy", true);
+//
+// Trust exactly one hop (the Envoy edge itself), not `true` (any hop). This
+// still lets req.protocol read X-Forwarded-Proto, but req.ip and any
+// IP-based logic (e.g. rate limiting) only trust the immediate proxy's
+// X-Forwarded-For entry, not an attacker-supplied chain of arbitrary length.
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({

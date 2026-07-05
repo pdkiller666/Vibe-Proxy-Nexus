@@ -14,18 +14,26 @@ to both: the client app periodically re-fetches the URL and overwrites
 whatever the user edited locally, and adding a node/key server-side just shows
 up on the next refresh — no new import step for the user.
 
-**Token design:** stateless HMAC (`userId.hmacSha256(userId, SESSION_SECRET)`)
-rather than a random token stored in the DB. Avoids a schema migration, is
-stable across deploys, and is unforgeable without the session secret.
-`timingSafeEqual` is used for comparison. See
-`artifacts/api-server/src/lib/subscription.ts`.
+**Token design:** stateless HMAC (`userId.hmac(userId, sessionSecret)`) rather
+than a random token stored in the DB. Avoids a schema migration, is stable
+across deploys, and is unforgeable without the session secret. Compared with
+a constant-time equality check to avoid timing attacks. Tradeoff: a leaked
+subscription URL cannot be individually revoked (only global secret rotation
+invalidates all tokens) — acceptable for now, but a per-user salt/version
+would be needed to support per-user revocation later.
 
 **Response format:** body is base64 of newline-joined `vless://` links (the
 de facto subscription format most clients — Happ, v2rayNG, v2rayN — expect).
-Branding is conveyed via headers: `Profile-Title: base64:<...>` (group name
-shown in the app) and `Profile-Update-Interval` (hours). `Subscription-Userinfo`
-carries `expire=<unix>` from the user's active subscription `endsAt` when present.
+Branding is conveyed via response headers rather than the link bodies
+themselves (profile title, update interval, userinfo/expiry).
 
-**Related:** default VPN key labels changed from `${node.name} — ${user.email}`
-to `${BRAND_NAME} — ${node.name}` — the label is shown as the profile name
-inside client apps, so it should never contain the user's email.
+**Related:** default VPN key labels changed from including the user's email
+to a brand-name-based label — the label is shown as the profile name inside
+client apps, so it should never contain the user's email.
+
+**Reverse proxy gotcha:** Amvera's edge terminates TLS and forwards plain
+HTTP internally, so any server-generated absolute URL (like this
+subscription URL) needs Express's `trust proxy` set, or it will render as
+`http://` even on a public HTTPS domain. Set it to `1` (single hop), not
+`true` — trusting an unbounded chain lets clients spoof `X-Forwarded-For`
+and weaken IP-based logic (e.g. login rate limiting).
