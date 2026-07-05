@@ -8,8 +8,18 @@ build:
 
 run:
   ports:
-    - 8080
-    - 443
+    # Web UI + API — plain HTTP, this is what Amvera should route the public
+    # domain (https://...amvera.tech) to.
+    - number: 8080
+    # Xray VPN (VLESS-XTLS-Reality) — raw TCP, NOT HTTP. Must be tagged
+    # `protocol: tcp` explicitly, otherwise Amvera's ingress may try to
+    # terminate HTTPS on this port too (since 443 is the standard HTTPS
+    # port), which breaks routing for the whole domain (503 on everything,
+    # even though the app itself is healthy). Reaching this port from the
+    # internet also requires the "Dedicated IPv4" add-on in the Amvera
+    # dashboard — without it, only the web UI on 8080 is reachable.
+    - number: 443
+      protocol: tcp
   # Persist the live Xray config (issued clients) across restarts/redeploys.
   persistenceMount: /etc/xray
   # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required
