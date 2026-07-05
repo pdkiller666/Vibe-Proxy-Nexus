@@ -12,16 +12,7 @@ run:
     - 443
   # Persist the live Xray config (issued clients) across restarts/redeploys.
   persistenceMount: /etc/xray
-  env:
-    - name: DATABASE_URL
-      secret: true
-    - name: SESSION_SECRET
-      secret: true
-    - name: REALITY_PRIVATE_KEY
-      secret: true
-    - name: REALITY_PUBLIC_KEY
-      secret: true
-    - name: REALITY_SHORT_ID
-      secret: true
-    - name: REALITY_SNI
-      value: www.microsoft.com
+  # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required
+  # env vars (DATABASE_URL, SESSION_SECRET, REALITY_PRIVATE_KEY,
+  # REALITY_PUBLIC_KEY, REALITY_SHORT_ID, REALITY_SNI) must be set manually
+  # in the Amvera dashboard under the project's "Configuration" tab.
