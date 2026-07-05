@@ -24,6 +24,11 @@ RUN PORT=3000 BASE_PATH=/ \
 # Backend: esbuild bundle -> artifacts/api-server/dist/index.mjs (self-contained).
 RUN pnpm --filter @workspace/api-server run build
 
+# Self-contained deploy of @workspace/db (schema + drizzle-kit) for the
+# runtime image, so it can push schema changes on boot without DATABASE_URL
+# being available at build time.
+RUN pnpm --filter @workspace/db deploy --legacy /tmp/db-deploy
+
 ########## Runtime ##########
 FROM node:24-bookworm-slim AS runtime
 
@@ -49,6 +54,10 @@ WORKDIR /app
 # Built artifacts from the builder stage.
 COPY --from=builder /repo/artifacts/api-server/dist ./server
 COPY --from=builder /repo/artifacts/vpn-portal/dist/public ./public
+
+# Self-contained @workspace/db (schema + drizzle-kit) used by entrypoint.sh to
+# push schema changes on every boot.
+COPY --from=builder /tmp/db-deploy ./db-migrate
 
 # Deployment glue.
 COPY deploy/amvera-all-in-one/xray-config.json.template ./xray/config.json.template

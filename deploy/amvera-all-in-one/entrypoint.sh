@@ -22,4 +22,12 @@ if [ ! -f "$XRAY_CONFIG_PATH" ]; then
     < /app/xray/config.json.template > "$XRAY_CONFIG_PATH"
 fi
 
+# Push DB schema on every boot (idempotent: no-op if schema already matches).
+# Uses the self-contained @workspace/db deploy (schema + drizzle-kit) baked
+# into the image at build time. --force skips the interactive confirmation
+# prompt for destructive changes, since there is no TTY in production.
+echo "Pushing database schema..."
+/app/db-migrate/node_modules/.bin/drizzle-kit push --force --config /app/db-migrate/drizzle.config.ts
+echo "Database schema is up to date."
+
 exec supervisord -c /app/supervisord.conf
