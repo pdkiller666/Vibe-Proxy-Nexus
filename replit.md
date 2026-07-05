@@ -1,6 +1,6 @@
 # Vibe Proxy Nexus
 
-Приватный VPN-сервис по приглашениям (VLESS-XTLS-Reality на Xray-core) — веб-панель для управления подписками, оплатой через СБП и выдачей ключей доступа.
+Приватный VPN-сервис по приглашениям (VLESS поверх WebSocket/TLS, на Xray-core) — веб-панель для управления подписками, оплатой через СБП и выдачей ключей доступа.
 
 ## Run & Operate
 
@@ -10,6 +10,7 @@
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `./deploy.sh "Сообщение на русском о том, что изменилось"` — deploy to production (pushes to GitHub, which triggers Amvera's auto-build). Main agent's shell blocks `git push`, so this is the only way to ship.
 - Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
@@ -21,24 +22,30 @@
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
 - Frontend: React + Vite, wouter, TanStack Query, custom email+password auth (session cookie)
+- VPN: Xray-core (VLESS), transport is WebSocket riding on the normal HTTPS domain (not raw TCP — see Architecture decisions)
 
 ## Where things live
 
-- `artifacts/api-server` — Express backend: routes under `src/routes/`, auth in `src/lib/auth.ts`, VLESS link generation in `src/lib/vless.ts`.
-- `artifacts/vpn-portal` — React/Vite frontend. Pages in `src/pages/` (dashboard, plans, checkout, payments, keys, admin). Shared query client in `src/lib/query-client.ts`.
-- `deploy/amvera-vpn-node/` — self-contained Docker deployment package for the actual VPN node (Xray-core + secured management API + optional Telegram status bot), meant to be deployed to Amvera Cloud, not run in this Replit workspace. See its README for details.
+- `artifacts/api-server` — Express backend: routes under `src/routes/` (and `src/routes/admin/`), auth in `src/lib/auth.ts` + `src/lib/session.ts`, VLESS link generation in `src/lib/vless.ts`, subscription-URL tokens in `src/lib/subscription.ts`, local Xray config management in `src/lib/xray.ts`.
+- `artifacts/vpn-portal` — React/Vite frontend. Pages in `src/pages/` (home, sign-in/up, forgot/reset-password, dashboard, plans, checkout, keys, payments, admin, not-found). Shared query client in `src/lib/query-client.ts`.
+- `deploy/amvera-all-in-one/` — the Docker deployment package actually used in production (Xray-core + Node server + Postgres schema push, all in one container). See its README for details.
+- `deploy/amvera-vpn-node/` — self-contained package for a FUTURE multi-region setup (separate VPN nodes + secured management API). Not used today.
 
 ## Architecture decisions
 
-- **Deployment target is Amvera Cloud, all-in-one**: the whole project (React frontend + Express API + Xray-core VPN) ships as a single Docker image and runs in one Amvera container. Replit is the dev environment only. Only Postgres stays external. See `deploy/amvera-all-in-one/`.
+- **Deployment target is Amvera Cloud, all-in-one**: the whole project (React frontend + Express API + Xray-core VPN) ships as a single Docker image and runs in one Amvera container, managed by `supervisord`. Replit is the dev environment only. Only Postgres stays external. See `deploy/amvera-all-in-one/`.
+- **VPN transport is VLESS over WebSocket, not raw TCP or Reality.** Amvera's edge (Traefik/Envoy) always terminates TLS itself and only forwards plain HTTP(S)/WebSocket to the container on the app's single public port (8080). Raw-TCP VLESS and Reality are both incompatible with that (Reality needs to own the TLS handshake; raw TCP through Amvera's ingress gets corrupted). The working setup: Xray listens on `127.0.0.1:10000` for plain VLESS+WS (`security: none`), and the Node server itself proxies the `/vpnws` WebSocket upgrade to it (see `src/index.ts`). Clients connect with `security=tls&type=ws&sni=<web domain>` — a completely standard HTTPS/WebSocket connection from the outside. See `.agents/memory/amvera-raw-tcp-port.md`.
+- **Self-updating subscription URL** (added July 2026): instead of making users paste/manage individual `vless://` links, `GET /api/vpn-keys/subscription-url` returns one stable URL (`/api/sub/<token>`, stateless HMAC-signed, no DB row) that VPN client apps (Happ, v2rayNG, etc.) re-fetch periodically. It returns base64 of all the user's active links plus branded headers (`Profile-Title`, `Profile-Update-Interval`, `Subscription-Userinfo`). This is what lets the panel add/rotate nodes later without users re-importing anything, and stops users from hand-editing their own config. See `.agents/memory/vpn-subscription-links.md`.
 - All-in-one wiring: in production the Express process serves BOTH `/api/*` and the built React SPA (gated by `STATIC_DIR`). Because Xray runs in the same container, the backend manages the Xray client list directly on disk (gated by `XRAY_CONFIG_PATH`) and reloads via `supervisorctl restart xray` — no separate management API. Both gates are unset in Replit dev, so dev behavior is unchanged (Vite serves the frontend; keys are generated locally but not connectable).
-- Payment MVP is manual SBP (Russian bank transfer): users mark a payment as paid with a note, an admin manually confirms/rejects it in `/admin`, no automatic payment gateway.
+- `app.set("trust proxy", 1)` (single hop) is required so `req.protocol` correctly reports `https` behind Amvera's edge (otherwise generated absolute URLs, like the subscription URL, would render as `http://`). Deliberately not `trust proxy: true` — that would let clients spoof `X-Forwarded-For` and weaken IP-based login rate limiting.
+- Payment MVP is manual SBP (Russian bank transfer): users mark a payment as paid with a note, an admin manually confirms/rejects it in `/admin`. The schema already has a `yookassa` provider value for a future automatic gateway, but no such integration exists yet.
+- No transactional email provider is configured: password-reset links are returned directly in the API/UI response rather than emailed (see `.agents/memory/no-email-provider.md`).
 - `deploy/amvera-vpn-node/` (Xray + secured management API, `X-Management-Secret`) is kept for a FUTURE multi-region setup where VPN nodes live on separate machines and the panel stays central. Not used by the all-in-one deployment.
 
 ## Product
 
-- Invite-only VPN reselling: users sign up with email+password, pick a plan, pay via SBP transfer, get a subscription activated by an admin, then issue/revoke VLESS-XTLS-Reality keys from a dashboard.
-- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject), plans CRUD, VPN nodes CRUD, user role management, SBP payment settings.
+- Invite-only VPN reselling: users sign up with email+password, pick a plan, pay via SBP transfer, get a subscription activated by an admin, then issue/revoke VLESS keys (or use the one-click subscription link) from a dashboard.
+- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject), plans CRUD, VPN nodes CRUD, user role management, SBP payment settings, password-reset link generation for users.
 
 ## User preferences
 
@@ -49,3 +56,5 @@
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Full repo map and API/schema reference — `PROJECT_MAP.md`
+- Production deployment details — `deploy/amvera-all-in-one/README.md`

@@ -1,11 +1,13 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { mountStaticFrontend } from "./lib/staticServer";
 import { getSessionSecret, startSessionCleanupJob } from "./lib/session";
+import { corsOriginCheck } from "./lib/corsOrigins";
 
 const app: Express = express();
 
@@ -41,7 +43,8 @@ app.use(
   }),
 );
 
-app.use(cors({ credentials: true, origin: true }));
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(cors({ credentials: true, origin: corsOriginCheck }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(getSessionSecret()));

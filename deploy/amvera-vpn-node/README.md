@@ -1,8 +1,18 @@
 # Amvera VPN Node — Xray-core (VLESS-XTLS-Reality)
 
-This directory is a **self-contained deployment package** for the actual VPN node.
-It is meant to be pushed to **Amvera Cloud** (or any Docker host) — it does **not**
-run inside this Replit workspace, because Replit cannot host raw TCP VPN traffic.
+> **Status: not used in production.** The service currently in production is
+> `deploy/amvera-all-in-one` — a single container running the web app, API,
+> and Xray-core together, with VPN traffic riding VLESS over WebSocket on the
+> normal HTTPS domain (no Reality, no separate node, no dedicated IP needed).
+> This package is a **future option** for when a single Amvera container is no
+> longer enough (e.g. multiple regions, or wanting Reality's stronger
+> masking on a node with a Dedicated IPv4). It is not wired to the backend
+> today — see "Wiring this up" below for what's still missing.
+
+This directory is a **self-contained deployment package** for a dedicated VPN node
+(separate from the main web app). It is meant to be pushed to **Amvera Cloud**
+(or any Docker host) as its own container/service — it does **not** run inside
+this Replit workspace, because Replit cannot host raw TCP VPN traffic.
 
 ## What this is (and isn't)
 
