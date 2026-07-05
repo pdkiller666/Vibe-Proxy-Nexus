@@ -30,7 +30,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#F4F4F5] font-sans">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#F4F4F5] font-sans overflow-x-hidden">
       {/* Sidebar */}
       <aside className="w-full md:w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-6 border-b border-gray-200 flex items-center gap-3">

@@ -145,12 +145,12 @@ function PaymentsQueue() {
             </div>
           </div>
           {rejectingId === payment.id && (
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <Input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Причина отклонения"
-                className="rounded-none"
+                className="rounded-none min-w-0 flex-1 basis-40"
               />
               <button
                 onClick={() => handleReject(payment.id)}
@@ -614,23 +614,25 @@ export default function Admin() {
       <SummarySection />
 
       <Tabs defaultValue="payments">
-        <TabsList className="rounded-none">
-          <TabsTrigger value="payments" className="rounded-none gap-1.5">
-            <CreditCard className="w-4 h-4" /> Платежи
-          </TabsTrigger>
-          <TabsTrigger value="plans" className="rounded-none gap-1.5">
-            <Shield className="w-4 h-4" /> Тарифы
-          </TabsTrigger>
-          <TabsTrigger value="nodes" className="rounded-none gap-1.5">
-            <Settings className="w-4 h-4" /> Узлы
-          </TabsTrigger>
-          <TabsTrigger value="users" className="rounded-none gap-1.5">
-            <Users className="w-4 h-4" /> Пользователи
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="rounded-none gap-1.5">
-            <Settings className="w-4 h-4" /> Реквизиты
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList className="rounded-none w-max min-w-full md:w-auto">
+            <TabsTrigger value="payments" className="rounded-none gap-1.5 whitespace-nowrap">
+              <CreditCard className="w-4 h-4" /> Платежи
+            </TabsTrigger>
+            <TabsTrigger value="plans" className="rounded-none gap-1.5 whitespace-nowrap">
+              <Shield className="w-4 h-4" /> Тарифы
+            </TabsTrigger>
+            <TabsTrigger value="nodes" className="rounded-none gap-1.5 whitespace-nowrap">
+              <Settings className="w-4 h-4" /> Узлы
+            </TabsTrigger>
+            <TabsTrigger value="users" className="rounded-none gap-1.5 whitespace-nowrap">
+              <Users className="w-4 h-4" /> Пользователи
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="rounded-none gap-1.5 whitespace-nowrap">
+              <Settings className="w-4 h-4" /> Реквизиты
+            </TabsTrigger>
+          </TabsList>
+        </div>
         <TabsContent value="payments" className="pt-4">
           <PaymentsQueue />
         </TabsContent>
