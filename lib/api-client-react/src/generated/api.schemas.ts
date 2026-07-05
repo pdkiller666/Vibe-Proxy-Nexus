@@ -220,6 +220,7 @@ export interface VpnNode {
   region: string;
   /** @nullable */
   host?: string | null;
+  port?: number;
   sni: string;
   isActive: boolean;
   createdAt?: string;
@@ -231,6 +232,7 @@ export interface VpnNodeInput {
   /** @minLength 1 */
   region: string;
   host?: string;
+  port?: number;
   panelUrl?: string;
   panelLogin?: string;
   panelPassword?: string;
@@ -247,6 +249,7 @@ export interface VpnNodeUpdate {
   /** @minLength 1 */
   region?: string;
   host?: string;
+  port?: number;
   panelUrl?: string;
   panelLogin?: string;
   panelPassword?: string;

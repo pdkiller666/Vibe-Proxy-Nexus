@@ -151,6 +151,7 @@ export const ListVpnNodesResponseItem = zod.object({
   "name": zod.string(),
   "region": zod.string(),
   "host": zod.string().nullish(),
+  "port": zod.number().optional(),
   "sni": zod.string(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
@@ -498,6 +499,7 @@ export const CreateVpnNodeBody = zod.object({
   "name": zod.string().min(1),
   "region": zod.string().min(1),
   "host": zod.string().optional(),
+  "port": zod.number().optional(),
   "panelUrl": zod.string().optional(),
   "panelLogin": zod.string().optional(),
   "panelPassword": zod.string().optional(),
@@ -512,6 +514,7 @@ export const CreateVpnNodeResponse = zod.object({
   "name": zod.string(),
   "region": zod.string(),
   "host": zod.string().nullish(),
+  "port": zod.number().optional(),
   "sni": zod.string(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
@@ -534,6 +537,7 @@ export const UpdateVpnNodeBody = zod.object({
   "name": zod.string().min(1).optional(),
   "region": zod.string().min(1).optional(),
   "host": zod.string().optional(),
+  "port": zod.number().optional(),
   "panelUrl": zod.string().optional(),
   "panelLogin": zod.string().optional(),
   "panelPassword": zod.string().optional(),
@@ -548,6 +552,7 @@ export const UpdateVpnNodeResponse = zod.object({
   "name": zod.string(),
   "region": zod.string(),
   "host": zod.string().nullish(),
+  "port": zod.number().optional(),
   "sni": zod.string(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()

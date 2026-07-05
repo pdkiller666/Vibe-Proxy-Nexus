@@ -311,6 +311,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   const [name, setName] = useState(node?.name ?? "");
   const [region, setRegion] = useState(node?.region ?? "");
   const [host, setHost] = useState(node?.host ?? "");
+  const [port, setPort] = useState(String(node?.port ?? 443));
   const [sni, setSni] = useState(node?.sni ?? "");
   const [publicKey, setPublicKey] = useState("");
   const [shortId, setShortId] = useState("");
@@ -324,6 +325,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       name,
       region,
       host: host || undefined,
+      port: port ? Number(port) : undefined,
       sni,
       publicKey: publicKey || undefined,
       shortId: shortId || undefined,
@@ -352,6 +354,12 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
         <Input placeholder="Название" value={name} onChange={(e) => setName(e.target.value)} className="rounded-none" />
         <Input placeholder="Регион" value={region} onChange={(e) => setRegion(e.target.value)} className="rounded-none" />
         <Input placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} className="rounded-none" />
+        <Input
+          placeholder="Порт (443 или 27017 для Amvera TCP)"
+          value={port}
+          onChange={(e) => setPort(e.target.value)}
+          className="rounded-none"
+        />
         <Input placeholder="SNI" value={sni} onChange={(e) => setSni(e.target.value)} className="rounded-none" />
         <Input
           placeholder="Reality Public Key"
@@ -429,7 +437,7 @@ function NodesManagement() {
                 {!node.isActive && <span className="text-muted-foreground font-normal"> (неактивен)</span>}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
-                {node.host ?? "—"} · SNI: {node.sni}
+                {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
               </div>
             </div>
             <div className="flex gap-2">

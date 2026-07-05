@@ -790,6 +790,7 @@ components:
         name: { type: string }
         region: { type: string }
         host: { type: ["string", "null"] }
+        port: { type: integer }
         sni: { type: string }
         isActive: { type: boolean }
         createdAt: { type: string, format: date-time }
@@ -801,6 +802,7 @@ components:
         name: { type: string, minLength: 1 }
         region: { type: string, minLength: 1 }
         host: { type: string }
+        port: { type: integer }
         panelUrl: { type: string }
         panelLogin: { type: string }
         panelPassword: { type: string }
@@ -815,6 +817,7 @@ components:
         name: { type: string, minLength: 1 }
         region: { type: string, minLength: 1 }
         host: { type: string }
+        port: { type: integer }
         panelUrl: { type: string }
         panelLogin: { type: string }
         panelPassword: { type: string }

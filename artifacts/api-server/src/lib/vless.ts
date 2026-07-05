@@ -20,7 +20,7 @@ export function generatePaymentReference(subscriptionId: number): string {
  */
 export function buildVlessLink(node: VpnNode, uuid: string, label: string): string {
   const host = node.host || node.sni;
-  const port = 443;
+  const port = node.port ?? 443;
   const params = new URLSearchParams({
     type: "tcp",
     security: "reality",

@@ -6,3 +6,4 @@
 - [Amvera amvera.yaml real schema](amvera-yaml-schema.md) — no `ports` list field exists at all, only `run.containerPort` (single int); clean build log does not mean config is valid, check app log too.
 - [Amvera internal DB TLS verification](amvera-internal-db-tls.md) — sslmode=require against self-signed CNPG cert breaks every query identically (looks like missing schema, isn't); fix with rejectUnauthorized:false.
 - [VPN node seeding](vpn-node-seeding.md) — key issuance 404s if `vpn_nodes` is empty; all-in-one deploy needs one row seeded from REALITY_* env vars, not automatic.
+- [Amvera raw TCP port limitation](amvera-raw-tcp-port.md) — containerPort's comma-separated list is HTTP-only; confirmed Amvera always terminates TLS on 443 itself, no raw TCP passthrough for Reality/VLESS without Dedicated IPv4.

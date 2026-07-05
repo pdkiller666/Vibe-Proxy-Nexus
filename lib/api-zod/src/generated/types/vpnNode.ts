@@ -12,6 +12,7 @@ export interface VpnNode {
   region: string;
   /** @nullable */
   host?: string | null;
+  port?: number;
   sni: string;
   isActive: boolean;
   createdAt?: Date;

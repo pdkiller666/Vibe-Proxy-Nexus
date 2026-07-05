@@ -7,22 +7,24 @@ build:
   dockerfile: Dockerfile
 
 run:
-  # IMPORTANT: there is no `ports` (list) field in Amvera's schema — that was
-  # always invalid ("Configuration error ... unknown fields: ports"). The
-  # supported field is `containerPort`, which does accept a comma-separated
-  # list per the dashboard's own config UI (e.g. "5000,3000,80") — but this
-  # was TESTED with "8080,443" and it does NOT expose raw Reality traffic:
-  # Amvera's edge always terminates TLS itself on the public 443 and expects
-  # plain HTTP behind every listed port, regardless of the list. External
-  # port 443 keeps answering with Amvera's own *.waw0.amvera.tech cert no
-  # matter the SNI sent — confirmed via direct openssl s_client probes.
-  # Xray's raw VLESS-XTLS-Reality port is NOT reachable through containerPort
-  # at all; it needs the paid "Dedicated IPv4" add-on / a genuine TCP port
-  # mapping in the Amvera dashboard's networking settings (not amvera.yml).
-  containerPort: 8080
+  # Two ports mapped in parallel (comma-separated, positional 1:1):
+  #   8080 (web/API)  -> servicePort 80    — goes through the normal HTTPS
+  #                                          ingress bound to the app's domain.
+  #   443  (Xray VPN) -> servicePort 27017 — goes through Amvera's raw-TCP
+  #                                          SNI ingress (free), reachable at
+  #                                          the "tcp-..." domain created in
+  #                                          Настройки -> Домены with
+  #                                          connection type MONGO. This is a
+  #                                          genuine raw TCP passthrough (no
+  #                                          TLS termination by Amvera), unlike
+  #                                          plain containerPort/HTTP ingress.
+  # See .agents/memory/amvera-raw-tcp-port.md for how this was discovered.
+  containerPort: "8080,443"
+  servicePort: "80,27017"
   # Persist the live Xray config (issued clients) across restarts/redeploys.
   persistenceMount: /etc/xray
   # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required
   # env vars (DATABASE_URL, SESSION_SECRET, REALITY_PRIVATE_KEY,
-  # REALITY_PUBLIC_KEY, REALITY_SHORT_ID, REALITY_SNI) must be set manually
-  # in the Amvera dashboard under the project's "Configuration" tab.
+  # REALITY_PUBLIC_KEY, REALITY_SHORT_ID, REALITY_SNI, REALITY_DEST) must be
+  # set manually in the Amvera dashboard under the project's "Configuration"
+  # tab. REALITY_SNI must equal the "tcp-..." domain from "Домены" above.

@@ -12,6 +12,7 @@ export interface VpnNodeUpdate {
   /** @minLength 1 */
   region?: string;
   host?: string;
+  port?: number;
   panelUrl?: string;
   panelLogin?: string;
   panelPassword?: string;
