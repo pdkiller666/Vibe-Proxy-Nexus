@@ -22,7 +22,7 @@ if (!TOKEN) {
 const BRANCH = process.env.DEPLOY_BRANCH || "main";
 const commitMessage =
   process.argv.slice(2).join(" ").trim() ||
-  `Deploy: ${new Date().toISOString()}`;
+  `Деплой: ${new Date().toISOString()}`;
 
 function sh(cmd, args) {
   return execFileSync(cmd, args, { encoding: "utf8" }).trim();

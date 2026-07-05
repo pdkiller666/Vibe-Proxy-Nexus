@@ -44,6 +44,7 @@
 
 - All UI copy must be in Russian.
 - Visual identity: technical, precise, quietly confident — not corporate SaaS blue, not playful. Bold, deliberate color choice (industrial orange accent). No emojis.
+- Every deploy commit message (the message passed to `./deploy.sh "..."`) must be written in Russian and clearly describe what changed, since the user reads deploy history in Amvera/GitHub to track what was shipped.
 
 ## Pointers
 
