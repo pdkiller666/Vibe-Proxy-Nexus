@@ -9,6 +9,13 @@ import { getSessionSecret, startSessionCleanupJob } from "./lib/session";
 
 const app: Express = express();
 
+// Amvera's edge (Envoy) terminates TLS and forwards plain HTTP to the
+// container over its internal network, adding an X-Forwarded-Proto header.
+// Without trusting the proxy, req.protocol/req.secure would always report
+// "http" even though the public-facing request was HTTPS — which would leak
+// into things like the generated subscription URL.
+app.set("trust proxy", true);
+
 app.use(
   pinoHttp({
     logger,
