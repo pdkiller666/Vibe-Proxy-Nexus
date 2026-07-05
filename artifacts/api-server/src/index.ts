@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { seedDefaultAdmin } from "./lib/seedAdmin";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,9 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Fire-and-forget: never block startup on the DB. If it's briefly
+  // unreachable at boot, this just logs and does nothing — same as the
+  // background schema push.
+  void seedDefaultAdmin();
 });

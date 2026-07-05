@@ -3,3 +3,4 @@
 - [No email provider configured](no-email-provider.md) — password reset and similar flows return the link in-app instead of emailing it; check before assuming email delivery works.
 - [Deploy workflow](deploy-workflow.md) — deploying == pushing to GitHub (Amvera auto-builds); use `./deploy.sh "message"` since main agent's shell blocks `git push`.
 - [Session/token expiry boundary semantics](session-expiry-boundary.md) — a row seeded with expiresAt=now IS deleted by lt(expiresAt, new Date()) cleanup queries, since real time always advances before the query runs.
+- [Amvera amvera.yaml real schema](amvera-yaml-schema.md) — no `ports` list field exists at all, only `run.containerPort` (single int); clean build log does not mean config is valid, check app log too.
