@@ -43,9 +43,9 @@ export default function Payments() {
                 <div
                   key={payment.id}
                   style={{ animationDelay: `${i * 60}ms` }}
-                  className="bg-card border border-border p-5 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-1 duration-500"
+                  className="bg-card border border-border p-5 flex items-center justify-between gap-4 flex-wrap animate-in fade-in slide-in-from-bottom-1 duration-500"
                 >
-                  <div>
+                  <div className="min-w-0 break-words">
                     <div className="font-bold">{payment.amountRub} ₽</div>
                     <div className="text-sm text-muted-foreground font-mono">
                       {formatDate(payment.createdAt)} · {payment.reference}
@@ -55,7 +55,7 @@ export default function Payments() {
                     )}
                   </div>
                   <span
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold ${status.className}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold shrink-0 ${status.className}`}
                   >
                     <StatusIcon className="w-3.5 h-3.5" />
                     {status.label}

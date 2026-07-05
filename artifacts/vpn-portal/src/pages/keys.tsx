@@ -140,16 +140,16 @@ export default function Keys() {
                 key.revokedAt ? "border-border opacity-50" : "border-border"
               }`}
             >
-              <div className="flex items-center justify-between gap-4 mb-3">
-                <div className="flex items-center gap-2 font-bold">
-                  <KeyRound className="w-4 h-4 text-primary" />
+              <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
+                <div className="flex items-center gap-2 font-bold min-w-0 break-words">
+                  <KeyRound className="w-4 h-4 text-primary shrink-0" />
                   {key.label} <span className="text-muted-foreground font-normal font-mono text-sm">· {key.nodeName}</span>
                 </div>
                 {!key.revokedAt && (
                   <button
                     onClick={() => handleRevoke(key.id)}
                     disabled={revokingId === key.id}
-                    className="flex items-center gap-1.5 text-sm text-destructive hover:opacity-70 transition-opacity"
+                    className="flex items-center gap-1.5 text-sm text-destructive hover:opacity-70 transition-opacity shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Отозвать

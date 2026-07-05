@@ -270,8 +270,8 @@ function PlansManagement() {
         editingId === plan.id ? (
           <PlanForm key={plan.id} plan={plan} onDone={() => setEditingId(null)} />
         ) : (
-          <div key={plan.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4">
-            <div>
+          <div key={plan.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0 break-words">
               <div className="font-bold">
                 {plan.name} {!plan.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
               </div>
@@ -279,7 +279,7 @@ function PlansManagement() {
                 {plan.priceRub} ₽ · {plan.durationDays} дней
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <button onClick={() => setEditingId(plan.id)} className="p-2 text-muted-foreground hover:text-primary">
                 <Pencil className="w-4 h-4" />
               </button>
@@ -430,17 +430,17 @@ function NodesManagement() {
         editingId === node.id ? (
           <NodeForm key={node.id} node={node} onDone={() => setEditingId(null)} />
         ) : (
-          <div key={node.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4">
-            <div>
+          <div key={node.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0 break-words">
               <div className="font-bold">
                 {node.name} <span className="text-muted-foreground font-normal">· {node.region}</span>
                 {!node.isActive && <span className="text-muted-foreground font-normal"> (неактивен)</span>}
               </div>
-              <div className="text-sm text-muted-foreground font-mono">
+              <div className="text-sm text-muted-foreground font-mono break-all">
                 {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <button onClick={() => setEditingId(node.id)} className="p-2 text-muted-foreground hover:text-primary">
                 <Pencil className="w-4 h-4" />
               </button>
@@ -505,14 +505,14 @@ function UsersManagement() {
     <div className="space-y-3">
       {users?.map((user) => (
         <div key={user.id} className="bg-card border border-border p-4 space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="font-bold">{user.email}</div>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0 break-words">
+              <div className="font-bold break-all">{user.email}</div>
               <div className="text-sm text-muted-foreground font-mono">
                 {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap shrink-0">
               <button
                 onClick={() => generateResetLink(user.id)}
                 disabled={resettingPassword}

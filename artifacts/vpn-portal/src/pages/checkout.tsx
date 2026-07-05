@@ -13,17 +13,17 @@ import { Copy, CheckCircle2, Clock, XCircle } from "lucide-react";
 function CopyField({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
   return (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-border last:border-0">
-      <div>
+    <div className="flex items-center justify-between gap-4 flex-wrap py-3 border-b border-border last:border-0">
+      <div className="min-w-0 break-words">
         <div className="text-xs font-mono text-muted-foreground uppercase">{label}</div>
-        <div className="font-medium">{value}</div>
+        <div className="font-medium break-all">{value}</div>
       </div>
       <button
         onClick={() => {
           navigator.clipboard.writeText(value);
           toast({ title: "Скопировано" });
         }}
-        className="p-2 text-muted-foreground hover:text-primary transition-colors"
+        className="p-2 text-muted-foreground hover:text-primary transition-colors shrink-0"
         aria-label="Копировать"
       >
         <Copy className="w-4 h-4" />
