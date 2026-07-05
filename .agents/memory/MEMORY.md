@@ -4,3 +4,5 @@
 - [Deploy workflow](deploy-workflow.md) — deploying == pushing to GitHub (Amvera auto-builds); use `./deploy.sh "message"` since main agent's shell blocks `git push`.
 - [Session/token expiry boundary semantics](session-expiry-boundary.md) — a row seeded with expiresAt=now IS deleted by lt(expiresAt, new Date()) cleanup queries, since real time always advances before the query runs.
 - [Amvera amvera.yaml real schema](amvera-yaml-schema.md) — no `ports` list field exists at all, only `run.containerPort` (single int); clean build log does not mean config is valid, check app log too.
+- [Amvera internal DB TLS verification](amvera-internal-db-tls.md) — sslmode=require against self-signed CNPG cert breaks every query identically (looks like missing schema, isn't); fix with rejectUnauthorized:false.
+- [VPN node seeding](vpn-node-seeding.md) — key issuance 404s if `vpn_nodes` is empty; all-in-one deploy needs one row seeded from REALITY_* env vars, not automatic.
