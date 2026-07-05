@@ -7,19 +7,17 @@ build:
   dockerfile: Dockerfile
 
 run:
+  # Amvera's amvera.yaml schema only accepts a plain list of port numbers
+  # here (the `number`/`protocol` object form is rejected as an "unknown
+  # field" — confirmed by a failed deploy). Listing 8080 first is intentional:
+  # it's the web UI + API (HTTP), and should be what the public domain
+  # (https://...amvera.tech) routes to. 443 is Xray's raw VLESS-XTLS-Reality
+  # port; reaching it from the internet requires the "Dedicated IPv4" add-on
+  # in the Amvera dashboard — without it, only the web UI on 8080 is
+  # reachable from the public domain.
   ports:
-    # Web UI + API — plain HTTP, this is what Amvera should route the public
-    # domain (https://...amvera.tech) to.
-    - number: 8080
-    # Xray VPN (VLESS-XTLS-Reality) — raw TCP, NOT HTTP. Must be tagged
-    # `protocol: tcp` explicitly, otherwise Amvera's ingress may try to
-    # terminate HTTPS on this port too (since 443 is the standard HTTPS
-    # port), which breaks routing for the whole domain (503 on everything,
-    # even though the app itself is healthy). Reaching this port from the
-    # internet also requires the "Dedicated IPv4" add-on in the Amvera
-    # dashboard — without it, only the web UI on 8080 is reachable.
-    - number: 443
-      protocol: tcp
+    - 8080
+    - 443
   # Persist the live Xray config (issued clients) across restarts/redeploys.
   persistenceMount: /etc/xray
   # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required
