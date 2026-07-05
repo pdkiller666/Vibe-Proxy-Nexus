@@ -1,5 +1,4 @@
 import express, { type Express } from "express";
-import net from "net";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
@@ -7,7 +6,6 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { mountStaticFrontend } from "./lib/staticServer";
 import { getSessionSecret, startSessionCleanupJob } from "./lib/session";
-import { VPN_WS_PATH } from "./lib/vless";
 
 const app: Express = express();
 
@@ -37,26 +35,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(getSessionSecret()));
 
 app.use("/api", router);
-
-// Diagnostic endpoint (temporary): confirms which build is live and whether the
-// local Xray WebSocket inbound is reachable from this process.
-app.get("/api/vpn-diag", (_req, res) => {
-  const probe = net.connect(10000, "127.0.0.1");
-  const finish = (xrayReachable: boolean) => {
-    probe.destroy();
-    res.json({
-      ok: true,
-      marker: "ws-diag-1",
-      transport: "ws",
-      wsPath: VPN_WS_PATH,
-      xrayReachable,
-    });
-  };
-  probe.setTimeout(2000);
-  probe.once("connect", () => finish(true));
-  probe.once("timeout", () => finish(false));
-  probe.once("error", () => finish(false));
-});
 
 // In the all-in-one deployment, also serve the built frontend from this process.
 // No-op when STATIC_DIR is unset (e.g. Replit dev).
