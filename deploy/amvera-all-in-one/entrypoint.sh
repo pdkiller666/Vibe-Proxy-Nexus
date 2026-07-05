@@ -3,7 +3,7 @@
 # runs both Xray-core (VPN, port 443) and the Node web+API server (port $PORT).
 set -e
 
-: "${REALITY_SNI:?REALITY_SNI is required}"
+export REALITY_SNI="${REALITY_SNI:-www.microsoft.com}"
 : "${REALITY_PRIVATE_KEY:?REALITY_PRIVATE_KEY is required}"
 : "${REALITY_SHORT_ID:?REALITY_SHORT_ID is required}"
 : "${DATABASE_URL:?DATABASE_URL is required}"
