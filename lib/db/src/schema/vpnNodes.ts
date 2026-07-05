@@ -19,6 +19,9 @@ export const vpnNodesTable = pgTable("vpn_nodes", {
   shortId: text("short_id"),
   sni: text("sni").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  // Optional cap on concurrently-active VPN keys this node will serve. Null
+  // means unlimited. Enforced at key-issuance time in vpnKeys.ts.
+  maxUsers: integer("max_users"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -223,6 +223,9 @@ export interface VpnNode {
   port?: number;
   sni: string;
   isActive: boolean;
+  /** @nullable */
+  maxUsers?: number | null;
+  activeUserCount?: number;
   createdAt?: string;
 }
 
@@ -241,6 +244,11 @@ export interface VpnNodeInput {
   /** @minLength 1 */
   sni: string;
   isActive?: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxUsers?: number | null;
 }
 
 export interface VpnNodeUpdate {
@@ -258,6 +266,11 @@ export interface VpnNodeUpdate {
   /** @minLength 1 */
   sni?: string;
   isActive?: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxUsers?: number | null;
 }
 
 export interface VpnKey {

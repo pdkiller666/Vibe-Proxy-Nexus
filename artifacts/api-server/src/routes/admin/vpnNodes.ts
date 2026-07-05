@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, vpnNodesTable } from "@workspace/db";
+import { eq, isNull, and, sql } from "drizzle-orm";
+import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import {
   CreateVpnNodeBody,
   CreateVpnNodeResponse,
@@ -22,7 +22,7 @@ router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Pro
   }
 
   const [node] = await db.insert(vpnNodesTable).values(parsed.data).returning();
-  res.status(201).json(CreateVpnNodeResponse.parse(node));
+  res.status(201).json(CreateVpnNodeResponse.parse({ ...node, activeUserCount: 0 }));
 });
 
 router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, res): Promise<void> => {
@@ -51,7 +51,12 @@ router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, 
     return;
   }
 
-  res.json(UpdateVpnNodeResponse.parse(node));
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(vpnKeysTable)
+    .where(and(eq(vpnKeysTable.nodeId, node.id), isNull(vpnKeysTable.revokedAt)));
+
+  res.json(UpdateVpnNodeResponse.parse({ ...node, activeUserCount: count }));
 });
 
 router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, res): Promise<void> => {

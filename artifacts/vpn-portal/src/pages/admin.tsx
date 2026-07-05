@@ -319,6 +319,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   const [panelLogin, setPanelLogin] = useState("");
   const [panelPassword, setPanelPassword] = useState("");
   const [isActive, setIsActive] = useState(node?.isActive ?? true);
+  const [maxUsers, setMaxUsers] = useState(node?.maxUsers != null ? String(node.maxUsers) : "");
 
   function handleSubmit() {
     const body = {
@@ -333,6 +334,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       panelLogin: panelLogin || undefined,
       panelPassword: panelPassword || undefined,
       isActive,
+      maxUsers: maxUsers ? Number(maxUsers) : null,
     };
     const onSuccess = () => {
       queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
@@ -368,6 +370,12 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           className="rounded-none"
         />
         <Input placeholder="Short ID" value={shortId} onChange={(e) => setShortId(e.target.value)} className="rounded-none" />
+        <Input
+          placeholder="Лимит пользователей (пусто = без лимита)"
+          value={maxUsers}
+          onChange={(e) => setMaxUsers(e.target.value.replace(/[^0-9]/g, ""))}
+          className="rounded-none"
+        />
         <Input placeholder="Panel URL" value={panelUrl} onChange={(e) => setPanelUrl(e.target.value)} className="rounded-none" />
         <Input
           placeholder="Panel Login"
@@ -438,6 +446,10 @@ function NodesManagement() {
               </div>
               <div className="text-sm text-muted-foreground font-mono break-all">
                 {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Клиентов: {node.activeUserCount}
+                {node.maxUsers != null ? ` / ${node.maxUsers}` : ""}
               </div>
             </div>
             <div className="flex gap-2 shrink-0">

@@ -809,6 +809,8 @@ components:
         port: { type: integer }
         sni: { type: string }
         isActive: { type: boolean }
+        maxUsers: { type: ["integer", "null"] }
+        activeUserCount: { type: integer }
         createdAt: { type: string, format: date-time }
 
     VpnNodeInput:
@@ -826,6 +828,7 @@ components:
         shortId: { type: string }
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
+        maxUsers: { type: ["integer", "null"], minimum: 1 }
 
     VpnNodeUpdate:
       type: object
@@ -841,6 +844,7 @@ components:
         shortId: { type: string }
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
+        maxUsers: { type: ["integer", "null"], minimum: 1 }
 
     VpnKey:
       type: object

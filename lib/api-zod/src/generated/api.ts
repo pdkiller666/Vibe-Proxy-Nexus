@@ -154,6 +154,8 @@ export const ListVpnNodesResponseItem = zod.object({
   "port": zod.number().optional(),
   "sni": zod.string(),
   "isActive": zod.boolean(),
+  "maxUsers": zod.number().nullish(),
+  "activeUserCount": zod.number().optional(),
   "createdAt": zod.coerce.date().optional()
 })
 export const ListVpnNodesResponse = zod.array(ListVpnNodesResponseItem)
@@ -503,6 +505,7 @@ export const RejectPaymentResponse = zod.object({
 
 
 
+
 export const CreateVpnNodeBody = zod.object({
   "name": zod.string().min(1),
   "region": zod.string().min(1),
@@ -514,7 +517,8 @@ export const CreateVpnNodeBody = zod.object({
   "publicKey": zod.string().optional(),
   "shortId": zod.string().optional(),
   "sni": zod.string().min(1),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "maxUsers": zod.number().min(1).nullish()
 })
 
 export const CreateVpnNodeResponse = zod.object({
@@ -525,6 +529,8 @@ export const CreateVpnNodeResponse = zod.object({
   "port": zod.number().optional(),
   "sni": zod.string(),
   "isActive": zod.boolean(),
+  "maxUsers": zod.number().nullish(),
+  "activeUserCount": zod.number().optional(),
   "createdAt": zod.coerce.date().optional()
 })
 
@@ -535,6 +541,7 @@ export const CreateVpnNodeResponse = zod.object({
 export const UpdateVpnNodeParams = zod.object({
   "nodeId": zod.coerce.number()
 })
+
 
 
 
@@ -552,7 +559,8 @@ export const UpdateVpnNodeBody = zod.object({
   "publicKey": zod.string().optional(),
   "shortId": zod.string().optional(),
   "sni": zod.string().min(1).optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "maxUsers": zod.number().min(1).nullish()
 })
 
 export const UpdateVpnNodeResponse = zod.object({
@@ -563,6 +571,8 @@ export const UpdateVpnNodeResponse = zod.object({
   "port": zod.number().optional(),
   "sni": zod.string(),
   "isActive": zod.boolean(),
+  "maxUsers": zod.number().nullish(),
+  "activeUserCount": zod.number().optional(),
   "createdAt": zod.coerce.date().optional()
 })
 

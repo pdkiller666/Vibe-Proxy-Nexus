@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { db, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import {
   CreateVpnKeyBody,
@@ -62,22 +62,60 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Nodes with a maxUsers cap are excluded from selection once their
+  // non-revoked key count reaches the limit, so a single overloaded box
+  // can't be crammed with more clients than it was sized for.
+  const activeCounts = db
+    .select({
+      nodeId: vpnKeysTable.nodeId,
+      count: sql<number>`count(*)::int`.as("count"),
+    })
+    .from(vpnKeysTable)
+    .where(isNull(vpnKeysTable.revokedAt))
+    .groupBy(vpnKeysTable.nodeId)
+    .as("active_counts");
+
+  const nodeHasCapacity = or(
+    isNull(vpnNodesTable.maxUsers),
+    sql`coalesce(${activeCounts.count}, 0) < ${vpnNodesTable.maxUsers}`,
+  );
+
   let node;
   if (parsed.data.nodeId) {
     [node] = await db
-      .select()
+      .select({ node: vpnNodesTable })
       .from(vpnNodesTable)
-      .where(and(eq(vpnNodesTable.id, parsed.data.nodeId), eq(vpnNodesTable.isActive, true)));
+      .leftJoin(activeCounts, eq(activeCounts.nodeId, vpnNodesTable.id))
+      .where(
+        and(eq(vpnNodesTable.id, parsed.data.nodeId), eq(vpnNodesTable.isActive, true), nodeHasCapacity),
+      )
+      .then((rows) => rows.map((r) => r.node));
   } else {
     [node] = await db
-      .select()
+      .select({ node: vpnNodesTable })
       .from(vpnNodesTable)
-      .where(eq(vpnNodesTable.isActive, true))
+      .leftJoin(activeCounts, eq(activeCounts.nodeId, vpnNodesTable.id))
+      .where(and(eq(vpnNodesTable.isActive, true), nodeHasCapacity))
       .orderBy(asc(vpnNodesTable.id))
-      .limit(1);
+      .limit(1)
+      .then((rows) => rows.map((r) => r.node));
   }
 
   if (!node) {
+    // Distinguish "node doesn't exist / is inactive" from "node exists but
+    // is full" only for the explicit-nodeId case, since that's actionable
+    // feedback for the user; the auto-select case just means no capacity
+    // anywhere right now.
+    if (parsed.data.nodeId) {
+      const [requested] = await db
+        .select()
+        .from(vpnNodesTable)
+        .where(and(eq(vpnNodesTable.id, parsed.data.nodeId), eq(vpnNodesTable.isActive, true)));
+      if (requested) {
+        res.status(409).json({ error: "Selected VPN node has reached its user capacity" });
+        return;
+      }
+    }
     res.status(404).json({ error: "No available VPN node found" });
     return;
   }

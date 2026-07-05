@@ -21,4 +21,9 @@ export interface VpnNodeUpdate {
   /** @minLength 1 */
   sni?: string;
   isActive?: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxUsers?: number | null;
 }
