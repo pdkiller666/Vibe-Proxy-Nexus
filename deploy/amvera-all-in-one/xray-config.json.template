@@ -13,7 +13,10 @@
       },
       "streamSettings": {
         "network": "tcp",
-        "security": "none"
+        "security": "none",
+        "sockopt": {
+          "acceptProxyProtocol": true
+        }
       },
       "sniffing": {
         "enabled": true,
