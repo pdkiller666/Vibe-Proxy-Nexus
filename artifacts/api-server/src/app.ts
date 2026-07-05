@@ -8,6 +8,7 @@ import { logger } from "./lib/logger";
 import { mountStaticFrontend } from "./lib/staticServer";
 import { getSessionSecret, startSessionCleanupJob } from "./lib/session";
 import { corsOriginCheck } from "./lib/corsOrigins";
+import { startSubscriptionExpiryJob } from "./lib/subscriptionLifecycle";
 
 const app: Express = express();
 
@@ -56,5 +57,6 @@ app.use("/api", router);
 mountStaticFrontend(app);
 
 startSessionCleanupJob();
+startSubscriptionExpiryJob();
 
 export default app;

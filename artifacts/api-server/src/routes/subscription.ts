@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db, subscriptionsTable, vpnKeysTable } from "@workspace/db";
 import { BRAND_NAME, SUBSCRIPTION_UPDATE_INTERVAL_HOURS, verifySubscriptionToken } from "../lib/subscription";
 
@@ -18,15 +18,30 @@ router.get("/sub/:token", async (req, res): Promise<void> => {
     return;
   }
 
-  const keys = await db
-    .select()
-    .from(vpnKeysTable)
-    .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
-
+  // Gate the served keys on a currently-valid subscription (not just the
+  // "active" status string, which can lag behind endsAt until the periodic
+  // expiry sweep runs — see subscriptionLifecycle.ts). Without this check, a
+  // user whose subscription lapsed keeps pulling working keys from this
+  // public, token-only endpoint until the sweep catches up and revokes them.
   const [activeSubscription] = await db
     .select()
     .from(subscriptionsTable)
-    .where(and(eq(subscriptionsTable.userId, userId), eq(subscriptionsTable.status, "active")));
+    .where(
+      and(
+        eq(subscriptionsTable.userId, userId),
+        eq(subscriptionsTable.status, "active"),
+        or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, new Date())),
+      ),
+    )
+    .orderBy(desc(subscriptionsTable.endsAt))
+    .limit(1);
+
+  const keys = activeSubscription
+    ? await db
+        .select()
+        .from(vpnKeysTable)
+        .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)))
+    : [];
 
   const body = Buffer.from(keys.map((key) => key.vlessLink).join("\n"), "utf8").toString("base64");
 

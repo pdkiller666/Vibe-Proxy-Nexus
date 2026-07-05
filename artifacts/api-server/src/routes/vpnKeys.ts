@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import {
   CreateVpnKeyBody,
@@ -44,10 +44,18 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // See meResponse.ts for why endsAt is re-checked here rather than trusting
+  // status alone: the expiry sweep runs periodically, not instantly.
   const [activeSubscription] = await db
     .select()
     .from(subscriptionsTable)
-    .where(and(eq(subscriptionsTable.userId, user.id), eq(subscriptionsTable.status, "active")));
+    .where(
+      and(
+        eq(subscriptionsTable.userId, user.id),
+        eq(subscriptionsTable.status, "active"),
+        or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, new Date())),
+      ),
+    );
 
   if (!activeSubscription) {
     res.status(403).json({ error: "An active subscription is required to issue a VPN key" });

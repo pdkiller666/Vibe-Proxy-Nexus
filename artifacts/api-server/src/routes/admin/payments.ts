@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, paymentsTable, plansTable, subscriptionsTable, usersTable } from "@workspace/db";
 import {
   ConfirmPaymentParams,
@@ -75,6 +75,15 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     return;
   }
 
+  // Idempotency guard: the payment.status check above already blocks most
+  // double-confirm races, but this catches the case where the subscription
+  // row itself was already activated (e.g. by a concurrent request that won
+  // the race between the two selects above).
+  if (subscription.status === "active") {
+    res.status(409).json({ error: "Subscription is already active" });
+    return;
+  }
+
   const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, subscription.planId));
 
   if (!plan) {
@@ -82,19 +91,54 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     return;
   }
 
-  const startsAt = new Date();
+  // If the user already has another currently-active subscription (e.g. they
+  // paid for a renewal before their current period ran out), chain the new
+  // period onto the end of it instead of restarting the clock from now and
+  // silently discarding the remaining paid-for time.
+  const [currentActive] = await db
+    .select()
+    .from(subscriptionsTable)
+    .where(and(eq(subscriptionsTable.userId, subscription.userId), eq(subscriptionsTable.status, "active")))
+    .orderBy(desc(subscriptionsTable.endsAt))
+    .limit(1);
+
+  const now = new Date();
+  const startsAt = currentActive?.endsAt && currentActive.endsAt > now ? currentActive.endsAt : now;
   const endsAt = new Date(startsAt.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
-  await db
-    .update(subscriptionsTable)
-    .set({ status: "active", startsAt, endsAt })
-    .where(eq(subscriptionsTable.id, subscription.id));
+  // Both writes must land together: if the process died between them we'd
+  // otherwise end up with either an activated subscription backed by an
+  // unconfirmed payment, or a confirmed payment for a subscription that was
+  // never actually activated.
+  let updatedPayment;
+  try {
+    updatedPayment = await db.transaction(async (tx) => {
+      const [updatedSubscription] = await tx
+        .update(subscriptionsTable)
+        .set({ status: "active", startsAt, endsAt })
+        .where(and(eq(subscriptionsTable.id, subscription.id), eq(subscriptionsTable.status, subscription.status)))
+        .returning();
 
-  const [updatedPayment] = await db
-    .update(paymentsTable)
-    .set({ status: "confirmed", confirmedAt: new Date() })
-    .where(eq(paymentsTable.id, payment.id))
-    .returning();
+      if (!updatedSubscription) {
+        throw new Error("Subscription state changed concurrently");
+      }
+
+      const [updatedPay] = await tx
+        .update(paymentsTable)
+        .set({ status: "confirmed", confirmedAt: new Date() })
+        .where(and(eq(paymentsTable.id, payment.id), eq(paymentsTable.status, "pending")))
+        .returning();
+
+      if (!updatedPay) {
+        throw new Error("Payment state changed concurrently");
+      }
+
+      return updatedPay;
+    });
+  } catch {
+    res.status(409).json({ error: "Payment or subscription state changed concurrently, please retry" });
+    return;
+  }
 
   res.json(ConfirmPaymentResponse.parse(updatedPayment));
 });
@@ -129,16 +173,32 @@ router.post("/admin/payments/:paymentId/reject", requireAuth, requireAdmin, asyn
     return;
   }
 
-  await db
-    .update(subscriptionsTable)
-    .set({ status: "rejected" })
-    .where(eq(subscriptionsTable.id, payment.subscriptionId));
+  let updatedPayment;
+  try {
+    updatedPayment = await db.transaction(async (tx) => {
+      await tx
+        .update(subscriptionsTable)
+        .set({ status: "rejected" })
+        .where(
+          and(eq(subscriptionsTable.id, payment.subscriptionId), eq(subscriptionsTable.status, "pending_payment")),
+        );
 
-  const [updatedPayment] = await db
-    .update(paymentsTable)
-    .set({ status: "rejected", rejectionReason: parsed.data.reason })
-    .where(eq(paymentsTable.id, payment.id))
-    .returning();
+      const [updatedPay] = await tx
+        .update(paymentsTable)
+        .set({ status: "rejected", rejectionReason: parsed.data.reason })
+        .where(and(eq(paymentsTable.id, payment.id), eq(paymentsTable.status, "pending")))
+        .returning();
+
+      if (!updatedPay) {
+        throw new Error("Payment state changed concurrently");
+      }
+
+      return updatedPay;
+    });
+  } catch {
+    res.status(409).json({ error: "Payment or subscription state changed concurrently, please retry" });
+    return;
+  }
 
   res.json(RejectPaymentResponse.parse(updatedPayment));
 });

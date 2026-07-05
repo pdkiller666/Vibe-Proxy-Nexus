@@ -49,6 +49,7 @@ describe("admin payments confirm/reject flow", () => {
   let planId: number;
   const subscriptionIds: number[] = [];
   const paymentIds: number[] = [];
+  const extraUserIds: number[] = [];
 
   beforeAll(async () => {
     const admin = await createUser("admin");
@@ -79,6 +80,9 @@ describe("admin payments confirm/reject flow", () => {
     await db.delete(plansTable).where(eq(plansTable.id, planId));
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     await db.delete(usersTable).where(eq(usersTable.id, adminId));
+    for (const id of extraUserIds) {
+      await db.delete(usersTable).where(eq(usersTable.id, id));
+    }
   });
 
   async function seedPendingPayment(): Promise<{ subscriptionId: number; paymentId: number }> {
@@ -193,5 +197,80 @@ describe("admin payments confirm/reject flow", () => {
       .set("Cookie", adminCookie);
 
     expect(res.status).toBe(404);
+  });
+
+  it("chains an early renewal onto the end of the current active period instead of restarting the clock", async () => {
+    // Use a dedicated user so earlier tests' leftover active subscriptions
+    // for the shared `userId` (only cleaned up in afterAll) can't affect
+    // which "current active" row this test's renewal chains onto.
+    const renewalUser = await createUser("user");
+    extraUserIds.push(renewalUser.id);
+
+    const currentEndsAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+    const [currentSubscription] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId: renewalUser.id,
+        planId,
+        status: "active",
+        startsAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000),
+        endsAt: currentEndsAt,
+      })
+      .returning({ id: subscriptionsTable.id });
+    subscriptionIds.push(currentSubscription.id);
+
+    const [pendingSubscription] = await db
+      .insert(subscriptionsTable)
+      .values({ userId: renewalUser.id, planId, status: "pending_payment" })
+      .returning({ id: subscriptionsTable.id });
+    subscriptionIds.push(pendingSubscription.id);
+
+    const [pendingPayment] = await db
+      .insert(paymentsTable)
+      .values({
+        subscriptionId: pendingSubscription.id,
+        userId: renewalUser.id,
+        provider: "manual_sbp",
+        amountRub: 10000,
+        status: "pending",
+        reference: `TEST-${randomBytes(4).toString("hex")}`,
+      })
+      .returning({ id: paymentsTable.id });
+    paymentIds.push(pendingPayment.id);
+
+    const renewalSubscriptionId = pendingSubscription.id;
+    const paymentId = pendingPayment.id;
+
+    const res = await request
+      .post(`/api/admin/payments/${paymentId}/confirm`)
+      .set("Cookie", adminCookie);
+
+    expect(res.status).toBe(200);
+
+    const [renewedSubscription] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, renewalSubscriptionId));
+
+    expect(renewedSubscription?.status).toBe("active");
+    expect(renewedSubscription?.startsAt?.getTime()).toBe(currentEndsAt.getTime());
+    expect(renewedSubscription?.endsAt?.getTime()).toBe(
+      currentEndsAt.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+  });
+
+  it("returns 409 when confirming a payment whose subscription is already active", async () => {
+    const { subscriptionId, paymentId } = await seedPendingPayment();
+
+    await db
+      .update(subscriptionsTable)
+      .set({ status: "active", startsAt: new Date(), endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) })
+      .where(eq(subscriptionsTable.id, subscriptionId));
+
+    const res = await request
+      .post(`/api/admin/payments/${paymentId}/confirm`)
+      .set("Cookie", adminCookie);
+
+    expect(res.status).toBe(409);
   });
 });
