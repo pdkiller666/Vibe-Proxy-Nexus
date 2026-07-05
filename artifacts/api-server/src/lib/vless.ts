@@ -11,24 +11,25 @@ export function generatePaymentReference(subscriptionId: number): string {
 }
 
 /**
- * Builds a VLESS-XTLS-Reality connection URI for a given node + client UUID.
+ * Builds a VLESS + TLS connection URI for a given node + client UUID.
  *
- * NOTE: Until a real Xray-core node (see deploy/amvera-vpn-node) is deployed and
- * this node's connection details are filled in via the admin panel, the link is
- * syntactically valid but not connectable — there is no live Reality endpoint
- * behind it yet.
+ * Amvera's edge (Traefik) always terminates TLS with a real Let's Encrypt
+ * certificate for the node's domain and forwards the decrypted TCP stream to
+ * the container, so we ride on top of that TLS instead of using Reality (which
+ * requires owning the raw TLS handshake and is therefore incompatible with
+ * Amvera's TLS termination — see .agents/memory/amvera-raw-tcp-port.md). The
+ * client speaks plain VLESS over the TLS tunnel Amvera provides; Xray inside
+ * the container listens for plain VLESS (security "none").
  */
 export function buildVlessLink(node: VpnNode, uuid: string, label: string): string {
   const host = node.host || node.sni;
   const port = node.port ?? 443;
   const params = new URLSearchParams({
     type: "tcp",
-    security: "reality",
-    pbk: node.publicKey ?? "",
-    fp: "chrome",
+    security: "tls",
     sni: node.sni,
-    sid: node.shortId ?? "",
-    flow: "xtls-rprx-vision",
+    fp: "chrome",
+    encryption: "none",
   });
 
   return `vless://${uuid}@${host}:${port}?${params.toString()}#${encodeURIComponent(label)}`;

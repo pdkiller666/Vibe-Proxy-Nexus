@@ -14,7 +14,6 @@ import { promises as fs } from "fs";
 import { spawn } from "child_process";
 
 const CONFIG_PATH = process.env["XRAY_CONFIG_PATH"];
-const XRAY_FLOW = "xtls-rprx-vision";
 
 interface XrayClient {
   id: string;
@@ -74,7 +73,7 @@ export async function addXrayClient(uuid: string, email: string): Promise<void> 
     const config = await readConfig();
     const clients = getClients(config);
     if (clients.some((c) => c.id === uuid)) return;
-    clients.push({ id: uuid, email, flow: XRAY_FLOW });
+    clients.push({ id: uuid, email });
     await writeConfig(config);
     await reloadXray();
   });

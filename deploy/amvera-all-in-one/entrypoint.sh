@@ -3,31 +3,24 @@
 # runs both Xray-core (VPN, port 443) and the Node web+API server (port $PORT).
 set -e
 
-# REALITY_DEST is the real HTTPS site Xray "steals" a genuine TLS handshake
-# from (camouflage). REALITY_SNI is the domain name Xray accepts from clients'
-# ClientHello (serverNames) — it defaults to REALITY_DEST, but on Amvera
-# without Dedicated IPv4 it MUST be set to the platform's own TCP-SNI domain
-# (Настройки -> Домены -> тип MONGO/POSTGRES/REDIS), e.g.
-# "myapp.user.tcp-waw0.amvera.tech", since Amvera's TCP ingress routes
-# purely by the SNI it sees on ports 5432/27017/6379. See
-# .agents/memory/amvera-raw-tcp-port.md.
-export REALITY_DEST="${REALITY_DEST:-www.microsoft.com}"
-export REALITY_SNI="${REALITY_SNI:-$REALITY_DEST}"
-: "${REALITY_PRIVATE_KEY:?REALITY_PRIVATE_KEY is required}"
-: "${REALITY_SHORT_ID:?REALITY_SHORT_ID is required}"
+# Xray listens for PLAIN VLESS (security "none") on port 443. TLS is provided by
+# Amvera's edge (Traefik), which terminates TLS with a real Let's Encrypt cert
+# for the node's domain and forwards the decrypted TCP stream into the
+# container. Clients therefore connect with security=tls + sni=<node domain>
+# and speak plain VLESS over that tunnel. No Reality keys are needed — Reality
+# is fundamentally incompatible with Amvera's TLS termination
+# (see .agents/memory/amvera-raw-tcp-port.md).
 : "${DATABASE_URL:?DATABASE_URL is required}"
 : "${SESSION_SECRET:?SESSION_SECRET is required}"
 
 export PORT="${PORT:-8080}"
 export XRAY_CONFIG_PATH="${XRAY_CONFIG_PATH:-/etc/xray/config.json}"
 
-# Always re-render the config from the template (so changes to REALITY_SNI /
-# REALITY_DEST / keys take effect on redeploy), but preserve the live list of
-# issued clients from the previous config on the persistent volume so
-# existing keys keep working.
+# Always re-render the config from the template (so template changes take effect
+# on redeploy), but preserve the live list of issued clients from the previous
+# config on the persistent volume so existing keys keep working.
 mkdir -p "$(dirname "$XRAY_CONFIG_PATH")"
-RENDERED="$(envsubst '${REALITY_SNI} ${REALITY_DEST} ${REALITY_PRIVATE_KEY} ${REALITY_SHORT_ID}' \
-  < /app/xray/config.json.template)"
+RENDERED="$(cat /app/xray/config.json.template)"
 if [ -f "$XRAY_CONFIG_PATH" ]; then
   printf '%s' "$RENDERED" | node -e '
     const fs = require("fs");

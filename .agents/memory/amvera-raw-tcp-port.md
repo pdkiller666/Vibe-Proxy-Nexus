@@ -1,29 +1,42 @@
 ---
-name: Amvera cannot expose raw TCP (non-HTTP) ports via containerPort
-description: containerPort in amvera.yml accepts a comma-separated port list, but Amvera's edge always terminates TLS itself on public 443 and forwards plain HTTP — confirmed this does not work for non-HTTP protocols like VLESS/Reality.
+name: Amvera cannot expose raw TCP (non-HTTP) ports — confirmed for both containerPort and the "TCP domain" (MONGO/POSTGRES/REDIS) feature
+description: Amvera's edge always terminates TLS itself with its own Let's Encrypt certificate and forwards decrypted traffic — true for the plain HTTP(S) controller AND for the dashboard's "TCP domain" connection-type feature. Confirmed this breaks VLESS-Reality.
 ---
 
 Amvera's dashboard config UI hints that `run.containerPort` accepts a
 comma-separated list (e.g. `"5000,3000,80"`), suggesting multi-port exposure
-might be possible without the paid "Dedicated IPv4" add-on.
+might be possible without the paid "Dedicated IPv4" add-on. Amvera docs also
+describe a "TCP domain" feature: attaching a domain with connection type
+MONGO/POSTGRES/REDIS on a fixed external port (5432/27017/6379), described
+as SNI-based routing "without TLS termination" (as opposed to the HTTP(S)
+controller, which always terminates TLS).
 
-**Tested and confirmed NOT to work** for raw/non-HTTP TCP protocols: setting
-`containerPort: "8080,443"` so that Xray's VLESS-XTLS-Reality listener (443)
-would be reachable alongside the web app (8080). External port 443 kept
-answering with Amvera's own `*.<subdomain>.amvera.tech` Let's Encrypt
-certificate regardless of the SNI sent (verified with direct `openssl
-s_client` probes against both the app's own domain and the Reality mask
-domain) — i.e. Amvera's edge terminates TLS itself on 443 for every app and
-forwards plain HTTP behind the scenes, it does not do raw TCP passthrough.
+**Tested and confirmed NOT to work for either mechanism:**
 
-**Why:** the multi-port list is for apps that expose multiple HTTP(S)
-endpoints on different internal ports, not a general TCP passthrough
-mechanism.
+1. `containerPort: "8080,443"` (web app + Reality on 443 sharing one
+   container) — external 443 still answers with Amvera's own domain
+   certificate regardless of SNI.
+2. Dashboard "TCP domain" with connection type MONGO, external port 27017,
+   pointed at a `tcp-waw0.amvera.tech` subdomain — `openssl s_client`
+   against `host:27017` still completes a full TLS handshake and returns a
+   valid Let's Encrypt certificate for `*.tcp-waw0.amvera.tech`. A raw
+   non-TLS byte probe (plain TCP, no ClientHello) gets silently swallowed
+   (no response, no error) rather than forwarded — confirming the edge is
+   parsing/terminating TLS, not blindly relaying bytes to the container.
 
-**How to apply:** any protocol that needs to own the raw TLS handshake
-itself (Reality, raw VLESS/Trojan, custom TCP protocols) cannot go out
-through `containerPort`. The only paths are: (1) Amvera's "Dedicated IPv4"
-add-on / manual port mapping in the dashboard's networking settings (paid,
-outside `amvera.yml`), or (2) hosting that specific service on infrastructure
-that supports raw TCP (a separate VPS), keeping only the HTTP web/API on
-Amvera.
+**Why:** despite the "TCP domain" naming and docs implying passthrough,
+Amvera's edge appears to terminate TLS for every public port/domain it
+manages using its own certs. There is no product path (short of the paid
+Dedicated IPv4 add-on) that delivers an unmodified TLS ClientHello to the
+container.
+
+**How to apply:** any protocol that must own the raw TLS handshake itself
+(Reality, raw VLESS/Trojan, custom TCP protocols) cannot be exposed through
+Amvera's shared free networking — neither via `containerPort` nor via the
+"TCP domain" feature. Viable paths going forward: (1) Dedicated IPv4 add-on
+(paid), (2) host that one service on separate infra with real TCP access,
+keeping only the HTTP web/API on Amvera, or (3) switch the VPN transport to
+something that tolerates edge TLS termination — e.g. VLESS over WebSocket
+with TLS handled by Amvera's own cert (client TLS terminates at Amvera,
+plaintext WS forwarded to the container) — trading away Reality's
+active-probing resistance for actually working within Amvera's free tier.
