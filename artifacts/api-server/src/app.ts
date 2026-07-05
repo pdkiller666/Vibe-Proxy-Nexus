@@ -5,7 +5,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { mountStaticFrontend } from "./lib/staticServer";
-import { getSessionSecret } from "./lib/session";
+import { getSessionSecret, startSessionCleanupJob } from "./lib/session";
 
 const app: Express = express();
 
@@ -39,5 +39,7 @@ app.use("/api", router);
 // In the all-in-one deployment, also serve the built frontend from this process.
 // No-op when STATIC_DIR is unset (e.g. Replit dev).
 mountStaticFrontend(app);
+
+startSessionCleanupJob();
 
 export default app;
