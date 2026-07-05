@@ -7,17 +7,20 @@ build:
   dockerfile: Dockerfile
 
 run:
-  # Amvera's amvera.yaml schema only accepts a plain list of port numbers
-  # here (the `number`/`protocol` object form is rejected as an "unknown
-  # field" — confirmed by a failed deploy). Listing 8080 first is intentional:
-  # it's the web UI + API (HTTP), and should be what the public domain
-  # (https://...amvera.tech) routes to. 443 is Xray's raw VLESS-XTLS-Reality
-  # port; reaching it from the internet requires the "Dedicated IPv4" add-on
-  # in the Amvera dashboard — without it, only the web UI on 8080 is
-  # reachable from the public domain.
-  ports:
-    - 8080
-    - 443
+  # IMPORTANT: Amvera's amvera.yaml schema has NO `ports` (list) field at
+  # all — that was always invalid and caused every deploy to fail with
+  # "Configuration error ... unknown fields: ports", even though the Docker
+  # build itself succeeded (the app just never actually started with the
+  # new config). The only supported field is `containerPort` (a single
+  # integer, default 80) — see https://docs.amvera.ru/applications/configuration/config-file.html
+  #
+  # containerPort is what the public https://...amvera.tech domain routes
+  # to — that must be the web UI + API (Node/Express on 8080). Xray's raw
+  # VLESS-XTLS-Reality port (443) is NOT reachable through this mechanism;
+  # exposing it to the internet requires the "Dedicated IPv4" add-on /
+  # separate TCP port mapping in the Amvera dashboard's networking settings
+  # (see deploy/amvera-all-in-one/README.md).
+  containerPort: 8080
   # Persist the live Xray config (issued clients) across restarts/redeploys.
   persistenceMount: /etc/xray
   # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required

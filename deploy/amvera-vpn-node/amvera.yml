@@ -7,9 +7,11 @@ build:
   dockerfile: Dockerfile
 
 run:
-  ports:
-    - 443
-    - 8443
+  # Amvera's amvera.yaml schema has no `ports` (list) field — only a single
+  # `containerPort` (integer). Any additional raw TCP ports (like Xray's 443
+  # here) must be exposed via the "Dedicated IPv4" add-on / networking
+  # settings in the Amvera dashboard, not via amvera.yaml.
+  containerPort: 8443
   persistenceMount: /etc/xray
   # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required
   # env vars (MGMT_API_SECRET, REALITY_PRIVATE_KEY, REALITY_PUBLIC_KEY,
