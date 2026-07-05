@@ -1,1 +1,2 @@
 - [Clerk Russian localization](clerk-localization.md) — custom `localization` prop overrides alone leave most Clerk UI in English; must spread `ruRU` from `@clerk/localizations` as base.
+- [Amvera pnpm build](amvera-pnpm-build.md) — root package.json must pin `packageManager: pnpm@10.x` or corepack grabs pnpm 11 in Docker and ignores `onlyBuiltDependencies`; build success ends at "Pushing image", rest is runtime env.
