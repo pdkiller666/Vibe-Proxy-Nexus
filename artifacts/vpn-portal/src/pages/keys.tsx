@@ -5,21 +5,24 @@ import {
   useListVpnNodes,
   useCreateVpnKey,
   useRevokeVpnKey,
+  useGetSubscriptionUrl,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown } from "lucide-react";
 
 export default function Keys() {
   const { data: me } = useGetMe();
   const { data: keys, isLoading } = useListMyVpnKeys();
   const { data: nodes } = useListVpnNodes();
+  const { data: subscription } = useGetSubscriptionUrl();
   const { mutate: createKey, isPending: creating } = useCreateVpnKey();
   const { mutate: revokeKey } = useRevokeVpnKey();
   const { toast } = useToast();
   const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [showManualLinks, setShowManualLinks] = useState(false);
 
   const activeKeys = keys?.filter((k) => !k.revokedAt) ?? [];
   const canIssue = !!me?.hasActiveSubscription;
@@ -89,6 +92,37 @@ export default function Keys() {
         </p>
       )}
 
+      {subscription?.url && activeKeys.length > 0 && (
+        <div className="bg-card border border-border p-5 space-y-3">
+          <div className="flex items-center gap-2 font-bold">
+            <RefreshCw className="w-4 h-4 text-primary" />
+            Ссылка подписки
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Рекомендуемый способ: добавьте эту ссылку один раз в приложение (Happ, v2rayNG, v2rayN — пункт «Добавить
+            подписку» / «Add subscription»). Приложение само подтягивает актуальные ключи при обновлении, поэтому
+            вручную ничего менять не нужно — и любые правки конфигурации внутри приложения будут перезаписаны при
+            следующем обновлении.
+          </p>
+          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+            <span className="truncate flex-1">{subscription.url}</span>
+            <button
+              onClick={() => copyLink(subscription.url)}
+              className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => setShowManualLinks((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showManualLinks ? "rotate-180" : ""}`} />
+            {showManualLinks ? "Скрыть отдельные ключи" : "Показать отдельные ключи для ручного импорта"}
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-28 w-full" />
@@ -96,7 +130,7 @@ export default function Keys() {
         </div>
       ) : !keys || keys.length === 0 ? (
         <p className="text-muted-foreground">Ключей пока нет.</p>
-      ) : (
+      ) : !subscription?.url || activeKeys.length === 0 || showManualLinks ? (
         <div className="space-y-3">
           {keys.map((key, i) => (
             <div
@@ -138,7 +172,7 @@ export default function Keys() {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

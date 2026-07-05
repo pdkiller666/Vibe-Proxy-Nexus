@@ -316,6 +316,14 @@ export const RevokeVpnKeyResponse = zod.void()
 
 
 /**
+ * @summary Get the current user's stable subscription URL (a self-updating link that aggregates all of the user's active VPN keys — add it once in the client app instead of pasting individual vless links).
+ */
+export const GetSubscriptionUrlResponse = zod.object({
+  "url": zod.string()
+})
+
+
+/**
  * @summary Admin dashboard summary metrics
  */
 export const GetAdminDashboardSummaryResponse = zod.object({

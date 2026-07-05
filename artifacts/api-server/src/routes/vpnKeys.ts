@@ -1,10 +1,17 @@
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
-import { CreateVpnKeyBody, CreateVpnKeyResponse, ListMyVpnKeysResponse, RevokeVpnKeyParams } from "@workspace/api-zod";
+import {
+  CreateVpnKeyBody,
+  CreateVpnKeyResponse,
+  GetSubscriptionUrlResponse,
+  ListMyVpnKeysResponse,
+  RevokeVpnKeyParams,
+} from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { buildDeepLink, buildVlessLink, generateKeyUuid } from "../lib/vless";
 import { addXrayClient, isLocalXrayEnabled, removeXrayClient } from "../lib/xray";
+import { BRAND_NAME, buildSubscriptionUrl } from "../lib/subscription";
 
 const router: IRouter = Router();
 
@@ -68,7 +75,10 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
   }
 
   const uuid = generateKeyUuid();
-  const label = parsed.data.label?.trim() || `${node.name} — ${user.email}`;
+  // Default label is the branded project name plus the node — never the
+  // user's email, since this string is shown as the profile name inside VPN
+  // client apps (Happ, v2rayNG, ...).
+  const label = parsed.data.label?.trim() || `${BRAND_NAME} — ${node.name}`;
   const vlessLink = buildVlessLink(node, uuid, label);
   const deepLink = buildDeepLink(vlessLink);
 
@@ -115,6 +125,16 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.status(201).json(CreateVpnKeyResponse.parse({ ...key, nodeName: node.name }));
+});
+
+// Stable, self-updating subscription URL for the current user. Add this once
+// in the VPN client app (Happ, v2rayNG, ...) instead of pasting individual
+// vless links — new/rotated keys show up automatically on the app's next
+// refresh, and the app overwrites any local edits the user makes.
+router.get("/vpn-keys/subscription-url", requireAuth, async (req, res): Promise<void> => {
+  const user = req.appUser!;
+  const url = buildSubscriptionUrl(req, user.id);
+  res.json(GetSubscriptionUrlResponse.parse({ url }));
 });
 
 router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> => {

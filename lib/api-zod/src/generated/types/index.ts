@@ -33,6 +33,7 @@ export * from './resetPasswordResult';
 export * from './subscription';
 export * from './subscriptionInput';
 export * from './subscriptionStatus';
+export * from './subscriptionUrl';
 export * from './userRole';
 export * from './userRoleUpdate';
 export * from './vpnKey';

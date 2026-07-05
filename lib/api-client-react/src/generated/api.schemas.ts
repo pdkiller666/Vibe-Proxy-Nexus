@@ -277,6 +277,10 @@ export interface VpnKeyInput {
   label?: string;
 }
 
+export interface SubscriptionUrl {
+  url: string;
+}
+
 export interface AdminUser {
   id: number;
   email: string;

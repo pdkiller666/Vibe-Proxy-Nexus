@@ -44,6 +44,7 @@ import type {
   ResetPasswordResult,
   Subscription,
   SubscriptionInput,
+  SubscriptionUrl,
   UserRoleUpdate,
   VpnKey,
   VpnKeyInput,
@@ -1326,6 +1327,83 @@ export const useRevokeVpnKey = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getRevokeVpnKeyMutationOptions(options));
     }
+
+export const getGetSubscriptionUrlUrl = () => {
+
+
+
+
+  return `/api/vpn-keys/subscription-url`
+}
+
+/**
+ * @summary Get the current user's stable subscription URL (a self-updating link that aggregates all of the user's active VPN keys — add it once in the client app instead of pasting individual vless links).
+ */
+export const getSubscriptionUrl = async ( options?: RequestInit): Promise<SubscriptionUrl> => {
+
+  return customFetch<SubscriptionUrl>(getGetSubscriptionUrlUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSubscriptionUrlQueryKey = () => {
+    return [
+    `/api/vpn-keys/subscription-url`
+    ] as const;
+    }
+
+
+export const getGetSubscriptionUrlQueryOptions = <TData = Awaited<ReturnType<typeof getSubscriptionUrl>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionUrl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSubscriptionUrlQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSubscriptionUrl>>> = ({ signal }) => getSubscriptionUrl({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionUrl>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSubscriptionUrlQueryResult = NonNullable<Awaited<ReturnType<typeof getSubscriptionUrl>>>
+export type GetSubscriptionUrlQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the current user's stable subscription URL (a self-updating link that aggregates all of the user's active VPN keys — add it once in the client app instead of pasting individual vless links).
+ */
+
+export function useGetSubscriptionUrl<TData = Awaited<ReturnType<typeof getSubscriptionUrl>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionUrl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSubscriptionUrlQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAdminDashboardSummaryUrl = () => {
 

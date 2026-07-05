@@ -305,6 +305,22 @@ paths:
         "204":
           description: Revoked
 
+  /vpn-keys/subscription-url:
+    get:
+      operationId: getSubscriptionUrl
+      tags: [vpn-keys]
+      summary: >-
+        Get the current user's stable subscription URL (a self-updating link
+        that aggregates all of the user's active VPN keys — add it once in the
+        client app instead of pasting individual vless links).
+      responses:
+        "200":
+          description: Subscription URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionUrl"
+
   /admin/dashboard/summary:
     get:
       operationId: getAdminDashboardSummary
@@ -844,6 +860,12 @@ components:
       properties:
         nodeId: { type: integer }
         label: { type: string }
+
+    SubscriptionUrl:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
 
     AdminUser:
       type: object
