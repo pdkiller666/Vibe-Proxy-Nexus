@@ -1,5 +1,6 @@
 export * from "./users";
 export * from "./sessions";
+export * from "./passwordResetTokens";
 export * from "./plans";
 export * from "./subscriptions";
 export * from "./payments";

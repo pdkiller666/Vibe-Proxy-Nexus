@@ -72,6 +72,37 @@ export const LogoutResponse = zod.void()
 
 
 /**
+ * @summary Start a password reset for the given email, if an account exists
+ */
+export const ForgotPasswordBody = zod.object({
+  "email": zod.string().email()
+})
+
+export const ForgotPasswordResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Complete a password reset using a reset token
+ */
+
+export const resetPasswordBodyPasswordMin = 8;
+export const resetPasswordBodyPasswordMax = 200;
+
+
+
+export const ResetPasswordBody = zod.object({
+  "token": zod.string().min(1),
+  "password": zod.string().min(resetPasswordBodyPasswordMin).max(resetPasswordBodyPasswordMax)
+})
+
+export const ResetPasswordResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
  * @summary Get current user profile
  */
 export const GetMeResponse = zod.object({
@@ -545,6 +576,18 @@ export const ListAdminUsersResponseItem = zod.object({
   "activeSubscriptions": zod.number().optional()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
+
+
+/**
+ * @summary Generate a one-time password reset link for a user (admin-assisted reset, no email sending configured)
+ */
+export const AdminResetUserPasswordParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const AdminResetUserPasswordResponse = zod.object({
+  "resetUrl": zod.string()
+})
 
 
 /**

@@ -36,6 +36,28 @@ export interface LoginInput {
   password: string;
 }
 
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface ForgotPasswordResult {
+  message: string;
+}
+
+export interface ResetPasswordInput {
+  /** @minLength 1 */
+  token: string;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  password: string;
+}
+
+export interface ResetPasswordResult {
+  message: string;
+}
+
 export interface Me {
   id: number;
   email: string;
@@ -260,6 +282,10 @@ export interface AdminUser {
   role: UserRole;
   createdAt: string;
   activeSubscriptions?: number;
+}
+
+export interface AdminPasswordResetResult {
+  resetUrl: string;
 }
 
 export interface UserRoleUpdate {

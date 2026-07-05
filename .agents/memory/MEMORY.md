@@ -1,2 +1,3 @@
 - [Amvera pnpm build](amvera-pnpm-build.md) — root package.json must pin `packageManager: pnpm@10.x` or corepack grabs pnpm 11 in Docker and ignores `onlyBuiltDependencies`; build success ends at "Pushing image", rest is runtime env.
 - [Session auth vs Clerk](session-auth-migration.md) — this project migrated off Clerk to custom email+password + DB-backed sessions; the old Clerk localization note no longer applies.
+- [No email provider configured](no-email-provider.md) — password reset and similar flows return the link in-app instead of emailing it; check before assuming email delivery works.

@@ -69,9 +69,17 @@ export default function SignInPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-black font-semibold">
-              Пароль
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password" className="text-black font-semibold">
+                Пароль
+              </Label>
+              <Link
+                href={`${basePath}/forgot-password`}
+                className="text-xs text-orange-600 font-semibold hover:text-orange-700"
+              >
+                Забыли пароль?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"

@@ -12,6 +12,8 @@ import Keys from "@/pages/keys";
 import Admin from "@/pages/admin";
 import SignInPage from "@/pages/sign-in";
 import SignUpPage from "@/pages/sign-up";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 import { Layout } from "@/components/layout";
 import { queryClient } from "@/lib/query-client";
 
@@ -87,6 +89,8 @@ function App() {
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in" component={SignInPage} />
           <Route path="/sign-up" component={SignUpPage} />
+          <Route path="/forgot-password" component={ForgotPasswordPage} />
+          <Route path="/reset-password" component={ResetPasswordPage} />
 
           <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
           <Route path="/plans"><ProtectedRoute component={Plans} /></Route>

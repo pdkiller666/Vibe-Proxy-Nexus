@@ -14,6 +14,7 @@ import {
   useDeleteVpnNode,
   useListAdminUsers,
   useUpdateUserRole,
+  useAdminResetUserPassword,
   useGetPaymentSettings,
   useUpdatePaymentSettings,
   getGetAdminDashboardSummaryQueryKey,
@@ -459,7 +460,9 @@ function NodesManagement() {
 function UsersManagement() {
   const { data: users, isLoading } = useListAdminUsers();
   const { mutate: updateRole } = useUpdateUserRole();
+  const { mutate: resetPassword, isPending: resettingPassword } = useAdminResetUserPassword();
   const { toast } = useToast();
+  const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
 
   function toggleRole(userId: number, currentRole: string) {
     const role = currentRole === "admin" ? "user" : "admin";
@@ -475,24 +478,57 @@ function UsersManagement() {
     );
   }
 
+  function generateResetLink(userId: number) {
+    resetPassword(
+      { userId },
+      {
+        onSuccess: (data) => {
+          setResetLinks((prev) => ({ ...prev, [userId]: `${window.location.origin}${data.resetUrl}` }));
+          toast({ title: "Ссылка для сброса пароля создана" });
+        },
+        onError: () => toast({ title: "Ошибка создания ссылки", variant: "destructive" }),
+      },
+    );
+  }
+
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
   return (
     <div className="space-y-3">
       {users?.map((user) => (
-        <div key={user.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4">
-          <div>
-            <div className="font-bold">{user.email}</div>
-            <div className="text-sm text-muted-foreground font-mono">
-              {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
+        <div key={user.id} className="bg-card border border-border p-4 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="font-bold">{user.email}</div>
+              <div className="text-sm text-muted-foreground font-mono">
+                {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => generateResetLink(user.id)}
+                disabled={resettingPassword}
+                className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+              >
+                Сбросить пароль
+              </button>
+              <button
+                onClick={() => toggleRole(user.id, user.role)}
+                className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
+              >
+                {user.role === "admin" ? "Понизить" : "Назначить админом"}
+              </button>
             </div>
           </div>
-          <button
-            onClick={() => toggleRole(user.id, user.role)}
-            className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
-          >
-            {user.role === "admin" ? "Понизить" : "Назначить админом"}
-          </button>
+          {resetLinks[user.id] && (
+            <div className="bg-muted/30 border border-border p-3 space-y-1">
+              <p className="text-xs text-muted-foreground">
+                Одноразовая ссылка для сброса пароля (действует 30 минут). Передайте её пользователю через
+                доверенный канал (например, поддержку):
+              </p>
+              <p className="text-sm font-mono break-all text-primary">{resetLinks[user.id]}</p>
+            </div>
+          )}
         </div>
       ))}
     </div>

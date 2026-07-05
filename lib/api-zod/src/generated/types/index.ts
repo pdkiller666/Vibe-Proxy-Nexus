@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminPasswordResetResult';
 export * from './adminPayment';
 export * from './adminUser';
 export * from './checkoutResult';
 export * from './dashboardSummary';
+export * from './forgotPasswordInput';
+export * from './forgotPasswordResult';
 export * from './healthStatus';
 export * from './listAdminPaymentsParams';
 export * from './loginInput';
@@ -25,6 +28,8 @@ export * from './plan';
 export * from './planInput';
 export * from './planUpdate';
 export * from './registerInput';
+export * from './resetPasswordInput';
+export * from './resetPasswordResult';
 export * from './subscription';
 export * from './subscriptionInput';
 export * from './subscriptionStatus';

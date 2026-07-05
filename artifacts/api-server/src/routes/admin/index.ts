@@ -5,6 +5,7 @@ import paymentSettingsRouter from "./paymentSettings";
 import paymentsRouter from "./payments";
 import vpnNodesRouter from "./vpnNodes";
 import usersRouter from "./users";
+import passwordResetRouter from "./passwordReset";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(paymentSettingsRouter);
 router.use(paymentsRouter);
 router.use(vpnNodesRouter);
 router.use(usersRouter);
+router.use(passwordResetRouter);
 
 export default router;

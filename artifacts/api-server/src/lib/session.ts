@@ -3,6 +3,7 @@ import { and, eq, gt, lt } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { db, sessionsTable, usersTable, type User } from "@workspace/db";
 import { logger } from "./logger";
+import { deleteExpiredPasswordResetTokens } from "./passwordReset";
 
 export const SESSION_COOKIE_NAME = "vpn_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -28,6 +29,10 @@ export async function createSession(userId: number): Promise<{ token: string; ex
 
 export async function destroySession(token: string): Promise<void> {
   await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
+}
+
+export async function invalidateUserSessions(userId: number): Promise<void> {
+  await db.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
 }
 
 export async function getUserBySessionToken(token: string): Promise<User | null> {
@@ -81,6 +86,16 @@ export function startSessionCleanupJob(): NodeJS.Timeout {
       })
       .catch((err) => {
         logger.error({ err }, "Failed to delete expired sessions");
+      });
+
+    deleteExpiredPasswordResetTokens()
+      .then((count) => {
+        if (count > 0) {
+          logger.info({ count }, "Deleted expired password reset tokens");
+        }
+      })
+      .catch((err) => {
+        logger.error({ err }, "Failed to delete expired password reset tokens");
       });
   };
 

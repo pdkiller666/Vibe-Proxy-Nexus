@@ -88,6 +88,44 @@ paths:
         "204":
           description: Signed out
 
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Start a password reset for the given email, if an account exists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordInput"
+      responses:
+        "200":
+          description: Reset started (response is intentionally generic to avoid leaking account existence)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForgotPasswordResult"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Complete a password reset using a reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetPasswordResult"
+
   /me:
     get:
       operationId: getMe
@@ -493,6 +531,25 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdminUser"
 
+  /admin/users/{userId}/password-reset:
+    post:
+      operationId: adminResetUserPassword
+      tags: [admin]
+      summary: Generate a one-time password reset link for a user (admin-assisted reset, no email sending configured)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reset link generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPasswordResetResult"
+
   /admin/users/{userId}/role:
     patch:
       operationId: updateUserRole
@@ -546,6 +603,31 @@ components:
       properties:
         email: { type: string, format: email }
         password: { type: string, minLength: 1, maxLength: 200 }
+
+    ForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    ForgotPasswordResult:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+    ResetPasswordInput:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string, minLength: 1 }
+        password: { type: string, minLength: 8, maxLength: 200 }
+
+    ResetPasswordResult:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
 
     Me:
       type: object
@@ -771,6 +853,12 @@ components:
           $ref: "#/components/schemas/UserRole"
         createdAt: { type: string, format: date-time }
         activeSubscriptions: { type: integer }
+
+    AdminPasswordResetResult:
+      type: object
+      required: [resetUrl]
+      properties:
+        resetUrl: { type: string }
 
     UserRoleUpdate:
       type: object
