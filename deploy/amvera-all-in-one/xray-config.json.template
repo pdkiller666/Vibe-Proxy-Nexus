@@ -4,18 +4,18 @@
   },
   "inbounds": [
     {
-      "listen": "0.0.0.0",
-      "port": 443,
+      "listen": "127.0.0.1",
+      "port": 10000,
       "protocol": "vless",
       "settings": {
         "clients": [],
         "decryption": "none"
       },
       "streamSettings": {
-        "network": "tcp",
+        "network": "ws",
         "security": "none",
-        "sockopt": {
-          "acceptProxyProtocol": true
+        "wsSettings": {
+          "path": "/vpnws"
         }
       },
       "sniffing": {

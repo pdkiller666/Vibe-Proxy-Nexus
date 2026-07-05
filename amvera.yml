@@ -7,24 +7,18 @@ build:
   dockerfile: Dockerfile
 
 run:
-  # Two ports mapped in parallel (comma-separated, positional 1:1):
-  #   8080 (web/API)  -> servicePort 80    — goes through the normal HTTPS
-  #                                          ingress bound to the app's domain.
-  #   443  (Xray VPN) -> servicePort 27017 — goes through Amvera's raw-TCP
-  #                                          SNI ingress (free), reachable at
-  #                                          the "tcp-..." domain created in
-  #                                          Настройки -> Домены with
-  #                                          connection type MONGO. This is a
-  #                                          genuine raw TCP passthrough (no
-  #                                          TLS termination by Amvera), unlike
-  #                                          plain containerPort/HTTP ingress.
-  # See .agents/memory/amvera-raw-tcp-port.md for how this was discovered.
-  containerPort: "8080,443"
-  servicePort: "80,27017"
+  # Single port: 8080 (web/API + VPN) -> servicePort 80, through Amvera's normal
+  # HTTPS ingress bound to the app's domain. Traefik terminates TLS and forwards
+  # HTTP — including WebSocket upgrades — to the container. The Node server serves
+  # the web/API and also proxies the VPN WebSocket upgrade (VPN_WS_PATH) to a
+  # local Xray inbound, so VLESS rides on a standard HTTPS/WebSocket tunnel.
+  # Raw-TCP VLESS through Amvera's "MONGO" TCP ingress does NOT work — that
+  # controller treats the TLS-terminated stream as HTTP and corrupts the payload
+  # (see .agents/memory/amvera-raw-tcp-port.md).
+  containerPort: "8080"
+  servicePort: "80"
   # Persist the live Xray config (issued clients) across restarts/redeploys.
   persistenceMount: /etc/xray
-  # NOTE: Amvera does not support an `env:` key in amvera.yaml. All required
-  # env vars (DATABASE_URL, SESSION_SECRET, REALITY_PRIVATE_KEY,
-  # REALITY_PUBLIC_KEY, REALITY_SHORT_ID, REALITY_SNI, REALITY_DEST) must be
-  # set manually in the Amvera dashboard under the project's "Configuration"
-  # tab. REALITY_SNI must equal the "tcp-..." domain from "Домены" above.
+  # NOTE: Amvera does not support an `env:` key in amvera.yaml. Required env vars
+  # (DATABASE_URL, SESSION_SECRET) must be set manually in the Amvera dashboard
+  # under the project's "Configuration" tab.

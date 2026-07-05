@@ -1,15 +1,16 @@
 #!/bin/sh
 # Renders /etc/xray/config.json from the template, then starts supervisord which
-# runs both Xray-core (VPN, port 443) and the Node web+API server (port $PORT).
+# runs both Xray-core (VPN) and the Node web+API server (port $PORT).
 set -e
 
-# Xray listens for PLAIN VLESS (security "none") on port 443. TLS is provided by
-# Amvera's edge (Traefik), which terminates TLS with a real Let's Encrypt cert
-# for the node's domain and forwards the decrypted TCP stream into the
-# container. Clients therefore connect with security=tls + sni=<node domain>
-# and speak plain VLESS over that tunnel. No Reality keys are needed — Reality
-# is fundamentally incompatible with Amvera's TLS termination
-# (see .agents/memory/amvera-raw-tcp-port.md).
+# Xray listens for plain VLESS over WebSocket (security "none") on the
+# container-internal loopback (127.0.0.1:10000). Amvera's edge (Traefik)
+# terminates TLS with a real Let's Encrypt cert for the web domain and forwards
+# the HTTP/WebSocket upgrade to the Node server, which proxies the upgrade to
+# Xray. Clients connect with security=tls + type=ws + sni=<web domain> and speak
+# VLESS over that standard HTTPS/WebSocket tunnel. Raw-TCP VLESS through Amvera's
+# TCP ingress does NOT work and Reality is incompatible with edge TLS
+# termination (see .agents/memory/amvera-raw-tcp-port.md).
 : "${DATABASE_URL:?DATABASE_URL is required}"
 : "${SESSION_SECRET:?SESSION_SECRET is required}"
 

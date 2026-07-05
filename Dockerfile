@@ -70,7 +70,8 @@ ENV STATIC_DIR=/app/public
 ENV XRAY_CONFIG_PATH=/etc/xray/config.json
 ENV PORT=8080
 
-# 443 = Xray (VPN); 8080 = web interface + API.
-EXPOSE 443 8080
+# 8080 = web interface + API + VPN WebSocket proxy. Xray listens only on the
+# container-internal loopback (127.0.0.1:10000), reached via the Node WS proxy.
+EXPOSE 8080
 
 ENTRYPOINT ["/app/entrypoint.sh"]
