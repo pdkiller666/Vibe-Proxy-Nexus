@@ -1,3 +1,5 @@
 - [Amvera pnpm build](amvera-pnpm-build.md) — root package.json must pin `packageManager: pnpm@10.x` or corepack grabs pnpm 11 in Docker and ignores `onlyBuiltDependencies`; build success ends at "Pushing image", rest is runtime env.
 - [Session auth vs Clerk](session-auth-migration.md) — this project migrated off Clerk to custom email+password + DB-backed sessions; the old Clerk localization note no longer applies.
 - [No email provider configured](no-email-provider.md) — password reset and similar flows return the link in-app instead of emailing it; check before assuming email delivery works.
+- [Deploy workflow](deploy-workflow.md) — deploying == pushing to GitHub (Amvera auto-builds); use `./deploy.sh "message"` since main agent's shell blocks `git push`.
+- [Session/token expiry boundary semantics](session-expiry-boundary.md) — a row seeded with expiresAt=now IS deleted by lt(expiresAt, new Date()) cleanup queries, since real time always advances before the query runs.
