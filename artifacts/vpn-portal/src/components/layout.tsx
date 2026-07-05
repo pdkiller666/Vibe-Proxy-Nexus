@@ -1,13 +1,22 @@
 import { Link, useLocation } from "wouter";
-import { useClerk, useUser } from "@clerk/react";
-import { useGetMe } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGetMe, useLogout } from "@workspace/api-client-react";
 import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
-  const { signOut } = useClerk();
+  const [location, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "admin";
+
+  const logoutMutation = useLogout({
+    mutation: {
+      onSuccess: () => {
+        queryClient.clear();
+        navigate("/");
+      },
+    },
+  });
 
   const navItems = [
     { href: "/dashboard", label: "Панель", icon: LayoutDashboard },
@@ -54,8 +63,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {me?.email}
           </div>
           <button
-            onClick={() => signOut({ redirectUrl: "/" })}
-            className="flex items-center gap-3 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors w-full"
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+            className="flex items-center gap-3 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors w-full disabled:opacity-50"
           >
             <LogOut className="w-4 h-4" />
             Выход

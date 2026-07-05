@@ -7,6 +7,7 @@ set -e
 : "${REALITY_PRIVATE_KEY:?REALITY_PRIVATE_KEY is required}"
 : "${REALITY_SHORT_ID:?REALITY_SHORT_ID is required}"
 : "${DATABASE_URL:?DATABASE_URL is required}"
+: "${SESSION_SECRET:?SESSION_SECRET is required}"
 
 export PORT="${PORT:-8080}"
 export XRAY_CONFIG_PATH="${XRAY_CONFIG_PATH:-/etc/xray/config.json}"

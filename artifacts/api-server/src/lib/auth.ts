@@ -1,8 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { clerkClient, getAuth } from "@clerk/express";
-import { eq } from "drizzle-orm";
-import { db, usersTable, type User } from "@workspace/db";
-import { logger } from "./logger";
+import type { User } from "@workspace/db";
+import { getSessionTokenFromRequest, getUserBySessionToken } from "./session";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -13,58 +11,26 @@ declare global {
   }
 }
 
-export async function getOrCreateUser(clerkUserId: string): Promise<User> {
-  const [existing] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.clerkUserId, clerkUserId));
-
-  if (existing) return existing;
-
-  const clerkUser = await clerkClient.users.getUser(clerkUserId);
-  const primaryEmail = clerkUser.emailAddresses.find(
-    (address) => address.id === clerkUser.primaryEmailAddressId,
-  );
-  const email =
-    primaryEmail?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress ?? "";
-  const name =
-    [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ").trim() || null;
-
-  const [user] = await db
-    .insert(usersTable)
-    .values({ clerkUserId, email, name })
-    .onConflictDoNothing({ target: usersTable.clerkUserId })
-    .returning();
-
-  if (user) return user;
-
-  const [raceWinner] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.clerkUserId, clerkUserId));
-
-  if (!raceWinner) {
-    logger.error({ clerkUserId }, "Failed to provision local user record");
-    throw new Error("Failed to provision user");
-  }
-
-  return raceWinner;
-}
-
 export async function requireAuth(
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  const auth = getAuth(req);
-  const clerkUserId = auth?.userId;
+  const token = getSessionTokenFromRequest(req);
 
-  if (!clerkUserId) {
+  if (!token) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
-  req.appUser = await getOrCreateUser(clerkUserId);
+  const user = await getUserBySessionToken(token);
+
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  req.appUser = user;
   next();
 }
 

@@ -18,6 +18,60 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Register a new account
+ */
+export const registerBodyPasswordMin = 8;
+export const registerBodyPasswordMax = 200;
+
+
+
+export const RegisterBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(registerBodyPasswordMin).max(registerBodyPasswordMax),
+  "name": zod.string().optional()
+})
+
+export const RegisterResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "hasActiveSubscription": zod.boolean(),
+  "currentPlanName": zod.string().nullish(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Sign in with email and password
+ */
+export const loginBodyPasswordMax = 200;
+
+
+
+export const LoginBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(1).max(loginBodyPasswordMax)
+})
+
+export const LoginResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "hasActiveSubscription": zod.boolean(),
+  "currentPlanName": zod.string().nullish(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Sign out
+ */
+export const LogoutResponse = zod.void()
+
+
+/**
  * @summary Get current user profile
  */
 export const GetMeResponse = zod.object({

@@ -20,7 +20,7 @@
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
-- Frontend: React + Vite, wouter, TanStack Query, Clerk (auth)
+- Frontend: React + Vite, wouter, TanStack Query, custom email+password auth (session cookie)
 
 ## Where things live
 
@@ -30,24 +30,20 @@
 
 ## Architecture decisions
 
-- **Deployment target is Amvera Cloud, all-in-one**: the whole project (React frontend + Express API + Xray-core VPN) ships as a single Docker image and runs in one Amvera container. Replit is the dev environment only. Postgres and Clerk stay external. See `deploy/amvera-all-in-one/`.
+- **Deployment target is Amvera Cloud, all-in-one**: the whole project (React frontend + Express API + Xray-core VPN) ships as a single Docker image and runs in one Amvera container. Replit is the dev environment only. Only Postgres stays external. See `deploy/amvera-all-in-one/`.
 - All-in-one wiring: in production the Express process serves BOTH `/api/*` and the built React SPA (gated by `STATIC_DIR`). Because Xray runs in the same container, the backend manages the Xray client list directly on disk (gated by `XRAY_CONFIG_PATH`) and reloads via `supervisorctl restart xray` — no separate management API. Both gates are unset in Replit dev, so dev behavior is unchanged (Vite serves the frontend; keys are generated locally but not connectable).
 - Payment MVP is manual SBP (Russian bank transfer): users mark a payment as paid with a note, an admin manually confirms/rejects it in `/admin`, no automatic payment gateway.
 - `deploy/amvera-vpn-node/` (Xray + secured management API, `X-Management-Secret`) is kept for a FUTURE multi-region setup where VPN nodes live on separate machines and the panel stays central. Not used by the all-in-one deployment.
 
 ## Product
 
-- Invite-only VPN reselling: users sign up (Clerk), pick a plan, pay via SBP transfer, get a subscription activated by an admin, then issue/revoke VLESS-XTLS-Reality keys from a dashboard.
+- Invite-only VPN reselling: users sign up with email+password, pick a plan, pay via SBP transfer, get a subscription activated by an admin, then issue/revoke VLESS-XTLS-Reality keys from a dashboard.
 - Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject), plans CRUD, VPN nodes CRUD, user role management, SBP payment settings.
 
 ## User preferences
 
 - All UI copy must be in Russian.
 - Visual identity: technical, precise, quietly confident — not corporate SaaS blue, not playful. Bold, deliberate color choice (industrial orange accent). No emojis.
-
-## Gotchas
-
-- Clerk's built-in `<SignIn>`/`<SignUp>` components default to English even when you pass custom `localization` overrides for just a couple of strings — you must import and spread the official `ruRU` dict from `@clerk/localizations` as the base, then merge in custom title/subtitle overrides on top.
 
 ## Pointers
 

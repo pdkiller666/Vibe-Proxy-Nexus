@@ -17,6 +17,25 @@ export const UserRole = {
   admin: 'admin',
 } as const;
 
+export interface RegisterInput {
+  email: string;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  password: string;
+  name?: string;
+}
+
+export interface LoginInput {
+  email: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  password: string;
+}
+
 export interface Me {
   id: number;
   email: string;

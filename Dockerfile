@@ -13,18 +13,12 @@ RUN corepack enable
 
 WORKDIR /repo
 
-# Baked into the static frontend bundle by Vite at build time.
-ARG VITE_CLERK_PUBLISHABLE_KEY
-ARG VITE_CLERK_PROXY_URL=/api/__clerk
-
 COPY . .
 
 RUN pnpm install --frozen-lockfile
 
 # Frontend: Vite requires PORT + BASE_PATH at build time; served at domain root.
 RUN PORT=3000 BASE_PATH=/ \
-    VITE_CLERK_PUBLISHABLE_KEY="$VITE_CLERK_PUBLISHABLE_KEY" \
-    VITE_CLERK_PROXY_URL="$VITE_CLERK_PROXY_URL" \
     pnpm --filter @workspace/vpn-portal run build
 
 # Backend: esbuild bundle -> artifacts/api-server/dist/index.mjs (self-contained).

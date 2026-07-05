@@ -9,10 +9,12 @@
 Xray находятся в одном контейнере, при выдаче/отзыве ключа бэкенд напрямую правит
 конфиг Xray на диске и перезапускает процесс — отдельный management API не нужен.
 
-Снаружи контейнера остаются только:
+Снаружи контейнера остаётся только:
 
-- **PostgreSQL** — управляемая база Amvera (передаётся через `DATABASE_URL`);
-- **Clerk** — облачная авторизация (внешний сервис).
+- **PostgreSQL** — управляемая база Amvera (передаётся через `DATABASE_URL`).
+
+Авторизация (email + пароль) реализована прямо в бэкенде и хранит сессии в
+той же PostgreSQL — никаких внешних сервисов для входа не нужно.
 
 Файлы `Dockerfile` и `amvera.yml` лежат в **корне репозитория** (Amvera по
 умолчанию ищет их там); контекст сборки — корень репозитория.
@@ -28,23 +30,22 @@ Xray находятся в одном контейнере, при выдаче/
                  │        ▲                                                     │
                  │        └── правит /etc/xray/config.json + supervisorctl      │
                  └──────────────────────────────────────────────────────────────┘
-                          │                              │
-                          ▼                              ▼
-                  PostgreSQL (Amvera)              Clerk (внешний)
+                          │
+                          ▼
+                  PostgreSQL (Amvera)
 ```
 
 ## Переменные окружения
 
 ### Секреты (в панели Amvera)
 
-| Переменная              | Назначение                                                    |
-| ----------------------- | ------------------------------------------------------------- |
-| `DATABASE_URL`          | строка подключения к PostgreSQL от Amvera                     |
-| `CLERK_SECRET_KEY`      | секретный ключ Clerk (бэкенд)                                 |
-| `CLERK_PUBLISHABLE_KEY` | публичный ключ Clerk (бэкенд)                                 |
-| `REALITY_PRIVATE_KEY`   | приватный ключ Reality (см. ниже)                            |
-| `REALITY_PUBLIC_KEY`    | публичный ключ Reality — вносится в узел в админке            |
-| `REALITY_SHORT_ID`      | short id Reality                                              |
+| Переменная            | Назначение                                                        |
+| --------------------- | ------------------------------------------------------------------ |
+| `DATABASE_URL`        | строка подключения к PostgreSQL от Amvera                          |
+| `SESSION_SECRET`      | секрет для подписи cookie сессии, например `openssl rand -hex 32`  |
+| `REALITY_PRIVATE_KEY` | приватный ключ Reality (см. ниже)                                  |
+| `REALITY_PUBLIC_KEY`  | публичный ключ Reality — вносится в узел в админке                 |
+| `REALITY_SHORT_ID`    | short id Reality                                                    |
 
 ### Обычные значения
 
@@ -52,13 +53,6 @@ Xray находятся в одном контейнере, при выдаче/
 | ------------- | --------------------- | --------------------------------------- |
 | `REALITY_SNI` | `www.microsoft.com`   | домен-маскировка для Reality            |
 | `PORT`        | `8080`                | порт веб-интерфейса + API               |
-
-### Build-time (в `amvera.yml` → `build.dockerBuildArgs`)
-
-| Переменная                   | Назначение                                          |
-| ---------------------------- | --------------------------------------------------- |
-| `VITE_CLERK_PUBLISHABLE_KEY` | публичный ключ Clerk, вшивается в статический бандл  |
-| `VITE_CLERK_PROXY_URL`       | путь Clerk-прокси, по умолчанию `/api/__clerk`      |
 
 ## Подготовка перед первым деплоем
 
@@ -79,12 +73,16 @@ Xray находятся в одном контейнере, при выдаче/
    DATABASE_URL="<amvera-postgres-url>" pnpm --filter @workspace/db run push
    ```
 
-3. **Clerk.** Возьмите публичный и секретный ключи вашего Clerk-приложения.
+3. **Секрет сессии.** Сгенерируйте случайную строку для `SESSION_SECRET`:
+
+   ```sh
+   openssl rand -hex 32
+   ```
 
 ## Деплой
 
 1. Залейте репозиторий в Amvera (git push или через интерфейс).
-2. Проставьте секреты и `VITE_CLERK_PUBLISHABLE_KEY` в настройках приложения.
+2. Проставьте секреты в настройках приложения.
 3. Amvera соберёт образ по корневому `Dockerfile` и запустит контейнер.
 
 ## После деплоя
@@ -110,14 +108,11 @@ Xray находятся в одном контейнере, при выдаче/
 ## Локальная сборка (проверка)
 
 ```sh
-docker build \
-  --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx \
-  -t vibe-proxy-nexus .
+docker build -t vibe-proxy-nexus .
 
 docker run --rm -p 8080:8080 -p 443:443 \
   -e DATABASE_URL=... \
-  -e CLERK_SECRET_KEY=... \
-  -e CLERK_PUBLISHABLE_KEY=... \
+  -e SESSION_SECRET=... \
   -e REALITY_PRIVATE_KEY=... \
   -e REALITY_SHORT_ID=... \
   vibe-proxy-nexus
