@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -53,12 +53,10 @@ async function buildAll() {
       "handlebars",
       "knex",
       "typeorm",
-      "protobufjs",
       "onnxruntime-node",
       "@tensorflow/*",
       "@prisma/client",
       "@mikro-orm/*",
-      "@grpc/*",
       "@swc/*",
       "@aws-sdk/*",
       "@azure/*",
@@ -118,6 +116,15 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // xray.ts loads these .proto files from disk at runtime (via a path
+  // relative to __dirname) to build its gRPC client; esbuild only bundles JS,
+  // so the raw .proto files must be copied alongside dist/index.mjs by hand.
+  await cp(
+    path.resolve(artifactDir, "src/lib/xray-proto"),
+    path.resolve(distDir, "xray-proto"),
+    { recursive: true },
+  );
 }
 
 buildAll().catch((err) => {

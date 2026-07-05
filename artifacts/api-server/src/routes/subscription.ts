@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db, subscriptionsTable, vpnKeysTable } from "@workspace/db";
 import { BRAND_NAME, SUBSCRIPTION_UPDATE_INTERVAL_HOURS, verifySubscriptionToken } from "../lib/subscription";
+import { subscriptionRateLimit } from "../lib/rateLimit";
 
 const router: IRouter = Router();
 
@@ -10,9 +11,12 @@ const router: IRouter = Router();
 // once and re-fetch it on a schedule, so any config the user pastes/edits
 // locally gets silently overwritten with our source of truth on next refresh —
 // this is what actually protects the config, not "encryption" of the link
-// itself (VLESS already runs over TLS).
-router.get("/sub/:token", async (req, res): Promise<void> => {
-  const userId = verifySubscriptionToken(req.params.token);
+// itself (VLESS already runs over TLS). Rate-limited since it has no session
+// auth by design — see subscriptionRateLimit for the reasoning.
+router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void> => {
+  const tokenParam = req.params.token;
+  const token = Array.isArray(tokenParam) ? tokenParam[0] : tokenParam;
+  const userId = token ? verifySubscriptionToken(token) : null;
   if (!userId) {
     res.status(404).send("Not found");
     return;

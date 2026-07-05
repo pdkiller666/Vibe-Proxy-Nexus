@@ -24,3 +24,19 @@ export const forgotPasswordRateLimit = rateLimit({
     error: "Слишком много запросов на сброс пароля. Попробуйте позже.",
   },
 });
+
+// IP-based limiter for the public, token-authenticated subscription endpoint
+// (/api/sub/:token). This endpoint has no session/auth cookie by design (VPN
+// client apps like Happ/v2rayNG fetch it directly), so its only line of
+// defense against token brute-forcing or DB-load abuse is this limiter.
+// Real clients only auto-refresh every SUBSCRIPTION_UPDATE_INTERVAL_HOURS
+// (see subscription.ts), so this budget is generous enough for a user with
+// several devices/apps polling independently, while still bounding how many
+// distinct tokens a single IP can probe per window.
+export const subscriptionRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много запросов. Попробуйте позже." },
+});

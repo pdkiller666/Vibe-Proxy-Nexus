@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package xray.app.proxyman.command;
+
+// Trimmed copy of Xray-core's app/proxyman/command/command.proto (v1.8.24),
+// keeping only the messages/RPC we actually call (AlterInbound with
+// AddUserOperation/RemoveUserOperation) to avoid pulling in the full
+// core/config.proto dependency tree needed by AddInbound/AddOutbound (which
+// we don't use). Wire format is per-message, so trimming unused sibling
+// messages/RPCs from this file does not affect compatibility with the real
+// Xray-core gRPC server — only the messages we actually encode/decode need to
+// match field numbers and types exactly.
+import "common/protocol/user.proto";
+import "common/serial/typed_message.proto";
+
+message AddUserOperation {
+  xray.common.protocol.User user = 1;
+}
+
+message RemoveUserOperation {
+  string email = 1;
+}
+
+message AlterInboundRequest {
+  string tag = 1;
+  xray.common.serial.TypedMessage operation = 2;
+}
+
+message AlterInboundResponse {}
+
+service HandlerService {
+  rpc AlterInbound(AlterInboundRequest) returns (AlterInboundResponse) {}
+}

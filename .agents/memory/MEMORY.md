@@ -8,3 +8,5 @@
 - [VPN node seeding](vpn-node-seeding.md) — key issuance 404s if `vpn_nodes` is empty; all-in-one deploy needs one row seeded from REALITY_* env vars, not automatic.
 - [Amvera raw TCP port limitation](amvera-raw-tcp-port.md) — containerPort's comma-separated list is HTTP-only; confirmed Amvera always terminates TLS on 443 itself, no raw TCP passthrough for Reality/VLESS without Dedicated IPv4. Resolved via VLESS+WebSocket (see file for details).
 - [VPN subscription URL design](vpn-subscription-links.md) — self-updating subscription link (stateless HMAC token, base64 body, branded headers) replaces raw pasted vless links; key labels must never contain user email.
+- [Payments are manual SBP transfer](payments-manual-sbp.md) — no real payment gateway integrated; admin manually confirms bank transfers. yookassa fields exist only as unused schema/UI placeholders.
+- [Xray gRPC proto loading](xray-grpc-proto-loading.md) — protobufjs needs resolvePath override for Xray's include-root-relative proto imports; bg processes die between sandbox tool calls.

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package xray.common.serial;
+
+// TypedMessage is a serialized proto message along with its type name. Xray
+// uses this as a poor man's google.protobuf.Any: `type` is the fully
+// qualified proto message name (e.g. "xray.proxy.vless.Account"), and `value`
+// is that message's serialized bytes.
+message TypedMessage {
+  string type = 1;
+  bytes value = 2;
+}

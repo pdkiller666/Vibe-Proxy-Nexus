@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -12,21 +12,25 @@ export const subscriptionStatusValues = [
   "rejected",
 ] as const;
 
-export const subscriptionsTable = pgTable("subscriptions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id")
-    .notNull()
-    .references(() => usersTable.id),
-  planId: integer("plan_id")
-    .notNull()
-    .references(() => plansTable.id),
-  status: text("status", { enum: subscriptionStatusValues })
-    .notNull()
-    .default("pending_payment"),
-  startsAt: timestamp("starts_at", { withTimezone: true }),
-  endsAt: timestamp("ends_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const subscriptionsTable = pgTable(
+  "subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => usersTable.id),
+    planId: integer("plan_id")
+      .notNull()
+      .references(() => plansTable.id),
+    status: text("status", { enum: subscriptionStatusValues })
+      .notNull()
+      .default("pending_payment"),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("subscriptions_user_id_idx").on(table.userId)],
+);
 
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable).omit({
   id: true,

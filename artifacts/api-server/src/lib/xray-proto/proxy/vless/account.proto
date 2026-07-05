@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package xray.proxy.vless;
+
+message Account {
+  // ID of the account, in the form of a UUID.
+  string id = 1;
+  // Flow settings. May be "xtls-rprx-vision". Empty for our WS+TLS-at-edge setup.
+  string flow = 2;
+  // Encryption settings. Only applies to client side; server side must be "none".
+  string encryption = 3;
+}

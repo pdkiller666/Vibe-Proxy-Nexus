@@ -2,11 +2,29 @@
   "log": {
     "loglevel": "warning"
   },
+  "api": {
+    "tag": "api",
+    "services": ["HandlerService"]
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true
+    }
+  },
   "inbounds": [
     {
       "listen": "127.0.0.1",
       "port": 10000,
       "protocol": "vless",
+      "tag": "vless-in",
       "settings": {
         "clients": [],
         "decryption": "none"
@@ -22,6 +40,15 @@
         "enabled": true,
         "destOverride": ["http", "tls"]
       }
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
     }
   ],
   "outbounds": [
@@ -33,5 +60,14 @@
       "protocol": "blackhole",
       "tag": "blocked"
     }
-  ]
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": ["api"],
+        "outboundTag": "api"
+      }
+    ]
+  }
 }
