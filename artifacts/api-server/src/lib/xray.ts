@@ -69,7 +69,8 @@ export async function addXrayClient(uuid: string, email: string): Promise<void> 
   await withLock(async () => {
     const config = await readConfig();
     const clients = getClients(config);
-    if (clients.some((c) => c.id === uuid)) return;
+    // Guard by both UUID and email: Xray rejects configs with duplicate emails.
+    if (clients.some((c) => c.id === uuid || c.email === email)) return;
     clients.push({ id: uuid, email });
     // Persist first — the client survives a container restart even if the
     // reload below fails; the next boot will pick this client up automatically.

@@ -31,7 +31,21 @@ if [ -f "$XRAY_CONFIG_PATH" ]; then
       const prev = JSON.parse(fs.readFileSync(prevPath, "utf-8"));
       const prevClients = prev?.inbounds?.[0]?.settings?.clients;
       if (Array.isArray(prevClients)) {
-        next.inbounds[0].settings.clients = prevClients;
+        // Deduplicate by email (keep first occurrence of each email).
+        // Xray rejects a config that has two clients with the same email
+        // and refuses to start — duplicates can appear if a key-issuance
+        // request wrote to disk but then failed before the live reload,
+        // and the user retried with the same label (same email, new UUID).
+        const seenEmails = new Set();
+        const seenIds = new Set();
+        const unique = prevClients.filter(c => {
+          if (!c.id || seenIds.has(c.id)) return false;
+          if (c.email && seenEmails.has(c.email)) return false;
+          seenIds.add(c.id);
+          if (c.email) seenEmails.add(c.email);
+          return true;
+        });
+        next.inbounds[0].settings.clients = unique;
       }
     } catch {
       // No valid previous config to preserve clients from; start fresh.
