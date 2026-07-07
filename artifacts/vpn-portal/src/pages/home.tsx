@@ -179,15 +179,15 @@ export default function Home() {
 
       {/* ─── HERO ─────────────────────────────────────────────────── */}
       <section className="relative pt-20 pb-28 px-6 flex flex-col items-center text-center overflow-hidden">
-        {/* subtle warm background */}
+        {/* subtle warm background — full-width so no sharp side edges */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px]
-                          bg-gradient-to-b from-orange-50 to-transparent opacity-80" />
+          <div className="absolute top-0 left-0 right-0 h-[520px]
+                          bg-gradient-to-b from-orange-50/70 to-transparent" />
           {/* decorative rings */}
           <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[700px] h-[700px]
-                          rounded-full border border-orange-100 opacity-60" />
+                          rounded-full border border-orange-100 opacity-50" />
           <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[500px] h-[500px]
-                          rounded-full border border-orange-100 opacity-40" />
+                          rounded-full border border-orange-100 opacity-30" />
         </div>
 
         {/* Badge */}
