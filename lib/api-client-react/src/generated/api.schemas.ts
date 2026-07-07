@@ -69,6 +69,8 @@ export interface Me {
   currentPlanName?: string | null;
   /** @nullable */
   subscriptionEndsAt?: string | null;
+  deviceSlots: number;
+  activeKeyCount: number;
 }
 
 export interface Plan {
@@ -78,6 +80,7 @@ export interface Plan {
   description?: string | null;
   priceRub: number;
   durationDays: number;
+  devicesIncluded: number;
   isActive: boolean;
   createdAt?: string;
 }
@@ -90,6 +93,8 @@ export interface PlanInput {
   priceRub: number;
   /** @minimum 1 */
   durationDays: number;
+  /** @minimum 1 */
+  devicesIncluded?: number;
   isActive?: boolean;
 }
 
@@ -101,6 +106,8 @@ export interface PlanUpdate {
   priceRub?: number;
   /** @minimum 1 */
   durationDays?: number;
+  /** @minimum 1 */
+  devicesIncluded?: number;
   isActive?: boolean;
 }
 
@@ -302,6 +309,7 @@ export interface AdminUser {
   role: UserRole;
   createdAt: string;
   activeSubscriptions?: number;
+  extraDeviceSlots: number;
 }
 
 export interface AdminPasswordResetResult {
@@ -310,6 +318,11 @@ export interface AdminPasswordResetResult {
 
 export interface UserRoleUpdate {
   role: UserRole;
+}
+
+export interface UserExtraSlotsUpdate {
+  /** @minimum 0 */
+  extraDeviceSlots: number;
 }
 
 export interface DashboardSummary {

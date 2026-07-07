@@ -165,10 +165,9 @@ export default function Keys() {
   const activeNodes = (nodes ?? []).filter((n: { isActive: boolean }) => n.isActive);
   const defaultNodeId = activeNodes[0]?.id;
 
-  // User already has a key for every active node — hide the issue button.
-  const coveredNodeIds = new Set(activeKeys.map((k: { nodeId: number }) => k.nodeId));
-  const hasUncoveredNode = activeNodes.some((n: { id: number }) => !coveredNodeIds.has(n.id));
-  const allNodesCovered = canIssue && !hasUncoveredNode && activeKeys.length > 0;
+  const deviceSlots = me?.deviceSlots ?? 1;
+  const activeKeyCount = me?.activeKeyCount ?? activeKeys.length;
+  const hasSlotAvailable = canIssue && activeKeyCount < deviceSlots;
 
   function handleCreate() {
     createKey(
@@ -217,16 +216,21 @@ export default function Keys() {
             Учётные данные подключения. Импортируйте vless-ссылку в свой клиент.
           </p>
         </div>
-        {!allNodesCovered && (
-          <button
-            onClick={handleCreate}
-            disabled={!canIssue || creating}
-            title={canIssue ? undefined : "Нужна активная подписка"}
-            className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
-          >
-            <Plus className="w-4 h-4" />
-            {creating ? "Выпускаем..." : "Получить ключ"}
-          </button>
+        {canIssue && (
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-sm font-mono text-muted-foreground">
+              Устройства: {activeKeyCount} / {deviceSlots}
+            </span>
+            <button
+              onClick={handleCreate}
+              disabled={!hasSlotAvailable || creating}
+              title={hasSlotAvailable ? undefined : "Все слоты заняты. Обратитесь к администратору для расширения."}
+              className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              <Plus className="w-4 h-4" />
+              {creating ? "Выпускаем..." : "Добавить устройство"}
+            </button>
+          </div>
         )}
       </div>
 

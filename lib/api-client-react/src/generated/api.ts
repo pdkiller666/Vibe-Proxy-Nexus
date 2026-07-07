@@ -45,6 +45,7 @@ import type {
   Subscription,
   SubscriptionInput,
   SubscriptionUrl,
+  UserExtraSlotsUpdate,
   UserRoleUpdate,
   VpnKey,
   VpnKeyInput,
@@ -2415,5 +2416,58 @@ export const useUpdateUserRole = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateUserRoleMutationOptions(options));
+    }
+
+
+/**
+ * @summary Update extra device slots for a user
+ */
+export const getUpdateUserExtraSlotsUrl = (userId: number) => {
+  return `/api/admin/users/${userId}/extra-slots`
+}
+
+export const updateUserExtraSlots = async (userId: number, userExtraSlotsUpdate: UserExtraSlotsUpdate, options?: RequestInit): Promise<AdminUser> => {
+  return customFetch<AdminUser>(getUpdateUserExtraSlotsUrl(userId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(userExtraSlotsUpdate)
+  });
+}
+
+export const getUpdateUserExtraSlotsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUserExtraSlots>>, TError,{userId: number;data: BodyType<UserExtraSlotsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUserExtraSlots>>, TError,{userId: number;data: BodyType<UserExtraSlotsUpdate>}, TContext> => {
+  const mutationKey = ['updateUserExtraSlots'];
+  const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey }, request: undefined};
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUserExtraSlots>>, {userId: number;data: BodyType<UserExtraSlotsUpdate>}> = (props) => {
+    const {userId, data} = props ?? {};
+    return updateUserExtraSlots(userId, data, requestOptions)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UpdateUserExtraSlotsMutationResult = NonNullable<Awaited<ReturnType<typeof updateUserExtraSlots>>>
+export type UpdateUserExtraSlotsMutationBody = BodyType<UserExtraSlotsUpdate>
+export type UpdateUserExtraSlotsMutationError = ErrorType<unknown>
+
+/**
+ * @summary Update extra device slots for a user
+ */
+export const useUpdateUserExtraSlots = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUserExtraSlots>>, TError,{userId: number;data: BodyType<UserExtraSlotsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUserExtraSlots>>,
+        TError,
+        {userId: number;data: BodyType<UserExtraSlotsUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateUserExtraSlotsMutationOptions(options));
     }
 

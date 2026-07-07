@@ -8,6 +8,7 @@ export const plansTable = pgTable("plans", {
   description: text("description"),
   priceRub: integer("price_rub").notNull(),
   durationDays: integer("duration_days").notNull(),
+  devicesIncluded: integer("devices_included").notNull().default(1),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

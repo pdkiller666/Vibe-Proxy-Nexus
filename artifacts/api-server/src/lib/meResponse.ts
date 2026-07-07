@@ -1,5 +1,5 @@
-import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
-import { db, plansTable, subscriptionsTable, type User } from "@workspace/db";
+import { and, count, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { db, plansTable, subscriptionsTable, vpnKeysTable, type User } from "@workspace/db";
 
 export async function buildMeData(user: User) {
   // Defense in depth: the background job in subscriptionLifecycle.ts flips
@@ -11,6 +11,7 @@ export async function buildMeData(user: User) {
     .select({
       endsAt: subscriptionsTable.endsAt,
       planName: plansTable.name,
+      devicesIncluded: plansTable.devicesIncluded,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
@@ -24,6 +25,14 @@ export async function buildMeData(user: User) {
     .orderBy(desc(subscriptionsTable.endsAt))
     .limit(1);
 
+  const [keyCountResult] = await db
+    .select({ cnt: count() })
+    .from(vpnKeysTable)
+    .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)));
+
+  const activeKeyCount = keyCountResult?.cnt ?? 0;
+  const deviceSlots = (activeSubscription?.devicesIncluded ?? 1) + user.extraDeviceSlots;
+
   return {
     id: user.id,
     email: user.email,
@@ -32,5 +41,7 @@ export async function buildMeData(user: User) {
     hasActiveSubscription: Boolean(activeSubscription),
     currentPlanName: activeSubscription?.planName ?? null,
     subscriptionEndsAt: activeSubscription?.endsAt ?? null,
+    deviceSlots,
+    activeKeyCount,
   };
 }

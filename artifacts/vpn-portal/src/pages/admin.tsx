@@ -15,6 +15,7 @@ import {
   useDeleteVpnNode,
   useListAdminUsers,
   useUpdateUserRole,
+  useUpdateUserExtraSlots,
   useAdminResetUserPassword,
   useGetPaymentSettings,
   useUpdatePaymentSettings,
@@ -176,6 +177,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
   const [description, setDescription] = useState(plan?.description ?? "");
   const [priceRub, setPriceRub] = useState(plan?.priceRub?.toString() ?? "");
   const [durationDays, setDurationDays] = useState(plan?.durationDays?.toString() ?? "");
+  const [devicesIncluded, setDevicesIncluded] = useState(plan?.devicesIncluded?.toString() ?? "1");
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
 
   function handleSubmit() {
@@ -184,6 +186,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
       description,
       priceRub: Number(priceRub),
       durationDays: Number(durationDays),
+      devicesIncluded: devicesIncluded ? Number(devicesIncluded) : 1,
       isActive,
     };
     const onSuccess = () => {
@@ -216,6 +219,14 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
           placeholder="Длительность, дней"
           value={durationDays}
           onChange={(e) => setDurationDays(e.target.value)}
+          className="rounded-none"
+        />
+        <Input
+          type="number"
+          placeholder="Устройств включено"
+          min={1}
+          value={devicesIncluded}
+          onChange={(e) => setDevicesIncluded(e.target.value.replace(/[^0-9]/g, ""))}
           className="rounded-none"
         />
         <label className="flex items-center gap-2 text-sm">
@@ -278,7 +289,7 @@ function PlansManagement() {
                 {plan.name} {!plan.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
-                {plan.priceRub} ₽ · {plan.durationDays} дней
+                {plan.priceRub} ₽ · {plan.durationDays} дней · {plan.devicesIncluded} уст.
               </div>
             </div>
             <div className="flex gap-2 shrink-0">
@@ -482,6 +493,7 @@ function NodesManagement() {
 function UsersManagement() {
   const { data: users, isLoading } = useListAdminUsers();
   const { mutate: updateRole } = useUpdateUserRole();
+  const { mutate: updateExtraSlots } = useUpdateUserExtraSlots();
   const { mutate: resetPassword, isPending: resettingPassword } = useAdminResetUserPassword();
   const { toast } = useToast();
   const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
@@ -496,6 +508,20 @@ function UsersManagement() {
           toast({ title: "Роль обновлена" });
         },
         onError: () => toast({ title: "Ошибка обновления роли", variant: "destructive" }),
+      },
+    );
+  }
+
+  function changeExtraSlots(userId: number, current: number, delta: number) {
+    const next = Math.max(0, current + delta);
+    updateExtraSlots(
+      { userId, data: { extraDeviceSlots: next } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+          toast({ title: `Дополнительных слотов: ${next}` });
+        },
+        onError: () => toast({ title: "Ошибка изменения слотов", variant: "destructive" }),
       },
     );
   }
@@ -539,6 +565,25 @@ function UsersManagement() {
                 className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
               >
                 {user.role === "admin" ? "Понизить" : "Назначить админом"}
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <span className="text-xs text-muted-foreground font-mono">Доп. устройства:</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, -1)}
+                disabled={user.extraDeviceSlots === 0}
+                className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors disabled:opacity-30"
+              >
+                −
+              </button>
+              <span className="w-8 text-center text-sm font-mono font-bold">{user.extraDeviceSlots}</span>
+              <button
+                onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, +1)}
+                className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors"
+              >
+                +
               </button>
             </div>
           </div>

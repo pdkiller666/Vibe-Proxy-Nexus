@@ -112,7 +112,9 @@ export const GetMeResponse = zod.object({
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
   "currentPlanName": zod.string().nullish(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "deviceSlots": zod.number(),
+  "activeKeyCount": zod.number()
 })
 
 
@@ -125,6 +127,7 @@ export const ListPlansResponseItem = zod.object({
   "description": zod.string().nullish(),
   "priceRub": zod.number(),
   "durationDays": zod.number(),
+  "devicesIncluded": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -352,6 +355,7 @@ export const CreatePlanBody = zod.object({
   "description": zod.string().optional(),
   "priceRub": zod.number().min(createPlanBodyPriceRubMin),
   "durationDays": zod.number().min(1),
+  "devicesIncluded": zod.number().min(1).optional(),
   "isActive": zod.boolean().optional()
 })
 
@@ -361,6 +365,7 @@ export const CreatePlanResponse = zod.object({
   "description": zod.string().nullish(),
   "priceRub": zod.number(),
   "durationDays": zod.number(),
+  "devicesIncluded": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -384,6 +389,7 @@ export const UpdatePlanBody = zod.object({
   "description": zod.string().optional(),
   "priceRub": zod.number().min(updatePlanBodyPriceRubMin).optional(),
   "durationDays": zod.number().min(1).optional(),
+  "devicesIncluded": zod.number().min(1).optional(),
   "isActive": zod.boolean().optional()
 })
 
@@ -393,6 +399,7 @@ export const UpdatePlanResponse = zod.object({
   "description": zod.string().nullish(),
   "priceRub": zod.number(),
   "durationDays": zod.number(),
+  "devicesIncluded": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -597,7 +604,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
-  "activeSubscriptions": zod.number().optional()
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
@@ -631,7 +639,30 @@ export const UpdateUserRoleResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
-  "activeSubscriptions": zod.number().optional()
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number()
+})
+
+
+/**
+ * @summary Update extra device slots for a user
+ */
+export const UpdateUserDeviceSlotsParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const UpdateUserDeviceSlotsBody = zod.object({
+  "extraDeviceSlots": zod.number().int().min(0)
+})
+
+export const UpdateUserDeviceSlotsResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "createdAt": zod.coerce.date(),
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number()
 })
 
 

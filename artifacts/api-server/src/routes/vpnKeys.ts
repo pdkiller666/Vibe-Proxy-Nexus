@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
-import { db, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
+import { and, asc, count, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { db, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import {
   CreateVpnKeyBody,
   CreateVpnKeyResponse,
@@ -44,11 +44,13 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Fetch active subscription WITH plan for devicesIncluded.
   // See meResponse.ts for why endsAt is re-checked here rather than trusting
   // status alone: the expiry sweep runs periodically, not instantly.
-  const [activeSubscription] = await db
-    .select()
+  const [activeWithPlan] = await db
+    .select({ devicesIncluded: plansTable.devicesIncluded })
     .from(subscriptionsTable)
+    .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
     .where(
       and(
         eq(subscriptionsTable.userId, user.id),
@@ -57,64 +59,16 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
       ),
     );
 
-  if (!activeSubscription) {
+  if (!activeWithPlan) {
     res.status(403).json({ error: "An active subscription is required to issue a VPN key" });
     return;
   }
 
-  // 1 key per user per node — with a single Warsaw server this means one key
-  // total. When more nodes are added each user gets exactly one key per node,
-  // so the subscription link always has the right set without any duplication.
-  const targetNodeId = parsed.data.nodeId;
-  if (targetNodeId) {
-    const [existingOnNode] = await db
-      .select({ id: vpnKeysTable.id })
-      .from(vpnKeysTable)
-      .where(
-        and(
-          eq(vpnKeysTable.userId, user.id),
-          eq(vpnKeysTable.nodeId, targetNodeId),
-          isNull(vpnKeysTable.revokedAt),
-        ),
-      )
-      .limit(1);
-
-    if (existingOnNode) {
-      res.status(409).json({
-        error: "У вас уже есть активный ключ для этого сервера. Для смены устройства используйте тот же ключ — он работает на нескольких устройствах одновременно.",
-      });
-      return;
-    }
-  } else {
-    // Auto-select path: skip nodes where the user already has a key.
-    // This ensures the auto-select always picks an uncovered node, and returns
-    // 409 only when every active node already has a key for this user.
-    const existingNodeIds = await db
-      .select({ nodeId: vpnKeysTable.nodeId })
-      .from(vpnKeysTable)
-      .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)));
-
-    if (existingNodeIds.length > 0) {
-      // Check if there's any active node without a key yet.
-      const coveredIds = existingNodeIds.map((r) => r.nodeId);
-      const [uncoveredNode] = await db
-        .select({ id: vpnNodesTable.id })
-        .from(vpnNodesTable)
-        .where(and(eq(vpnNodesTable.isActive, true), sql`${vpnNodesTable.id} != ALL(${sql.raw(`ARRAY[${coveredIds.join(",")}]::int[]`)})`))
-        .limit(1);
-
-      if (!uncoveredNode) {
-        res.status(409).json({
-          error: "У вас уже есть активный ключ для каждого доступного сервера. При добавлении нового сервера ключ появится автоматически.",
-        });
-        return;
-      }
-    }
-  }
+  // totalSlots = plan quota + admin-granted extras
+  const totalSlots = activeWithPlan.devicesIncluded + user.extraDeviceSlots;
 
   // Nodes with a maxUsers cap are excluded from selection once their
-  // non-revoked key count reaches the limit, so a single overloaded box
-  // can't be crammed with more clients than it was sized for.
+  // non-revoked key count reaches the limit.
   const activeCounts = db
     .select({
       nodeId: vpnKeysTable.nodeId,
@@ -131,7 +85,9 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
   );
 
   let node;
+
   if (parsed.data.nodeId) {
+    // --- Explicit node ---
     [node] = await db
       .select({ node: vpnNodesTable })
       .from(vpnNodesTable)
@@ -140,34 +96,68 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
         and(eq(vpnNodesTable.id, parsed.data.nodeId), eq(vpnNodesTable.isActive, true), nodeHasCapacity),
       )
       .then((rows) => rows.map((r) => r.node));
+
+    if (!node) {
+      const [exists] = await db
+        .select({ id: vpnNodesTable.id })
+        .from(vpnNodesTable)
+        .where(and(eq(vpnNodesTable.id, parsed.data.nodeId), eq(vpnNodesTable.isActive, true)));
+      res.status(exists ? 409 : 404).json({
+        error: exists ? "Selected VPN node has reached its user capacity" : "No available VPN node found",
+      });
+      return;
+    }
+
+    // Device slot check for this node
+    const [{ slotCount }] = await db
+      .select({ slotCount: count() })
+      .from(vpnKeysTable)
+      .where(
+        and(
+          eq(vpnKeysTable.userId, user.id),
+          eq(vpnKeysTable.nodeId, node.id),
+          isNull(vpnKeysTable.revokedAt),
+        ),
+      );
+
+    if (slotCount >= totalSlots) {
+      res.status(409).json({
+        error: `Все слоты устройств заняты (${slotCount} из ${totalSlots}). Обратитесь к администратору для расширения.`,
+      });
+      return;
+    }
   } else {
-    [node] = await db
+    // --- Auto-select: find first node with capacity and a free slot for this user ---
+    const candidateNodes = await db
       .select({ node: vpnNodesTable })
       .from(vpnNodesTable)
       .leftJoin(activeCounts, eq(activeCounts.nodeId, vpnNodesTable.id))
       .where(and(eq(vpnNodesTable.isActive, true), nodeHasCapacity))
       .orderBy(asc(vpnNodesTable.id))
-      .limit(1)
       .then((rows) => rows.map((r) => r.node));
-  }
 
-  if (!node) {
-    // Distinguish "node doesn't exist / is inactive" from "node exists but
-    // is full" only for the explicit-nodeId case, since that's actionable
-    // feedback for the user; the auto-select case just means no capacity
-    // anywhere right now.
-    if (parsed.data.nodeId) {
-      const [requested] = await db
-        .select()
-        .from(vpnNodesTable)
-        .where(and(eq(vpnNodesTable.id, parsed.data.nodeId), eq(vpnNodesTable.isActive, true)));
-      if (requested) {
-        res.status(409).json({ error: "Selected VPN node has reached its user capacity" });
-        return;
-      }
+    if (candidateNodes.length === 0) {
+      res.status(404).json({ error: "No available VPN node found" });
+      return;
     }
-    res.status(404).json({ error: "No available VPN node found" });
-    return;
+
+    // Get user's active key count per node
+    const userKeyCounts = await db
+      .select({ nodeId: vpnKeysTable.nodeId, cnt: count() })
+      .from(vpnKeysTable)
+      .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)))
+      .groupBy(vpnKeysTable.nodeId);
+
+    const userCountMap = new Map(userKeyCounts.map((r) => [r.nodeId, r.cnt]));
+
+    node = candidateNodes.find((n) => (userCountMap.get(n.id) ?? 0) < totalSlots);
+
+    if (!node) {
+      res.status(409).json({
+        error: `Все слоты устройств заняты (${totalSlots} из ${totalSlots}). Обратитесь к администратору для расширения.`,
+      });
+      return;
+    }
   }
 
   const uuid = generateKeyUuid();
