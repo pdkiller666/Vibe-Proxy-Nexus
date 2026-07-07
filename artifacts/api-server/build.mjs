@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { cp, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -29,12 +29,6 @@ async function buildAll() {
     // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
     external: [
       "*.node",
-      // gRPC and protobuf are externalized so their internal dynamic requires,
-      // file-system paths, and optional native addons resolve correctly at
-      // runtime. They are installed into /app/server/node_modules by the
-      // Dockerfile so Node.js ESM resolution finds them next to index.mjs.
-      "@grpc/grpc-js",
-      "protobufjs",
       "sharp",
       "better-sqlite3",
       "sqlite3",
@@ -123,14 +117,6 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     },
   });
 
-  // xray.ts loads these .proto files from disk at runtime (via a path
-  // relative to __dirname) to build its gRPC client; esbuild only bundles JS,
-  // so the raw .proto files must be copied alongside dist/index.mjs by hand.
-  await cp(
-    path.resolve(artifactDir, "src/lib/xray-proto"),
-    path.resolve(distDir, "xray-proto"),
-    { recursive: true },
-  );
 }
 
 buildAll().catch((err) => {

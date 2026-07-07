@@ -9,31 +9,17 @@
  *     survives container restarts — see entrypoint.sh, which preserves
  *     `inbounds[0].settings.clients` across re-renders of the config
  *     template on every boot).
- *  2. Pushes the same add/remove live to the *running* Xray process via its
- *     local gRPC API (HandlerService.AlterInbound), instead of restarting the
- *     process. This means issuing or revoking one user's key no longer drops
- *     every other connected user's VPN session for the few seconds a
- *     `supervisorctl restart xray` used to take.
+ *  2. Restarts Xray via supervisorctl so the updated config takes effect
+ *     immediately without waiting for the next redeploy.
  *
  * In the Replit dev environment `XRAY_CONFIG_PATH` is unset, so all of these
  * become no-ops and key issuance behaves as before (link generated locally,
  * not yet connectable).
  */
 import { promises as fs } from "fs";
-import path from "node:path";
-import * as grpc from "@grpc/grpc-js";
-import protobuf from "protobufjs";
+import { execSync } from "node:child_process";
 
 const CONFIG_PATH = process.env["XRAY_CONFIG_PATH"];
-
-// Local-only loopback address for Xray's gRPC API inbound (see
-// deploy/amvera-all-in-one/xray-config.json.template — the "api"
-// dokodemo-door inbound listens here). Never exposed outside the container.
-const XRAY_API_ADDRESS = process.env["XRAY_API_ADDRESS"] || "127.0.0.1:10085";
-
-// Tag of the VLESS inbound in xray-config.json.template that AlterInbound
-// requests target.
-const VLESS_INBOUND_TAG = "vless-in";
 
 interface XrayClient {
   id: string;
@@ -72,164 +58,11 @@ function getClients(config: Record<string, any>): XrayClient[] {
   return clients as XrayClient[];
 }
 
-// ---------------------------------------------------------------------------
-// gRPC client: hand-rolled (no protoc codegen) against a trimmed copy of
-// Xray-core's own .proto files (see ./xray-proto). We only need the
-// HandlerService.AlterInbound RPC with AddUserOperation/RemoveUserOperation,
-// so we skip the full AddInbound/AddOutbound message tree (which pulls in
-// core/config.proto's large dependency graph) and load protobufjs types
-// directly rather than going through @grpc/proto-loader.
-// ---------------------------------------------------------------------------
-
-// esbuild only bundles JS; the raw .proto files are copied next to
-// dist/index.mjs at build time (see build.mjs) and loaded from there using
-// __dirname, which the build's banner derives from import.meta.url so it
-// resolves correctly both in dev (src/lib) and in the bundled dist output.
-const PROTO_ROOT = path.join(__dirname, "xray-proto");
-
-let protoRootPromise: Promise<protobuf.Root> | null = null;
-
-function loadProtoRoot(): Promise<protobuf.Root> {
-  if (!protoRootPromise) {
-    const root = new protobuf.Root();
-    // protobufjs's default resolvePath resolves relative imports against the
-    // *importing file's* directory, which breaks Xray's proto layout (e.g.
-    // app/proxyman/command/command.proto imports "common/protocol/user.proto"
-    // meaning "relative to the proto include root", not to command.proto's
-    // own directory). Override it to always resolve against our proto root,
-    // matching how protoc/proto-loader's includeDirs option works.
-    root.resolvePath = (_origin, target) => path.join(PROTO_ROOT, target);
-    protoRootPromise = root
-      .load(
-        ["app/proxyman/command/command.proto", "proxy/vless/account.proto"],
-        { keepCase: true },
-      )
-      .then((loadedRoot) => {
-        loadedRoot.resolveAll();
-        return loadedRoot;
-      })
-      .catch((err) => {
-        // Reset so the next call retries instead of re-using a permanently
-        // failed promise (e.g. proto files not yet written to disk).
-        protoRootPromise = null;
-        throw err;
-      });
-  }
-  return protoRootPromise;
+function reloadXray(): void {
+  // Restart Xray via supervisorctl so the updated on-disk config takes effect.
+  // Takes ~2 s; existing connected clients reconnect automatically.
+  execSync("supervisorctl restart xray", { stdio: "pipe" });
 }
-
-// Wraps a protobufjs message in Xray's poor-man's-Any TypedMessage: `type` is
-// the fully qualified proto message name, `value` is its serialized bytes.
-function toTypedMessage(type: protobuf.Type, payload: object): { type: string; value: Buffer } {
-  const err = type.verify(payload);
-  if (err) throw new Error(`Invalid ${type.fullName} payload: ${err}`);
-  return {
-    type: type.fullName.replace(/^\./, ""),
-    value: Buffer.from(type.encode(type.create(payload)).finish()),
-  };
-}
-
-let handlerClient: grpc.Client | null = null;
-let alterInboundTypes: {
-  AlterInboundRequest: protobuf.Type;
-  AlterInboundResponse: protobuf.Type;
-  AddUserOperation: protobuf.Type;
-  RemoveUserOperation: protobuf.Type;
-  User: protobuf.Type;
-  Account: protobuf.Type;
-} | null = null;
-
-async function getHandlerClient() {
-  if (handlerClient && alterInboundTypes) {
-    return { client: handlerClient, types: alterInboundTypes };
-  }
-
-  const root = await loadProtoRoot();
-  const types = {
-    AlterInboundRequest: root.lookupType("xray.app.proxyman.command.AlterInboundRequest"),
-    AlterInboundResponse: root.lookupType("xray.app.proxyman.command.AlterInboundResponse"),
-    AddUserOperation: root.lookupType("xray.app.proxyman.command.AddUserOperation"),
-    RemoveUserOperation: root.lookupType("xray.app.proxyman.command.RemoveUserOperation"),
-    User: root.lookupType("xray.common.protocol.User"),
-    Account: root.lookupType("xray.proxy.vless.Account"),
-  };
-
-  const serviceDefinition: grpc.ServiceDefinition = {
-    alterInbound: {
-      path: "/xray.app.proxyman.command.HandlerService/AlterInbound",
-      requestStream: false,
-      responseStream: false,
-      requestSerialize: (msg: any) => Buffer.from(types.AlterInboundRequest.encode(msg).finish()),
-      requestDeserialize: (buf: Buffer) => types.AlterInboundRequest.decode(buf),
-      responseSerialize: (msg: any) => Buffer.from(types.AlterInboundResponse.encode(msg).finish()),
-      responseDeserialize: (buf: Buffer) => types.AlterInboundResponse.decode(buf),
-    },
-  };
-
-  const HandlerServiceClient = grpc.makeGenericClientConstructor(serviceDefinition, "HandlerService");
-  // Create the channel with a short deadline for the initial connection attempt
-  // so we get a fast failure instead of hanging indefinitely if Xray isn't up yet.
-  const newClient = new HandlerServiceClient(
-    XRAY_API_ADDRESS,
-    grpc.credentials.createInsecure(),
-    {
-      "grpc.enable_retries": 0,
-      "grpc.initial_reconnect_backoff_ms": 500,
-      "grpc.max_reconnect_backoff_ms": 2000,
-    },
-  ) as grpc.Client;
-
-  handlerClient = newClient;
-  alterInboundTypes = types;
-
-  return { client: handlerClient, types };
-}
-
-function alterInbound(operation: { type: string; value: Buffer }): Promise<void> {
-  return getHandlerClient().then(
-    ({ client, types }) =>
-      new Promise<void>((resolve, reject) => {
-        const request = types.AlterInboundRequest.create({
-          tag: VLESS_INBOUND_TAG,
-          operation,
-        });
-        (client as any).alterInbound(request, (err: grpc.ServiceError | null) => {
-          if (err) {
-            // Include gRPC status code and details so production logs show the
-            // exact failure reason (e.g. UNAVAILABLE=14 means Xray isn't
-            // listening on XRAY_API_ADDRESS; UNKNOWN=2 "request errored" means
-            // Xray rejected the operation — likely wrong inbound tag or bad proto).
-            reject(
-              new Error(
-                `Xray AlterInbound failed: code=${err.code} details=${err.details ?? ""} message=${err.message}`,
-              ),
-            );
-          } else {
-            resolve();
-          }
-        });
-      }),
-  );
-}
-
-async function addUserViaGrpc(uuid: string, email: string): Promise<void> {
-  const { types } = await getHandlerClient();
-  const account = toTypedMessage(types.Account, { id: uuid, flow: "", encryption: "none" });
-  const user = types.User.create({ level: 0, email, account });
-  const operation = toTypedMessage(types.AddUserOperation, { user });
-  await alterInbound(operation);
-}
-
-async function removeUserViaGrpc(email: string): Promise<void> {
-  const { types } = await getHandlerClient();
-  const operation = toTypedMessage(types.RemoveUserOperation, { email });
-  await alterInbound(operation);
-}
-
-// ---------------------------------------------------------------------------
-// Public API (unchanged signatures — callers in vpnKeys.ts don't need to
-// change) backed by the persisted-file + live-gRPC-push combo above.
-// ---------------------------------------------------------------------------
 
 export async function addXrayClient(uuid: string, email: string): Promise<void> {
   if (!isLocalXrayEnabled()) return;
@@ -238,11 +71,10 @@ export async function addXrayClient(uuid: string, email: string): Promise<void> 
     const clients = getClients(config);
     if (clients.some((c) => c.id === uuid)) return;
     clients.push({ id: uuid, email });
-    // Persist first so the client survives a container restart even if the
-    // live gRPC push below fails; the caller still surfaces the error (see
-    // vpnKeys.ts), and a retry or the next redeploy will pick this client up.
+    // Persist first — the client survives a container restart even if the
+    // reload below fails; the next boot will pick this client up automatically.
     await writeConfig(config);
-    await addUserViaGrpc(uuid, email);
+    reloadXray();
   });
 }
 
@@ -251,13 +83,10 @@ export async function removeXrayClient(uuid: string): Promise<void> {
   await withLock(async () => {
     const config = await readConfig();
     const clients = getClients(config);
-    const existing = clients.find((c) => c.id === uuid);
-    if (!existing) return;
+    if (!clients.some((c) => c.id === uuid)) return;
     const next = clients.filter((c) => c.id !== uuid);
     config["inbounds"][0]["settings"]["clients"] = next;
     await writeConfig(config);
-    // Xray identifies users by `email`, not by our uuid — use the email we
-    // recorded for this client when it was added.
-    await removeUserViaGrpc(existing.email ?? uuid);
+    reloadXray();
   });
 }

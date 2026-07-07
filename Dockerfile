@@ -55,15 +55,6 @@ WORKDIR /app
 COPY --from=builder /repo/artifacts/api-server/dist ./server
 COPY --from=builder /repo/artifacts/vpn-portal/dist/public ./public
 
-# @grpc/grpc-js and protobufjs are externalized from the esbuild bundle
-# (they use dynamic requires and file-system paths that break under bundling).
-# Install them next to index.mjs so Node.js ESM resolution finds them.
-WORKDIR /app/server
-RUN npm install --no-package-lock --no-save \
-    @grpc/grpc-js@1.14.4 \
-    protobufjs@7.5.4
-WORKDIR /app
-
 # Self-contained @workspace/db (schema + drizzle-kit) used by entrypoint.sh to
 # push schema changes on every boot.
 COPY --from=builder /tmp/db-deploy ./db-migrate
