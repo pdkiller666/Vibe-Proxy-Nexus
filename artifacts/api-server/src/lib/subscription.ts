@@ -6,7 +6,7 @@ import { getSessionSecret } from "./session";
  * apps (Happ, v2rayNG, v2rayN, etc). Keeping this in one place means every
  * issued key and the subscription itself stay consistently branded.
  */
-export const BRAND_NAME = "Vibe Proxy Nexus";
+export const BRAND_NAME = "VPNexus";
 
 /**
  * How often (in hours) client apps should auto-refresh the subscription.

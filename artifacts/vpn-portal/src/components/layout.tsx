@@ -77,7 +77,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-8 h-8 bg-orange-600 flex items-center justify-center">
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-lg tracking-tight">NEXUS</span>
+          <span className="font-bold text-lg tracking-tight">VPNexus</span>
         </div>
         <button
           onClick={() => setMobileOpen((v) => !v)}
@@ -106,7 +106,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-8 h-8 bg-orange-600 flex items-center justify-center">
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-lg tracking-tight">NEXUS</span>
+          <span className="font-bold text-lg tracking-tight">VPNexus</span>
         </div>
         <NavContent />
       </aside>
@@ -117,7 +117,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-8 h-8 bg-orange-600 flex items-center justify-center">
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-lg tracking-tight">NEXUS</span>
+          <span className="font-bold text-lg tracking-tight">VPNexus</span>
         </div>
         <NavContent />
       </aside>

@@ -61,11 +61,11 @@ export default function SignUpPage() {
           <div className="w-8 h-8 bg-orange-600 flex items-center justify-center">
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-lg tracking-tight">NEXUS</span>
+          <span className="font-bold text-lg tracking-tight">VPNexus</span>
         </div>
 
         <h1 className="text-2xl font-bold tracking-tight text-black mb-1">
-          Регистрация в Vibe Proxy Nexus
+          Регистрация в VPNexus
         </h1>
         <p className="text-gray-500 mb-6">Создайте аккаунт для доступа к сервису</p>
 

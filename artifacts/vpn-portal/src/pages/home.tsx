@@ -13,7 +13,7 @@ export default function Home() {
           <div className="w-8 h-8 bg-orange-600 flex items-center justify-center shrink-0">
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight">NEXUS</span>
+          <span className="font-bold text-xl tracking-tight">VPNexus</span>
         </div>
         <div className="flex gap-4">
           <Link href="/sign-in" className="text-sm font-medium text-gray-600 hover:text-gray-900 px-4 py-2">
