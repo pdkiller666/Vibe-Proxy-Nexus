@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import {
   useListMyPayments,
   useGetPaymentSettings,
@@ -8,7 +8,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
@@ -35,16 +36,43 @@ function CopyField({ label, value }: { label: string; value: string }) {
 export default function Checkout() {
   const { id } = useParams<{ id: string }>();
   const subscriptionId = Number(id);
+  const [, setLocation] = useLocation();
   const { data: payments, isLoading: paymentsLoading } = useListMyPayments();
   const { data: settings, isLoading: settingsLoading } = useGetPaymentSettings();
   const { mutate: updateNote, isPending: notePending } = useUpdatePaymentNote();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [note, setNote] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const payment = payments
     ?.filter((p) => p.subscriptionId === subscriptionId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+  // #5 — User-initiated cancellation of their own pending_payment subscription.
+  const { mutate: cancelSubscription, isPending: cancelling } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/subscriptions/${subscriptionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Не удалось отменить подписку");
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "Подписка отменена" });
+      queryClient.invalidateQueries({ queryKey: ["payments", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["subscriptions", "me"] });
+      setLocation("/plans");
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message, variant: "destructive" });
+      setConfirmCancel(false);
+    },
+  });
 
   function handleSubmitNote() {
     if (!payment || !note.trim()) return;
@@ -126,27 +154,63 @@ export default function Checkout() {
       )}
 
       {payment.status === "pending" && (
-        <div className="space-y-3">
-          <label className="text-sm font-bold block">
-            Отметка об оплате (например, время перевода)
-          </label>
-          <Textarea
-            value={note || payment.userNote || ""}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Оплатил(а) в 14:32, перевод прошёл"
-            className="rounded-none"
-          />
-          <button
-            onClick={handleSubmitNote}
-            disabled={notePending || (!note.trim() && !payment.userNote)}
-            className="bg-primary text-primary-foreground font-bold px-6 py-3 hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {notePending ? "Сохраняем..." : submitted || payment.userNote ? "Обновить отметку" : "Я оплатил(а)"}
-          </button>
-          <p className="text-xs text-muted-foreground">
-            Это не автоматическая оплата картой — администратор вручную сверит перевод и активирует подписку.
-          </p>
-        </div>
+        <>
+          <div className="space-y-3">
+            <label className="text-sm font-bold block">
+              Отметка об оплате (например, время перевода)
+            </label>
+            <Textarea
+              value={note || payment.userNote || ""}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Оплатил(а) в 14:32, перевод прошёл"
+              className="rounded-none"
+            />
+            <button
+              onClick={handleSubmitNote}
+              disabled={notePending || (!note.trim() && !payment.userNote)}
+              className="bg-primary text-primary-foreground font-bold px-6 py-3 hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {notePending ? "Сохраняем..." : submitted || payment.userNote ? "Обновить отметку" : "Я оплатил(а)"}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              Это не автоматическая оплата картой — администратор вручную сверит перевод и активирует подписку.
+            </p>
+          </div>
+
+          {/* Cancel pending subscription */}
+          <div className="border-t border-border pt-6">
+            {!confirmCancel ? (
+              <button
+                onClick={() => setConfirmCancel(true)}
+                className="text-sm text-muted-foreground hover:text-destructive transition-colors underline underline-offset-2"
+              >
+                Отменить заявку на подписку
+              </button>
+            ) : (
+              <div className="bg-destructive/10 border border-destructive/30 p-4 space-y-3">
+                <div className="flex items-start gap-2 text-sm text-destructive font-medium">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  Вы уверены? Заявка будет отменена. Если вы уже перевели деньги — свяжитесь с поддержкой.
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => cancelSubscription()}
+                    disabled={cancelling}
+                    className="bg-destructive text-destructive-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {cancelling ? "Отменяем..." : "Да, отменить"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmCancel(false)}
+                    className="border border-border px-4 py-2 text-sm hover:bg-muted transition-colors"
+                  >
+                    Назад
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

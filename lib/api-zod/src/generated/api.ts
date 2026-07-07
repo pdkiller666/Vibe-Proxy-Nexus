@@ -333,6 +333,7 @@ export const GetAdminDashboardSummaryResponse = zod.object({
   "activeSubscriptions": zod.number(),
   "pendingPayments": zod.number(),
   "monthlyRevenueRub": zod.number(),
+  "last30DaysRevenueRub": zod.number(),
   "totalVpnKeys": zod.number()
 })
 

@@ -51,19 +51,20 @@ function SummarySection() {
   const { data, isLoading } = useGetAdminDashboardSummary();
   if (isLoading || !data) {
     return (
-      <div className="grid md:grid-cols-5 gap-4">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-24 w-full" />
         ))}
       </div>
     );
   }
   return (
-    <div className="grid md:grid-cols-5 gap-4">
+    <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
       <Metric label="Пользователи" value={data.totalUsers} />
       <Metric label="Активные подписки" value={data.activeSubscriptions} />
       <Metric label="Ожидают оплаты" value={data.pendingPayments} />
-      <Metric label="Доход за месяц" value={`${data.monthlyRevenueRub} ₽`} />
+      <Metric label="Доход (месяц)" value={`${data.monthlyRevenueRub} ₽`} />
+      <Metric label="Доход (30 дней)" value={`${data.last30DaysRevenueRub} ₽`} />
       <Metric label="Выпущено ключей" value={data.totalVpnKeys} />
     </div>
   );
