@@ -1,15 +1,31 @@
-import { useState } from "react";
 import { Link } from "wouter";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useForgotPassword } from "@workspace/api-client-react";
+import { ForgotPasswordBody } from "@workspace/api-zod";
 import { Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+type ForgotPasswordFormValues = {
+  email: string;
+};
+
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+  const form = useForm<ForgotPasswordFormValues>({
+    resolver: zodResolver(ForgotPasswordBody),
+    defaultValues: { email: "" },
+  });
 
   const forgotPasswordMutation = useForgotPassword();
 
@@ -21,9 +37,8 @@ export default function ForgotPasswordPage() {
         ? "Не удалось отправить запрос. Попробуйте позже."
         : null;
 
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    forgotPasswordMutation.mutate({ data: { email } });
+  function onSubmit(values: ForgotPasswordFormValues) {
+    forgotPasswordMutation.mutate({ data: values });
   }
 
   const result = forgotPasswordMutation.data;
@@ -42,32 +57,38 @@ export default function ForgotPasswordPage() {
         <p className="text-gray-500 mb-6">Введите email, указанный при регистрации</p>
 
         {!result ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-black font-semibold">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="rounded-none border-gray-300 focus-visible:ring-orange-600"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-black font-semibold">Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        autoComplete="email"
+                        className="rounded-none border-gray-300 focus-visible:ring-orange-600"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+              {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
 
-            <Button
-              type="submit"
-              disabled={forgotPasswordMutation.isPending}
-              className="w-full rounded-none bg-orange-600 hover:bg-orange-700 text-white font-mono"
-            >
-              {forgotPasswordMutation.isPending ? "Отправка..." : "Отправить ссылку для сброса"}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                disabled={forgotPasswordMutation.isPending}
+                className="w-full rounded-none bg-orange-600 hover:bg-orange-700 text-white font-mono"
+              >
+                {forgotPasswordMutation.isPending ? "Отправка..." : "Отправить ссылку для сброса"}
+              </Button>
+            </form>
+          </Form>
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-gray-700">{result.message}</p>

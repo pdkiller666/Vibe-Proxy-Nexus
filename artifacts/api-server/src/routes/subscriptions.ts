@@ -4,6 +4,7 @@ import { db, plansTable, subscriptionsTable, paymentsTable } from "@workspace/db
 import { CreateSubscriptionBody, CreateSubscriptionResponse, ListMySubscriptionsResponse } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { generatePaymentReference } from "../lib/vless";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -43,36 +44,50 @@ router.post("/subscriptions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const [subscription] = await db
-    .insert(subscriptionsTable)
-    .values({
-      userId: user.id,
-      planId: plan.id,
-      status: "pending_payment",
-    })
-    .returning();
+  // Both writes must land together: if the process died between them we'd
+  // otherwise end up with a "pending_payment" subscription that has no
+  // payment record to ever confirm it, leaving the user stuck.
+  let created;
+  try {
+    created = await db.transaction(async (tx) => {
+      const [subscription] = await tx
+        .insert(subscriptionsTable)
+        .values({
+          userId: user.id,
+          planId: plan.id,
+          status: "pending_payment",
+        })
+        .returning();
 
-  if (!subscription) {
+      if (!subscription) {
+        throw new Error("Failed to create subscription");
+      }
+
+      const [payment] = await tx
+        .insert(paymentsTable)
+        .values({
+          subscriptionId: subscription.id,
+          userId: user.id,
+          provider: parsed.data.provider ?? "manual_sbp",
+          amountRub: plan.priceRub,
+          status: "pending",
+          reference: generatePaymentReference(subscription.id),
+        })
+        .returning();
+
+      if (!payment) {
+        throw new Error("Failed to create payment");
+      }
+
+      return { subscription, payment };
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to create subscription with payment");
     res.status(500).json({ error: "Failed to create subscription" });
     return;
   }
 
-  const [payment] = await db
-    .insert(paymentsTable)
-    .values({
-      subscriptionId: subscription.id,
-      userId: user.id,
-      provider: parsed.data.provider ?? "manual_sbp",
-      amountRub: plan.priceRub,
-      status: "pending",
-      reference: generatePaymentReference(subscription.id),
-    })
-    .returning();
-
-  if (!payment) {
-    res.status(500).json({ error: "Failed to create payment" });
-    return;
-  }
+  const { subscription, payment } = created;
 
   res.status(201).json(
     CreateSubscriptionResponse.parse({

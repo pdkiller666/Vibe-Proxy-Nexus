@@ -1,19 +1,37 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useLogin } from "@workspace/api-client-react";
+import { LoginBody } from "@workspace/api-zod";
 import { Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+type LoginFormValues = {
+  email: string;
+  password: string;
+};
 
 export default function SignInPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(LoginBody),
+    defaultValues: { email: "", password: "" },
+  });
 
   const loginMutation = useLogin({
     mutation: {
@@ -32,9 +50,8 @@ export default function SignInPage() {
         ? "Не удалось войти. Проверьте данные."
         : null;
 
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    loginMutation.mutate({ data: { email, password } });
+  function onSubmit(values: LoginFormValues) {
+    loginMutation.mutate({ data: values });
   }
 
   return (
@@ -52,55 +69,65 @@ export default function SignInPage() {
         </h1>
         <p className="text-gray-500 mb-6">Доступ только по приглашению</p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-black font-semibold">
-              Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="rounded-none border-gray-300 focus-visible:ring-orange-600"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-black font-semibold">Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      className="rounded-none border-gray-300 focus-visible:ring-orange-600"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-black font-semibold">
-                Пароль
-              </Label>
-              <Link
-                href={`${basePath}/forgot-password`}
-                className="text-xs text-orange-600 font-semibold hover:text-orange-700"
-              >
-                Забыли пароль?
-              </Link>
-            </div>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="rounded-none border-gray-300 focus-visible:ring-orange-600"
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="text-black font-semibold">Пароль</FormLabel>
+                    <Link
+                      href={`${basePath}/forgot-password`}
+                      className="text-xs text-orange-600 font-semibold hover:text-orange-700"
+                    >
+                      Забыли пароль?
+                    </Link>
+                  </div>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="current-password"
+                      className="rounded-none border-gray-300 focus-visible:ring-orange-600"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
 
-          <Button
-            type="submit"
-            disabled={loginMutation.isPending}
-            className="w-full rounded-none bg-orange-600 hover:bg-orange-700 text-white font-mono"
-          >
-            {loginMutation.isPending ? "Вход..." : "Войти"}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              disabled={loginMutation.isPending}
+              className="w-full rounded-none bg-orange-600 hover:bg-orange-700 text-white font-mono"
+            >
+              {loginMutation.isPending ? "Вход..." : "Войти"}
+            </Button>
+          </form>
+        </Form>
 
         <p className="text-sm text-gray-500 mt-6">
           Нет аккаунта?{" "}
