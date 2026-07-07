@@ -62,6 +62,56 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // 1 key per user per node — with a single Warsaw server this means one key
+  // total. When more nodes are added each user gets exactly one key per node,
+  // so the subscription link always has the right set without any duplication.
+  const targetNodeId = parsed.data.nodeId;
+  if (targetNodeId) {
+    const [existingOnNode] = await db
+      .select({ id: vpnKeysTable.id })
+      .from(vpnKeysTable)
+      .where(
+        and(
+          eq(vpnKeysTable.userId, user.id),
+          eq(vpnKeysTable.nodeId, targetNodeId),
+          isNull(vpnKeysTable.revokedAt),
+        ),
+      )
+      .limit(1);
+
+    if (existingOnNode) {
+      res.status(409).json({
+        error: "У вас уже есть активный ключ для этого сервера. Для смены устройства используйте тот же ключ — он работает на нескольких устройствах одновременно.",
+      });
+      return;
+    }
+  } else {
+    // Auto-select path: skip nodes where the user already has a key.
+    // This ensures the auto-select always picks an uncovered node, and returns
+    // 409 only when every active node already has a key for this user.
+    const existingNodeIds = await db
+      .select({ nodeId: vpnKeysTable.nodeId })
+      .from(vpnKeysTable)
+      .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)));
+
+    if (existingNodeIds.length > 0) {
+      // Check if there's any active node without a key yet.
+      const coveredIds = existingNodeIds.map((r) => r.nodeId);
+      const [uncoveredNode] = await db
+        .select({ id: vpnNodesTable.id })
+        .from(vpnNodesTable)
+        .where(and(eq(vpnNodesTable.isActive, true), sql`${vpnNodesTable.id} != ALL(${sql.raw(`ARRAY[${coveredIds.join(",")}]::int[]`)})`))
+        .limit(1);
+
+      if (!uncoveredNode) {
+        res.status(409).json({
+          error: "У вас уже есть активный ключ для каждого доступного сервера. При добавлении нового сервера ключ появится автоматически.",
+        });
+        return;
+      }
+    }
+  }
+
   // Nodes with a maxUsers cap are excluded from selection once their
   // non-revoked key count reaches the limit, so a single overloaded box
   // can't be crammed with more clients than it was sized for.

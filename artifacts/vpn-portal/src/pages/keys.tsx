@@ -162,18 +162,25 @@ export default function Keys() {
 
   const activeKeys = (keys ?? []).filter((k: { revokedAt?: Date | null }) => !k.revokedAt);
   const canIssue = !!me?.hasActiveSubscription;
-  const defaultNodeId = nodes?.find((n: { isActive: boolean }) => n.isActive)?.id;
+  const activeNodes = (nodes ?? []).filter((n: { isActive: boolean }) => n.isActive);
+  const defaultNodeId = activeNodes[0]?.id;
+
+  // User already has a key for every active node — hide the issue button.
+  const coveredNodeIds = new Set(activeKeys.map((k: { nodeId: number }) => k.nodeId));
+  const hasUncoveredNode = activeNodes.some((n: { id: number }) => !coveredNodeIds.has(n.id));
+  const allNodesCovered = canIssue && !hasUncoveredNode && activeKeys.length > 0;
 
   function handleCreate() {
     createKey(
-      { data: { nodeId: defaultNodeId, label: "Мой ключ" } },
+      { data: { nodeId: defaultNodeId } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
           toast({ title: "Ключ выпущен", description: "Импортируйте его в клиент VLESS." });
         },
-        onError: () => {
-          toast({ title: "Не удалось выпустить ключ", variant: "destructive" });
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : undefined;
+          toast({ title: msg ?? "Не удалось выпустить ключ", variant: "destructive" });
         },
       },
     );
@@ -210,15 +217,17 @@ export default function Keys() {
             Учётные данные подключения. Импортируйте vless-ссылку в свой клиент.
           </p>
         </div>
-        <button
-          onClick={handleCreate}
-          disabled={!canIssue || creating}
-          title={canIssue ? undefined : "Нужна активная подписка"}
-          className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
-        >
-          <Plus className="w-4 h-4" />
-          {creating ? "Выпускаем..." : "Новый ключ"}
-        </button>
+        {!allNodesCovered && (
+          <button
+            onClick={handleCreate}
+            disabled={!canIssue || creating}
+            title={canIssue ? undefined : "Нужна активная подписка"}
+            className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
+          >
+            <Plus className="w-4 h-4" />
+            {creating ? "Выпускаем..." : "Получить ключ"}
+          </button>
+        )}
       </div>
 
       {!canIssue && (
