@@ -4,7 +4,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRegister } from "@workspace/api-client-react";
 import { RegisterBody } from "@workspace/api-zod";
-import { Shield } from "lucide-react";
+import { Shield, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +26,7 @@ type RegisterFormValues = {
 };
 
 export default function SignUpPage() {
+  const [showPassword, setShowPassword] = useState(false);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -116,12 +118,22 @@ export default function SignUpPage() {
                 <FormItem>
                   <FormLabel className="text-black font-semibold">Пароль</FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      autoComplete="new-password"
-                      className="rounded-none border-gray-300 focus-visible:ring-orange-600"
-                      {...field}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        className="rounded-none border-gray-300 focus-visible:ring-orange-600 pr-10"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </FormControl>
                   <p className="text-xs text-gray-400">Минимум 8 символов</p>
                   <FormMessage />

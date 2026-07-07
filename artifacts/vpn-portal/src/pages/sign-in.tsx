@@ -5,7 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLogin } from "@workspace/api-client-react";
 import { LoginBody } from "@workspace/api-zod";
-import { Shield } from "lucide-react";
+import { Shield, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +26,7 @@ type LoginFormValues = {
 };
 
 export default function SignInPage() {
+  const [showPassword, setShowPassword] = useState(false);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
@@ -105,12 +107,22 @@ export default function SignInPage() {
                     </Link>
                   </div>
                   <FormControl>
-                    <Input
-                      type="password"
-                      autoComplete="current-password"
-                      className="rounded-none border-gray-300 focus-visible:ring-orange-600"
-                      {...field}
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        className="rounded-none border-gray-300 focus-visible:ring-orange-600 pr-10"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
