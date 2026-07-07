@@ -39,18 +39,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function Metric({ label, value }: { label: string; value: string | number }) {
+function Metric({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
   return (
-    <div className="bg-card border border-border p-5">
-      <div className="text-xs font-mono text-muted-foreground uppercase mb-1">{label}</div>
-      <div className="text-2xl font-bold">{value}</div>
+    <div className={`bg-card border p-5 ${highlight ? "border-orange-400 bg-orange-50/50" : "border-border"}`}>
+      <div className={`text-xs font-mono uppercase mb-1 ${highlight ? "text-orange-600 font-bold" : "text-muted-foreground"}`}>{label}</div>
+      <div className={`text-2xl font-bold ${highlight ? "text-orange-700" : ""}`}>{value}</div>
     </div>
+  );
+}
+
+function Badge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-600 text-white text-[10px] font-bold leading-none">
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 
@@ -69,10 +78,10 @@ function SummarySection() {
     <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
       <Metric label="Пользователи" value={data.totalUsers} />
       <Metric label="Активные подписки" value={data.activeSubscriptions} />
-      <Metric label="Ожидают оплаты" value={data.pendingPayments} />
-      <Metric label="Доход (месяц)" value={`${data.monthlyRevenueRub} ₽`} />
+      <Metric label="Ожидают оплаты" value={data.pendingPayments} highlight={data.pendingPayments > 0} />
       <Metric label="Доход (30 дней)" value={`${data.last30DaysRevenueRub} ₽`} />
       <Metric label="Выпущено ключей" value={data.totalVpnKeys} />
+      <Metric label="Открытых тикетов" value={data.openTickets} highlight={data.openTickets > 0} />
     </div>
   );
 }
@@ -1056,6 +1065,10 @@ function SupportManagement() {
 }
 
 export default function Admin() {
+  const { data: summary } = useGetAdminDashboardSummary();
+  const pendingPayments = summary?.pendingPayments ?? 0;
+  const openTickets = summary?.openTickets ?? 0;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div>
@@ -1070,6 +1083,7 @@ export default function Admin() {
           <TabsList className="rounded-none w-max min-w-full md:w-auto">
             <TabsTrigger value="payments" className="rounded-none gap-1.5 whitespace-nowrap">
               <CreditCard className="w-4 h-4" /> Платежи
+              <Badge count={pendingPayments} />
             </TabsTrigger>
             <TabsTrigger value="plans" className="rounded-none gap-1.5 whitespace-nowrap">
               <Shield className="w-4 h-4" /> Тарифы
@@ -1088,6 +1102,7 @@ export default function Admin() {
             </TabsTrigger>
             <TabsTrigger value="support" className="rounded-none gap-1.5 whitespace-nowrap">
               <MessageCircle className="w-4 h-4" /> Поддержка
+              <Badge count={openTickets} />
             </TabsTrigger>
           </TabsList>
         </div>

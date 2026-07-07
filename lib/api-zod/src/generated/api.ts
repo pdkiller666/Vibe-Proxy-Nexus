@@ -341,7 +341,8 @@ export const GetAdminDashboardSummaryResponse = zod.object({
   "pendingPayments": zod.number(),
   "monthlyRevenueRub": zod.number(),
   "last30DaysRevenueRub": zod.number(),
-  "totalVpnKeys": zod.number()
+  "totalVpnKeys": zod.number(),
+  "openTickets": zod.number()
 })
 
 

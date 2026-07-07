@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, count, eq, gte, sum } from "drizzle-orm";
-import { db, paymentsTable, subscriptionsTable, usersTable, vpnKeysTable } from "@workspace/db";
+import { and, count, eq, gte, inArray, sum } from "drizzle-orm";
+import { db, paymentsTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 
@@ -23,6 +23,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     [monthlyRevenue],
     [last30DaysRevenue],
     [totalVpnKeys],
+    [openTickets],
   ] = await Promise.all([
     db.select({ value: count() }).from(usersTable),
     db.select({ value: count() }).from(subscriptionsTable).where(eq(subscriptionsTable.status, "active")),
@@ -36,6 +37,10 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       .from(paymentsTable)
       .where(and(eq(paymentsTable.status, "confirmed"), gte(paymentsTable.confirmedAt, startOf30Days))),
     db.select({ value: count() }).from(vpnKeysTable),
+    db
+      .select({ value: count() })
+      .from(supportTicketsTable)
+      .where(inArray(supportTicketsTable.status, ["open", "answered"])),
   ]);
 
   res.json(
@@ -46,6 +51,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       monthlyRevenueRub: Number(monthlyRevenue?.value ?? 0),
       last30DaysRevenueRub: Number(last30DaysRevenue?.value ?? 0),
       totalVpnKeys: totalVpnKeys?.value ?? 0,
+      openTickets: openTickets?.value ?? 0,
     }),
   );
 });

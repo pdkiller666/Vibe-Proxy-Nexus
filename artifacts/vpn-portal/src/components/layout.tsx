@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetMe, useLogout } from "@workspace/api-client-react";
+import { useGetMe, useLogout, useGetAdminDashboardSummary } from "@workspace/api-client-react";
 import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -10,6 +10,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "admin";
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const { data: summary } = useGetAdminDashboardSummary({
+    query: { enabled: isAdmin, refetchInterval: 60_000 },
+  });
+  const adminAlertCount = isAdmin
+    ? (summary?.pendingPayments ?? 0) + (summary?.openTickets ?? 0)
+    : 0;
 
   const logoutMutation = useLogout({
     mutation: {
@@ -37,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <nav className="flex-1 p-4 space-y-1">
         {navItems.map((item) => {
           const isActive = location === item.href || location.startsWith(`${item.href}/`);
+          const showBadge = item.href === "/admin" && adminAlertCount > 0;
           return (
             <Link
               key={item.href}
@@ -48,8 +56,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent"
               }`}
             >
-              <item.icon className="w-4 h-4" />
-              {item.label}
+              <item.icon className="w-4 h-4 shrink-0" />
+              <span className="flex-1">{item.label}</span>
+              {showBadge && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-600 text-white text-[10px] font-bold leading-none">
+                  {adminAlertCount > 99 ? "99+" : adminAlertCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -80,13 +93,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <span className="font-bold text-lg tracking-tight">VPNexus</span>
         </div>
-        <button
-          onClick={() => setMobileOpen((v) => !v)}
-          className="p-2 text-gray-600 hover:text-gray-900 transition-colors"
-          aria-label="Меню"
-        >
-          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          {adminAlertCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full bg-orange-600 text-white text-[10px] font-bold">
+              {adminAlertCount > 99 ? "99+" : adminAlertCount}
+            </span>
+          )}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="p-2 text-gray-600 hover:text-gray-900 transition-colors"
+            aria-label="Меню"
+          >
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </header>
 
       {/* Mobile drawer overlay */}
