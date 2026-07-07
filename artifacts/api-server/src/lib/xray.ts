@@ -107,6 +107,12 @@ function loadProtoRoot(): Promise<protobuf.Root> {
       .then((loadedRoot) => {
         loadedRoot.resolveAll();
         return loadedRoot;
+      })
+      .catch((err) => {
+        // Reset so the next call retries instead of re-using a permanently
+        // failed promise (e.g. proto files not yet written to disk).
+        protoRootPromise = null;
+        throw err;
       });
   }
   return protoRootPromise;
@@ -161,7 +167,19 @@ async function getHandlerClient() {
   };
 
   const HandlerServiceClient = grpc.makeGenericClientConstructor(serviceDefinition, "HandlerService");
-  handlerClient = new HandlerServiceClient(XRAY_API_ADDRESS, grpc.credentials.createInsecure()) as grpc.Client;
+  // Create the channel with a short deadline for the initial connection attempt
+  // so we get a fast failure instead of hanging indefinitely if Xray isn't up yet.
+  const newClient = new HandlerServiceClient(
+    XRAY_API_ADDRESS,
+    grpc.credentials.createInsecure(),
+    {
+      "grpc.enable_retries": 0,
+      "grpc.initial_reconnect_backoff_ms": 500,
+      "grpc.max_reconnect_backoff_ms": 2000,
+    },
+  ) as grpc.Client;
+
+  handlerClient = newClient;
   alterInboundTypes = types;
 
   return { client: handlerClient, types };
@@ -176,8 +194,19 @@ function alterInbound(operation: { type: string; value: Buffer }): Promise<void>
           operation,
         });
         (client as any).alterInbound(request, (err: grpc.ServiceError | null) => {
-          if (err) reject(new Error(`Xray AlterInbound failed: ${err.message}`));
-          else resolve();
+          if (err) {
+            // Include gRPC status code and details so production logs show the
+            // exact failure reason (e.g. UNAVAILABLE=14 means Xray isn't
+            // listening on XRAY_API_ADDRESS; UNKNOWN=2 "request errored" means
+            // Xray rejected the operation — likely wrong inbound tag or bad proto).
+            reject(
+              new Error(
+                `Xray AlterInbound failed: code=${err.code} details=${err.details ?? ""} message=${err.message}`,
+              ),
+            );
+          } else {
+            resolve();
+          }
         });
       }),
   );

@@ -29,6 +29,12 @@ async function buildAll() {
     // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
     external: [
       "*.node",
+      // gRPC and protobuf are externalized so their internal dynamic requires,
+      // file-system paths, and optional native addons resolve correctly at
+      // runtime. They are installed into /app/server/node_modules by the
+      // Dockerfile so Node.js ESM resolution finds them next to index.mjs.
+      "@grpc/grpc-js",
+      "protobufjs",
       "sharp",
       "better-sqlite3",
       "sqlite3",
