@@ -1,6 +1,7 @@
 import { useListMyPayments } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Info } from "lucide-react";
+import { OnboardingTip } from "@/components/onboarding-tip";
 
 const statusConfig = {
   pending: { label: "Ожидает", icon: Clock, className: "bg-primary/10 text-primary" },
@@ -23,6 +24,20 @@ export default function Payments() {
           Статус ваших обращений по оплате.
         </p>
       </div>
+
+      <OnboardingTip
+        id="payments-info"
+        icon={<Info className="w-4 h-4" />}
+        title="Как работают платежи"
+      >
+        <p>
+          После оплаты тарифа через СБП здесь появится запись со статусом <strong>«Ожидает»</strong>.
+        </p>
+        <p>
+          Когда администратор подтвердит перевод, статус сменится на <strong>«Подтверждён»</strong>
+          — и подписка активируется автоматически.
+        </p>
+      </OnboardingTip>
 
       {isLoading ? (
         <div className="space-y-3">

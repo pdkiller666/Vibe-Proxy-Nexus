@@ -14,7 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap } from "lucide-react";
+import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
 
 function CopyButton({ text }: { text: string }) {
@@ -269,6 +270,22 @@ export default function Keys() {
           </div>
         )}
       </div>
+
+      <OnboardingTip
+        id="keys-intro"
+        icon={<Zap className="w-4 h-4" />}
+        title="Как подключиться за 2 минуты"
+      >
+        <p>
+          <strong>1.</strong> Установите приложение: <strong>Happ</strong> (iOS/Android), <strong>v2rayNG</strong> (Android) или <strong>v2rayN</strong> (Windows).
+        </p>
+        <p>
+          <strong>2.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже и добавьте её в приложение через «Добавить подписку».
+        </p>
+        <p>
+          <strong>3.</strong> Нажмите подключение — готово. Ключи обновляются автоматически.
+        </p>
+      </OnboardingTip>
 
       {!canIssue && (
         <p className="text-sm text-muted-foreground bg-card border border-border p-4">

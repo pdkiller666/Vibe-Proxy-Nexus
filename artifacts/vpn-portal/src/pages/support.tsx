@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageCircle, Plus, ArrowLeft, Send, ChevronDown, ChevronUp } from "lucide-react";
+import { OnboardingTip } from "@/components/onboarding-tip";
 
 type TicketStatus = "open" | "answered" | "closed";
 
@@ -268,6 +269,15 @@ export default function SupportPage() {
           </button>
         )}
       </div>
+
+      <OnboardingTip
+        id="support-intro"
+        icon={<MessageCircle className="w-4 h-4" />}
+        title="Как работает поддержка"
+      >
+        <p>Создайте обращение — опишите проблему или задайте вопрос. Отвечаем обычно в течение нескольких часов.</p>
+        <p>В разделе <strong>FAQ</strong> ниже собраны ответы на самые частые вопросы — возможно, ответ уже там.</p>
+      </OnboardingTip>
 
       {/* Main content */}
       {view === "new" ? (

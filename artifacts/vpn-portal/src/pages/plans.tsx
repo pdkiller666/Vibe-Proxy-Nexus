@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { useListPlans, useCreateSubscription } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Check } from "lucide-react";
+import { Check, CreditCard } from "lucide-react";
+import { OnboardingTip } from "@/components/onboarding-tip";
 
 export default function Plans() {
   const { data: plans, isLoading } = useListPlans();
@@ -41,6 +42,22 @@ export default function Plans() {
           Оплата — вручную через СБП. Активация после подтверждения перевода.
         </p>
       </div>
+
+      <OnboardingTip
+        id="plans-how-to-pay"
+        icon={<CreditCard className="w-4 h-4" />}
+        title="Как оплатить тариф"
+      >
+        <p>
+          <strong>1.</strong> Выберите нужный план и нажмите «Выбрать».
+        </p>
+        <p>
+          <strong>2.</strong> Вы увидите реквизиты для перевода по СБП — переведите точную сумму.
+        </p>
+        <p>
+          <strong>3.</strong> Администратор подтверждает оплату в течение нескольких часов, после чего подписка активируется автоматически.
+        </p>
+      </OnboardingTip>
 
       <div className="grid md:grid-cols-3 gap-6">
         {isLoading ? (
