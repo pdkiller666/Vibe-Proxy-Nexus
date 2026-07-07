@@ -684,3 +684,94 @@ export const UpdateUserDeviceSlotsResponse = zod.object({
 })
 
 
+
+
+/**
+ * Support Tickets
+ */
+export const ticketStatusValues = ['open', 'answered', 'closed'] as const;
+export const SupportTicketStatusEnum = zod.enum(ticketStatusValues);
+
+export const createSupportTicketBodySubjectMax = 200;
+export const createSupportTicketBodyBodyMax = 4000;
+
+export const CreateSupportTicketBody = zod.object({
+  subject: zod.string().min(1).max(createSupportTicketBodySubjectMax),
+  body: zod.string().min(1).max(createSupportTicketBodyBodyMax),
+});
+
+export const SupportMessageItem = zod.object({
+  id: zod.number(),
+  ticketId: zod.number(),
+  authorId: zod.number(),
+  authorEmail: zod.string(),
+  isAdmin: zod.boolean(),
+  body: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+export const SupportTicketItem = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  userEmail: zod.string(),
+  subject: zod.string(),
+  status: SupportTicketStatusEnum,
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  messageCount: zod.number(),
+});
+
+export const CreateSupportTicketResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  subject: zod.string(),
+  status: SupportTicketStatusEnum,
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+export const ListMyTicketsResponse = zod.array(SupportTicketItem);
+export const ListAdminTicketsResponse = zod.array(SupportTicketItem);
+
+export const ListAdminTicketsQueryParams = zod.object({
+  status: SupportTicketStatusEnum.optional(),
+});
+
+export const GetTicketParams = zod.object({
+  ticketId: zod.coerce.number(),
+});
+
+export const GetTicketResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  userEmail: zod.string(),
+  subject: zod.string(),
+  status: SupportTicketStatusEnum,
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  messageCount: zod.number(),
+  messages: zod.array(SupportMessageItem),
+});
+
+export const AddTicketMessageBody = zod.object({
+  body: zod.string().min(1).max(4000),
+});
+
+export const AddTicketMessageParams = zod.object({
+  ticketId: zod.coerce.number(),
+});
+
+export const AddTicketMessageResponse = SupportMessageItem;
+
+export const UpdateTicketStatusBody = zod.object({
+  status: SupportTicketStatusEnum,
+});
+
+export const UpdateTicketStatusParams = zod.object({
+  ticketId: zod.coerce.number(),
+});
+
+export const UpdateTicketStatusResponse = zod.object({
+  id: zod.number(),
+  status: SupportTicketStatusEnum,
+});

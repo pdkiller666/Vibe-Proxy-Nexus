@@ -25,15 +25,21 @@ import {
   getListVpnNodesQueryKey,
   getListAdminUsersQueryKey,
   getGetPaymentSettingsQueryKey,
+  useListAdminTickets,
+  useGetAdminTicket,
+  useAdminAddTicketMessage,
+  useUpdateTicketStatus,
+  getListAdminTicketsQueryKey,
+  getGetAdminTicketQueryKey,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -885,6 +891,170 @@ function VpnKeysManagement() {
   );
 }
 
+const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
+  open: "Открыт",
+  answered: "Отвечен",
+  closed: "Закрыт",
+};
+const TICKET_STATUS_CLS: Record<TicketStatus, string> = {
+  open: "bg-blue-50 text-blue-700",
+  answered: "bg-orange-50 text-orange-700",
+  closed: "bg-gray-100 text-gray-500",
+};
+
+function TicketDetail({ ticketId, onBack }: { ticketId: number; onBack: () => void }) {
+  const [reply, setReply] = useState("");
+  const { data: ticket, isLoading } = useGetAdminTicket(ticketId);
+  const { mutate: sendMsg, isPending: sending } = useAdminAddTicketMessage();
+  const { mutate: setStatus, isPending: updatingStatus } = useUpdateTicketStatus();
+  const { toast } = useToast();
+
+  function send() {
+    const body = reply.trim();
+    if (!body) return;
+    sendMsg(
+      { ticketId, body },
+      {
+        onSuccess: () => {
+          setReply("");
+          queryClient.invalidateQueries({ queryKey: getGetAdminTicketQueryKey(ticketId) });
+          queryClient.invalidateQueries({ queryKey: getListAdminTicketsQueryKey() });
+        },
+        onError: () => toast({ title: "Ошибка отправки", variant: "destructive" }),
+      },
+    );
+  }
+
+  function closeTicket() {
+    setStatus(
+      { ticketId, status: "closed" },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetAdminTicketQueryKey(ticketId) });
+          queryClient.invalidateQueries({ queryKey: getListAdminTicketsQueryKey() });
+        },
+        onError: () => toast({ title: "Ошибка", variant: "destructive" }),
+      },
+    );
+  }
+
+  return (
+    <div>
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Все тикеты
+      </button>
+      {isLoading || !ticket ? (
+        <div className="space-y-3"><Skeleton className="h-8 w-1/3" /><Skeleton className="h-40 w-full" /></div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-3 mb-4 pb-4 border-b border-border">
+            <div>
+              <h3 className="font-bold text-base">{ticket.subject}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">#{ticket.id} · {ticket.userEmail} · {formatDate(ticket.createdAt.toString())}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-semibold px-2 py-0.5 ${TICKET_STATUS_CLS[ticket.status as TicketStatus]}`}>
+                {TICKET_STATUS_LABEL[ticket.status as TicketStatus]}
+              </span>
+              {ticket.status !== "closed" && (
+                <button onClick={closeTicket} disabled={updatingStatus} className="text-xs text-muted-foreground border border-border px-2 py-0.5 hover:text-destructive transition-colors disabled:opacity-50">
+                  Закрыть
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto mb-4 pr-1">
+            {ticket.messages.map((msg) => (
+              <div key={msg.id} className={`p-3 text-sm ${msg.isAdmin ? "bg-orange-50 border border-orange-100 ml-8" : "bg-muted border border-border mr-8"}`}>
+                <p className="whitespace-pre-wrap text-foreground">{msg.body}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {msg.isAdmin ? "Поддержка" : msg.authorEmail} · {formatDate(msg.createdAt.toString())}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {ticket.status !== "closed" && (
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Ответ клиенту…"
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                className="resize-none rounded-none"
+                rows={3}
+                onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send(); }}
+              />
+              <button onClick={send} disabled={sending || !reply.trim()} className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-medium px-4 py-2 hover:opacity-90 disabled:opacity-50 transition-opacity">
+                <Send className="w-3.5 h-3.5" /> {sending ? "Отправка…" : "Ответить"}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function SupportManagement() {
+  const [filterStatus, setFilterStatus] = useState<TicketStatus | "all">("all");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { data: tickets, isLoading } = useListAdminTickets(
+    filterStatus !== "all" ? { status: filterStatus } : undefined,
+  );
+
+  if (selectedId !== null) {
+    return <TicketDetail ticketId={selectedId} onBack={() => setSelectedId(null)} />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 flex-wrap">
+        {(["all", "open", "answered", "closed"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setFilterStatus(s)}
+            className={`text-xs font-semibold px-3 py-1.5 transition-colors border ${
+              filterStatus === s
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:text-foreground"
+            }`}
+          >
+            {s === "all" ? "Все" : TICKET_STATUS_LABEL[s]}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+      ) : !tickets?.length ? (
+        <div className="bg-muted/50 border border-border p-10 text-center text-sm text-muted-foreground">
+          <MessageCircle className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
+          Тикетов нет
+        </div>
+      ) : (
+        <div className="divide-y divide-border border border-border">
+          {tickets.map((t: SupportTicket) => (
+            <button
+              key={t.id}
+              onClick={() => setSelectedId(t.id)}
+              className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors flex items-start justify-between gap-4"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{t.subject}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">#{t.id} · {t.userEmail} · {formatDate(t.updatedAt.toString())} · {t.messageCount} сообщ.</p>
+              </div>
+              <span className={`text-xs font-semibold px-2 py-0.5 shrink-0 ${TICKET_STATUS_CLS[t.status as TicketStatus]}`}>
+                {TICKET_STATUS_LABEL[t.status as TicketStatus]}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -916,6 +1086,9 @@ export default function Admin() {
             <TabsTrigger value="settings" className="rounded-none gap-1.5 whitespace-nowrap">
               <Settings className="w-4 h-4" /> Реквизиты
             </TabsTrigger>
+            <TabsTrigger value="support" className="rounded-none gap-1.5 whitespace-nowrap">
+              <MessageCircle className="w-4 h-4" /> Поддержка
+            </TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="payments" className="pt-4">
@@ -935,6 +1108,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="settings" className="pt-4">
           <PaymentSettingsForm />
+        </TabsContent>
+        <TabsContent value="support" className="pt-4">
+          <SupportManagement />
         </TabsContent>
       </Tabs>
     </div>

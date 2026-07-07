@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, useLogout } from "@workspace/api-client-react";
-import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X } from "lucide-react";
+import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
@@ -25,6 +25,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/plans", label: "Тарифы", icon: Shield },
     { href: "/keys", label: "Ключи VPN", icon: Key },
     { href: "/payments", label: "Платежи", icon: CreditCard },
+    { href: "/support", label: "Поддержка", icon: MessageCircle },
   ];
 
   if (isAdmin) {

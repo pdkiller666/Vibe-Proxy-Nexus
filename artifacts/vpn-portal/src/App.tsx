@@ -10,6 +10,7 @@ import Checkout from "@/pages/checkout";
 import SlotCheckout from "@/pages/slot-checkout";
 import Payments from "@/pages/payments";
 import Keys from "@/pages/keys";
+import Support from "@/pages/support";
 import Admin from "@/pages/admin";
 import SignInPage from "@/pages/sign-in";
 import SignUpPage from "@/pages/sign-up";
@@ -99,6 +100,7 @@ function App() {
           <Route path="/checkout/slot/:id"><ProtectedRoute component={SlotCheckout} /></Route>
           <Route path="/payments"><ProtectedRoute component={Payments} /></Route>
           <Route path="/keys"><ProtectedRoute component={Keys} /></Route>
+          <Route path="/support"><ProtectedRoute component={Support} /></Route>
           <Route path="/admin" component={AdminRoute} />
 
           <Route path="/:rest*">

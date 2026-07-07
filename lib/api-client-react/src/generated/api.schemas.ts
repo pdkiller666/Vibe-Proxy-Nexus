@@ -357,3 +357,48 @@ export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
 };
 
+
+
+export type TicketStatus = 'open' | 'answered' | 'closed';
+
+export interface SupportMessage {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  authorEmail: string;
+  isAdmin: boolean;
+  body: string;
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: number;
+  userId: number;
+  userEmail: string;
+  subject: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface SupportTicketDetail extends SupportTicket {
+  messages: SupportMessage[];
+}
+
+export interface CreateSupportTicketInput {
+  subject: string;
+  body: string;
+}
+
+export interface AddMessageInput {
+  body: string;
+}
+
+export interface UpdateTicketStatusInput {
+  status: TicketStatus;
+}
+
+export type ListAdminSupportTicketsParams = {
+  status?: TicketStatus;
+};

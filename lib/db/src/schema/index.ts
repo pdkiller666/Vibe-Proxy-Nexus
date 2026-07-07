@@ -7,3 +7,4 @@ export * from "./payments";
 export * from "./paymentSettings";
 export * from "./vpnNodes";
 export * from "./vpnKeys";
+export * from "./supportTickets";

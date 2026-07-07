@@ -57,6 +57,22 @@ function StatCard({
   );
 }
 
+function FaqItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-gray-100 last:border-0">
+      <button
+        className="w-full flex items-center justify-between px-6 py-4 text-left gap-4 hover:text-orange-600 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="font-medium text-sm text-gray-800">{q}</span>
+        <span className={`text-gray-400 transition-transform duration-200 shrink-0 ${open ? "rotate-180" : ""}`}>▼</span>
+      </button>
+      {open && <p className="text-sm text-gray-500 px-6 pb-5 leading-relaxed">{a}</p>}
+    </div>
+  );
+}
+
 export default function Home() {
   const { data: plans } = useListPlans();
   const activePlans = plans?.filter((p: { isActive: boolean }) => p.isActive) ?? [];
@@ -455,6 +471,30 @@ export default function Home() {
               </Link>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ─── FAQ ──────────────────────────────────────────────────── */}
+      <section className="py-24 px-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">FAQ</p>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tighter">
+              Частые вопросы
+            </h2>
+          </div>
+          <div className="bg-white border border-gray-100 divide-y divide-gray-100 shadow-sm shadow-orange-50">
+            {[
+              { q: "Как быстро я получу доступ?", a: "После регистрации — мгновенно. Пробный период стартует автоматически: перейдите в «Ключи VPN», добавьте устройство и подключайтесь." },
+              { q: "На каких устройствах работает?", a: "iOS, Android, Windows, macOS, Linux — на любом, где есть VLESS-клиент (Happ, v2rayNG, Nekobox, Clash Meta). Один аккаунт — несколько устройств." },
+              { q: "Мой провайдер увидит, что я использую VPN?", a: "Нет. Протокол VLESS + WebSocket маскирует трафик под обычный HTTPS. Для провайдера это выглядит как обращение к обычному сайту." },
+              { q: "Есть ограничение скорости или трафика?", a: "Трафик неограничен. Скорость — зависит от вашего интернета. Жёсткий лимит пользователей на узел гарантирует, что канал не будет перегружен." },
+              { q: "Что будет после окончания пробного периода?", a: "Подписка деактивируется — ключи перестанут работать. Никакого автосписания нет. Оплатите нужный тариф вручную через СБП и доступ восстановится." },
+              { q: "Как получить помощь, если что-то не работает?", a: "В личном кабинете есть раздел «Поддержка». Опишите проблему — обычно отвечаем в течение нескольких часов." },
+            ].map(({ q, a }, i) => (
+              <FaqItem key={i} q={q} a={a} />
+            ))}
+          </div>
         </div>
       </section>
 
