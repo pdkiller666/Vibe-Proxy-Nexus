@@ -10,6 +10,8 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   instructions: text("instructions"),
   yookassaEnabled: boolean("yookassa_enabled").notNull().default(false),
   extraDeviceSlotPriceRub: integer("extra_device_slot_price_rub").notNull().default(0),
+  trialEnabled: boolean("trial_enabled").notNull().default(false),
+  trialDays: integer("trial_days").notNull().default(5),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

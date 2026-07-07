@@ -12,4 +12,7 @@ export interface PaymentSettingsUpdate {
   sbpRecipientName?: string;
   instructions?: string;
   yookassaEnabled?: boolean;
+  extraDeviceSlotPriceRub?: number;
+  trialEnabled?: boolean;
+  trialDays?: number;
 }

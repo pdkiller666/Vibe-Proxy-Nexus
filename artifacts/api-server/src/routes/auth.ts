@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { asc, eq } from "drizzle-orm";
+import { db, usersTable, plansTable, subscriptionsTable, paymentSettingsTable } from "@workspace/db";
 import {
   RegisterBody,
   RegisterResponse,
@@ -65,6 +65,41 @@ router.post("/auth/register", registerRateLimit, async (req, res): Promise<void>
   if (!user) {
     res.status(409).json({ error: "Пользователь с таким email уже зарегистрирован" });
     return;
+  }
+
+  // Trial subscription: if enabled in settings, create an active subscription
+  // immediately so the user can try the service without paying first.
+  // We pick the cheapest active plan (by priceRub, then id) for devicesIncluded.
+  // If no plans exist yet the trial is silently skipped.
+  try {
+    const [settings] = await db.select().from(paymentSettingsTable).limit(1);
+    if (settings?.trialEnabled) {
+      const [trialPlan] = await db
+        .select()
+        .from(plansTable)
+        .where(eq(plansTable.isActive, true))
+        .orderBy(asc(plansTable.priceRub), asc(plansTable.id))
+        .limit(1);
+
+      if (trialPlan) {
+        const trialDays = settings.trialDays ?? 5;
+        const startsAt = new Date();
+        const endsAt = new Date(startsAt.getTime() + trialDays * 24 * 60 * 60 * 1000);
+        await db.insert(subscriptionsTable).values({
+          userId: user.id,
+          planId: trialPlan.id,
+          status: "active",
+          startsAt,
+          endsAt,
+        });
+        logger.info({ userId: user.id, trialDays, planId: trialPlan.id }, "Trial subscription created");
+      } else {
+        logger.warn({ userId: user.id }, "Trial enabled but no active plans found — skipping trial");
+      }
+    }
+  } catch (err) {
+    // Trial creation failure must not break registration — user still gets their account.
+    logger.error({ err, userId: user.id }, "Failed to create trial subscription");
   }
 
   const { token, expiresAt } = await createSession(user.id);

@@ -612,6 +612,8 @@ function PaymentSettingsForm() {
   const [sbpRecipientName, setSbpRecipientName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [extraDeviceSlotPriceRub, setExtraDeviceSlotPriceRub] = useState("");
+  const [trialEnabled, setTrialEnabled] = useState(false);
+  const [trialDays, setTrialDays] = useState("5");
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -620,12 +622,14 @@ function PaymentSettingsForm() {
     setSbpRecipientName(settings.sbpRecipientName);
     setInstructions(settings.instructions ?? "");
     setExtraDeviceSlotPriceRub(String(settings.extraDeviceSlotPriceRub ?? 0));
+    setTrialEnabled(settings.trialEnabled ?? false);
+    setTrialDays(String(settings.trialDays ?? 5));
     setInitialized(true);
   }
 
   function handleSubmit() {
     update(
-      { data: { sbpPhone, sbpBank, sbpRecipientName, instructions, extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0 } },
+      { data: { sbpPhone, sbpBank, sbpRecipientName, instructions, extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0, trialEnabled, trialDays: Number(trialDays) || 5 } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
@@ -665,6 +669,42 @@ function PaymentSettingsForm() {
           className="rounded-none"
         />
       </div>
+
+      <div className="border border-border p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Пробный период</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Новые пользователи получают бесплатную подписку при регистрации</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={trialEnabled}
+              onChange={(e) => setTrialEnabled(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+        </div>
+        {trialEnabled && (
+          <div>
+            <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Длительность пробного периода (дней)</label>
+            <Input
+              type="number"
+              min="1"
+              max="365"
+              placeholder="5"
+              value={trialDays}
+              onChange={(e) => setTrialDays(e.target.value.replace(/[^0-9]/g, ""))}
+              className="rounded-none max-w-[140px]"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Используется наиболее дешёвый из активных тарифов. Создайте тариф заранее.
+            </p>
+          </div>
+        )}
+      </div>
+
       <button
         onClick={handleSubmit}
         disabled={isPending}

@@ -143,7 +143,9 @@ export const GetPaymentSettingsResponse = zod.object({
   "sbpRecipientName": zod.string(),
   "instructions": zod.string().nullish(),
   "yookassaEnabled": zod.boolean().optional(),
-  "extraDeviceSlotPriceRub": zod.number().optional()
+  "extraDeviceSlotPriceRub": zod.number().optional(),
+  "trialEnabled": zod.boolean().optional(),
+  "trialDays": zod.number().optional()
 })
 
 
@@ -426,7 +428,9 @@ export const UpdatePaymentSettingsBody = zod.object({
   "sbpRecipientName": zod.string().optional(),
   "instructions": zod.string().optional(),
   "yookassaEnabled": zod.boolean().optional(),
-  "extraDeviceSlotPriceRub": zod.number().optional()
+  "extraDeviceSlotPriceRub": zod.number().optional(),
+  "trialEnabled": zod.boolean().optional(),
+  "trialDays": zod.number().optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -435,7 +439,9 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "sbpRecipientName": zod.string(),
   "instructions": zod.string().nullish(),
   "yookassaEnabled": zod.boolean().optional(),
-  "extraDeviceSlotPriceRub": zod.number().optional()
+  "extraDeviceSlotPriceRub": zod.number().optional(),
+  "trialEnabled": zod.boolean().optional(),
+  "trialDays": zod.number().optional()
 })
 
 

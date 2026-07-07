@@ -13,4 +13,7 @@ export interface PaymentSettings {
   /** @nullable */
   instructions?: string | null;
   yookassaEnabled?: boolean;
+  extraDeviceSlotPriceRub?: number;
+  trialEnabled?: boolean;
+  trialDays?: number;
 }
