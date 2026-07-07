@@ -10,10 +10,10 @@ export default function Plans() {
   const { mutate: createSubscription, isPending } = useCreateSubscription();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [loadingPlanId, setLoadingPlanId] = useState<number | null>(null);
 
   function handleSelect(planId: number) {
-    setSelectedPlanId(planId);
+    setLoadingPlanId(planId);
     createSubscription(
       { data: { planId, provider: "manual_sbp" } },
       {
@@ -27,7 +27,7 @@ export default function Plans() {
             description: "Попробуйте ещё раз чуть позже.",
             variant: "destructive",
           });
-          setSelectedPlanId(null);
+          setLoadingPlanId(null);
         },
       },
     );
@@ -73,7 +73,7 @@ export default function Plans() {
                   disabled={isPending}
                   className="w-full bg-primary text-primary-foreground font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isPending && selectedPlanId === plan.id ? (
+                  {loadingPlanId === plan.id ? (
                     "Оформляем..."
                   ) : (
                     <>

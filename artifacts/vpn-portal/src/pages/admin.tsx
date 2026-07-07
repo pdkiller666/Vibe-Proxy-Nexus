@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   useGetAdminDashboardSummary,
   useListAdminPayments,
@@ -31,7 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -615,6 +616,175 @@ function PaymentSettingsForm() {
   );
 }
 
+interface AdminVpnKey {
+  id: number;
+  userId: number;
+  nodeId: number;
+  label: string;
+  vlessLink: string;
+  createdAt: string;
+  revokedAt: string | null;
+  nodeName: string;
+  userEmail: string;
+}
+
+function VpnKeysManagement() {
+  const { toast } = useToast();
+  const [issuingUserId, setIssuingUserId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [filter, setFilter] = useState("");
+
+  const { data: keys, isLoading, refetch } = useQuery<AdminVpnKey[]>({
+    queryKey: ["admin", "vpn-keys"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/vpn-keys", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const { data: users } = useQuery({
+    queryKey: getListAdminUsersQueryKey(),
+    queryFn: async () => {
+      const res = await fetch("/api/admin/users", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json() as Promise<Array<{ id: number; email: string }>>;
+    },
+  });
+
+  const issueMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const res = await fetch("/api/admin/vpn-keys/issue", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      toast({ title: "Ключ выдан" });
+      setIssuingUserId(null);
+      refetch();
+    },
+    onError: () => toast({ title: "Ошибка выдачи ключа", variant: "destructive" }),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (keyId: number) => {
+      const res = await fetch(`/api/admin/vpn-keys/${keyId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      toast({ title: "Ключ отозван" });
+      refetch();
+    },
+    onError: () => toast({ title: "Ошибка отзыва ключа", variant: "destructive" }),
+  });
+
+  function copyLink(keyId: number, link: string) {
+    navigator.clipboard.writeText(link);
+    setCopiedId(keyId);
+    toast({ title: "Ссылка скопирована" });
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  const filtered = (keys ?? []).filter(
+    (k) =>
+      !filter ||
+      k.userEmail.toLowerCase().includes(filter.toLowerCase()) ||
+      k.label.toLowerCase().includes(filter.toLowerCase()),
+  );
+
+  const activeCount = (keys ?? []).filter((k) => !k.revokedAt).length;
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <Input
+          placeholder="Поиск по email или ключу..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="rounded-none max-w-xs"
+        />
+        <span className="text-sm text-muted-foreground font-mono">
+          Активных: {activeCount} / Всего: {keys?.length ?? 0}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {filtered.map((key) => (
+          <div
+            key={key.id}
+            className={`bg-card border p-4 ${key.revokedAt ? "border-border opacity-50" : "border-border"}`}
+          >
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0 space-y-1">
+                <div className="font-bold text-sm break-all">{key.userEmail}</div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  {key.label} · {key.nodeName} · {formatDate(key.createdAt)}
+                  {key.revokedAt && <span className="ml-2 text-destructive">Отозван {formatDate(key.revokedAt)}</span>}
+                </div>
+                {!key.revokedAt && (
+                  <div className="flex items-center gap-2 bg-muted/50 border border-border px-2 py-1 font-mono text-xs overflow-hidden max-w-lg">
+                    <span className="truncate flex-1">{key.vlessLink}</span>
+                    <button
+                      onClick={() => copyLink(key.id, key.vlessLink)}
+                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {copiedId === key.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {!key.revokedAt && (
+                <button
+                  onClick={() => revokeMutation.mutate(key.id)}
+                  disabled={revokeMutation.isPending}
+                  className="flex items-center gap-1.5 text-sm text-destructive hover:opacity-70 transition-opacity shrink-0 whitespace-nowrap"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Отозвать
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-muted-foreground text-sm">Ключей не найдено.</p>
+        )}
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <div className="text-sm font-bold mb-3">Выдать ключ пользователю вручную</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={issuingUserId ?? ""}
+            onChange={(e) => setIssuingUserId(Number(e.target.value) || null)}
+            className="border border-border bg-background px-3 py-2 text-sm rounded-none min-w-48"
+          >
+            <option value="">— Выберите пользователя —</option>
+            {users?.map((u) => (
+              <option key={u.id} value={u.id}>{u.email}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => issuingUserId && issueMutation.mutate(issuingUserId)}
+            disabled={!issuingUserId || issueMutation.isPending}
+            className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" /> Выдать ключ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -637,6 +807,9 @@ export default function Admin() {
             <TabsTrigger value="nodes" className="rounded-none gap-1.5 whitespace-nowrap">
               <Settings className="w-4 h-4" /> Узлы
             </TabsTrigger>
+            <TabsTrigger value="vpn-keys" className="rounded-none gap-1.5 whitespace-nowrap">
+              <Key className="w-4 h-4" /> Ключи VPN
+            </TabsTrigger>
             <TabsTrigger value="users" className="rounded-none gap-1.5 whitespace-nowrap">
               <Users className="w-4 h-4" /> Пользователи
             </TabsTrigger>
@@ -653,6 +826,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="nodes" className="pt-4">
           <NodesManagement />
+        </TabsContent>
+        <TabsContent value="vpn-keys" className="pt-4">
+          <VpnKeysManagement />
         </TabsContent>
         <TabsContent value="users" className="pt-4">
           <UsersManagement />

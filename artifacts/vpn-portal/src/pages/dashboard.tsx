@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { useGetMe, useListMyVpnKeys } from "@workspace/api-client-react";
-import { Shield, Key, CreditCard, ArrowRight } from "lucide-react";
+import { Shield, Key, CreditCard, ArrowRight, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function formatDate(iso?: string | null) {
@@ -12,11 +12,20 @@ function formatDate(iso?: string | null) {
   });
 }
 
+function getDaysLeft(endsAt?: string | null): number | null {
+  if (!endsAt) return null;
+  const diff = new Date(endsAt).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
 export default function Dashboard() {
   const { data: me, isLoading: meLoading } = useGetMe();
   const { data: keys, isLoading: keysLoading } = useListMyVpnKeys();
 
   const activeKeys = keys?.filter((k) => !k.revokedAt) ?? [];
+  const daysLeft = getDaysLeft(me?.subscriptionEndsAt as string | null | undefined);
+  const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 5;
+  const isExpired = daysLeft !== null && daysLeft < 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -26,6 +35,18 @@ export default function Dashboard() {
           Статус вашего доступа к узлу.
         </p>
       </div>
+
+      {isExpiringSoon && !isExpired && (
+        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 text-sm text-orange-700">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            Подписка истекает через <strong>{daysLeft === 0 ? "менее суток" : `${daysLeft} ${daysLeft === 1 ? "день" : daysLeft <= 4 ? "дня" : "дней"}`}</strong>.{" "}
+            <Link href="/plans" className="underline font-semibold hover:text-orange-900">
+              Продлить сейчас
+            </Link>
+          </span>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-3 gap-4">
         <div className="bg-card border border-border p-6 col-span-1 md:col-span-2">
@@ -38,8 +59,13 @@ export default function Dashboard() {
           ) : me?.hasActiveSubscription ? (
             <div>
               <div className="text-2xl font-bold">{me.currentPlanName}</div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Активна до {formatDate(me.subscriptionEndsAt)}
+              <p className={`text-sm mt-1 ${isExpiringSoon ? "text-orange-600 font-medium" : "text-muted-foreground"}`}>
+                Активна до {formatDate(me.subscriptionEndsAt as string | null | undefined)}
+                {isExpiringSoon && daysLeft !== null && daysLeft >= 0 && (
+                  <span className="ml-1">
+                    ({daysLeft === 0 ? "последний день" : `осталось ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft <= 4 ? "дня" : "дней"}`})
+                  </span>
+                )}
               </p>
             </div>
           ) : (

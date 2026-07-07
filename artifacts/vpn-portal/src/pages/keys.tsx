@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useGetMe,
   useListMyVpnKeys,
@@ -11,7 +11,142 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink } from "lucide-react";
+import QRCode from "qrcode";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast({ title: "Скопировано" });
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+      title="Копировать"
+    >
+      {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+    </button>
+  );
+}
+
+function QRModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    QRCode.toDataURL(url, { width: 300, margin: 2, color: { dark: "#000000", light: "#ffffff" } })
+      .then(setDataUrl)
+      .catch(console.error);
+  }, [url]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-white p-6 max-w-sm w-full mx-4 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-base">QR-код подписки</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Отсканируйте в приложении (v2rayNG, Happ, Sing-Box) через «Добавить подписку».
+        </p>
+        <div className="flex justify-center">
+          {dataUrl ? (
+            <img src={dataUrl} alt="QR-код подписки" className="w-64 h-64" />
+          ) : (
+            <div className="w-64 h-64 bg-muted animate-pulse" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const CLIENTS = [
+  { name: "Android: v2rayNG", url: "https://play.google.com/store/apps/details?id=com.v2ray.ang" },
+  { name: "Android/iOS: Happ", url: "https://apps.apple.com/app/happ-proxy-utility/id6504287215" },
+  { name: "iOS: Streisand", url: "https://apps.apple.com/app/streisand/id6450534064" },
+  { name: "Windows: v2rayN", url: "https://github.com/2dust/v2rayN/releases/latest" },
+  { name: "macOS: V2Box", url: "https://apps.apple.com/app/v2box-v2ray-client/id6446814690" },
+];
+
+function ConnectionGuide({ subscriptionUrl }: { subscriptionUrl?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-card border border-border">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between p-5 text-left"
+      >
+        <div className="flex items-center gap-2 font-bold">
+          <Smartphone className="w-4 h-4 text-primary" />
+          Как подключиться?
+        </div>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="border-t border-border p-5 space-y-4 text-sm">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
+              <Monitor className="w-3.5 h-3.5" /> Шаг 1 — Установите приложение
+            </div>
+            <ul className="space-y-1.5 ml-1">
+              {CLIENTS.map((c) => (
+                <li key={c.name}>
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                  >
+                    {c.name} <ExternalLink className="w-3 h-3" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
+              <RefreshCw className="w-3.5 h-3.5" /> Шаг 2 — Добавьте подписку (рекомендуется)
+            </div>
+            <p className="text-muted-foreground">
+              Скопируйте <strong>ссылку подписки</strong> выше и вставьте в приложение через
+              пункт <strong>«Добавить подписку»</strong> / <strong>«Add subscription»</strong>.
+              Ключи будут обновляться автоматически.
+            </p>
+            {subscriptionUrl && (
+              <p className="text-muted-foreground text-xs">
+                Или отсканируйте QR-код — нажмите иконку <QrCode className="inline w-3 h-3" /> рядом со ссылкой.
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
+              <KeyRound className="w-3.5 h-3.5" /> Альтернатива — импорт отдельного ключа
+            </div>
+            <p className="text-muted-foreground">
+              Скопируйте <strong>vless://...</strong> ссылку и вставьте в приложение через
+              «Импорт из буфера обмена» / «Import from clipboard».
+            </p>
+          </div>
+          <div className="bg-muted/40 border border-border p-3 text-xs text-muted-foreground">
+            После добавления нажмите кнопку подключения в приложении. Если VPN не работает — обратитесь в поддержку.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Keys() {
   const { data: me } = useGetMe();
@@ -23,10 +158,11 @@ export default function Keys() {
   const { toast } = useToast();
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [showManualLinks, setShowManualLinks] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
-  const activeKeys = keys?.filter((k) => !k.revokedAt) ?? [];
+  const activeKeys = (keys ?? []).filter((k: { revokedAt?: Date | null }) => !k.revokedAt);
   const canIssue = !!me?.hasActiveSubscription;
-  const defaultNodeId = nodes?.find((n) => n.isActive)?.id;
+  const defaultNodeId = nodes?.find((n: { isActive: boolean }) => n.isActive)?.id;
 
   function handleCreate() {
     createKey(
@@ -61,13 +197,12 @@ export default function Keys() {
     );
   }
 
-  function copyLink(link: string) {
-    navigator.clipboard.writeText(link);
-    toast({ title: "Ссылка скопирована" });
-  }
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {showQR && subscription?.url && (
+        <QRModal url={subscription.url} onClose={() => setShowQR(false)} />
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Ключи VPN</h1>
@@ -92,6 +227,8 @@ export default function Keys() {
         </p>
       )}
 
+      <ConnectionGuide subscriptionUrl={subscription?.url} />
+
       {subscription?.url && activeKeys.length > 0 && (
         <div className="bg-card border border-border p-5 space-y-3">
           <div className="flex items-center gap-2 font-bold">
@@ -107,11 +244,13 @@ export default function Keys() {
           <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
             <span className="truncate flex-1">{subscription.url}</span>
             <button
-              onClick={() => copyLink(subscription.url)}
+              onClick={() => setShowQR(true)}
               className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+              title="QR-код"
             >
-              <Copy className="w-4 h-4" />
+              <QrCode className="w-4 h-4" />
             </button>
+            <CopyButton text={subscription.url} />
           </div>
           <button
             onClick={() => setShowManualLinks((v) => !v)}
@@ -161,12 +300,7 @@ export default function Keys() {
               ) : (
                 <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
                   <span className="truncate flex-1">{key.vlessLink}</span>
-                  <button
-                    onClick={() => copyLink(key.vlessLink)}
-                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
+                  <CopyButton text={key.vlessLink} />
                 </div>
               )}
             </div>
