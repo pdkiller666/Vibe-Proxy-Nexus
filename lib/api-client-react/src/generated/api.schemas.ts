@@ -118,6 +118,7 @@ export interface PaymentSettings {
   /** @nullable */
   instructions?: string | null;
   yookassaEnabled?: boolean;
+  extraDeviceSlotPriceRub?: number;
 }
 
 export interface PaymentSettingsUpdate {
@@ -126,6 +127,7 @@ export interface PaymentSettingsUpdate {
   sbpRecipientName?: string;
   instructions?: string;
   yookassaEnabled?: boolean;
+  extraDeviceSlotPriceRub?: number;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
@@ -173,9 +175,19 @@ export const PaymentStatus = {
   rejected: 'rejected',
 } as const;
 
+export type PaymentType = typeof PaymentType[keyof typeof PaymentType];
+
+
+export const PaymentType = {
+  subscription: 'subscription',
+  extra_device_slot: 'extra_device_slot',
+} as const;
+
 export interface Payment {
   id: number;
-  subscriptionId: number;
+  /** @nullable */
+  subscriptionId?: number | null;
+  type?: PaymentType;
   provider: PaymentProvider;
   amountRub: number;
   status: PaymentStatus;
@@ -191,9 +203,12 @@ export interface Payment {
 
 export interface AdminPayment {
   id: number;
-  subscriptionId: number;
+  /** @nullable */
+  subscriptionId?: number | null;
+  type?: PaymentType;
   userEmail: string;
-  planName: string;
+  /** @nullable */
+  planName?: string | null;
   provider: PaymentProvider;
   amountRub: number;
   status: PaymentStatus;
@@ -205,6 +220,11 @@ export interface AdminPayment {
   createdAt: string;
   /** @nullable */
   confirmedAt?: string | null;
+}
+
+export interface ExtraSlotOrderResult {
+  paymentId: number;
+  amountRub: number;
 }
 
 export interface PaymentNoteUpdate {

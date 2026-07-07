@@ -1,4 +1,4 @@
-import { boolean, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,7 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   sbpRecipientName: text("sbp_recipient_name").notNull(),
   instructions: text("instructions"),
   yookassaEnabled: boolean("yookassa_enabled").notNull().default(false),
+  extraDeviceSlotPriceRub: integer("extra_device_slot_price_rub").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

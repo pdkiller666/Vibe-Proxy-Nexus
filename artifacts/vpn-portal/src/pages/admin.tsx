@@ -88,9 +88,10 @@ function PaymentsQueue() {
     confirm(
       { paymentId },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           invalidate();
-          toast({ title: "Платёж подтверждён", description: "Подписка активирована." });
+          const isSlot = data?.type === "extra_device_slot";
+          toast({ title: "Платёж подтверждён", description: isSlot ? "Устройство добавлено пользователю." : "Подписка активирована." });
         },
         onError: () => toast({ title: "Ошибка подтверждения", variant: "destructive" }),
       },
@@ -123,7 +124,7 @@ function PaymentsQueue() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <div className="font-bold">
-                {payment.userEmail} · {payment.planName}
+                {payment.userEmail} · {payment.type === "extra_device_slot" ? "Доп. устройство" : (payment.planName ?? "—")}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
                 {payment.amountRub} ₽ · {payment.reference} · {formatDate(payment.createdAt)}
@@ -610,6 +611,7 @@ function PaymentSettingsForm() {
   const [sbpBank, setSbpBank] = useState("");
   const [sbpRecipientName, setSbpRecipientName] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [extraDeviceSlotPriceRub, setExtraDeviceSlotPriceRub] = useState("");
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -617,12 +619,13 @@ function PaymentSettingsForm() {
     setSbpBank(settings.sbpBank);
     setSbpRecipientName(settings.sbpRecipientName);
     setInstructions(settings.instructions ?? "");
+    setExtraDeviceSlotPriceRub(String(settings.extraDeviceSlotPriceRub ?? 0));
     setInitialized(true);
   }
 
   function handleSubmit() {
     update(
-      { data: { sbpPhone, sbpBank, sbpRecipientName, instructions } },
+      { data: { sbpPhone, sbpBank, sbpRecipientName, instructions, extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0 } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
@@ -651,6 +654,17 @@ function PaymentSettingsForm() {
         onChange={(e) => setInstructions(e.target.value)}
         className="rounded-none"
       />
+      <div>
+        <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Цена доп. устройства (₽)</label>
+        <Input
+          type="number"
+          min="0"
+          placeholder="0"
+          value={extraDeviceSlotPriceRub}
+          onChange={(e) => setExtraDeviceSlotPriceRub(e.target.value)}
+          className="rounded-none"
+        />
+      </div>
       <button
         onClick={handleSubmit}
         disabled={isPending}

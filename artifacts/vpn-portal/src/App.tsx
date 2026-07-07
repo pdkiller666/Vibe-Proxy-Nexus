@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import Dashboard from "@/pages/dashboard";
 import Plans from "@/pages/plans";
 import Checkout from "@/pages/checkout";
+import SlotCheckout from "@/pages/slot-checkout";
 import Payments from "@/pages/payments";
 import Keys from "@/pages/keys";
 import Admin from "@/pages/admin";
@@ -95,6 +96,7 @@ function App() {
           <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
           <Route path="/plans"><ProtectedRoute component={Plans} /></Route>
           <Route path="/checkout/:id"><ProtectedRoute component={Checkout} /></Route>
+          <Route path="/checkout/slot/:id"><ProtectedRoute component={SlotCheckout} /></Route>
           <Route path="/payments"><ProtectedRoute component={Payments} /></Route>
           <Route path="/keys"><ProtectedRoute component={Keys} /></Route>
           <Route path="/admin" component={AdminRoute} />

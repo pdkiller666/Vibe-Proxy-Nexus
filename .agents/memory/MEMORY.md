@@ -10,3 +10,4 @@
 - [VPN subscription URL design](vpn-subscription-links.md) — self-updating subscription link (stateless HMAC token, base64 body, branded headers) replaces raw pasted vless links; key labels must never contain user email.
 - [Payments are manual SBP transfer](payments-manual-sbp.md) — no real payment gateway integrated; admin manually confirms bank transfers. yookassa fields exist only as unused schema/UI placeholders.
 - [Xray gRPC proto loading](xray-grpc-proto-loading.md) — protobufjs needs resolvePath override for Xray's include-root-relative proto imports; bg processes die between sandbox tool calls.
+- [Device slots model](device-slots.md) — «1 ключ = 1 слот»: devicesIncluded на plans, extraDeviceSlots на users; meResponse отдаёт deviceSlots+activeKeyCount; admin PATCH /extra-slots; ui «Устройства: X/Y».

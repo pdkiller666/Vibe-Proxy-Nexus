@@ -142,7 +142,8 @@ export const GetPaymentSettingsResponse = zod.object({
   "sbpBank": zod.string(),
   "sbpRecipientName": zod.string(),
   "instructions": zod.string().nullish(),
-  "yookassaEnabled": zod.boolean().optional()
+  "yookassaEnabled": zod.boolean().optional(),
+  "extraDeviceSlotPriceRub": zod.number().optional()
 })
 
 
@@ -233,7 +234,8 @@ export const CreateSubscriptionResponse = zod.object({
  */
 export const ListMyPaymentsResponseItem = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number(),
+  "subscriptionId": zod.number().nullish(),
+  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -423,7 +425,8 @@ export const UpdatePaymentSettingsBody = zod.object({
   "sbpBank": zod.string().optional(),
   "sbpRecipientName": zod.string().optional(),
   "instructions": zod.string().optional(),
-  "yookassaEnabled": zod.boolean().optional()
+  "yookassaEnabled": zod.boolean().optional(),
+  "extraDeviceSlotPriceRub": zod.number().optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -431,7 +434,8 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "sbpBank": zod.string(),
   "sbpRecipientName": zod.string(),
   "instructions": zod.string().nullish(),
-  "yookassaEnabled": zod.boolean().optional()
+  "yookassaEnabled": zod.boolean().optional(),
+  "extraDeviceSlotPriceRub": zod.number().optional()
 })
 
 
@@ -444,9 +448,10 @@ export const ListAdminPaymentsQueryParams = zod.object({
 
 export const ListAdminPaymentsResponseItem = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number(),
+  "subscriptionId": zod.number().nullish(),
+  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
   "userEmail": zod.string(),
-  "planName": zod.string(),
+  "planName": zod.string().nullish(),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -468,7 +473,8 @@ export const ConfirmPaymentParams = zod.object({
 
 export const ConfirmPaymentResponse = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number(),
+  "subscriptionId": zod.number().nullish(),
+  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -493,7 +499,8 @@ export const RejectPaymentBody = zod.object({
 
 export const RejectPaymentResponse = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number(),
+  "subscriptionId": zod.number().nullish(),
+  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -502,6 +509,11 @@ export const RejectPaymentResponse = zod.object({
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
+})
+
+export const CreateExtraSlotOrderResponse = zod.object({
+  "paymentId": zod.number(),
+  "amountRub": zod.number()
 })
 
 

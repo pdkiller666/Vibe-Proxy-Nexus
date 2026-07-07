@@ -6,7 +6,10 @@ import {
   useCreateVpnKey,
   useRevokeVpnKey,
   useGetSubscriptionUrl,
+  useGetPaymentSettings,
+  useCreateExtraSlotOrder,
 } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
@@ -153,9 +156,12 @@ export default function Keys() {
   const { data: keys, isLoading } = useListMyVpnKeys();
   const { data: nodes } = useListVpnNodes();
   const { data: subscription } = useGetSubscriptionUrl();
+  const { data: paymentSettings } = useGetPaymentSettings();
   const { mutate: createKey, isPending: creating } = useCreateVpnKey();
+  const { mutate: createSlotOrder, isPending: orderingSlot } = useCreateExtraSlotOrder();
   const { mutate: revokeKey } = useRevokeVpnKey();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [showManualLinks, setShowManualLinks] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -168,6 +174,7 @@ export default function Keys() {
   const deviceSlots = me?.deviceSlots ?? 1;
   const activeKeyCount = me?.activeKeyCount ?? activeKeys.length;
   const hasSlotAvailable = canIssue && activeKeyCount < deviceSlots;
+  const slotPrice = paymentSettings?.extraDeviceSlotPriceRub ?? 0;
 
   function handleCreate() {
     createKey(
@@ -221,15 +228,44 @@ export default function Keys() {
             <span className="text-sm font-mono text-muted-foreground">
               Устройства: {activeKeyCount} / {deviceSlots}
             </span>
-            <button
-              onClick={handleCreate}
-              disabled={!hasSlotAvailable || creating}
-              title={hasSlotAvailable ? undefined : "Все слоты заняты. Обратитесь к администратору для расширения."}
-              className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
-            >
-              <Plus className="w-4 h-4" />
-              {creating ? "Выпускаем..." : "Добавить устройство"}
-            </button>
+            {hasSlotAvailable ? (
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
+              >
+                <Plus className="w-4 h-4" />
+                {creating ? "Выпускаем..." : "Добавить устройство"}
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  createSlotOrder(undefined, {
+                    onSuccess: (data) => setLocation(`/checkout/slot/${data.paymentId}`),
+                    onError: (err: unknown) => {
+                      const body = err as { paymentId?: number; message?: string };
+                      if (body?.paymentId) {
+                        setLocation(`/checkout/slot/${body.paymentId}`);
+                        return;
+                      }
+                      toast({
+                        title: err instanceof Error ? err.message : "Не удалось создать заявку",
+                        variant: "destructive",
+                      });
+                    },
+                  });
+                }}
+                disabled={orderingSlot}
+                className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
+              >
+                <Plus className="w-4 h-4" />
+                {orderingSlot
+                  ? "Создаём заявку..."
+                  : slotPrice > 0
+                    ? `Добавить устройство — ${slotPrice} ₽`
+                    : "Добавить устройство"}
+              </button>
+            )}
           </div>
         )}
       </div>

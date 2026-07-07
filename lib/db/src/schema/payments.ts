@@ -6,17 +6,18 @@ import { subscriptionsTable } from "./subscriptions";
 
 export const paymentProviderValues = ["manual_sbp", "yookassa"] as const;
 export const paymentStatusValues = ["pending", "confirmed", "rejected"] as const;
+export const paymentTypeValues = ["subscription", "extra_device_slot"] as const;
 
 export const paymentsTable = pgTable(
   "payments",
   {
     id: serial("id").primaryKey(),
     subscriptionId: integer("subscription_id")
-      .notNull()
       .references(() => subscriptionsTable.id),
     userId: integer("user_id")
       .notNull()
       .references(() => usersTable.id),
+    type: text("type", { enum: paymentTypeValues }).notNull().default("subscription"),
     provider: text("provider", { enum: paymentProviderValues }).notNull(),
     amountRub: integer("amount_rub").notNull(),
     status: text("status", { enum: paymentStatusValues }).notNull().default("pending"),

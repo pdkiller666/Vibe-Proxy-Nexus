@@ -9,6 +9,7 @@ import subscriptionsRouter from "./subscriptions";
 import paymentsRouter from "./payments";
 import vpnKeysRouter from "./vpnKeys";
 import subscriptionRouter from "./subscription";
+import extraSlotOrderRouter from "./extraSlotOrder";
 import adminRouter from "./admin";
 
 const router: IRouter = Router();
@@ -23,6 +24,7 @@ router.use(subscriptionsRouter);
 router.use(paymentsRouter);
 router.use(vpnKeysRouter);
 router.use(subscriptionRouter);
+router.use(extraSlotOrderRouter);
 router.use(adminRouter);
 
 export default router;

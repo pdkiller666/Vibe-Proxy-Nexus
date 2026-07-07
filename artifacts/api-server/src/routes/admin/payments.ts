@@ -30,14 +30,14 @@ router.get("/admin/payments", requireAuth, requireAdmin, async (req, res): Promi
     })
     .from(paymentsTable)
     .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
-    .innerJoin(subscriptionsTable, eq(paymentsTable.subscriptionId, subscriptionsTable.id))
-    .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
+    .leftJoin(subscriptionsTable, eq(paymentsTable.subscriptionId, subscriptionsTable.id))
+    .leftJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
     .where(query.data.status ? eq(paymentsTable.status, query.data.status) : undefined)
     .orderBy(desc(paymentsTable.createdAt));
 
   res.json(
     ListAdminPaymentsResponse.parse(
-      rows.map(({ payment, userEmail, planName }) => ({ ...payment, userEmail, planName })),
+      rows.map(({ payment, userEmail, planName }) => ({ ...payment, userEmail, planName: planName ?? null })),
     ),
   );
 });
@@ -65,20 +65,55 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     return;
   }
 
+  // Extra device slot: increment user's extra slots instead of activating a subscription
+  if (payment.type === "extra_device_slot") {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, payment.userId));
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    let updatedPayment;
+    try {
+      updatedPayment = await db.transaction(async (tx) => {
+        await tx
+          .update(usersTable)
+          .set({ extraDeviceSlots: user.extraDeviceSlots + 1 })
+          .where(eq(usersTable.id, user.id));
+
+        const [updatedPay] = await tx
+          .update(paymentsTable)
+          .set({ status: "confirmed", confirmedAt: new Date() })
+          .where(and(eq(paymentsTable.id, payment.id), eq(paymentsTable.status, "pending")))
+          .returning();
+
+        if (!updatedPay) {
+          throw new Error("Payment state changed concurrently");
+        }
+
+        return updatedPay;
+      });
+    } catch {
+      res.status(409).json({ error: "Payment state changed concurrently, please retry" });
+      return;
+    }
+
+    res.json(ConfirmPaymentResponse.parse(updatedPayment));
+    return;
+  }
+
+  // Subscription payment
   const [subscription] = await db
     .select()
     .from(subscriptionsTable)
-    .where(eq(subscriptionsTable.id, payment.subscriptionId));
+    .where(eq(subscriptionsTable.id, payment.subscriptionId!));
 
   if (!subscription) {
     res.status(404).json({ error: "Subscription not found" });
     return;
   }
 
-  // Idempotency guard: the payment.status check above already blocks most
-  // double-confirm races, but this catches the case where the subscription
-  // row itself was already activated (e.g. by a concurrent request that won
-  // the race between the two selects above).
   if (subscription.status === "active") {
     res.status(409).json({ error: "Subscription is already active" });
     return;
@@ -91,10 +126,6 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     return;
   }
 
-  // If the user already has another currently-active subscription (e.g. they
-  // paid for a renewal before their current period ran out), chain the new
-  // period onto the end of it instead of restarting the clock from now and
-  // silently discarding the remaining paid-for time.
   const [currentActive] = await db
     .select()
     .from(subscriptionsTable)
@@ -106,10 +137,6 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
   const startsAt = currentActive?.endsAt && currentActive.endsAt > now ? currentActive.endsAt : now;
   const endsAt = new Date(startsAt.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
-  // Both writes must land together: if the process died between them we'd
-  // otherwise end up with either an activated subscription backed by an
-  // unconfirmed payment, or a confirmed payment for a subscription that was
-  // never actually activated.
   let updatedPayment;
   try {
     updatedPayment = await db.transaction(async (tx) => {
@@ -176,12 +203,15 @@ router.post("/admin/payments/:paymentId/reject", requireAuth, requireAdmin, asyn
   let updatedPayment;
   try {
     updatedPayment = await db.transaction(async (tx) => {
-      await tx
-        .update(subscriptionsTable)
-        .set({ status: "rejected" })
-        .where(
-          and(eq(subscriptionsTable.id, payment.subscriptionId), eq(subscriptionsTable.status, "pending_payment")),
-        );
+      // Only update subscription status if this is a subscription payment
+      if (payment.type === "subscription" && payment.subscriptionId) {
+        await tx
+          .update(subscriptionsTable)
+          .set({ status: "rejected" })
+          .where(
+            and(eq(subscriptionsTable.id, payment.subscriptionId), eq(subscriptionsTable.status, "pending_payment")),
+          );
+      }
 
       const [updatedPay] = await tx
         .update(paymentsTable)

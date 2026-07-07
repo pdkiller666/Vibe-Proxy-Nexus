@@ -2471,3 +2471,59 @@ export const useUpdateUserExtraSlots = <TError = ErrorType<unknown>,
       return useMutation(getUpdateUserExtraSlotsMutationOptions(options));
     }
 
+
+
+/**
+ * @summary Create an extra device slot payment order
+ */
+export const createExtraSlotOrder = async ( options?: RequestInit): Promise<import('./api.schemas').ExtraSlotOrderResult> => {
+  return customFetch<import('./api.schemas').ExtraSlotOrderResult>('/api/extra-slot-order', {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
+    credentials: 'include',
+  });
+};
+
+export const getCreateExtraSlotOrderMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createExtraSlotOrder>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationOptions<Awaited<ReturnType<typeof createExtraSlotOrder>>, TError, void, TContext> => {
+  const { mutation: mutationOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createExtraSlotOrder>>, void> = () => {
+    return createExtraSlotOrder();
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateExtraSlotOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createExtraSlotOrder>>>;
+export type CreateExtraSlotOrderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create an extra device slot payment order
+ */
+export const useCreateExtraSlotOrder = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createExtraSlotOrder>>, TError, void, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof createExtraSlotOrder>>, TError, void, TContext> => {
+  return useMutation(getCreateExtraSlotOrderMutationOptions(options));
+};
+
+
+/**
+ * @summary Cancel a pending extra device slot payment
+ */
+export const deleteExtraSlotOrder = async (paymentId: number, options?: RequestInit): Promise<void> => {
+  return customFetch<void>(`/api/extra-slot-order/${paymentId}`, {
+    ...options,
+    method: 'DELETE',
+    credentials: 'include',
+  });
+};
+
+export const useDeleteExtraSlotOrder = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof deleteExtraSlotOrder>>, TError, { paymentId: number }, TContext>; request?: SecondParameter<typeof customFetch> }
+): UseMutationResult<Awaited<ReturnType<typeof deleteExtraSlotOrder>>, TError, { paymentId: number }, TContext> => {
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteExtraSlotOrder>>, { paymentId: number }> = ({ paymentId }) => {
+    return deleteExtraSlotOrder(paymentId);
+  };
+  return useMutation({ mutationFn, ...options?.mutation });
+};
