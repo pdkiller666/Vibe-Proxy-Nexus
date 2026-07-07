@@ -69,9 +69,14 @@ export async function addXrayClient(uuid: string, email: string): Promise<void> 
   await withLock(async () => {
     const config = await readConfig();
     const clients = getClients(config);
-    // Guard by both UUID and email: Xray rejects configs with duplicate emails.
-    if (clients.some((c) => c.id === uuid || c.email === email)) return;
-    clients.push({ id: uuid, email });
+    // If this exact UUID is already registered, nothing to do.
+    if (clients.some((c) => c.id === uuid)) return;
+    // Remove any stale entry with the same email but a different UUID — this
+    // happens when a key was re-issued (DB assigned a new UUID but the old UUID
+    // still sits in the on-disk config). The DB record is the source of truth.
+    const cleaned = clients.filter((c) => c.email !== email);
+    cleaned.push({ id: uuid, email });
+    config["inbounds"][0]["settings"]["clients"] = cleaned;
     // Persist first — the client survives a container restart even if the
     // reload below fails; the next boot will pick this client up automatically.
     await writeConfig(config);
