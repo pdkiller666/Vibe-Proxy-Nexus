@@ -29,6 +29,7 @@ import {
   createPasswordResetToken,
 } from "../lib/passwordReset";
 import { logger } from "../lib/logger";
+import { issueKeyForUser } from "../lib/keyIssuance";
 
 const router: IRouter = Router();
 
@@ -93,6 +94,20 @@ router.post("/auth/register", registerRateLimit, async (req, res): Promise<void>
           endsAt,
         });
         logger.info({ userId: user.id, trialDays, planId: trialPlan.id }, "Trial subscription created");
+
+        // Auto-issue first VPN key so the user can connect immediately after
+        // registration without any extra steps.
+        try {
+          const totalSlots = trialPlan.devicesIncluded + 0; // new user has no extra slots yet
+          const keyResult = await issueKeyForUser(user.id, totalSlots);
+          if (keyResult.ok) {
+            logger.info({ userId: user.id, keyId: keyResult.key.id }, "Auto VPN key issued on registration");
+          } else {
+            logger.warn({ userId: user.id, error: keyResult.error }, "Auto VPN key skipped on registration");
+          }
+        } catch (err) {
+          logger.error({ err, userId: user.id }, "Failed to auto-issue VPN key on registration");
+        }
       } else {
         logger.warn({ userId: user.id }, "Trial enabled but no active plans found — skipping trial");
       }
