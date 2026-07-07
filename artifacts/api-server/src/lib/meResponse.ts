@@ -31,7 +31,11 @@ export async function buildMeData(user: User) {
     .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)));
 
   const activeKeyCount = keyCountResult?.cnt ?? 0;
-  const deviceSlots = (activeSubscription?.devicesIncluded ?? 1) + user.extraDeviceSlots;
+  // Without an active subscription no keys can be issued, so report 0 total
+  // slots instead of a misleading non-zero number.
+  const deviceSlots = activeSubscription
+    ? activeSubscription.devicesIncluded + user.extraDeviceSlots
+    : user.extraDeviceSlots;
 
   return {
     id: user.id,

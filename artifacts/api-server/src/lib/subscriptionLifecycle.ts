@@ -136,6 +136,36 @@ export async function cancelStalePendingSubscriptions(): Promise<number> {
 }
 
 /**
+ * Cancels extra_device_slot payments that have been pending longer than
+ * PENDING_PAYMENT_EXPIRY_HOURS. These payments have subscriptionId = null
+ * so they are not covered by cancelStalePendingSubscriptions.
+ *
+ * Without this, a user with a forgotten/abandoned slot order is permanently
+ * blocked by the "one pending slot order at a time" guard (409) and can
+ * never buy a new slot.
+ */
+export async function cancelStaleExtraSlotPayments(): Promise<number> {
+  const cutoff = new Date(Date.now() - PENDING_PAYMENT_EXPIRY_HOURS * 60 * 60 * 1000);
+
+  const result = await db
+    .update(paymentsTable)
+    .set({
+      status: "rejected",
+      rejectionReason: "Автоматическая отмена: оплата не поступила в течение 48 часов",
+    })
+    .where(
+      and(
+        eq(paymentsTable.type, "extra_device_slot"),
+        eq(paymentsTable.status, "pending"),
+        lt(paymentsTable.createdAt, cutoff),
+      ),
+    )
+    .returning({ id: paymentsTable.id });
+
+  return result.length;
+}
+
+/**
  * Reconciliation pass: for any VPN key revoked within the last 24 hours,
  * attempt to remove the client from Xray again. This handles the edge case
  * where Xray was temporarily unavailable during the expiry run — the DB row
@@ -183,6 +213,16 @@ export function startSubscriptionExpiryJob(): NodeJS.Timeout {
       })
       .catch((err) => {
         logger.error({ err }, "Failed to cancel stale pending subscriptions");
+      });
+
+    cancelStaleExtraSlotPayments()
+      .then((count) => {
+        if (count > 0) {
+          logger.info({ count }, "Auto-cancelled stale extra device slot payments (48h timeout)");
+        }
+      })
+      .catch((err) => {
+        logger.error({ err }, "Failed to cancel stale extra device slot payments");
       });
 
     reconcileRevokedXrayClients().catch((err) => {
