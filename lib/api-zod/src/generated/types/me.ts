@@ -18,4 +18,6 @@ export interface Me {
   currentPlanName?: string | null;
   /** @nullable */
   subscriptionEndsAt?: Date | null;
+  deviceSlots: number;
+  activeKeyCount: number;
 }

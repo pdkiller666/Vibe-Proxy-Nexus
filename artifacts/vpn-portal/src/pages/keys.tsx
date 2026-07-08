@@ -167,7 +167,7 @@ export default function Keys() {
   const [showManualLinks, setShowManualLinks] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
-  const activeKeys = (keys ?? []).filter((k: { revokedAt?: Date | null }) => !k.revokedAt);
+  const activeKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => !k.revokedAt);
   const canIssue = !!me?.hasActiveSubscription;
   const activeNodes = (nodes ?? []).filter((n: { isActive: boolean }) => n.isActive);
   const defaultNodeId = activeNodes[0]?.id;

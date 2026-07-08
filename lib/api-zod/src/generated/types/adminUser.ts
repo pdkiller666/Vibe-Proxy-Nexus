@@ -15,4 +15,5 @@ export interface AdminUser {
   role: UserRole;
   createdAt: Date;
   activeSubscriptions?: number;
+  extraDeviceSlots: number;
 }

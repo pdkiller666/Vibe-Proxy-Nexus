@@ -13,6 +13,7 @@ export interface Plan {
   description?: string | null;
   priceRub: number;
   durationDays: number;
+  devicesIncluded: number;
   isActive: boolean;
   createdAt?: Date;
 }

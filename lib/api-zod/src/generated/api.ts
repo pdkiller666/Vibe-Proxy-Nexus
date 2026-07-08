@@ -38,7 +38,9 @@ export const RegisterResponse = zod.object({
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
   "currentPlanName": zod.string().nullish(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "deviceSlots": zod.number(),
+  "activeKeyCount": zod.number()
 })
 
 
@@ -61,7 +63,9 @@ export const LoginResponse = zod.object({
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
   "currentPlanName": zod.string().nullish(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "deviceSlots": zod.number(),
+  "activeKeyCount": zod.number()
 })
 
 
@@ -143,9 +147,9 @@ export const GetPaymentSettingsResponse = zod.object({
   "sbpRecipientName": zod.string(),
   "instructions": zod.string().nullish(),
   "yookassaEnabled": zod.boolean().optional(),
-  "extraDeviceSlotPriceRub": zod.number().optional(),
-  "trialEnabled": zod.boolean().optional(),
-  "trialDays": zod.number().optional()
+  "extraDeviceSlotPriceRub": zod.number(),
+  "trialEnabled": zod.boolean(),
+  "trialDays": zod.number()
 })
 
 
@@ -179,6 +183,7 @@ export const ListMySubscriptionsResponseItem = zod.object({
   "description": zod.string().nullish(),
   "priceRub": zod.number(),
   "durationDays": zod.number(),
+  "devicesIncluded": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 }),
@@ -208,6 +213,7 @@ export const CreateSubscriptionResponse = zod.object({
   "description": zod.string().nullish(),
   "priceRub": zod.number(),
   "durationDays": zod.number(),
+  "devicesIncluded": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 }),
@@ -218,7 +224,8 @@ export const CreateSubscriptionResponse = zod.object({
 }),
   "payment": zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number(),
+  "subscriptionId": zod.number().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -236,8 +243,8 @@ export const CreateSubscriptionResponse = zod.object({
  */
 export const ListMyPaymentsResponseItem = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number().nullish(),
-  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
+  "subscriptionId": zod.number().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -266,7 +273,8 @@ export const UpdatePaymentNoteBody = zod.object({
 
 export const UpdatePaymentNoteResponse = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number(),
+  "subscriptionId": zod.number().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -355,6 +363,7 @@ export const createPlanBodyPriceRubMin = 0;
 
 
 
+
 export const CreatePlanBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string().optional(),
@@ -385,6 +394,7 @@ export const UpdatePlanParams = zod.object({
 
 
 export const updatePlanBodyPriceRubMin = 0;
+
 
 
 
@@ -423,15 +433,20 @@ export const DeletePlanResponse = zod.void()
 /**
  * @summary Update SBP payment instructions
  */
+export const updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin = 0;
+
+
+
+
 export const UpdatePaymentSettingsBody = zod.object({
   "sbpPhone": zod.string().optional(),
   "sbpBank": zod.string().optional(),
   "sbpRecipientName": zod.string().optional(),
   "instructions": zod.string().optional(),
   "yookassaEnabled": zod.boolean().optional(),
-  "extraDeviceSlotPriceRub": zod.number().optional(),
+  "extraDeviceSlotPriceRub": zod.number().min(updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin).optional(),
   "trialEnabled": zod.boolean().optional(),
-  "trialDays": zod.number().optional()
+  "trialDays": zod.number().min(1).optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -440,9 +455,9 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "sbpRecipientName": zod.string(),
   "instructions": zod.string().nullish(),
   "yookassaEnabled": zod.boolean().optional(),
-  "extraDeviceSlotPriceRub": zod.number().optional(),
-  "trialEnabled": zod.boolean().optional(),
-  "trialDays": zod.number().optional()
+  "extraDeviceSlotPriceRub": zod.number(),
+  "trialEnabled": zod.boolean(),
+  "trialDays": zod.number()
 })
 
 
@@ -455,10 +470,10 @@ export const ListAdminPaymentsQueryParams = zod.object({
 
 export const ListAdminPaymentsResponseItem = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number().nullish(),
-  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
+  "subscriptionId": zod.number().nullable(),
   "userEmail": zod.string(),
-  "planName": zod.string().nullish(),
+  "planName": zod.string().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -480,8 +495,8 @@ export const ConfirmPaymentParams = zod.object({
 
 export const ConfirmPaymentResponse = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number().nullish(),
-  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
+  "subscriptionId": zod.number().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -506,8 +521,8 @@ export const RejectPaymentBody = zod.object({
 
 export const RejectPaymentResponse = zod.object({
   "id": zod.number(),
-  "subscriptionId": zod.number().nullish(),
-  "type": zod.enum(['subscription', 'extra_device_slot']).optional(),
+  "subscriptionId": zod.number().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -516,11 +531,6 @@ export const RejectPaymentResponse = zod.object({
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
-})
-
-export const CreateExtraSlotOrderResponse = zod.object({
-  "paymentId": zod.number(),
-  "amountRub": zod.number()
 })
 
 
@@ -642,6 +652,242 @@ export const AdminResetUserPasswordResponse = zod.object({
 
 
 /**
+ * @summary Start a payment to purchase one extra device slot (requires an active subscription)
+ */
+export const CreateExtraSlotOrderResponse = zod.object({
+  "paymentId": zod.number(),
+  "amountRub": zod.number()
+})
+
+
+/**
+ * @summary Cancel a pending extra device slot payment
+ */
+export const DeleteExtraSlotOrderParams = zod.object({
+  "paymentId": zod.coerce.number()
+})
+
+export const DeleteExtraSlotOrderResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List current user's support tickets
+ */
+export const ListMyTicketsResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "userEmail": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messageCount": zod.number()
+})
+export const ListMyTicketsResponse = zod.array(ListMyTicketsResponseItem)
+
+
+/**
+ * @summary Create a support ticket with an initial message
+ */
+export const createSupportTicketBodySubjectMax = 200;
+
+export const createSupportTicketBodyBodyMax = 4000;
+
+
+
+export const CreateSupportTicketBody = zod.object({
+  "subject": zod.string().min(1).max(createSupportTicketBodySubjectMax),
+  "body": zod.string().min(1).max(createSupportTicketBodyBodyMax)
+})
+
+export const CreateSupportTicketResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get a ticket with its messages
+ */
+export const GetTicketParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const GetTicketResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "userEmail": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messageCount": zod.number(),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Add a message to one of the current user's tickets
+ */
+export const AddTicketMessageParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const addTicketMessageBodyBodyMax = 4000;
+
+
+
+export const AddTicketMessageBody = zod.object({
+  "body": zod.string().min(1).max(addTicketMessageBodyBodyMax)
+})
+
+export const AddTicketMessageResponse = zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List all support tickets (optionally filtered by status)
+ */
+export const ListAdminTicketsQueryParams = zod.object({
+  "status": zod.enum(['open', 'answered', 'closed']).optional()
+})
+
+export const ListAdminTicketsResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "userEmail": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messageCount": zod.number()
+})
+export const ListAdminTicketsResponse = zod.array(ListAdminTicketsResponseItem)
+
+
+/**
+ * @summary Get a ticket with its messages (admin)
+ */
+export const GetAdminTicketParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const GetAdminTicketResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "userEmail": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messageCount": zod.number(),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Reply to a support ticket as an admin
+ */
+export const AdminAddTicketMessageParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const adminAddTicketMessageBodyBodyMax = 4000;
+
+
+
+export const AdminAddTicketMessageBody = zod.object({
+  "body": zod.string().min(1).max(adminAddTicketMessageBodyBodyMax)
+})
+
+export const AdminAddTicketMessageResponse = zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a support ticket's status
+ */
+export const UpdateTicketStatusParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const UpdateTicketStatusBody = zod.object({
+  "status": zod.enum(['open', 'answered', 'closed'])
+})
+
+export const UpdateTicketStatusResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Manually set a user's extra device slot count
+ */
+export const UpdateUserExtraSlotsParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const updateUserExtraSlotsBodyExtraDeviceSlotsMin = 0;
+
+
+
+export const UpdateUserExtraSlotsBody = zod.object({
+  "extraDeviceSlots": zod.number().min(updateUserExtraSlotsBodyExtraDeviceSlotsMin)
+})
+
+export const UpdateUserExtraSlotsResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "createdAt": zod.coerce.date(),
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number()
+})
+
+
+/**
  * @summary Update a user's role
  */
 export const UpdateUserRoleParams = zod.object({
@@ -663,116 +909,3 @@ export const UpdateUserRoleResponse = zod.object({
 })
 
 
-/**
- * @summary Update extra device slots for a user
- */
-export const UpdateUserDeviceSlotsParams = zod.object({
-  "userId": zod.coerce.number()
-})
-
-export const UpdateUserDeviceSlotsBody = zod.object({
-  "extraDeviceSlots": zod.number().int().min(0)
-})
-
-export const UpdateUserDeviceSlotsResponse = zod.object({
-  "id": zod.number(),
-  "email": zod.string(),
-  "name": zod.string().nullish(),
-  "role": zod.enum(['user', 'admin']),
-  "createdAt": zod.coerce.date(),
-  "activeSubscriptions": zod.number().optional(),
-  "extraDeviceSlots": zod.number()
-})
-
-
-
-
-/**
- * Support Tickets
- */
-export const ticketStatusValues = ['open', 'answered', 'closed'] as const;
-export const SupportTicketStatusEnum = zod.enum(ticketStatusValues);
-
-export const createSupportTicketBodySubjectMax = 200;
-export const createSupportTicketBodyBodyMax = 4000;
-
-export const CreateSupportTicketBody = zod.object({
-  subject: zod.string().min(1).max(createSupportTicketBodySubjectMax),
-  body: zod.string().min(1).max(createSupportTicketBodyBodyMax),
-});
-
-export const SupportMessageItem = zod.object({
-  id: zod.number(),
-  ticketId: zod.number(),
-  authorId: zod.number(),
-  authorEmail: zod.string(),
-  isAdmin: zod.boolean(),
-  body: zod.string(),
-  createdAt: zod.coerce.date(),
-});
-
-export const SupportTicketItem = zod.object({
-  id: zod.number(),
-  userId: zod.number(),
-  userEmail: zod.string(),
-  subject: zod.string(),
-  status: SupportTicketStatusEnum,
-  createdAt: zod.coerce.date(),
-  updatedAt: zod.coerce.date(),
-  messageCount: zod.number(),
-});
-
-export const CreateSupportTicketResponse = zod.object({
-  id: zod.number(),
-  userId: zod.number(),
-  subject: zod.string(),
-  status: SupportTicketStatusEnum,
-  createdAt: zod.coerce.date(),
-  updatedAt: zod.coerce.date(),
-});
-
-export const ListMyTicketsResponse = zod.array(SupportTicketItem);
-export const ListAdminTicketsResponse = zod.array(SupportTicketItem);
-
-export const ListAdminTicketsQueryParams = zod.object({
-  status: SupportTicketStatusEnum.optional(),
-});
-
-export const GetTicketParams = zod.object({
-  ticketId: zod.coerce.number(),
-});
-
-export const GetTicketResponse = zod.object({
-  id: zod.number(),
-  userId: zod.number(),
-  userEmail: zod.string(),
-  subject: zod.string(),
-  status: SupportTicketStatusEnum,
-  createdAt: zod.coerce.date(),
-  updatedAt: zod.coerce.date(),
-  messageCount: zod.number(),
-  messages: zod.array(SupportMessageItem),
-});
-
-export const AddTicketMessageBody = zod.object({
-  body: zod.string().min(1).max(4000),
-});
-
-export const AddTicketMessageParams = zod.object({
-  ticketId: zod.coerce.number(),
-});
-
-export const AddTicketMessageResponse = SupportMessageItem;
-
-export const UpdateTicketStatusBody = zod.object({
-  status: SupportTicketStatusEnum,
-});
-
-export const UpdateTicketStatusParams = zod.object({
-  ticketId: zod.coerce.number(),
-});
-
-export const UpdateTicketStatusResponse = zod.object({
-  id: zod.number(),
-  status: SupportTicketStatusEnum,
-});

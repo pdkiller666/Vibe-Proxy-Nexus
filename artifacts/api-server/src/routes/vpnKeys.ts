@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import {
   CreateVpnKeyBody,

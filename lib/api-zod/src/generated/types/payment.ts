@@ -7,10 +7,13 @@
  */
 import type { PaymentProvider } from './paymentProvider';
 import type { PaymentStatus } from './paymentStatus';
+import type { PaymentType } from './paymentType';
 
 export interface Payment {
   id: number;
-  subscriptionId: number;
+  /** @nullable */
+  subscriptionId: number | null;
+  type: PaymentType;
   provider: PaymentProvider;
   amountRub: number;
   status: PaymentStatus;

@@ -922,7 +922,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: number; onBack: () => vo
     const body = reply.trim();
     if (!body) return;
     sendMsg(
-      { ticketId, body },
+      { ticketId, data: { body } },
       {
         onSuccess: () => {
           setReply("");
@@ -936,7 +936,7 @@ function TicketDetail({ ticketId, onBack }: { ticketId: number; onBack: () => vo
 
   function closeTicket() {
     setStatus(
-      { ticketId, status: "closed" },
+      { ticketId, data: { status: "closed" } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetAdminTicketQueryKey(ticketId) });

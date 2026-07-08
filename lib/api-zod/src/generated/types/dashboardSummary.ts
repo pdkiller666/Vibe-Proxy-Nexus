@@ -11,5 +11,7 @@ export interface DashboardSummary {
   activeSubscriptions: number;
   pendingPayments: number;
   monthlyRevenueRub: number;
+  last30DaysRevenueRub: number;
   totalVpnKeys: number;
+  openTickets: number;
 }

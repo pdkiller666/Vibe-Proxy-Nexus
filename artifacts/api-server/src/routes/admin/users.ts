@@ -3,9 +3,9 @@ import { desc, eq } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import {
   ListAdminUsersResponse,
-  UpdateUserDeviceSlotsBody,
-  UpdateUserDeviceSlotsParams,
-  UpdateUserDeviceSlotsResponse,
+  UpdateUserExtraSlotsBody,
+  UpdateUserExtraSlotsParams,
+  UpdateUserExtraSlotsResponse,
   UpdateUserRoleBody,
   UpdateUserRoleParams,
   UpdateUserRoleResponse,
@@ -49,14 +49,14 @@ router.patch("/admin/users/:userId/role", requireAuth, requireAdmin, async (req,
 });
 
 router.patch("/admin/users/:userId/extra-slots", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const params = UpdateUserDeviceSlotsParams.safeParse(req.params);
+  const params = UpdateUserExtraSlotsParams.safeParse(req.params);
 
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const parsed = UpdateUserDeviceSlotsBody.safeParse(req.body);
+  const parsed = UpdateUserExtraSlotsBody.safeParse(req.body);
 
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -74,7 +74,7 @@ router.patch("/admin/users/:userId/extra-slots", requireAuth, requireAdmin, asyn
     return;
   }
 
-  res.json(UpdateUserDeviceSlotsResponse.parse(user));
+  res.json(UpdateUserExtraSlotsResponse.parse(user));
 });
 
 export default router;

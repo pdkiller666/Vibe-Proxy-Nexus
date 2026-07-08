@@ -87,7 +87,7 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
     const body = reply.trim();
     if (!body) return;
     addMessage(
-      { ticketId, body },
+      { ticketId, data: { body } },
       {
         onSuccess: () => {
           setReply("");
@@ -192,7 +192,7 @@ function NewTicketForm({ onCreated }: { onCreated: (id: number) => void }) {
     e.preventDefault();
     if (!subject.trim() || !body.trim()) return;
     create(
-      { subject: subject.trim(), body: body.trim() },
+      { data: { subject: subject.trim(), body: body.trim() } },
       {
         onSuccess: (ticket) => {
           qc.invalidateQueries({ queryKey: getListMyTicketsQueryKey() });

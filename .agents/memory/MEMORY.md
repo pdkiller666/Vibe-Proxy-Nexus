@@ -11,3 +11,5 @@
 - [Payments are manual SBP transfer](payments-manual-sbp.md) — no real payment gateway integrated; admin manually confirms bank transfers. yookassa fields exist only as unused schema/UI placeholders.
 - [Xray gRPC proto loading](xray-grpc-proto-loading.md) — protobufjs needs resolvePath override for Xray's include-root-relative proto imports; bg processes die between sandbox tool calls.
 - [Device slots model](device-slots.md) — «1 ключ = 1 слот»: devicesIncluded на plans, extraDeviceSlots на users; покупка доп. слота через POST /extra-slot-order → /checkout/slot/:id → admin confirm → +1 extraDeviceSlots автоматически.
+- [Artifact re-registration on re-import](artifact-reregistration.md) — listArtifacts() empty + proxy 502 despite intact artifact.toml files? createArtifact for one artifact re-registers the others too.
+- [openapi.yaml spec drift — resolved](openapi-spec-drift.md) — never hand-edit files under `generated/`; always add schema to openapi.yaml first, then rerun orval codegen, or clients silently diverge from spec and each other.

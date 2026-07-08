@@ -14,5 +14,7 @@ export interface PlanUpdate {
   priceRub?: number;
   /** @minimum 1 */
   durationDays?: number;
+  /** @minimum 1 */
+  devicesIncluded?: number;
   isActive?: boolean;
 }

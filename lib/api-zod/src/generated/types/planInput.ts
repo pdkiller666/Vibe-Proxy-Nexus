@@ -14,5 +14,7 @@ export interface PlanInput {
   priceRub: number;
   /** @minimum 1 */
   durationDays: number;
+  /** @minimum 1 */
+  devicesIncluded?: number;
   isActive?: boolean;
 }

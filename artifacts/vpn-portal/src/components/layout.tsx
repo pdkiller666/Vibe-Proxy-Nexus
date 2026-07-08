@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetMe, useLogout, useGetAdminDashboardSummary } from "@workspace/api-client-react";
+import {
+  useGetMe,
+  useLogout,
+  useGetAdminDashboardSummary,
+  getGetAdminDashboardSummaryQueryKey,
+} from "@workspace/api-client-react";
 import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -12,7 +17,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const { data: summary } = useGetAdminDashboardSummary({
-    query: { enabled: isAdmin, refetchInterval: 60_000 },
+    query: { queryKey: getGetAdminDashboardSummaryQueryKey(), enabled: isAdmin, refetchInterval: 60_000 },
   });
   const adminAlertCount = isAdmin
     ? (summary?.pendingPayments ?? 0) + (summary?.openTickets ?? 0)

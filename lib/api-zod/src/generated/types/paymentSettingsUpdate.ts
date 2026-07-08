@@ -12,7 +12,9 @@ export interface PaymentSettingsUpdate {
   sbpRecipientName?: string;
   instructions?: string;
   yookassaEnabled?: boolean;
+  /** @minimum 0 */
   extraDeviceSlotPriceRub?: number;
   trialEnabled?: boolean;
+  /** @minimum 1 */
   trialDays?: number;
 }

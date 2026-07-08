@@ -30,6 +30,7 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
           sbpRecipientName: parsed.data.sbpRecipientName ?? "",
           instructions: parsed.data.instructions,
           yookassaEnabled: parsed.data.yookassaEnabled ?? false,
+          extraDeviceSlotPriceRub: parsed.data.extraDeviceSlotPriceRub,
           trialEnabled: parsed.data.trialEnabled ?? false,
           trialDays: parsed.data.trialDays ?? 5,
         })

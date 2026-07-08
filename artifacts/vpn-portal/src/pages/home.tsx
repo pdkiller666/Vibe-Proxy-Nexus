@@ -396,7 +396,7 @@ export default function Home() {
               }`}
             >
               {activePlans.map(
-                (plan: { id: string; name: string; description?: string; priceRub: number; durationDays: number; devicesIncluded: number },
+                (plan: { id: number; name: string; description?: string | null; priceRub: number; durationDays: number; devicesIncluded: number },
                   i: number) => {
                   const featured =
                     activePlans.length > 1 && i === Math.floor(activePlans.length / 2);

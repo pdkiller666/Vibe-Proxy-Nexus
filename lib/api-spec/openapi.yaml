@@ -24,6 +24,8 @@ tags:
     description: VPN keys
   - name: vpn-nodes
     description: VPN nodes
+  - name: support
+    description: Support tickets
   - name: admin
     description: Admin operations
 paths:
@@ -566,6 +568,229 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminPasswordResetResult"
 
+  /extra-slot-order:
+    post:
+      operationId: createExtraSlotOrder
+      tags: [payments]
+      summary: Start a payment to purchase one extra device slot (requires an active subscription)
+      responses:
+        "201":
+          description: Created pending payment for the extra slot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateExtraSlotOrderResult"
+
+  /extra-slot-order/{paymentId}:
+    delete:
+      operationId: deleteExtraSlotOrder
+      tags: [payments]
+      summary: Cancel a pending extra device slot payment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  /support-tickets:
+    get:
+      operationId: listMyTickets
+      tags: [support]
+      summary: List current user's support tickets
+      responses:
+        "200":
+          description: List of tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupportTicket"
+    post:
+      operationId: createSupportTicket
+      tags: [support]
+      summary: Create a support ticket with an initial message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupportTicketInput"
+      responses:
+        "201":
+          description: Created ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketRow"
+
+  /support-tickets/{ticketId}:
+    get:
+      operationId: getTicket
+      tags: [support]
+      summary: Get a ticket with its messages
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ticket with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketDetail"
+
+  /support-tickets/{ticketId}/messages:
+    post:
+      operationId: addTicketMessage
+      tags: [support]
+      summary: Add a message to one of the current user's tickets
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketMessageInput"
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportMessage"
+
+  /admin/support-tickets:
+    get:
+      operationId: listAdminTickets
+      tags: [admin]
+      summary: List all support tickets (optionally filtered by status)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TicketStatus"
+      responses:
+        "200":
+          description: List of tickets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupportTicket"
+
+  /admin/support-tickets/{ticketId}:
+    get:
+      operationId: getAdminTicket
+      tags: [admin]
+      summary: Get a ticket with its messages (admin)
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ticket with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketDetail"
+
+  /admin/support-tickets/{ticketId}/messages:
+    post:
+      operationId: adminAddTicketMessage
+      tags: [admin]
+      summary: Reply to a support ticket as an admin
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketMessageInput"
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportMessage"
+
+  /admin/support-tickets/{ticketId}/status:
+    patch:
+      operationId: updateTicketStatus
+      tags: [admin]
+      summary: Update a support ticket's status
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTicketStatusInput"
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketRow"
+
+  /admin/users/{userId}/extra-slots:
+    patch:
+      operationId: updateUserExtraSlots
+      tags: [admin]
+      summary: Manually set a user's extra device slot count
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserExtraSlotsInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
   /admin/users/{userId}/role:
     patch:
       operationId: updateUserRole
@@ -647,7 +872,7 @@ components:
 
     Me:
       type: object
-      required: [id, email, role, hasActiveSubscription]
+      required: [id, email, role, hasActiveSubscription, deviceSlots, activeKeyCount]
       properties:
         id: { type: integer }
         email: { type: string }
@@ -657,16 +882,19 @@ components:
         hasActiveSubscription: { type: boolean }
         currentPlanName: { type: ["string", "null"] }
         subscriptionEndsAt: { type: ["string", "null"], format: date-time }
+        deviceSlots: { type: integer }
+        activeKeyCount: { type: integer }
 
     Plan:
       type: object
-      required: [id, name, priceRub, durationDays, isActive]
+      required: [id, name, priceRub, durationDays, devicesIncluded, isActive]
       properties:
         id: { type: integer }
         name: { type: string }
         description: { type: ["string", "null"] }
         priceRub: { type: integer }
         durationDays: { type: integer }
+        devicesIncluded: { type: integer }
         isActive: { type: boolean }
         createdAt: { type: string, format: date-time }
 
@@ -678,6 +906,7 @@ components:
         description: { type: string }
         priceRub: { type: integer, minimum: 0 }
         durationDays: { type: integer, minimum: 1 }
+        devicesIncluded: { type: integer, minimum: 1 }
         isActive: { type: boolean }
 
     PlanUpdate:
@@ -687,17 +916,21 @@ components:
         description: { type: string }
         priceRub: { type: integer, minimum: 0 }
         durationDays: { type: integer, minimum: 1 }
+        devicesIncluded: { type: integer, minimum: 1 }
         isActive: { type: boolean }
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, trialEnabled, trialDays]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
         sbpRecipientName: { type: string }
         instructions: { type: ["string", "null"] }
         yookassaEnabled: { type: boolean }
+        extraDeviceSlotPriceRub: { type: integer }
+        trialEnabled: { type: boolean }
+        trialDays: { type: integer }
 
     PaymentSettingsUpdate:
       type: object
@@ -707,6 +940,9 @@ components:
         sbpRecipientName: { type: string }
         instructions: { type: string }
         yookassaEnabled: { type: boolean }
+        extraDeviceSlotPriceRub: { type: integer, minimum: 0 }
+        trialEnabled: { type: boolean }
+        trialDays: { type: integer, minimum: 1 }
 
     SubscriptionStatus:
       type: string
@@ -742,12 +978,18 @@ components:
       type: string
       enum: [pending, confirmed, rejected]
 
+    PaymentType:
+      type: string
+      enum: [subscription, extra_device_slot]
+
     Payment:
       type: object
-      required: [id, subscriptionId, provider, amountRub, status, reference, createdAt]
+      required: [id, subscriptionId, type, provider, amountRub, status, reference, createdAt]
       properties:
         id: { type: integer }
-        subscriptionId: { type: integer }
+        subscriptionId: { type: ["integer", "null"] }
+        type:
+          $ref: "#/components/schemas/PaymentType"
         provider:
           $ref: "#/components/schemas/PaymentProvider"
         amountRub: { type: integer }
@@ -761,12 +1003,14 @@ components:
 
     AdminPayment:
       type: object
-      required: [id, subscriptionId, userEmail, planName, provider, amountRub, status, reference, createdAt]
+      required: [id, subscriptionId, userEmail, planName, type, provider, amountRub, status, reference, createdAt]
       properties:
         id: { type: integer }
-        subscriptionId: { type: integer }
+        subscriptionId: { type: ["integer", "null"] }
         userEmail: { type: string }
-        planName: { type: string }
+        planName: { type: ["string", "null"] }
+        type:
+          $ref: "#/components/schemas/PaymentType"
         provider:
           $ref: "#/components/schemas/PaymentProvider"
         amountRub: { type: integer }
@@ -873,7 +1117,7 @@ components:
 
     AdminUser:
       type: object
-      required: [id, email, role, createdAt]
+      required: [id, email, role, createdAt, extraDeviceSlots]
       properties:
         id: { type: integer }
         email: { type: string }
@@ -882,6 +1126,106 @@ components:
           $ref: "#/components/schemas/UserRole"
         createdAt: { type: string, format: date-time }
         activeSubscriptions: { type: integer }
+        extraDeviceSlots: { type: integer }
+
+    UpdateUserExtraSlotsInput:
+      type: object
+      required: [extraDeviceSlots]
+      properties:
+        extraDeviceSlots: { type: integer, minimum: 0 }
+
+    CreateExtraSlotOrderResult:
+      type: object
+      required: [paymentId, amountRub]
+      properties:
+        paymentId: { type: integer }
+        amountRub: { type: integer }
+
+    OkResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    TicketStatus:
+      type: string
+      enum: [open, answered, closed]
+
+    SupportTicketRow:
+      type: object
+      required: [id, userId, subject, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        subject: { type: string }
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SupportTicket:
+      type: object
+      required: [id, userId, userEmail, subject, status, createdAt, updatedAt, messageCount]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        userEmail: { type: string }
+        subject: { type: string }
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        messageCount: { type: integer }
+
+    SupportMessage:
+      type: object
+      required: [id, ticketId, authorId, authorEmail, isAdmin, body, createdAt]
+      properties:
+        id: { type: integer }
+        ticketId: { type: integer }
+        authorId: { type: integer }
+        authorEmail: { type: string }
+        isAdmin: { type: boolean }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    SupportTicketDetail:
+      type: object
+      required: [id, userId, userEmail, subject, status, createdAt, updatedAt, messageCount, messages]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        userEmail: { type: string }
+        subject: { type: string }
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        messageCount: { type: integer }
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportMessage"
+
+    CreateSupportTicketInput:
+      type: object
+      required: [subject, body]
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        body: { type: string, minLength: 1, maxLength: 4000 }
+
+    TicketMessageInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 4000 }
+
+    UpdateTicketStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/TicketStatus"
 
     AdminPasswordResetResult:
       type: object
@@ -898,10 +1242,12 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, totalVpnKeys]
+      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets]
       properties:
         totalUsers: { type: integer }
         activeSubscriptions: { type: integer }
         pendingPayments: { type: integer }
         monthlyRevenueRub: { type: integer }
+        last30DaysRevenueRub: { type: integer }
         totalVpnKeys: { type: integer }
+        openTickets: { type: integer }

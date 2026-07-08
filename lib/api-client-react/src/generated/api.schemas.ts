@@ -118,7 +118,9 @@ export interface PaymentSettings {
   /** @nullable */
   instructions?: string | null;
   yookassaEnabled?: boolean;
-  extraDeviceSlotPriceRub?: number;
+  extraDeviceSlotPriceRub: number;
+  trialEnabled: boolean;
+  trialDays: number;
 }
 
 export interface PaymentSettingsUpdate {
@@ -127,7 +129,11 @@ export interface PaymentSettingsUpdate {
   sbpRecipientName?: string;
   instructions?: string;
   yookassaEnabled?: boolean;
+  /** @minimum 0 */
   extraDeviceSlotPriceRub?: number;
+  trialEnabled?: boolean;
+  /** @minimum 1 */
+  trialDays?: number;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
@@ -186,8 +192,8 @@ export const PaymentType = {
 export interface Payment {
   id: number;
   /** @nullable */
-  subscriptionId?: number | null;
-  type?: PaymentType;
+  subscriptionId: number | null;
+  type: PaymentType;
   provider: PaymentProvider;
   amountRub: number;
   status: PaymentStatus;
@@ -204,11 +210,11 @@ export interface Payment {
 export interface AdminPayment {
   id: number;
   /** @nullable */
-  subscriptionId?: number | null;
-  type?: PaymentType;
+  subscriptionId: number | null;
   userEmail: string;
   /** @nullable */
-  planName?: string | null;
+  planName: string | null;
+  type: PaymentType;
   provider: PaymentProvider;
   amountRub: number;
   status: PaymentStatus;
@@ -220,11 +226,6 @@ export interface AdminPayment {
   createdAt: string;
   /** @nullable */
   confirmedAt?: string | null;
-}
-
-export interface ExtraSlotOrderResult {
-  paymentId: number;
-  amountRub: number;
 }
 
 export interface PaymentNoteUpdate {
@@ -332,17 +333,102 @@ export interface AdminUser {
   extraDeviceSlots: number;
 }
 
+export interface UpdateUserExtraSlotsInput {
+  /** @minimum 0 */
+  extraDeviceSlots: number;
+}
+
+export interface CreateExtraSlotOrderResult {
+  paymentId: number;
+  amountRub: number;
+}
+
+export interface OkResult {
+  ok: boolean;
+}
+
+export type TicketStatus = typeof TicketStatus[keyof typeof TicketStatus];
+
+
+export const TicketStatus = {
+  open: 'open',
+  answered: 'answered',
+  closed: 'closed',
+} as const;
+
+export interface SupportTicketRow {
+  id: number;
+  userId: number;
+  subject: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportTicket {
+  id: number;
+  userId: number;
+  userEmail: string;
+  subject: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface SupportMessage {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  authorEmail: string;
+  isAdmin: boolean;
+  body: string;
+  createdAt: string;
+}
+
+export interface SupportTicketDetail {
+  id: number;
+  userId: number;
+  userEmail: string;
+  subject: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  messages: SupportMessage[];
+}
+
+export interface CreateSupportTicketInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  body: string;
+}
+
+export interface TicketMessageInput {
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  body: string;
+}
+
+export interface UpdateTicketStatusInput {
+  status: TicketStatus;
+}
+
 export interface AdminPasswordResetResult {
   resetUrl: string;
 }
 
 export interface UserRoleUpdate {
   role: UserRole;
-}
-
-export interface UserExtraSlotsUpdate {
-  /** @minimum 0 */
-  extraDeviceSlots: number;
 }
 
 export interface DashboardSummary {
@@ -359,48 +445,7 @@ export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
 };
 
-
-
-export type TicketStatus = 'open' | 'answered' | 'closed';
-
-export interface SupportMessage {
-  id: number;
-  ticketId: number;
-  authorId: number;
-  authorEmail: string;
-  isAdmin: boolean;
-  body: string;
-  createdAt: string;
-}
-
-export interface SupportTicket {
-  id: number;
-  userId: number;
-  userEmail: string;
-  subject: string;
-  status: TicketStatus;
-  createdAt: string;
-  updatedAt: string;
-  messageCount: number;
-}
-
-export interface SupportTicketDetail extends SupportTicket {
-  messages: SupportMessage[];
-}
-
-export interface CreateSupportTicketInput {
-  subject: string;
-  body: string;
-}
-
-export interface AddMessageInput {
-  body: string;
-}
-
-export interface UpdateTicketStatusInput {
-  status: TicketStatus;
-}
-
-export type ListAdminSupportTicketsParams = {
-  status?: TicketStatus;
+export type ListAdminTicketsParams = {
+status?: TicketStatus;
 };
+
