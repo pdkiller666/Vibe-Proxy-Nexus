@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   useGetAdminDashboardSummary,
@@ -781,6 +781,11 @@ function VpnKeysManagement() {
   const [issuingUserId, setIssuingUserId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
+  // Guards against a genuine double-click firing two overlapping issue
+  // requests before React commits `issueMutation.isPending` and disables the
+  // button — a slow issue request (Xray provisioning) made this window wide
+  // enough in practice to create two keys from what looked like one click.
+  const issueInFlightRef = useRef(false);
 
   const { data: keys, isLoading, refetch } = useQuery<AdminVpnKey[]>({
     queryKey: ["admin", "vpn-keys"],
@@ -816,7 +821,20 @@ function VpnKeysManagement() {
       refetch();
     },
     onError: () => toast({ title: "Ошибка выдачи ключа", variant: "destructive" }),
+    onSettled: () => {
+      issueInFlightRef.current = false;
+    },
   });
+
+  function handleIssueClick() {
+    // `issueMutation.isPending` only reflects reality once React commits the
+    // next render, which isn't fast enough to beat a real double-click on a
+    // slow request (Xray provisioning). This ref blocks the second call
+    // synchronously, before React ever sees it.
+    if (!issuingUserId || issueInFlightRef.current) return;
+    issueInFlightRef.current = true;
+    issueMutation.mutate(issuingUserId);
+  }
 
   const revokeMutation = useMutation({
     mutationFn: async (keyId: number) => {
@@ -925,7 +943,7 @@ function VpnKeysManagement() {
             ))}
           </select>
           <button
-            onClick={() => issuingUserId && issueMutation.mutate(issuingUserId)}
+            onClick={handleIssueClick}
             disabled={!issuingUserId || issueMutation.isPending}
             className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
           >

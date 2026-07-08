@@ -17,7 +17,11 @@
  * not yet connectable).
  */
 import { promises as fs } from "fs";
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+import { logger } from "./logger";
+
+const execAsync = promisify(exec);
 
 const CONFIG_PATH = process.env["XRAY_CONFIG_PATH"];
 
@@ -58,10 +62,26 @@ function getClients(config: Record<string, any>): XrayClient[] {
   return clients as XrayClient[];
 }
 
-function reloadXray(): void {
+async function reloadXray(): Promise<void> {
   // Restart Xray via supervisorctl so the updated on-disk config takes effect.
   // Takes ~2 s; existing connected clients reconnect automatically.
-  execSync("supervisorctl restart xray", { stdio: "pipe" });
+  //
+  // Uses the async `exec` (not `execSync`) so this does not block the whole
+  // Node event loop — a synchronous restart used to freeze every other
+  // in-flight request (including other admins' key issuance) for the full
+  // ~2 s, which risked client/proxy timeouts that made a *successful* issue
+  // look like a failure to the caller, prompting a retry that created a
+  // second key for the same user.
+  try {
+    await execAsync("supervisorctl restart xray");
+  } catch (err) {
+    // The on-disk config was already durably written before this call (see
+    // callers below), so the new client takes effect on the next container
+    // restart even if this immediate reload fails. Log and swallow rather
+    // than fail the whole request — the config write, which is the part
+    // that must succeed, already happened.
+    logger.error({ err }, "Failed to restart Xray after config change; change will apply on next restart");
+  }
 }
 
 export async function addXrayClient(uuid: string, email: string): Promise<void> {
@@ -80,7 +100,7 @@ export async function addXrayClient(uuid: string, email: string): Promise<void> 
     // Persist first — the client survives a container restart even if the
     // reload below fails; the next boot will pick this client up automatically.
     await writeConfig(config);
-    reloadXray();
+    await reloadXray();
   });
 }
 
@@ -93,6 +113,6 @@ export async function removeXrayClient(uuid: string): Promise<void> {
     const next = clients.filter((c) => c.id !== uuid);
     config["inbounds"][0]["settings"]["clients"] = next;
     await writeConfig(config);
-    reloadXray();
+    await reloadXray();
   });
 }
