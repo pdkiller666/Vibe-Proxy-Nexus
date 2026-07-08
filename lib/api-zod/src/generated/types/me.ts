@@ -20,4 +20,5 @@ export interface Me {
   subscriptionEndsAt?: Date | null;
   deviceSlots: number;
   activeKeyCount: number;
+  balanceKopecks: number;
 }

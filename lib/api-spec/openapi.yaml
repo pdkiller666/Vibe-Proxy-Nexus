@@ -323,6 +323,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubscriptionUrl"
 
+  /balance-topup-order:
+    post:
+      operationId: createBalanceTopupOrder
+      tags: [payments]
+      summary: Start a balance top-up payment via SBP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BalanceTopupOrderBody"
+      responses:
+        "201":
+          description: Created top-up order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceTopupOrderResult"
+
+  /balance-topup-order/{paymentId}:
+    delete:
+      operationId: deleteBalanceTopupOrder
+      tags: [payments]
+      summary: Cancel a pending balance top-up order
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelBalanceTopupOrderResult"
+
   /extra-slot-order:
     post:
       operationId: createExtraSlotOrder
@@ -965,7 +1003,7 @@ components:
 
     Me:
       type: object
-      required: [id, email, role, hasActiveSubscription, deviceSlots, activeKeyCount]
+      required: [id, email, role, hasActiveSubscription, deviceSlots, activeKeyCount, balanceKopecks]
       properties:
         id: { type: integer }
         email: { type: string }
@@ -977,6 +1015,7 @@ components:
         subscriptionEndsAt: { type: ["string", "null"], format: date-time }
         deviceSlots: { type: integer }
         activeKeyCount: { type: integer }
+        balanceKopecks: { type: integer }
 
     Plan:
       type: object
@@ -1077,7 +1116,7 @@ components:
 
     PaymentType:
       type: string
-      enum: [subscription, extra_device_slot]
+      enum: [subscription, extra_device_slot, balance_topup]
 
     Payment:
       type: object
@@ -1325,6 +1364,25 @@ components:
         last30DaysRevenueRub: { type: integer }
         totalVpnKeys: { type: integer }
         openTickets: { type: integer }
+
+    BalanceTopupOrderBody:
+      type: object
+      required: [amountRub]
+      properties:
+        amountRub: { type: integer, minimum: 1 }
+
+    BalanceTopupOrderResult:
+      type: object
+      required: [paymentId, amountRub]
+      properties:
+        paymentId: { type: integer }
+        amountRub: { type: integer }
+
+    CancelBalanceTopupOrderResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
 
     ExtraSlotOrderResult:
       type: object

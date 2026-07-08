@@ -47,5 +47,6 @@ export async function buildMeData(user: User) {
     subscriptionEndsAt: activeSubscription?.endsAt ?? null,
     deviceSlots,
     activeKeyCount,
+    balanceKopecks: user.balanceKopecks,
   };
 }

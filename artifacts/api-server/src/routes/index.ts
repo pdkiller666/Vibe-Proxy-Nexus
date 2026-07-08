@@ -10,6 +10,7 @@ import paymentsRouter from "./payments";
 import vpnKeysRouter from "./vpnKeys";
 import subscriptionRouter from "./subscription";
 import extraSlotOrderRouter from "./extraSlotOrder";
+import balanceTopupOrderRouter from "./balanceTopupOrder";
 import supportRouter from "./support";
 import adminRouter from "./admin";
 
@@ -26,6 +27,7 @@ router.use(paymentsRouter);
 router.use(vpnKeysRouter);
 router.use(subscriptionRouter);
 router.use(extraSlotOrderRouter);
+router.use(balanceTopupOrderRouter);
 router.use(supportRouter);
 router.use(adminRouter);
 

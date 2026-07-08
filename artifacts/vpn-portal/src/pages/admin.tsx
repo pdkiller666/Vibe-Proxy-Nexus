@@ -116,8 +116,14 @@ function PaymentsQueue() {
       {
         onSuccess: (data) => {
           invalidate();
-          const isSlot = data?.type === "extra_device_slot";
-          toast({ title: "Платёж подтверждён", description: isSlot ? "Устройство добавлено пользователю." : "Подписка активирована." });
+          queryClient.invalidateQueries({ queryKey: ["me"] });
+          const desc =
+            data?.type === "extra_device_slot"
+              ? "Устройство добавлено пользователю."
+              : data?.type === "balance_topup"
+                ? "Баланс пользователя пополнен."
+                : "Подписка активирована.";
+          toast({ title: "Платёж подтверждён", description: desc });
         },
         onError: () => toast({ title: "Ошибка подтверждения", variant: "destructive" }),
       },
@@ -150,7 +156,12 @@ function PaymentsQueue() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <div className="font-bold">
-                {payment.userEmail} · {payment.type === "extra_device_slot" ? "Доп. устройство" : (payment.planName ?? "—")}
+                {payment.userEmail} ·{" "}
+                {payment.type === "extra_device_slot"
+                  ? "Доп. устройство"
+                  : payment.type === "balance_topup"
+                    ? "Пополнение баланса"
+                    : (payment.planName ?? "—")}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
                 {payment.amountRub} ₽ · {payment.reference} · {formatDate(payment.createdAt)}
@@ -692,25 +703,36 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
           <p className="text-xs text-muted-foreground">Ключей нет.</p>
         ) : (
           userKeys.map((key) => (
-            <div key={key.id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
-              <div className="min-w-0 break-words">
-                <div className={key.revokedAt ? "text-muted-foreground line-through" : "font-medium"}>
+            <div key={key.id} className={`bg-muted/30 border border-border px-2 py-1.5 text-xs ${key.revokedAt ? "opacity-60" : ""}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className={key.revokedAt ? "text-muted-foreground line-through font-medium" : "font-medium"}>
                   {key.label}
                 </div>
-                <div className="text-muted-foreground font-mono">
-                  {formatBytes(key.periodUpBytes + key.periodDownBytes)} за период
+                {!key.revokedAt && (
+                  <button
+                    onClick={() => revokeMutation.mutate(key.id)}
+                    disabled={revokeMutation.isPending}
+                    className="shrink-0 text-destructive hover:opacity-70 transition-opacity"
+                    title="Отозвать"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-x-3 text-muted-foreground font-mono">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wide">Период</span>
+                  <div>↑ {formatBytes(key.periodUpBytes)}</div>
+                  <div>↓ {formatBytes(key.periodDownBytes)}</div>
+                  <div className="text-foreground/70">= {formatBytes(key.periodUpBytes + key.periodDownBytes)}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase tracking-wide">Всего</span>
+                  <div>↑ {formatBytes(key.trafficUpBytes)}</div>
+                  <div>↓ {formatBytes(key.trafficDownBytes)}</div>
+                  <div className="text-foreground/70">= {formatBytes(key.trafficUpBytes + key.trafficDownBytes)}</div>
                 </div>
               </div>
-              {!key.revokedAt && (
-                <button
-                  onClick={() => revokeMutation.mutate(key.id)}
-                  disabled={revokeMutation.isPending}
-                  className="shrink-0 text-destructive hover:opacity-70 transition-opacity"
-                  title="Отозвать"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
           ))
         )}

@@ -12,4 +12,5 @@ export type PaymentType = typeof PaymentType[keyof typeof PaymentType];
 export const PaymentType = {
   subscription: 'subscription',
   extra_device_slot: 'extra_device_slot',
+  balance_topup: 'balance_topup',
 } as const;

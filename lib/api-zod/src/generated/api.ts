@@ -40,7 +40,8 @@ export const RegisterResponse = zod.object({
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
-  "activeKeyCount": zod.number()
+  "activeKeyCount": zod.number(),
+  "balanceKopecks": zod.number()
 })
 
 
@@ -65,7 +66,8 @@ export const LoginResponse = zod.object({
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
-  "activeKeyCount": zod.number()
+  "activeKeyCount": zod.number(),
+  "balanceKopecks": zod.number()
 })
 
 
@@ -118,7 +120,8 @@ export const GetMeResponse = zod.object({
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
-  "activeKeyCount": zod.number()
+  "activeKeyCount": zod.number(),
+  "balanceKopecks": zod.number()
 })
 
 
@@ -228,7 +231,7 @@ export const CreateSubscriptionResponse = zod.object({
   "payment": zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -247,7 +250,7 @@ export const CreateSubscriptionResponse = zod.object({
 export const ListMyPaymentsResponseItem = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -277,7 +280,7 @@ export const UpdatePaymentNoteBody = zod.object({
 export const UpdatePaymentNoteResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -354,6 +357,34 @@ export const RevokeVpnKeyResponse = zod.void()
  */
 export const GetSubscriptionUrlResponse = zod.object({
   "url": zod.string()
+})
+
+
+/**
+ * @summary Start a balance top-up payment via SBP
+ */
+
+
+
+export const CreateBalanceTopupOrderBody = zod.object({
+  "amountRub": zod.number().min(1)
+})
+
+export const CreateBalanceTopupOrderResponse = zod.object({
+  "paymentId": zod.number(),
+  "amountRub": zod.number()
+})
+
+
+/**
+ * @summary Cancel a pending balance top-up order
+ */
+export const DeleteBalanceTopupOrderParams = zod.object({
+  "paymentId": zod.coerce.number()
+})
+
+export const DeleteBalanceTopupOrderResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 
@@ -613,7 +644,7 @@ export const ListAdminPaymentsResponseItem = zod.object({
   "userId": zod.number(),
   "userEmail": zod.string(),
   "planName": zod.string().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -636,7 +667,7 @@ export const ConfirmPaymentParams = zod.object({
 export const ConfirmPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -662,7 +693,7 @@ export const RejectPaymentBody = zod.object({
 export const RejectPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
   "provider": zod.enum(['manual_sbp', 'yookassa']),
   "amountRub": zod.number(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),

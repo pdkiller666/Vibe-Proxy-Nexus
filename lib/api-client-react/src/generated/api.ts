@@ -25,6 +25,9 @@ import type {
   AdminSubscriptionUpdate,
   AdminUser,
   AdminUserProfileUpdate,
+  BalanceTopupOrderBody,
+  BalanceTopupOrderResult,
+  CancelBalanceTopupOrderResult,
   CancelExtraSlotOrderResult,
   CheckoutResult,
   DashboardSummary,
@@ -1417,6 +1420,146 @@ export function useGetSubscriptionUrl<TData = Awaited<ReturnType<typeof getSubsc
 
 
 
+
+export const getCreateBalanceTopupOrderUrl = () => {
+
+
+
+
+  return `/api/balance-topup-order`
+}
+
+/**
+ * @summary Start a balance top-up payment via SBP
+ */
+export const createBalanceTopupOrder = async (balanceTopupOrderBody: BalanceTopupOrderBody, options?: RequestInit): Promise<BalanceTopupOrderResult> => {
+
+  return customFetch<BalanceTopupOrderResult>(getCreateBalanceTopupOrderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(balanceTopupOrderBody)
+  }
+);}
+
+
+
+
+export const getCreateBalanceTopupOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBalanceTopupOrder>>, TError,{data: BodyType<BalanceTopupOrderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBalanceTopupOrder>>, TError,{data: BodyType<BalanceTopupOrderBody>}, TContext> => {
+
+const mutationKey = ['createBalanceTopupOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBalanceTopupOrder>>, {data: BodyType<BalanceTopupOrderBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBalanceTopupOrder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBalanceTopupOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createBalanceTopupOrder>>>
+    export type CreateBalanceTopupOrderMutationBody = BodyType<BalanceTopupOrderBody>
+    export type CreateBalanceTopupOrderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start a balance top-up payment via SBP
+ */
+export const useCreateBalanceTopupOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBalanceTopupOrder>>, TError,{data: BodyType<BalanceTopupOrderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBalanceTopupOrder>>,
+        TError,
+        {data: BodyType<BalanceTopupOrderBody>},
+        TContext
+      > => {
+      return useMutation(getCreateBalanceTopupOrderMutationOptions(options));
+    }
+
+export const getDeleteBalanceTopupOrderUrl = (paymentId: number,) => {
+
+
+
+
+  return `/api/balance-topup-order/${paymentId}`
+}
+
+/**
+ * @summary Cancel a pending balance top-up order
+ */
+export const deleteBalanceTopupOrder = async (paymentId: number, options?: RequestInit): Promise<CancelBalanceTopupOrderResult> => {
+
+  return customFetch<CancelBalanceTopupOrderResult>(getDeleteBalanceTopupOrderUrl(paymentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteBalanceTopupOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBalanceTopupOrder>>, TError,{paymentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBalanceTopupOrder>>, TError,{paymentId: number}, TContext> => {
+
+const mutationKey = ['deleteBalanceTopupOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBalanceTopupOrder>>, {paymentId: number}> = (props) => {
+          const {paymentId} = props ?? {};
+
+          return  deleteBalanceTopupOrder(paymentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBalanceTopupOrderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBalanceTopupOrder>>>
+
+    export type DeleteBalanceTopupOrderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Cancel a pending balance top-up order
+ */
+export const useDeleteBalanceTopupOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBalanceTopupOrder>>, TError,{paymentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBalanceTopupOrder>>,
+        TError,
+        {paymentId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteBalanceTopupOrderMutationOptions(options));
+    }
 
 export const getCreateExtraSlotOrderUrl = () => {
 

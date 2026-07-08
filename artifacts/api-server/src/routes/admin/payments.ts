@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
-import { db, paymentsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable } from "@workspace/db";
+import { db, paymentsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, balanceTransactionsTable } from "@workspace/db";
 import { isNull } from "drizzle-orm";
 import {
   ConfirmPaymentParams,
@@ -82,6 +82,47 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
           .update(usersTable)
           .set({ extraDeviceSlots: user.extraDeviceSlots + 1 })
           .where(eq(usersTable.id, user.id));
+
+        const [updatedPay] = await tx
+          .update(paymentsTable)
+          .set({ status: "confirmed", confirmedAt: new Date() })
+          .where(and(eq(paymentsTable.id, payment.id), eq(paymentsTable.status, "pending")))
+          .returning();
+
+        if (!updatedPay) {
+          throw new Error("Payment state changed concurrently");
+        }
+
+        return updatedPay;
+      });
+    } catch {
+      res.status(409).json({ error: "Payment state changed concurrently, please retry" });
+      return;
+    }
+
+    res.json(ConfirmPaymentResponse.parse(updatedPayment));
+    return;
+  }
+
+  // Balance top-up: credit balance_kopecks and log the transaction
+  if (payment.type === "balance_topup") {
+    const amountKopecks = payment.amountRub * 100;
+    let updatedPayment;
+    try {
+      updatedPayment = await db.transaction(async (tx) => {
+        // Atomically increment balance
+        await tx
+          .update(usersTable)
+          .set({ balanceKopecks: (await tx.select({ bal: usersTable.balanceKopecks }).from(usersTable).where(eq(usersTable.id, payment.userId)).then(([r]) => (r?.bal ?? 0))) + amountKopecks })
+          .where(eq(usersTable.id, payment.userId));
+
+        await tx.insert(balanceTransactionsTable).values({
+          userId: payment.userId,
+          amountKopecks,
+          type: "topup",
+          paymentId: payment.id,
+          description: `Пополнение через СБП — ${payment.amountRub} ₽`,
+        });
 
         const [updatedPay] = await tx
           .update(paymentsTable)

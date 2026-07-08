@@ -6,7 +6,7 @@ import { subscriptionsTable } from "./subscriptions";
 
 export const paymentProviderValues = ["manual_sbp", "yookassa"] as const;
 export const paymentStatusValues = ["pending", "confirmed", "rejected"] as const;
-export const paymentTypeValues = ["subscription", "extra_device_slot"] as const;
+export const paymentTypeValues = ["subscription", "extra_device_slot", "balance_topup"] as const;
 
 export const paymentsTable = pgTable(
   "payments",

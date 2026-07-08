@@ -9,6 +9,12 @@ const statusConfig = {
   rejected: { label: "Отклонён", icon: XCircle, className: "bg-destructive/10 text-destructive" },
 } as const;
 
+function paymentTypeLabel(type: string): string {
+  if (type === "extra_device_slot") return "Доп. устройство";
+  if (type === "balance_topup") return "Пополнение баланса";
+  return "Подписка";
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
 }
@@ -61,7 +67,7 @@ export default function Payments() {
                   className="bg-card border border-border p-5 flex items-center justify-between gap-4 flex-wrap animate-in fade-in slide-in-from-bottom-1 duration-500"
                 >
                   <div className="min-w-0 break-words">
-                    <div className="font-bold">{payment.amountRub} ₽</div>
+                    <div className="font-bold">{payment.amountRub} ₽ · {paymentTypeLabel(payment.type)}</div>
                     <div className="text-sm text-muted-foreground font-mono">
                       {formatDate(payment.createdAt)} · {payment.reference}
                     </div>

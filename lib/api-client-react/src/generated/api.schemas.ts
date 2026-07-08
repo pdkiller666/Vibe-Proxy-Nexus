@@ -71,6 +71,7 @@ export interface Me {
   subscriptionEndsAt?: string | null;
   deviceSlots: number;
   activeKeyCount: number;
+  balanceKopecks: number;
 }
 
 export interface Plan {
@@ -202,6 +203,7 @@ export type PaymentType = typeof PaymentType[keyof typeof PaymentType];
 export const PaymentType = {
   subscription: 'subscription',
   extra_device_slot: 'extra_device_slot',
+  balance_topup: 'balance_topup',
 } as const;
 
 export interface Payment {
@@ -398,6 +400,20 @@ export interface DashboardSummary {
   last30DaysRevenueRub: number;
   totalVpnKeys: number;
   openTickets: number;
+}
+
+export interface BalanceTopupOrderBody {
+  /** @minimum 1 */
+  amountRub: number;
+}
+
+export interface BalanceTopupOrderResult {
+  paymentId: number;
+  amountRub: number;
+}
+
+export interface CancelBalanceTopupOrderResult {
+  ok: boolean;
 }
 
 export interface ExtraSlotOrderResult {
