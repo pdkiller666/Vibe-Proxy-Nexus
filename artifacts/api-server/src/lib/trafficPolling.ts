@@ -84,12 +84,15 @@ export async function enforceTrafficLimits(): Promise<number> {
       .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id)),
   );
 
-  const usage = await db
+  // sum(bigint + bigint) returns Postgres `numeric`, which the pg driver
+  // hands back as a string — coerce explicitly with Number() rather than
+  // relying on the `sql<number>` annotation, which is compile-time only.
+  const rawUsage = await db
     .with(currentPlanLimitByUser)
     .select({
       userId: vpnKeysTable.userId,
       trafficLimitGb: currentPlanLimitByUser.trafficLimitGb,
-      periodBytes: sql<number>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`.as(
+      periodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`.as(
         "period_bytes",
       ),
     })
@@ -97,6 +100,7 @@ export async function enforceTrafficLimits(): Promise<number> {
     .innerJoin(currentPlanLimitByUser, eq(currentPlanLimitByUser.userId, vpnKeysTable.userId))
     .where(isNull(vpnKeysTable.revokedAt))
     .groupBy(vpnKeysTable.userId, currentPlanLimitByUser.trafficLimitGb);
+  const usage = rawUsage.map((r) => ({ ...r, periodBytes: Number(r.periodBytes) }));
 
   let revokedUsers = 0;
 

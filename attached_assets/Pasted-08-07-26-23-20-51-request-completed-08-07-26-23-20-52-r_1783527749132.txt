@@ -1,0 +1,4052 @@
+08/07/26 23:20:51
+request completed
+
+08/07/26 23:20:52
+request errored
+
+08/07/26 23:20:52
+ZodError: [
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      0,
+
+08/07/26 23:20:52
+trafficUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      0,
+
+08/07/26 23:20:52
+trafficDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      0,
+
+08/07/26 23:20:52
+periodUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      0,
+
+08/07/26 23:20:52
+periodDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      1,
+
+08/07/26 23:20:52
+trafficUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      1,
+
+08/07/26 23:20:52
+trafficDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      1,
+
+08/07/26 23:20:52
+periodUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      1,
+
+08/07/26 23:20:52
+periodDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      2,
+
+08/07/26 23:20:52
+trafficUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      2,
+
+08/07/26 23:20:52
+trafficDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      2,
+
+08/07/26 23:20:52
+periodUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      2,
+
+08/07/26 23:20:52
+periodDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      3,
+
+08/07/26 23:20:52
+trafficUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      3,
+
+08/07/26 23:20:52
+trafficDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      3,
+
+08/07/26 23:20:52
+periodUpBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  },
+
+08/07/26 23:20:52
+  {
+
+08/07/26 23:20:52
+    "code": "invalid_type",
+
+08/07/26 23:20:52
+    "expected": "number",
+
+08/07/26 23:20:52
+    "received": "string",
+
+08/07/26 23:20:52
+    "path": [
+
+08/07/26 23:20:52
+      3,
+
+08/07/26 23:20:52
+periodDownBytes
+
+08/07/26 23:20:52
+    ],
+
+08/07/26 23:20:52
+    "message": "Expected number, received string"
+
+08/07/26 23:20:52
+  }
+
+08/07/26 23:20:52
+]
+
+08/07/26 23:20:52
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:20:52
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:20:52
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:20:52
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:20:53
+request errored
+
+08/07/26 23:20:53
+ZodError: [
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      0,
+
+08/07/26 23:20:53
+trafficUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      0,
+
+08/07/26 23:20:53
+trafficDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      0,
+
+08/07/26 23:20:53
+periodUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      0,
+
+08/07/26 23:20:53
+periodDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      1,
+
+08/07/26 23:20:53
+trafficUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      1,
+
+08/07/26 23:20:53
+trafficDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      1,
+
+08/07/26 23:20:53
+periodUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      1,
+
+08/07/26 23:20:53
+periodDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      2,
+
+08/07/26 23:20:53
+trafficUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      2,
+
+08/07/26 23:20:53
+trafficDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      2,
+
+08/07/26 23:20:53
+periodUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      2,
+
+08/07/26 23:20:53
+periodDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      3,
+
+08/07/26 23:20:53
+trafficUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      3,
+
+08/07/26 23:20:53
+trafficDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      3,
+
+08/07/26 23:20:53
+periodUpBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  },
+
+08/07/26 23:20:53
+  {
+
+08/07/26 23:20:53
+    "code": "invalid_type",
+
+08/07/26 23:20:53
+    "expected": "number",
+
+08/07/26 23:20:53
+    "received": "string",
+
+08/07/26 23:20:53
+    "path": [
+
+08/07/26 23:20:53
+      3,
+
+08/07/26 23:20:53
+periodDownBytes
+
+08/07/26 23:20:53
+    ],
+
+08/07/26 23:20:53
+    "message": "Expected number, received string"
+
+08/07/26 23:20:53
+  }
+
+08/07/26 23:20:53
+]
+
+08/07/26 23:20:53
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:20:53
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:20:53
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:20:53
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:20:55
+ZodError: [
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      0,
+
+08/07/26 23:20:55
+trafficUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      0,
+
+08/07/26 23:20:55
+trafficDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      0,
+
+08/07/26 23:20:55
+periodUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      0,
+
+08/07/26 23:20:55
+periodDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      1,
+
+08/07/26 23:20:55
+trafficUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      1,
+
+08/07/26 23:20:55
+trafficDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      1,
+
+08/07/26 23:20:55
+periodUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      1,
+
+08/07/26 23:20:55
+periodDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      2,
+
+08/07/26 23:20:55
+trafficUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      2,
+
+08/07/26 23:20:55
+trafficDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      2,
+
+08/07/26 23:20:55
+periodUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      2,
+
+08/07/26 23:20:55
+periodDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      3,
+
+08/07/26 23:20:55
+trafficUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      3,
+
+08/07/26 23:20:55
+trafficDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      3,
+
+08/07/26 23:20:55
+periodUpBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  },
+
+08/07/26 23:20:55
+  {
+
+08/07/26 23:20:55
+    "code": "invalid_type",
+
+08/07/26 23:20:55
+    "expected": "number",
+
+08/07/26 23:20:55
+    "received": "string",
+
+08/07/26 23:20:55
+    "path": [
+
+08/07/26 23:20:55
+      3,
+
+08/07/26 23:20:55
+periodDownBytes
+
+08/07/26 23:20:55
+    ],
+
+08/07/26 23:20:55
+    "message": "Expected number, received string"
+
+08/07/26 23:20:55
+  }
+
+08/07/26 23:20:55
+]
+
+08/07/26 23:20:55
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:20:55
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:20:55
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:20:55
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:20:55
+request errored
+
+08/07/26 23:20:58
+request completed
+
+08/07/26 23:20:58
+request errored
+
+08/07/26 23:20:58
+ZodError: [
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      0,
+
+08/07/26 23:20:58
+trafficUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      0,
+
+08/07/26 23:20:58
+trafficDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      0,
+
+08/07/26 23:20:58
+periodUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      0,
+
+08/07/26 23:20:58
+periodDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      1,
+
+08/07/26 23:20:58
+trafficUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      1,
+
+08/07/26 23:20:58
+trafficDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      1,
+
+08/07/26 23:20:58
+periodUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      1,
+
+08/07/26 23:20:58
+periodDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      2,
+
+08/07/26 23:20:58
+trafficUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      2,
+
+08/07/26 23:20:58
+trafficDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      2,
+
+08/07/26 23:20:58
+periodUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      2,
+
+08/07/26 23:20:58
+periodDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      3,
+
+08/07/26 23:20:58
+trafficUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      3,
+
+08/07/26 23:20:58
+trafficDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      3,
+
+08/07/26 23:20:58
+periodUpBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  },
+
+08/07/26 23:20:58
+  {
+
+08/07/26 23:20:58
+    "code": "invalid_type",
+
+08/07/26 23:20:58
+    "expected": "number",
+
+08/07/26 23:20:58
+    "received": "string",
+
+08/07/26 23:20:58
+    "path": [
+
+08/07/26 23:20:58
+      3,
+
+08/07/26 23:20:58
+periodDownBytes
+
+08/07/26 23:20:58
+    ],
+
+08/07/26 23:20:58
+    "message": "Expected number, received string"
+
+08/07/26 23:20:58
+  }
+
+08/07/26 23:20:58
+]
+
+08/07/26 23:20:58
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:20:58
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:20:58
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:20:58
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:20:59
+request errored
+
+08/07/26 23:20:59
+ZodError: [
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      0,
+
+08/07/26 23:20:59
+trafficUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      0,
+
+08/07/26 23:20:59
+trafficDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      0,
+
+08/07/26 23:20:59
+periodUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      0,
+
+08/07/26 23:20:59
+periodDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      1,
+
+08/07/26 23:20:59
+trafficUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      1,
+
+08/07/26 23:20:59
+trafficDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      1,
+
+08/07/26 23:20:59
+periodUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      1,
+
+08/07/26 23:20:59
+periodDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      2,
+
+08/07/26 23:20:59
+trafficUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      2,
+
+08/07/26 23:20:59
+trafficDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      2,
+
+08/07/26 23:20:59
+periodUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      2,
+
+08/07/26 23:20:59
+periodDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      3,
+
+08/07/26 23:20:59
+trafficUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      3,
+
+08/07/26 23:20:59
+trafficDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      3,
+
+08/07/26 23:20:59
+periodUpBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  },
+
+08/07/26 23:20:59
+  {
+
+08/07/26 23:20:59
+    "code": "invalid_type",
+
+08/07/26 23:20:59
+    "expected": "number",
+
+08/07/26 23:20:59
+    "received": "string",
+
+08/07/26 23:20:59
+    "path": [
+
+08/07/26 23:20:59
+      3,
+
+08/07/26 23:20:59
+periodDownBytes
+
+08/07/26 23:20:59
+    ],
+
+08/07/26 23:20:59
+    "message": "Expected number, received string"
+
+08/07/26 23:20:59
+  }
+
+08/07/26 23:20:59
+]
+
+08/07/26 23:20:59
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:20:59
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:20:59
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:20:59
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:21:01
+request errored
+
+08/07/26 23:21:01
+ZodError: [
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      0,
+
+08/07/26 23:21:01
+trafficUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      0,
+
+08/07/26 23:21:01
+trafficDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      0,
+
+08/07/26 23:21:01
+periodUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      0,
+
+08/07/26 23:21:01
+periodDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      1,
+
+08/07/26 23:21:01
+trafficUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      1,
+
+08/07/26 23:21:01
+trafficDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      1,
+
+08/07/26 23:21:01
+periodUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      1,
+
+08/07/26 23:21:01
+periodDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      2,
+
+08/07/26 23:21:01
+trafficUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      2,
+
+08/07/26 23:21:01
+trafficDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      2,
+
+08/07/26 23:21:01
+periodUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      2,
+
+08/07/26 23:21:01
+periodDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      3,
+
+08/07/26 23:21:01
+trafficUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      3,
+
+08/07/26 23:21:01
+trafficDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      3,
+
+08/07/26 23:21:01
+periodUpBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  },
+
+08/07/26 23:21:01
+  {
+
+08/07/26 23:21:01
+    "code": "invalid_type",
+
+08/07/26 23:21:01
+    "expected": "number",
+
+08/07/26 23:21:01
+    "received": "string",
+
+08/07/26 23:21:01
+    "path": [
+
+08/07/26 23:21:01
+      3,
+
+08/07/26 23:21:01
+periodDownBytes
+
+08/07/26 23:21:01
+    ],
+
+08/07/26 23:21:01
+    "message": "Expected number, received string"
+
+08/07/26 23:21:01
+  }
+
+08/07/26 23:21:01
+]
+
+08/07/26 23:21:01
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:21:01
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:21:01
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:21:01
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:21:03
+request completed
+
+08/07/26 23:21:04
+request completed
+
+08/07/26 23:21:05
+request completed
+
+08/07/26 23:21:06
+request completed
+
+08/07/26 23:21:06
+request errored
+
+08/07/26 23:21:06
+ZodError: [
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      0,
+
+08/07/26 23:21:06
+trafficUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      0,
+
+08/07/26 23:21:06
+trafficDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      0,
+
+08/07/26 23:21:06
+periodUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      0,
+
+08/07/26 23:21:06
+periodDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      1,
+
+08/07/26 23:21:06
+trafficUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      1,
+
+08/07/26 23:21:06
+trafficDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      1,
+
+08/07/26 23:21:06
+periodUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      1,
+
+08/07/26 23:21:06
+periodDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      2,
+
+08/07/26 23:21:06
+trafficUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      2,
+
+08/07/26 23:21:06
+trafficDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      2,
+
+08/07/26 23:21:06
+periodUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      2,
+
+08/07/26 23:21:06
+periodDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      3,
+
+08/07/26 23:21:06
+trafficUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      3,
+
+08/07/26 23:21:06
+trafficDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      3,
+
+08/07/26 23:21:06
+periodUpBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  },
+
+08/07/26 23:21:06
+  {
+
+08/07/26 23:21:06
+    "code": "invalid_type",
+
+08/07/26 23:21:06
+    "expected": "number",
+
+08/07/26 23:21:06
+    "received": "string",
+
+08/07/26 23:21:06
+    "path": [
+
+08/07/26 23:21:06
+      3,
+
+08/07/26 23:21:06
+periodDownBytes
+
+08/07/26 23:21:06
+    ],
+
+08/07/26 23:21:06
+    "message": "Expected number, received string"
+
+08/07/26 23:21:06
+  }
+
+08/07/26 23:21:06
+]
+
+08/07/26 23:21:06
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:21:06
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:21:06
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:21:06
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:21:07
+request errored
+
+08/07/26 23:21:07
+ZodError: [
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      0,
+
+08/07/26 23:21:07
+trafficUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      0,
+
+08/07/26 23:21:07
+trafficDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      0,
+
+08/07/26 23:21:07
+periodUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      0,
+
+08/07/26 23:21:07
+periodDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      1,
+
+08/07/26 23:21:07
+trafficUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      1,
+
+08/07/26 23:21:07
+trafficDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      1,
+
+08/07/26 23:21:07
+periodUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      1,
+
+08/07/26 23:21:07
+periodDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      2,
+
+08/07/26 23:21:07
+trafficUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      2,
+
+08/07/26 23:21:07
+trafficDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      2,
+
+08/07/26 23:21:07
+periodUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      2,
+
+08/07/26 23:21:07
+periodDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      3,
+
+08/07/26 23:21:07
+trafficUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      3,
+
+08/07/26 23:21:07
+trafficDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      3,
+
+08/07/26 23:21:07
+periodUpBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  },
+
+08/07/26 23:21:07
+  {
+
+08/07/26 23:21:07
+    "code": "invalid_type",
+
+08/07/26 23:21:07
+    "expected": "number",
+
+08/07/26 23:21:07
+    "received": "string",
+
+08/07/26 23:21:07
+    "path": [
+
+08/07/26 23:21:07
+      3,
+
+08/07/26 23:21:07
+periodDownBytes
+
+08/07/26 23:21:07
+    ],
+
+08/07/26 23:21:07
+    "message": "Expected number, received string"
+
+08/07/26 23:21:07
+  }
+
+08/07/26 23:21:07
+]
+
+08/07/26 23:21:07
+    at Object.get error (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:39:31)
+
+08/07/26 23:21:07
+    at _ZodArray.parse (/node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js:114:22)
+
+08/07/26 23:21:07
+    at <anonymous> (/app/src/routes/admin/users.ts:85:35)
+
+08/07/26 23:21:07
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:08
+request completed
+
+08/07/26 23:21:16
+pollUserTrafficDeltas: failed to query Xray StatsService

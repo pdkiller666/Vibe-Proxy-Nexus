@@ -30,17 +30,30 @@ async function enrichUsersWithTraffic(users: User[]) {
   // (revoked keys still count toward lifetime totals, but not toward the
   // active plan's limit — enforceTrafficLimits() in trafficPolling.ts only
   // sums non-revoked keys, so mirror that here for the "exceeded" flag).
-  const trafficRows = await db
+  // Postgres's sum(bigint) returns `numeric`, which node-postgres (and thus
+  // drizzle's `sql<number>` — a type-only annotation, not a runtime coercion)
+  // hands back as a *string*. Coalescing missing rows to a JS `0` above
+  // masked this in earlier ad-hoc testing (users with no vpn_keys never hit
+  // the SQL path), but any user with actual traffic breaks Zod validation
+  // with "Expected number, received string". Coerce explicitly with Number().
+  const rawTrafficRows = await db
     .select({
       userId: vpnKeysTable.userId,
-      trafficUpBytes: sql<number>`coalesce(sum(${vpnKeysTable.trafficUpBytes}), 0)`,
-      trafficDownBytes: sql<number>`coalesce(sum(${vpnKeysTable.trafficDownBytes}), 0)`,
-      periodUpBytes: sql<number>`coalesce(sum(${vpnKeysTable.periodUpBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
-      periodDownBytes: sql<number>`coalesce(sum(${vpnKeysTable.periodDownBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
+      trafficUpBytes: sql<string>`coalesce(sum(${vpnKeysTable.trafficUpBytes}), 0)`,
+      trafficDownBytes: sql<string>`coalesce(sum(${vpnKeysTable.trafficDownBytes}), 0)`,
+      periodUpBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
+      periodDownBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodDownBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
     })
     .from(vpnKeysTable)
     .where(inArray(vpnKeysTable.userId, userIds))
     .groupBy(vpnKeysTable.userId);
+  const trafficRows = rawTrafficRows.map((r) => ({
+    userId: r.userId,
+    trafficUpBytes: Number(r.trafficUpBytes),
+    trafficDownBytes: Number(r.trafficDownBytes),
+    periodUpBytes: Number(r.periodUpBytes),
+    periodDownBytes: Number(r.periodDownBytes),
+  }));
   const trafficByUser = new Map(trafficRows.map((r) => [r.userId, r]));
 
   // A user should only have one currently-active subscription, but pick the
