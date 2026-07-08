@@ -1292,6 +1292,7 @@ components:
           trafficDownBytes,
           periodUpBytes,
           periodDownBytes,
+          periodStartedAt,
           trafficLimitGb,
           trafficLimitExceeded,
         ]
@@ -1309,6 +1310,8 @@ components:
         trafficDownBytes: { type: integer }
         periodUpBytes: { type: integer }
         periodDownBytes: { type: integer }
+        # Start of the current billing window (reset when subscription renews).
+        periodStartedAt: { type: ["string", "null"], format: date-time }
         # From the user's currently active plan, if any; null = no active
         # subscription or an unlimited plan.
         trafficLimitGb: { type: ["integer", "null"] }

@@ -916,6 +916,14 @@ function UsersManagement() {
                 {user.trafficLimitGb != null && ` / ${user.trafficLimitGb} ГБ`}
                 {user.trafficLimitExceeded && " · лимит превышен"}
               </span>
+              {user.periodStartedAt && (
+                <span className="text-muted-foreground">
+                  Период с:{" "}
+                  <span className="text-foreground">
+                    {new Date(user.periodStartedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                </span>
+              )}
               <span className="text-muted-foreground">
                 Всего: {formatBytes(user.trafficUpBytes + user.trafficDownBytes)}
               </span>

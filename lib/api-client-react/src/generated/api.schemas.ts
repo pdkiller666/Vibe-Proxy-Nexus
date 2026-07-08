@@ -361,6 +361,8 @@ export interface AdminUser {
   periodUpBytes: number;
   periodDownBytes: number;
   /** @nullable */
+  periodStartedAt: string | null;
+  /** @nullable */
   trafficLimitGb: number | null;
   trafficLimitExceeded: boolean;
   /** @nullable */

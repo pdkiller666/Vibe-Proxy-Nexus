@@ -64,6 +64,9 @@ async function enrichUsersWithTraffic(users: User[]) {
       trafficDownBytes: sql<string>`coalesce(sum(${vpnKeysTable.trafficDownBytes}), 0)`,
       periodUpBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
       periodDownBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodDownBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
+      // All active keys are reset together, so max() gives the effective period
+      // start. Null if the user has no active (non-revoked) keys at all.
+      periodStartedAt: sql<Date | null>`max(${vpnKeysTable.periodStartedAt}) filter (where ${vpnKeysTable.revokedAt} is null)`,
     })
     .from(vpnKeysTable)
     .where(inArray(vpnKeysTable.userId, userIds))
@@ -74,6 +77,7 @@ async function enrichUsersWithTraffic(users: User[]) {
     trafficDownBytes: Number(r.trafficDownBytes),
     periodUpBytes: Number(r.periodUpBytes),
     periodDownBytes: Number(r.periodDownBytes),
+    periodStartedAt: r.periodStartedAt,
   }));
   const trafficByUser = new Map(trafficRows.map((r) => [r.userId, r]));
 
@@ -126,6 +130,7 @@ async function enrichUsersWithTraffic(users: User[]) {
       trafficDownBytes: traffic?.trafficDownBytes ?? 0,
       periodUpBytes: traffic?.periodUpBytes ?? 0,
       periodDownBytes: traffic?.periodDownBytes ?? 0,
+      periodStartedAt: traffic?.periodStartedAt ?? null,
       trafficLimitGb,
       trafficLimitExceeded: trafficLimitGb != null && periodBytes >= trafficLimitGb * 1024 * 1024 * 1024,
       planId: current?.planId ?? null,
