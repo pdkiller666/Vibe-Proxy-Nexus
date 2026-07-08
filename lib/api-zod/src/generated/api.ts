@@ -132,6 +132,7 @@ export const ListPlansResponseItem = zod.object({
   "priceRub": zod.number(),
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -184,6 +185,7 @@ export const ListMySubscriptionsResponseItem = zod.object({
   "priceRub": zod.number(),
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 }),
@@ -214,6 +216,7 @@ export const CreateSubscriptionResponse = zod.object({
   "priceRub": zod.number(),
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 }),
@@ -297,7 +300,13 @@ export const ListMyVpnKeysResponseItem = zod.object({
   "vlessLink": zod.string(),
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
-  "revokedAt": zod.coerce.date().nullish()
+  "revokedAt": zod.coerce.date().nullish(),
+  "userEmail": zod.string().optional(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "periodStartedAt": zod.coerce.date()
 })
 export const ListMyVpnKeysResponse = zod.array(ListMyVpnKeysResponseItem)
 
@@ -318,7 +327,13 @@ export const CreateVpnKeyResponse = zod.object({
   "vlessLink": zod.string(),
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
-  "revokedAt": zod.coerce.date().nullish()
+  "revokedAt": zod.coerce.date().nullish(),
+  "userEmail": zod.string().optional(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "periodStartedAt": zod.coerce.date()
 })
 
 
@@ -337,6 +352,121 @@ export const RevokeVpnKeyResponse = zod.void()
  */
 export const GetSubscriptionUrlResponse = zod.object({
   "url": zod.string()
+})
+
+
+/**
+ * @summary Start a checkout for an extra VPN device slot (requires an active subscription)
+ */
+export const CreateExtraSlotOrderResponse = zod.object({
+  "paymentId": zod.number(),
+  "amountRub": zod.number()
+})
+
+
+/**
+ * @summary Cancel a pending extra device slot order
+ */
+export const DeleteExtraSlotOrderParams = zod.object({
+  "paymentId": zod.coerce.number()
+})
+
+export const DeleteExtraSlotOrderResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List current user's support tickets
+ */
+export const ListMyTicketsResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "userEmail": zod.string(),
+  "messageCount": zod.number()
+})
+export const ListMyTicketsResponse = zod.array(ListMyTicketsResponseItem)
+
+
+/**
+ * @summary Create a support ticket with an initial message
+ */
+export const createSupportTicketBodySubjectMax = 200;
+
+export const createSupportTicketBodyBodyMax = 4000;
+
+
+
+export const CreateSupportTicketBody = zod.object({
+  "subject": zod.string().min(1).max(createSupportTicketBodySubjectMax),
+  "body": zod.string().min(1).max(createSupportTicketBodyBodyMax)
+})
+
+export const CreateSupportTicketResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get a ticket with its messages
+ */
+export const GetTicketParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const GetTicketResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "userEmail": zod.string(),
+  "messageCount": zod.number(),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Add a message to a ticket
+ */
+export const AddTicketMessageParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const addTicketMessageBodyBodyMax = 4000;
+
+
+
+export const AddTicketMessageBody = zod.object({
+  "body": zod.string().min(1).max(addTicketMessageBodyBodyMax)
+})
+
+export const AddTicketMessageResponse = zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean()
 })
 
 
@@ -364,12 +494,14 @@ export const createPlanBodyPriceRubMin = 0;
 
 
 
+
 export const CreatePlanBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string().optional(),
   "priceRub": zod.number().min(createPlanBodyPriceRubMin),
   "durationDays": zod.number().min(1),
   "devicesIncluded": zod.number().min(1).optional(),
+  "trafficLimitGb": zod.number().min(1).nullish(),
   "isActive": zod.boolean().optional()
 })
 
@@ -380,6 +512,7 @@ export const CreatePlanResponse = zod.object({
   "priceRub": zod.number(),
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -399,12 +532,14 @@ export const updatePlanBodyPriceRubMin = 0;
 
 
 
+
 export const UpdatePlanBody = zod.object({
   "name": zod.string().min(1).optional(),
   "description": zod.string().optional(),
   "priceRub": zod.number().min(updatePlanBodyPriceRubMin).optional(),
   "durationDays": zod.number().min(1).optional(),
   "devicesIncluded": zod.number().min(1).optional(),
+  "trafficLimitGb": zod.number().min(1).nullish(),
   "isActive": zod.boolean().optional()
 })
 
@@ -415,6 +550,7 @@ export const UpdatePlanResponse = zod.object({
   "priceRub": zod.number(),
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -435,6 +571,7 @@ export const DeletePlanResponse = zod.void()
  */
 export const updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin = 0;
 
+export const updatePaymentSettingsBodyTrialDaysMax = 365;
 
 
 
@@ -446,7 +583,7 @@ export const UpdatePaymentSettingsBody = zod.object({
   "yookassaEnabled": zod.boolean().optional(),
   "extraDeviceSlotPriceRub": zod.number().min(updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin).optional(),
   "trialEnabled": zod.boolean().optional(),
-  "trialDays": zod.number().min(1).optional()
+  "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -634,9 +771,47 @@ export const ListAdminUsersResponseItem = zod.object({
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
   "activeSubscriptions": zod.number().optional(),
-  "extraDeviceSlots": zod.number()
+  "extraDeviceSlots": zod.number(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
+  "trafficLimitExceeded": zod.boolean()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
+
+
+/**
+ * @summary List all VPN keys, with per-key traffic counters
+ */
+export const ListAdminVpnKeysResponseItem = zod.object({
+  "id": zod.number(),
+  "nodeId": zod.number(),
+  "nodeName": zod.string(),
+  "label": zod.string(),
+  "vlessLink": zod.string(),
+  "deepLink": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "userEmail": zod.string().optional(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "periodStartedAt": zod.coerce.date()
+})
+export const ListAdminVpnKeysResponse = zod.array(ListAdminVpnKeysResponseItem)
+
+
+/**
+ * @summary Revoke a VPN key
+ */
+export const RevokeAdminVpnKeyParams = zod.object({
+  "keyId": zod.coerce.number()
+})
+
+export const RevokeAdminVpnKeyResponse = zod.void()
 
 
 /**
@@ -648,242 +823,6 @@ export const AdminResetUserPasswordParams = zod.object({
 
 export const AdminResetUserPasswordResponse = zod.object({
   "resetUrl": zod.string()
-})
-
-
-/**
- * @summary Start a payment to purchase one extra device slot (requires an active subscription)
- */
-export const CreateExtraSlotOrderResponse = zod.object({
-  "paymentId": zod.number(),
-  "amountRub": zod.number()
-})
-
-
-/**
- * @summary Cancel a pending extra device slot payment
- */
-export const DeleteExtraSlotOrderParams = zod.object({
-  "paymentId": zod.coerce.number()
-})
-
-export const DeleteExtraSlotOrderResponse = zod.object({
-  "ok": zod.boolean()
-})
-
-
-/**
- * @summary List current user's support tickets
- */
-export const ListMyTicketsResponseItem = zod.object({
-  "id": zod.number(),
-  "userId": zod.number(),
-  "userEmail": zod.string(),
-  "subject": zod.string(),
-  "status": zod.enum(['open', 'answered', 'closed']),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date(),
-  "messageCount": zod.number()
-})
-export const ListMyTicketsResponse = zod.array(ListMyTicketsResponseItem)
-
-
-/**
- * @summary Create a support ticket with an initial message
- */
-export const createSupportTicketBodySubjectMax = 200;
-
-export const createSupportTicketBodyBodyMax = 4000;
-
-
-
-export const CreateSupportTicketBody = zod.object({
-  "subject": zod.string().min(1).max(createSupportTicketBodySubjectMax),
-  "body": zod.string().min(1).max(createSupportTicketBodyBodyMax)
-})
-
-export const CreateSupportTicketResponse = zod.object({
-  "id": zod.number(),
-  "userId": zod.number(),
-  "subject": zod.string(),
-  "status": zod.enum(['open', 'answered', 'closed']),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Get a ticket with its messages
- */
-export const GetTicketParams = zod.object({
-  "ticketId": zod.coerce.number()
-})
-
-export const GetTicketResponse = zod.object({
-  "id": zod.number(),
-  "userId": zod.number(),
-  "userEmail": zod.string(),
-  "subject": zod.string(),
-  "status": zod.enum(['open', 'answered', 'closed']),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date(),
-  "messageCount": zod.number(),
-  "messages": zod.array(zod.object({
-  "id": zod.number(),
-  "ticketId": zod.number(),
-  "authorId": zod.number(),
-  "authorEmail": zod.string(),
-  "isAdmin": zod.boolean(),
-  "body": zod.string(),
-  "createdAt": zod.coerce.date()
-}))
-})
-
-
-/**
- * @summary Add a message to one of the current user's tickets
- */
-export const AddTicketMessageParams = zod.object({
-  "ticketId": zod.coerce.number()
-})
-
-export const addTicketMessageBodyBodyMax = 4000;
-
-
-
-export const AddTicketMessageBody = zod.object({
-  "body": zod.string().min(1).max(addTicketMessageBodyBodyMax)
-})
-
-export const AddTicketMessageResponse = zod.object({
-  "id": zod.number(),
-  "ticketId": zod.number(),
-  "authorId": zod.number(),
-  "authorEmail": zod.string(),
-  "isAdmin": zod.boolean(),
-  "body": zod.string(),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary List all support tickets (optionally filtered by status)
- */
-export const ListAdminTicketsQueryParams = zod.object({
-  "status": zod.enum(['open', 'answered', 'closed']).optional()
-})
-
-export const ListAdminTicketsResponseItem = zod.object({
-  "id": zod.number(),
-  "userId": zod.number(),
-  "userEmail": zod.string(),
-  "subject": zod.string(),
-  "status": zod.enum(['open', 'answered', 'closed']),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date(),
-  "messageCount": zod.number()
-})
-export const ListAdminTicketsResponse = zod.array(ListAdminTicketsResponseItem)
-
-
-/**
- * @summary Get a ticket with its messages (admin)
- */
-export const GetAdminTicketParams = zod.object({
-  "ticketId": zod.coerce.number()
-})
-
-export const GetAdminTicketResponse = zod.object({
-  "id": zod.number(),
-  "userId": zod.number(),
-  "userEmail": zod.string(),
-  "subject": zod.string(),
-  "status": zod.enum(['open', 'answered', 'closed']),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date(),
-  "messageCount": zod.number(),
-  "messages": zod.array(zod.object({
-  "id": zod.number(),
-  "ticketId": zod.number(),
-  "authorId": zod.number(),
-  "authorEmail": zod.string(),
-  "isAdmin": zod.boolean(),
-  "body": zod.string(),
-  "createdAt": zod.coerce.date()
-}))
-})
-
-
-/**
- * @summary Reply to a support ticket as an admin
- */
-export const AdminAddTicketMessageParams = zod.object({
-  "ticketId": zod.coerce.number()
-})
-
-export const adminAddTicketMessageBodyBodyMax = 4000;
-
-
-
-export const AdminAddTicketMessageBody = zod.object({
-  "body": zod.string().min(1).max(adminAddTicketMessageBodyBodyMax)
-})
-
-export const AdminAddTicketMessageResponse = zod.object({
-  "id": zod.number(),
-  "ticketId": zod.number(),
-  "authorId": zod.number(),
-  "authorEmail": zod.string(),
-  "isAdmin": zod.boolean(),
-  "body": zod.string(),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Update a support ticket's status
- */
-export const UpdateTicketStatusParams = zod.object({
-  "ticketId": zod.coerce.number()
-})
-
-export const UpdateTicketStatusBody = zod.object({
-  "status": zod.enum(['open', 'answered', 'closed'])
-})
-
-export const UpdateTicketStatusResponse = zod.object({
-  "id": zod.number(),
-  "userId": zod.number(),
-  "subject": zod.string(),
-  "status": zod.enum(['open', 'answered', 'closed']),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Manually set a user's extra device slot count
- */
-export const UpdateUserExtraSlotsParams = zod.object({
-  "userId": zod.coerce.number()
-})
-
-export const updateUserExtraSlotsBodyExtraDeviceSlotsMin = 0;
-
-
-
-export const UpdateUserExtraSlotsBody = zod.object({
-  "extraDeviceSlots": zod.number().min(updateUserExtraSlotsBodyExtraDeviceSlotsMin)
-})
-
-export const UpdateUserExtraSlotsResponse = zod.object({
-  "id": zod.number(),
-  "email": zod.string(),
-  "name": zod.string().nullish(),
-  "role": zod.enum(['user', 'admin']),
-  "createdAt": zod.coerce.date(),
-  "activeSubscriptions": zod.number().optional(),
-  "extraDeviceSlots": zod.number()
 })
 
 
@@ -905,7 +844,140 @@ export const UpdateUserRoleResponse = zod.object({
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
   "activeSubscriptions": zod.number().optional(),
-  "extraDeviceSlots": zod.number()
+  "extraDeviceSlots": zod.number(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
+  "trafficLimitExceeded": zod.boolean()
+})
+
+
+/**
+ * @summary Set a user's extra device slot count
+ */
+export const UpdateUserExtraSlotsParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const updateUserExtraSlotsBodyExtraDeviceSlotsMin = 0;
+
+
+
+export const UpdateUserExtraSlotsBody = zod.object({
+  "extraDeviceSlots": zod.number().min(updateUserExtraSlotsBodyExtraDeviceSlotsMin)
+})
+
+export const UpdateUserExtraSlotsResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "createdAt": zod.coerce.date(),
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
+  "trafficLimitExceeded": zod.boolean()
+})
+
+
+/**
+ * @summary List all support tickets (optionally filtered by status)
+ */
+export const ListAdminTicketsQueryParams = zod.object({
+  "status": zod.enum(['open', 'answered', 'closed']).optional()
+})
+
+export const ListAdminTicketsResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "userEmail": zod.string(),
+  "messageCount": zod.number()
+})
+export const ListAdminTicketsResponse = zod.array(ListAdminTicketsResponseItem)
+
+
+/**
+ * @summary Get a ticket with its messages
+ */
+export const GetAdminTicketParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const GetAdminTicketResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "userEmail": zod.string(),
+  "messageCount": zod.number(),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Reply to a ticket as an admin
+ */
+export const AdminAddTicketMessageParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const adminAddTicketMessageBodyBodyMax = 4000;
+
+
+
+export const AdminAddTicketMessageBody = zod.object({
+  "body": zod.string().min(1).max(adminAddTicketMessageBodyBodyMax)
+})
+
+export const AdminAddTicketMessageResponse = zod.object({
+  "id": zod.number(),
+  "ticketId": zod.number(),
+  "authorId": zod.number(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "authorEmail": zod.string(),
+  "isAdmin": zod.boolean()
+})
+
+
+/**
+ * @summary Update a ticket's status
+ */
+export const UpdateTicketStatusParams = zod.object({
+  "ticketId": zod.coerce.number()
+})
+
+export const UpdateTicketStatusBody = zod.object({
+  "status": zod.enum(['open', 'answered', 'closed'])
+})
+
+export const UpdateTicketStatusResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'answered', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 

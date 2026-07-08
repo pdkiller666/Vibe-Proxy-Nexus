@@ -2,12 +2,12 @@ import { Router, type IRouter } from "express";
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import { db, supportTicketsTable, supportMessagesTable, usersTable } from "@workspace/db";
 import {
-  AddTicketMessageBody,
-  AddTicketMessageParams,
-  GetTicketParams,
+  AdminAddTicketMessageBody,
+  AdminAddTicketMessageParams,
+  GetAdminTicketParams,
   ListAdminTicketsResponse,
-  GetTicketResponse,
-  AddTicketMessageResponse,
+  GetAdminTicketResponse,
+  AdminAddTicketMessageResponse,
   UpdateTicketStatusBody,
   UpdateTicketStatusParams,
   UpdateTicketStatusResponse,
@@ -51,7 +51,7 @@ router.get("/admin/support-tickets", requireAuth, requireAdmin, async (req, res)
 
 // Get ticket with messages
 router.get("/admin/support-tickets/:ticketId", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const params = GetTicketParams.safeParse(req.params);
+  const params = GetAdminTicketParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
@@ -80,7 +80,7 @@ router.get("/admin/support-tickets/:ticketId", requireAuth, requireAdmin, async 
     .orderBy(asc(supportMessagesTable.createdAt));
 
   res.json(
-    GetTicketResponse.parse({
+    GetAdminTicketResponse.parse({
       ...ticket.ticket,
       userEmail: ticket.userEmail,
       messageCount: messages.length,
@@ -96,12 +96,12 @@ router.get("/admin/support-tickets/:ticketId", requireAuth, requireAdmin, async 
 // Admin reply
 router.post("/admin/support-tickets/:ticketId/messages", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const admin = req.appUser!;
-  const params = AddTicketMessageParams.safeParse(req.params);
+  const params = AdminAddTicketMessageParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const parsed = AddTicketMessageBody.safeParse(req.body);
+  const parsed = AdminAddTicketMessageBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -138,7 +138,7 @@ router.post("/admin/support-tickets/:ticketId/messages", requireAuth, requireAdm
     .where(eq(supportMessagesTable.id, msg.id));
 
   res.status(201).json(
-    AddTicketMessageResponse.parse({
+    AdminAddTicketMessageResponse.parse({
       ...withAuthor.msg,
       authorEmail: withAuthor.authorEmail,
       isAdmin: withAuthor.authorRole === "admin",

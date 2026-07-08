@@ -42,7 +42,9 @@ router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res)
 
   if (isLocalXrayEnabled()) {
     try {
-      await addXrayClient(uuid, label);
+      // See keyIssuance.ts: the Xray "email" identifier must be the unique
+      // UUID, not the (possibly colliding) display label.
+      await addXrayClient(uuid, uuid);
     } catch (err) {
       res.status(502).json({ error: "Failed to provision key on node" });
       return;

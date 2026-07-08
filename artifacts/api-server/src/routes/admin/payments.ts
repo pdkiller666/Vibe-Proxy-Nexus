@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
-import { db, paymentsTable, plansTable, subscriptionsTable, usersTable } from "@workspace/db";
+import { db, paymentsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable } from "@workspace/db";
+import { isNull } from "drizzle-orm";
 import {
   ConfirmPaymentParams,
   ConfirmPaymentResponse,
@@ -159,6 +160,16 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
       if (!updatedPay) {
         throw new Error("Payment state changed concurrently");
       }
+
+      // Renewal starts a fresh traffic-tracking period for this user's
+      // active keys: zero the "period" counters (lifetime counters are
+      // untouched) so the admin panel's per-period traffic view reflects
+      // consumption since this activation/renewal, not the account's
+      // entire history.
+      await tx
+        .update(vpnKeysTable)
+        .set({ periodUpBytes: 0, periodDownBytes: 0, periodStartedAt: new Date() })
+        .where(and(eq(vpnKeysTable.userId, subscription.userId), isNull(vpnKeysTable.revokedAt)));
 
       return updatedPay;
     });

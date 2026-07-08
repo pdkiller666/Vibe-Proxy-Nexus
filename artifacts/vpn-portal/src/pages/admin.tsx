@@ -45,6 +45,14 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 Б";
+  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** exp;
+  return `${value.toFixed(exp === 0 ? 0 : 1)} ${units[exp]}`;
+}
+
 function Metric({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
   return (
     <div className={`bg-card border p-5 ${highlight ? "border-orange-400 bg-orange-50/50" : "border-border"}`}>
@@ -194,6 +202,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
   const [priceRub, setPriceRub] = useState(plan?.priceRub?.toString() ?? "");
   const [durationDays, setDurationDays] = useState(plan?.durationDays?.toString() ?? "");
   const [devicesIncluded, setDevicesIncluded] = useState(plan?.devicesIncluded?.toString() ?? "1");
+  const [trafficLimitGb, setTrafficLimitGb] = useState(plan?.trafficLimitGb?.toString() ?? "");
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
 
   function handleSubmit() {
@@ -203,6 +212,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
       priceRub: Number(priceRub),
       durationDays: Number(durationDays),
       devicesIncluded: devicesIncluded ? Number(devicesIncluded) : 1,
+      trafficLimitGb: trafficLimitGb ? Number(trafficLimitGb) : null,
       isActive,
     };
     const onSuccess = () => {
@@ -243,6 +253,14 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
           min={1}
           value={devicesIncluded}
           onChange={(e) => setDevicesIncluded(e.target.value.replace(/[^0-9]/g, ""))}
+          className="rounded-none"
+        />
+        <Input
+          type="number"
+          placeholder="Лимит трафика, ГБ (пусто = безлимит)"
+          min={1}
+          value={trafficLimitGb}
+          onChange={(e) => setTrafficLimitGb(e.target.value.replace(/[^0-9]/g, ""))}
           className="rounded-none"
         />
         <label className="flex items-center gap-2 text-sm">
@@ -305,7 +323,8 @@ function PlansManagement() {
                 {plan.name} {!plan.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
-                {plan.priceRub} ₽ · {plan.durationDays} дней · {plan.devicesIncluded} уст.
+                {plan.priceRub} ₽ · {plan.durationDays} дней · {plan.devicesIncluded} уст. ·{" "}
+                {plan.trafficLimitGb ? `${plan.trafficLimitGb} ГБ/период` : "трафик без лимита"}
               </div>
             </div>
             <div className="flex gap-2 shrink-0">
@@ -584,6 +603,16 @@ function UsersManagement() {
               </button>
             </div>
           </div>
+          <div className="flex items-center gap-4 flex-wrap pt-1 text-xs font-mono">
+            <span className={user.trafficLimitExceeded ? "text-destructive font-bold" : "text-muted-foreground"}>
+              За период: {formatBytes(user.periodUpBytes + user.periodDownBytes)}
+              {user.trafficLimitGb != null && ` / ${user.trafficLimitGb} ГБ`}
+              {user.trafficLimitExceeded && " · лимит превышен"}
+            </span>
+            <span className="text-muted-foreground">
+              Всего: {formatBytes(user.trafficUpBytes + user.trafficDownBytes)}
+            </span>
+          </div>
           <div className="flex items-center gap-3 pt-1">
             <span className="text-xs text-muted-foreground font-mono">Доп. устройства:</span>
             <div className="flex items-center gap-1">
@@ -741,6 +770,10 @@ interface AdminVpnKey {
   revokedAt: string | null;
   nodeName: string;
   userEmail: string;
+  trafficUpBytes: number;
+  trafficDownBytes: number;
+  periodUpBytes: number;
+  periodDownBytes: number;
 }
 
 function VpnKeysManagement() {
@@ -844,6 +877,10 @@ function VpnKeysManagement() {
                 <div className="text-xs text-muted-foreground font-mono">
                   {key.label} · {key.nodeName} · {formatDate(key.createdAt)}
                   {key.revokedAt && <span className="ml-2 text-destructive">Отозван {formatDate(key.revokedAt)}</span>}
+                </div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  За период: {formatBytes(key.periodUpBytes + key.periodDownBytes)} · Всего:{" "}
+                  {formatBytes(key.trafficUpBytes + key.trafficDownBytes)}
                 </div>
                 {!key.revokedAt && (
                   <div className="flex items-center gap-2 bg-muted/50 border border-border px-2 py-1 font-mono text-xs overflow-hidden max-w-lg">

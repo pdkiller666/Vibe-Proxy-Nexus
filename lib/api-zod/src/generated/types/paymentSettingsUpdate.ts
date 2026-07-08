@@ -15,6 +15,9 @@ export interface PaymentSettingsUpdate {
   /** @minimum 0 */
   extraDeviceSlotPriceRub?: number;
   trialEnabled?: boolean;
-  /** @minimum 1 */
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
   trialDays?: number;
 }

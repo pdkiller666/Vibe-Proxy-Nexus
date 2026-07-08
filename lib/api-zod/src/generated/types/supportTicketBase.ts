@@ -5,17 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { SupportMessage } from './supportMessage';
 import type { TicketStatus } from './ticketStatus';
 
-export interface SupportTicketDetail {
+export interface SupportTicketBase {
   id: number;
   userId: number;
   subject: string;
   status: TicketStatus;
   createdAt: Date;
   updatedAt: Date;
-  userEmail: string;
-  messageCount: number;
-  messages: SupportMessage[];
 }

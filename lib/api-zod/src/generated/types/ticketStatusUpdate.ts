@@ -7,13 +7,6 @@
  */
 import type { TicketStatus } from './ticketStatus';
 
-export interface SupportTicket {
-  id: number;
-  userId: number;
-  subject: string;
+export interface TicketStatusUpdate {
   status: TicketStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  userEmail: string;
-  messageCount: number;
 }

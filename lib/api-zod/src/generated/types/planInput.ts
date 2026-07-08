@@ -16,5 +16,10 @@ export interface PlanInput {
   durationDays: number;
   /** @minimum 1 */
   devicesIncluded?: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  trafficLimitGb?: number | null;
   isActive?: boolean;
 }

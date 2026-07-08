@@ -14,6 +14,8 @@ export interface Plan {
   priceRub: number;
   durationDays: number;
   devicesIncluded: number;
+  /** @nullable */
+  trafficLimitGb: number | null;
   isActive: boolean;
   createdAt?: Date;
 }

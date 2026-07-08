@@ -111,7 +111,12 @@ export async function issueKeyForUser(
 
   if (isLocalXrayEnabled()) {
     try {
-      await addXrayClient(uuid, label);
+      // Use the key's UUID (not the display label) as the Xray client
+      // "email" — labels are user-chosen/branded text and can collide across
+      // keys or users, which would both corrupt Xray's per-user config
+      // dedup-by-email logic and misattribute traffic stats. The UUID is
+      // guaranteed unique per key.
+      await addXrayClient(uuid, uuid);
     } catch (err) {
       logger.error({ err }, "issueKeyForUser: failed to register client with local Xray");
       return { ok: false, status: 502, error: "Failed to provision VPN key on the node" };

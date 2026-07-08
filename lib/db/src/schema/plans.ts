@@ -9,6 +9,10 @@ export const plansTable = pgTable("plans", {
   priceRub: integer("price_rub").notNull(),
   durationDays: integer("duration_days").notNull(),
   devicesIncluded: integer("devices_included").notNull().default(1),
+  // Traffic cap for the current subscription period, in gigabytes. Null means
+  // unlimited. Enforced by src/lib/trafficPolling.ts, which revokes a user's
+  // VPN keys once their period traffic (summed across keys) exceeds this.
+  trafficLimitGb: integer("traffic_limit_gb"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,6 +1,6 @@
 ---
-name: openapi.yaml spec drift (support tickets / device slots / trial) — resolved
-description: Root cause and fix for a spec/implementation drift that blocked pnpm run build; lesson for avoiding it again.
+name: openapi.yaml spec drift (resolved) + orval naming collision rule
+description: Root cause and fix for a spec/implementation drift that blocked pnpm run build, plus an orval naming-collision gotcha worth knowing for future endpoints.
 ---
 
 **Resolved.** DB schema, backend routes, and frontend pages for support tickets, extra device-slot purchases, and trial-period payment settings were fully implemented, but `lib/api-spec/openapi.yaml` was never updated — and worse, `lib/api-client-react/src/generated/api.ts` had been hand-patched directly (manual section comments, ad-hoc inline types) instead of produced by orval, while `lib/api-zod/src/generated/api.ts` had *also* been hand-edited to add fields ahead of the spec. Both generated clients had silently diverged from `openapi.yaml` and from each other.
@@ -9,4 +9,6 @@ description: Root cause and fix for a spec/implementation drift that blocked pnp
 
 **Why this matters:** never hand-edit files under any `generated/` directory (orval, or any other codegen). If implementation races ahead of the spec, the fix is always: edit `openapi.yaml` first, then regenerate — never patch the generated output directly, since it silently decouples the two API clients from each other and from the spec, and the gap only surfaces at full `pnpm run build` (dev servers skip typecheck).
 
-**How to apply:** before adding a new endpoint/field to routes or frontend pages, add the OpenAPI schema entry first, run `pnpm --filter @workspace/api-spec run codegen`, then write the route/page code against the generated types.
+**Durable lesson — orval component-schema naming collision:** if an OpenAPI `components/schemas` entry happens to be named exactly `<operationId>Body`, `<operationId>Params`, `<operationId>Response`, or `<operationId>QueryParams`, orval's zod client generates its own auto-named operation-scoped schema with that *same* identifier — separately from the named component's own generated type. `api-zod`'s `index.ts` does `export * from "./generated/api"` and `export * from "./generated/types"`, so both land in scope and TS raises "Module has already exported a member" (TS2308). orval always auto-derives per-operation body/params/response schema names from the operationId regardless of what the referenced component schema is called (e.g. an operation can `$ref` a component named `PaymentReject` while orval still exports the operation-bound validator as `RejectPaymentBody`). Only when you *manually* pick a component name that coincides with that auto-derived name does the collision occur.
+
+**How to apply:** before adding a new endpoint/field to routes or frontend pages, add the OpenAPI schema entry first, run `pnpm --filter @workspace/api-spec run codegen`, then write the route/page code against the generated types. Name reusable `components/schemas` entries after the domain concept (e.g. `SupportTicketCreateInput`, `DeviceSlotsUpdate`, `TicketStatusFilter`), never after `<operationId>Body/Params/Response/QueryParams`.

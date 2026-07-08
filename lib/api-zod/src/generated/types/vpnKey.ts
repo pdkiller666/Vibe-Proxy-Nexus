@@ -16,4 +16,10 @@ export interface VpnKey {
   createdAt: Date;
   /** @nullable */
   revokedAt?: Date | null;
+  userEmail?: string;
+  trafficUpBytes: number;
+  trafficDownBytes: number;
+  periodUpBytes: number;
+  periodDownBytes: number;
+  periodStartedAt: Date;
 }

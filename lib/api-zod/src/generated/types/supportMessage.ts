@@ -10,8 +10,8 @@ export interface SupportMessage {
   id: number;
   ticketId: number;
   authorId: number;
-  authorEmail: string;
-  isAdmin: boolean;
   body: string;
   createdAt: Date;
+  authorEmail: string;
+  isAdmin: boolean;
 }

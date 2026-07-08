@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { db, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
 import {
   ListAdminUsersResponse,
   UpdateUserExtraSlotsBody,
@@ -14,9 +14,75 @@ import { requireAdmin, requireAuth } from "../../lib/auth";
 
 const router: IRouter = Router();
 
+/**
+ * Enriches raw user rows with aggregated traffic (lifetime + current period,
+ * summed across the user's own VPN keys) and the trafficLimitGb/exceeded
+ * flag from their current subscription's plan.
+ *
+ * `userIds` optionally scopes the traffic/limit lookups to a subset of
+ * users (e.g. a single user after a PATCH), avoiding a full-table scan.
+ */
+async function enrichUsersWithTraffic(users: User[]) {
+  if (users.length === 0) return [];
+  const userIds = users.map((u) => u.id);
+
+  // Lifetime + current-period traffic, summed across a user's own VPN keys
+  // (revoked keys still count toward lifetime totals, but not toward the
+  // active plan's limit — enforceTrafficLimits() in trafficPolling.ts only
+  // sums non-revoked keys, so mirror that here for the "exceeded" flag).
+  const trafficRows = await db
+    .select({
+      userId: vpnKeysTable.userId,
+      trafficUpBytes: sql<number>`coalesce(sum(${vpnKeysTable.trafficUpBytes}), 0)`,
+      trafficDownBytes: sql<number>`coalesce(sum(${vpnKeysTable.trafficDownBytes}), 0)`,
+      periodUpBytes: sql<number>`coalesce(sum(${vpnKeysTable.periodUpBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
+      periodDownBytes: sql<number>`coalesce(sum(${vpnKeysTable.periodDownBytes}) filter (where ${vpnKeysTable.revokedAt} is null), 0)`,
+    })
+    .from(vpnKeysTable)
+    .where(inArray(vpnKeysTable.userId, userIds))
+    .groupBy(vpnKeysTable.userId);
+  const trafficByUser = new Map(trafficRows.map((r) => [r.userId, r]));
+
+  // A user should only have one currently-active subscription, but pick the
+  // most recently started one defensively (DISTINCT ON) so a data anomaly
+  // can't fan this join out into multiple limit rows per user.
+  const limitRows = await db
+    .selectDistinctOn([subscriptionsTable.userId], {
+      userId: subscriptionsTable.userId,
+      trafficLimitGb: plansTable.trafficLimitGb,
+    })
+    .from(subscriptionsTable)
+    .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
+    .where(
+      and(
+        eq(subscriptionsTable.status, "active"),
+        or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, new Date())),
+        inArray(subscriptionsTable.userId, userIds),
+      ),
+    )
+    .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id));
+  const limitByUser = new Map(limitRows.map((r) => [r.userId, r.trafficLimitGb]));
+
+  return users.map((user) => {
+    const traffic = trafficByUser.get(user.id);
+    const trafficLimitGb = limitByUser.get(user.id) ?? null;
+    const periodBytes = (traffic?.periodUpBytes ?? 0) + (traffic?.periodDownBytes ?? 0);
+    return {
+      ...user,
+      trafficUpBytes: traffic?.trafficUpBytes ?? 0,
+      trafficDownBytes: traffic?.trafficDownBytes ?? 0,
+      periodUpBytes: traffic?.periodUpBytes ?? 0,
+      periodDownBytes: traffic?.periodDownBytes ?? 0,
+      trafficLimitGb,
+      trafficLimitExceeded: trafficLimitGb != null && periodBytes >= trafficLimitGb * 1024 * 1024 * 1024,
+    };
+  });
+}
+
 router.get("/admin/users", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const users = await db.select().from(usersTable).orderBy(desc(usersTable.createdAt));
-  res.json(ListAdminUsersResponse.parse(users));
+  const enriched = await enrichUsersWithTraffic(users);
+  res.json(ListAdminUsersResponse.parse(enriched));
 });
 
 router.patch("/admin/users/:userId/role", requireAuth, requireAdmin, async (req, res): Promise<void> => {
@@ -45,7 +111,8 @@ router.patch("/admin/users/:userId/role", requireAuth, requireAdmin, async (req,
     return;
   }
 
-  res.json(UpdateUserRoleResponse.parse(user));
+  const [enriched] = await enrichUsersWithTraffic([user]);
+  res.json(UpdateUserRoleResponse.parse(enriched));
 });
 
 router.patch("/admin/users/:userId/extra-slots", requireAuth, requireAdmin, async (req, res): Promise<void> => {
@@ -74,7 +141,8 @@ router.patch("/admin/users/:userId/extra-slots", requireAuth, requireAdmin, asyn
     return;
   }
 
-  res.json(UpdateUserExtraSlotsResponse.parse(user));
+  const [enriched] = await enrichUsersWithTraffic([user]);
+  res.json(UpdateUserExtraSlotsResponse.parse(enriched));
 });
 
 export default router;
