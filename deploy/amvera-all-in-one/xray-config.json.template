@@ -4,7 +4,7 @@
   },
   "api": {
     "tag": "api",
-    "services": ["HandlerService"]
+    "services": ["HandlerService", "StatsService"]
   },
   "stats": {},
   "policy": {
