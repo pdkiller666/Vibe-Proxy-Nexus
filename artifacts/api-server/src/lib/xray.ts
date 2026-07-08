@@ -63,6 +63,21 @@ function getClients(config: Record<string, any>): XrayClient[] {
 }
 
 async function reloadXray(): Promise<void> {
+  // Restarting Xray zeroes its in-memory Stats API counters (see
+  // xrayStats.ts / trafficPolling.ts). Flush whatever has accumulated since
+  // the last scheduled poll into Postgres first, so this deliberate restart
+  // never becomes a silent traffic-loss window. Dynamic import avoids a
+  // circular dependency at module-load time (trafficPolling.ts imports from
+  // this file); a failure here is logged and swallowed rather than blocking
+  // the config change — worst case the next scheduled poll still recovers
+  // it correctly via the lastSeen/restart-detection logic.
+  try {
+    const { flushTrafficDeltas } = await import("./trafficPolling");
+    await flushTrafficDeltas();
+  } catch (err) {
+    logger.error({ err }, "Failed to flush traffic deltas before restarting Xray");
+  }
+
   // Restart Xray via supervisorctl so the updated on-disk config takes effect.
   // Takes ~2 s; existing connected clients reconnect automatically.
   //

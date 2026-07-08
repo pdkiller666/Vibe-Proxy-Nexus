@@ -58,31 +58,41 @@ export function isXrayStatsEnabled(): boolean {
 }
 
 /**
- * Queries and atomically resets every per-user traffic counter Xray has
- * accumulated since the last call (or since Xray started, on the first
- * call). Returns a map of Xray client "email" (== VPN key UUID, see
- * keyIssuance.ts) to the uplink/downlink bytes accumulated in that window.
+ * Queries every per-user traffic counter Xray has accumulated since it last
+ * started (or since Xray's own internal reset, if anything else ever resets
+ * it). Returns a map of Xray client "email" (== VPN key UUID, see
+ * keyIssuance.ts) to the *absolute* uplink/downlink byte counts Xray is
+ * currently holding — NOT a delta.
  *
- * Resetting on read is intentional and matches Xray's own StatsService
- * design: this call is the only place these counters are ever read, so
- * accumulating the delta into Postgres and resetting Xray's copy keeps a
- * single source of truth (the DB) instead of two counters that can drift.
+ * Deliberately uses reset:false, not reset:true. Xray's counters are the
+ * only record of a client's traffic between polls; a reset:true poll that
+ * successfully zeroes Xray's copy but then crashes before the delta is
+ * committed to Postgres would permanently lose that window's traffic, and a
+ * mid-cycle Xray restart (e.g. supervisorctl restart after a key add/remove
+ * in xray.ts) would silently discard whatever had accumulated since the
+ * last poll. Leaving Xray's counters untouched means the only place any
+ * conversion from absolute reads to deltas happens is trafficPolling.ts,
+ * which persists the last-seen absolute value alongside the running totals
+ * in a single atomic UPDATE — so a crash there just means the next poll
+ * recomputes the same delta from the same lastSeen baseline, and an Xray
+ * restart (counters drop back to 0) is detected as current < lastSeen
+ * rather than silently swallowed.
  */
-export async function pollUserTrafficDeltas(): Promise<Map<string, { uplinkBytes: number; downlinkBytes: number }>> {
-  const deltas = new Map<string, { uplinkBytes: number; downlinkBytes: number }>();
-  if (!isXrayStatsEnabled()) return deltas;
+export async function pollUserTrafficCounters(): Promise<Map<string, { uplinkBytes: number; downlinkBytes: number }>> {
+  const counters = new Map<string, { uplinkBytes: number; downlinkBytes: number }>();
+  if (!isXrayStatsEnabled()) return counters;
 
   let response: { stat: StatEntry[] };
   try {
     response = await new Promise((resolve, reject) => {
-      getClient().QueryStats({ pattern: "user>>>", reset: true }, (err, resp) => {
+      getClient().QueryStats({ pattern: "user>>>", reset: false }, (err, resp) => {
         if (err) reject(err);
         else resolve(resp ?? { stat: [] });
       });
     });
   } catch (err) {
-    logger.error({ err }, "pollUserTrafficDeltas: failed to query Xray StatsService");
-    return deltas;
+    logger.error({ err }, "pollUserTrafficCounters: failed to query Xray StatsService");
+    return counters;
   }
 
   // Stat names look like "user>>>{email}>>>traffic>>>uplink" / ">>>downlink".
@@ -91,13 +101,13 @@ export async function pollUserTrafficDeltas(): Promise<Map<string, { uplinkBytes
     if (!match) continue;
     const [, email, direction] = match;
     const value = Number(stat.value);
-    if (!Number.isFinite(value) || value === 0) continue;
+    if (!Number.isFinite(value)) continue;
 
-    const entry = deltas.get(email) ?? { uplinkBytes: 0, downlinkBytes: 0 };
+    const entry = counters.get(email) ?? { uplinkBytes: 0, downlinkBytes: 0 };
     if (direction === "uplink") entry.uplinkBytes += value;
     else entry.downlinkBytes += value;
-    deltas.set(email, entry);
+    counters.set(email, entry);
   }
 
-  return deltas;
+  return counters;
 }

@@ -10,42 +10,58 @@
  */
 import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { db, plansTable, subscriptionsTable, vpnKeysTable } from "@workspace/db";
-import { pollUserTrafficDeltas } from "./xrayStats";
+import { pollUserTrafficCounters } from "./xrayStats";
 import { isLocalXrayEnabled, removeXrayClient } from "./xray";
 import { logger } from "./logger";
 
 const TRAFFIC_POLL_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /**
- * Applies queried uplink/downlink deltas (keyed by VPN key UUID) onto the
- * matching vpn_keys rows, adding to both the lifetime and current-period
- * counters. Safe to call with an empty map (no-op).
+ * Applies queried *absolute* uplink/downlink counter reads (keyed by VPN key
+ * UUID, see pollUserTrafficCounters) onto the matching vpn_keys rows. Safe
+ * to call with an empty map (no-op).
  *
- * Xray's QueryStats(reset: true) already zeroed its own counters the moment
- * it returned this map, so these deltas exist nowhere else. Applying them
- * inside a single transaction means we either commit the whole batch or
- * none of it — a partial failure can't silently attribute one user's
- * traffic to another or leave the table in a half-updated state. A crash
- * between the gRPC call and the commit can still lose that one poll's
- * deltas (there is no durable outbox), but that is a bounded, ~1-minute
- * worth of undercounting rather than corruption — acceptable for this
- * feature's accuracy requirements.
+ * Each row's own `last_seen_*_bytes` columns are the only record of what
+ * was already accounted for, so the delta for this cycle is computed
+ * in-database as `current - last_seen` inside the same UPDATE that stores
+ * the new `last_seen_*_bytes` — a single statement per key, so there is no
+ * read-then-write gap where a concurrent poll (or crash) could apply the
+ * same bytes twice or skip them.
+ *
+ * If `current < last_seen`, Xray's own counter must have been reset to 0
+ * behind our backs (a process restart — see reloadXray() in xray.ts, or an
+ * out-of-band `supervisorctl restart xray`). Since nothing ever reads that
+ * counter except this poller, and it was never told to reset it (reset:
+ * false in xrayStats.ts), any traffic since the restart is exactly
+ * `current` bytes — not `current - last_seen`, which would double-subtract
+ * work already credited from before the restart and could even go
+ * negative. Treating `current` as the delta in that case means an Xray
+ * restart mid-cycle never silently drops traffic, it just gets attributed
+ * to the poll right after the restart instead of the poll before it.
+ *
+ * A crash between the gRPC read and this commit no longer loses anything
+ * either: `last_seen_*_bytes` in the DB wasn't advanced, so the next poll
+ * simply recomputes the same (larger) delta from the same baseline.
  */
 export async function applyTrafficDeltas(
-  deltas: Map<string, { uplinkBytes: number; downlinkBytes: number }>,
+  counters: Map<string, { uplinkBytes: number; downlinkBytes: number }>,
 ): Promise<void> {
-  const entries = [...deltas].filter(([, d]) => d.uplinkBytes !== 0 || d.downlinkBytes !== 0);
+  const entries = [...counters].filter(([, c]) => c.uplinkBytes !== 0 || c.downlinkBytes !== 0);
   if (entries.length === 0) return;
 
   await db.transaction(async (tx) => {
     for (const [uuid, { uplinkBytes, downlinkBytes }] of entries) {
+      const upDelta = sql`(case when ${uplinkBytes} >= ${vpnKeysTable.lastSeenUpBytes} then ${uplinkBytes} - ${vpnKeysTable.lastSeenUpBytes} else ${uplinkBytes} end)`;
+      const downDelta = sql`(case when ${downlinkBytes} >= ${vpnKeysTable.lastSeenDownBytes} then ${downlinkBytes} - ${vpnKeysTable.lastSeenDownBytes} else ${downlinkBytes} end)`;
       await tx
         .update(vpnKeysTable)
         .set({
-          trafficUpBytes: sql`${vpnKeysTable.trafficUpBytes} + ${uplinkBytes}`,
-          trafficDownBytes: sql`${vpnKeysTable.trafficDownBytes} + ${downlinkBytes}`,
-          periodUpBytes: sql`${vpnKeysTable.periodUpBytes} + ${uplinkBytes}`,
-          periodDownBytes: sql`${vpnKeysTable.periodDownBytes} + ${downlinkBytes}`,
+          trafficUpBytes: sql`${vpnKeysTable.trafficUpBytes} + ${upDelta}`,
+          trafficDownBytes: sql`${vpnKeysTable.trafficDownBytes} + ${downDelta}`,
+          periodUpBytes: sql`${vpnKeysTable.periodUpBytes} + ${upDelta}`,
+          periodDownBytes: sql`${vpnKeysTable.periodDownBytes} + ${downDelta}`,
+          lastSeenUpBytes: uplinkBytes,
+          lastSeenDownBytes: downlinkBytes,
         })
         .where(eq(vpnKeysTable.uuid, uuid));
     }
@@ -141,10 +157,54 @@ export async function enforceTrafficLimits(): Promise<number> {
   return revokedUsers;
 }
 
+// Serializes every flush (scheduled interval ticks AND the ad-hoc flush
+// reloadXray() triggers before restarting Xray — see xray.ts) through a
+// single queue, so a read (pollUserTrafficCounters) always happens strictly
+// after the previous flush's write (applyTrafficDeltas) has committed.
+//
+// This ordering is what makes applyTrafficDeltas' `current < lastSeen`
+// restart check sound. Without it, two flushes racing (e.g. the 60s
+// interval firing at the same moment xray.ts triggers a pre-restart flush)
+// could commit out of order: an older, smaller gRPC snapshot committing
+// *after* a newer, larger one had already advanced `lastSeen` would make
+// `current < lastSeen` true for a reason that has nothing to do with an
+// actual Xray restart, and the whole (stale) `current` would be double
+// counted on top of what the newer snapshot already credited. Serializing
+// read+write as one unit per flush guarantees `current` can only be less
+// than `lastSeen` when Xray's own counter was genuinely reset to 0 by a
+// real process restart in between.
+let flushQueue: Promise<void> = Promise.resolve();
+
+async function doFlushTrafficDeltas(): Promise<void> {
+  const counters = await pollUserTrafficCounters();
+  await applyTrafficDeltas(counters);
+}
+
+/**
+ * Reads Xray's current absolute counters and commits their deltas into
+ * Postgres, without running traffic-limit enforcement. Exposed separately
+ * from the interval job so xray.ts can call it right before a deliberate
+ * `supervisorctl restart xray` (see reloadXray()) — flushing here means
+ * whatever accumulated since the last scheduled poll is safely committed
+ * before Xray's in-memory counters reset to 0, rather than only being
+ * picked up (as `current` rather than a proper delta, see applyTrafficDeltas)
+ * on the next scheduled poll.
+ *
+ * Queued behind any flush already in progress — see flushQueue above for
+ * why strict ordering (not just mutual exclusion) matters here.
+ */
+export function flushTrafficDeltas(): Promise<void> {
+  const run = flushQueue.then(doFlushTrafficDeltas, doFlushTrafficDeltas);
+  // Swallow so one failed flush doesn't permanently wedge the queue for
+  // every flush queued behind it; each caller still observes its own
+  // rejection via the returned `run` promise.
+  flushQueue = run.catch(() => undefined);
+  return run;
+}
+
 export function startTrafficPollingJob(): NodeJS.Timeout {
   const run = () => {
-    pollUserTrafficDeltas()
-      .then((deltas) => applyTrafficDeltas(deltas))
+    flushTrafficDeltas()
       .then(() => enforceTrafficLimits())
       .catch((err) => {
         logger.error({ err }, "Traffic polling job failed");

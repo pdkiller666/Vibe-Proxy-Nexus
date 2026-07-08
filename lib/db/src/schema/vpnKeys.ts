@@ -30,6 +30,16 @@ export const vpnKeysTable = pgTable(
     periodUpBytes: bigint("period_up_bytes", { mode: "number" }).notNull().default(0),
     periodDownBytes: bigint("period_down_bytes", { mode: "number" }).notNull().default(0),
     periodStartedAt: timestamp("period_started_at", { withTimezone: true }).notNull().defaultNow(),
+    // Last absolute counter values read from Xray's Stats API (QueryStats
+    // with reset:false — see src/lib/xrayStats.ts). Xray is never told to
+    // reset its own counters, so these let the poller derive this cycle's
+    // delta itself (current - lastSeen) without a read-then-write race, and
+    // without losing any traffic if Xray restarts mid-cycle: a restart
+    // resets Xray's in-memory counters to 0, which shows up here as
+    // current < lastSeen, and the poller treats the whole `current` value
+    // as the delta since the restart instead of discarding it.
+    lastSeenUpBytes: bigint("last_seen_up_bytes", { mode: "number" }).notNull().default(0),
+    lastSeenDownBytes: bigint("last_seen_down_bytes", { mode: "number" }).notNull().default(0),
   },
   (table) => [index("vpn_keys_user_id_idx").on(table.userId)],
 );
