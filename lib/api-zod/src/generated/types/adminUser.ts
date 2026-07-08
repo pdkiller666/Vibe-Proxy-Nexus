@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SubscriptionStatus } from './subscriptionStatus';
 import type { UserRole } from './userRole';
 
 export interface AdminUser {
@@ -23,4 +24,11 @@ export interface AdminUser {
   /** @nullable */
   trafficLimitGb: number | null;
   trafficLimitExceeded: boolean;
+  /** @nullable */
+  planId?: number | null;
+  /** @nullable */
+  planName?: string | null;
+  subscriptionStatus?: SubscriptionStatus | null;
+  /** @nullable */
+  subscriptionEndsAt?: Date | null;
 }

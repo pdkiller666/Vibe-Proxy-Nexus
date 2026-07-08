@@ -13,6 +13,7 @@ export interface AdminPayment {
   id: number;
   /** @nullable */
   subscriptionId: number | null;
+  userId: number;
   userEmail: string;
   /** @nullable */
   planName: string | null;

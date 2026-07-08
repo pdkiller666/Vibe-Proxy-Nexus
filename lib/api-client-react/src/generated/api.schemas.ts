@@ -226,6 +226,7 @@ export interface AdminPayment {
   id: number;
   /** @nullable */
   subscriptionId: number | null;
+  userId: number;
   userEmail: string;
   /** @nullable */
   planName: string | null;
@@ -326,6 +327,7 @@ export interface VpnKey {
   createdAt: string;
   /** @nullable */
   revokedAt?: string | null;
+  userId: number;
   userEmail?: string;
   trafficUpBytes: number;
   trafficDownBytes: number;
@@ -359,6 +361,25 @@ export interface AdminUser {
   /** @nullable */
   trafficLimitGb: number | null;
   trafficLimitExceeded: boolean;
+  /** @nullable */
+  planId?: number | null;
+  /** @nullable */
+  planName?: string | null;
+  subscriptionStatus?: SubscriptionStatus | null;
+  /** @nullable */
+  subscriptionEndsAt?: string | null;
+}
+
+export interface AdminUserProfileUpdate {
+  /** @nullable */
+  name?: string | null;
+  email?: string;
+}
+
+export interface AdminSubscriptionUpdate {
+  planId: number;
+  /** @minimum 1 */
+  durationDays?: number;
 }
 
 export interface AdminPasswordResetResult {

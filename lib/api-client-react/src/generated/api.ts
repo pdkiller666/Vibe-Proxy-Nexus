@@ -22,7 +22,9 @@ import type {
 import type {
   AdminPasswordResetResult,
   AdminPayment,
+  AdminSubscriptionUpdate,
   AdminUser,
+  AdminUserProfileUpdate,
   CancelExtraSlotOrderResult,
   CheckoutResult,
   DashboardSummary,
@@ -2939,6 +2941,147 @@ export const useAdminResetUserPassword = <TError = ErrorType<unknown>,
       return useMutation(getAdminResetUserPasswordMutationOptions(options));
     }
 
+export const getUpdateUserProfileUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}`
+}
+
+/**
+ * @summary Edit a user's name and/or email
+ */
+export const updateUserProfile = async (userId: number,
+    adminUserProfileUpdate: AdminUserProfileUpdate, options?: RequestInit): Promise<AdminUser> => {
+
+  return customFetch<AdminUser>(getUpdateUserProfileUrl(userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminUserProfileUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateUserProfileMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUserProfile>>, TError,{userId: number;data: BodyType<AdminUserProfileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUserProfile>>, TError,{userId: number;data: BodyType<AdminUserProfileUpdate>}, TContext> => {
+
+const mutationKey = ['updateUserProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUserProfile>>, {userId: number;data: BodyType<AdminUserProfileUpdate>}> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  updateUserProfile(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUserProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateUserProfile>>>
+    export type UpdateUserProfileMutationBody = BodyType<AdminUserProfileUpdate>
+    export type UpdateUserProfileMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Edit a user's name and/or email
+ */
+export const useUpdateUserProfile = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUserProfile>>, TError,{userId: number;data: BodyType<AdminUserProfileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUserProfile>>,
+        TError,
+        {userId: number;data: BodyType<AdminUserProfileUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateUserProfileMutationOptions(options));
+    }
+
+export const getDeleteUserUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}`
+}
+
+/**
+ * @summary Permanently delete a user and all of their data (keys, subscriptions, payments, tickets)
+ */
+export const deleteUser = async (userId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteUserUrl(userId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: number}, TContext> => {
+
+const mutationKey = ['deleteUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUser>>, {userId: number}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  deleteUser(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUserMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUser>>>
+
+    export type DeleteUserMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Permanently delete a user and all of their data (keys, subscriptions, payments, tickets)
+ */
+export const useDeleteUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUser>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUser>>,
+        TError,
+        {userId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteUserMutationOptions(options));
+    }
+
 export const getUpdateUserRoleUrl = (userId: number,) => {
 
 
@@ -3008,6 +3151,77 @@ export const useUpdateUserRole = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateUserRoleMutationOptions(options));
+    }
+
+export const getUpdateUserSubscriptionUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/subscription`
+}
+
+/**
+ * @summary Manually assign/change a user's plan and (re)activate or extend their subscription
+ */
+export const updateUserSubscription = async (userId: number,
+    adminSubscriptionUpdate: AdminSubscriptionUpdate, options?: RequestInit): Promise<AdminUser> => {
+
+  return customFetch<AdminUser>(getUpdateUserSubscriptionUrl(userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminSubscriptionUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateUserSubscriptionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUserSubscription>>, TError,{userId: number;data: BodyType<AdminSubscriptionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUserSubscription>>, TError,{userId: number;data: BodyType<AdminSubscriptionUpdate>}, TContext> => {
+
+const mutationKey = ['updateUserSubscription'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUserSubscription>>, {userId: number;data: BodyType<AdminSubscriptionUpdate>}> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  updateUserSubscription(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUserSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof updateUserSubscription>>>
+    export type UpdateUserSubscriptionMutationBody = BodyType<AdminSubscriptionUpdate>
+    export type UpdateUserSubscriptionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Manually assign/change a user's plan and (re)activate or extend their subscription
+ */
+export const useUpdateUserSubscription = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUserSubscription>>, TError,{userId: number;data: BodyType<AdminSubscriptionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUserSubscription>>,
+        TError,
+        {userId: number;data: BodyType<AdminSubscriptionUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateUserSubscriptionMutationOptions(options));
     }
 
 export const getUpdateUserExtraSlotsUrl = (userId: number,) => {

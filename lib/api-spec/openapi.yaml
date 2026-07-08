@@ -706,6 +706,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminPasswordResetResult"
 
+  /admin/users/{userId}:
+    patch:
+      operationId: updateUserProfile
+      tags: [admin]
+      summary: Edit a user's name and/or email
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserProfileUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+    delete:
+      operationId: deleteUser
+      tags: [admin]
+      summary: Permanently delete a user and all of their data (keys, subscriptions, payments, tickets)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /admin/users/{userId}/role:
     patch:
       operationId: updateUserRole
@@ -723,6 +761,31 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UserRoleUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{userId}/subscription:
+    patch:
+      operationId: updateUserSubscription
+      tags: [admin]
+      summary: Manually assign/change a user's plan and (re)activate or extend their subscription
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSubscriptionUpdate"
       responses:
         "200":
           description: Updated user
@@ -1037,10 +1100,12 @@ components:
 
     AdminPayment:
       type: object
-      required: [id, subscriptionId, userEmail, planName, type, provider, amountRub, status, reference, createdAt]
+      required:
+        [id, subscriptionId, userId, userEmail, planName, type, provider, amountRub, status, reference, createdAt]
       properties:
         id: { type: integer }
         subscriptionId: { type: ["integer", "null"] }
+        userId: { type: integer }
         userEmail: { type: string }
         planName: { type: ["string", "null"] }
         type:
@@ -1140,6 +1205,7 @@ components:
           periodUpBytes,
           periodDownBytes,
           periodStartedAt,
+          userId,
         ]
       properties:
         id: { type: integer }
@@ -1150,6 +1216,7 @@ components:
         deepLink: { type: string }
         createdAt: { type: string, format: date-time }
         revokedAt: { type: ["string", "null"], format: date-time }
+        userId: { type: integer }
         userEmail: { type: string }
         # Lifetime traffic counters, in bytes, accumulated from Xray's Stats
         # API by the background polling job (stay 0 if Xray isn't running
@@ -1207,6 +1274,32 @@ components:
         # subscription or an unlimited plan.
         trafficLimitGb: { type: ["integer", "null"] }
         trafficLimitExceeded: { type: boolean }
+        # Current (most recently started) subscription, regardless of status,
+        # so the admin panel can show what a user has even if it's expired,
+        # cancelled, or awaiting payment. Null fields = no subscription at all.
+        planId: { type: ["integer", "null"] }
+        planName: { type: ["string", "null"] }
+        subscriptionStatus:
+          oneOf:
+            - $ref: "#/components/schemas/SubscriptionStatus"
+            - type: "null"
+        subscriptionEndsAt: { type: ["string", "null"], format: date-time }
+
+    AdminUserProfileUpdate:
+      type: object
+      properties:
+        name: { type: ["string", "null"] }
+        email: { type: string, format: email }
+
+    AdminSubscriptionUpdate:
+      type: object
+      required: [planId]
+      properties:
+        planId: { type: integer }
+        # Overrides the plan's own durationDays for this activation, so an
+        # admin can grant e.g. a custom 7-day trial extension on top of a
+        # monthly plan. Defaults to the plan's durationDays when omitted.
+        durationDays: { type: integer, minimum: 1 }
 
     AdminPasswordResetResult:
       type: object

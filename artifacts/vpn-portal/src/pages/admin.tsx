@@ -16,6 +16,9 @@ import {
   useListAdminUsers,
   useUpdateUserRole,
   useUpdateUserExtraSlots,
+  useUpdateUserProfile,
+  useUpdateUserSubscription,
+  useDeleteUser,
   useAdminResetUserPassword,
   useGetPaymentSettings,
   useUpdatePaymentSettings,
@@ -32,7 +35,7 @@ import {
   getListAdminTicketsQueryKey,
   getGetAdminTicketQueryKey,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode, SupportTicket, TicketStatus } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -525,13 +528,239 @@ function NodesManagement() {
   );
 }
 
+function UserSubscriptionEditor({ user }: { user: AdminUser }) {
+  const { data: plans } = useListPlans();
+  const { mutate: updateSubscription, isPending } = useUpdateUserSubscription();
+  const { toast } = useToast();
+  const [planId, setPlanId] = useState<string>(user.planId ? String(user.planId) : "");
+  const [durationDays, setDurationDays] = useState("");
+
+  function handleAssign() {
+    if (!planId) return;
+    updateSubscription(
+      {
+        userId: user.id,
+        data: { planId: Number(planId), ...(durationDays ? { durationDays: Number(durationDays) } : {}) },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+          toast({ title: "Подписка обновлена" });
+          setDurationDays("");
+        },
+        onError: () => toast({ title: "Ошибка обновления подписки", variant: "destructive" }),
+      },
+    );
+  }
+
+  const statusLabel: Record<string, string> = {
+    pending_payment: "Ожидает оплаты",
+    active: "Активна",
+    expired: "Истекла",
+    cancelled: "Отменена",
+    rejected: "Отклонена",
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-mono text-muted-foreground">
+        Текущий тариф: <span className="font-bold text-foreground">{user.planName ?? "—"}</span>
+        {user.subscriptionStatus && ` · ${statusLabel[user.subscriptionStatus] ?? user.subscriptionStatus}`}
+        {user.subscriptionEndsAt && ` · до ${formatDate(user.subscriptionEndsAt)}`}
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={planId}
+          onChange={(e) => setPlanId(e.target.value)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="">— Выберите тариф —</option>
+          {plans?.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} · {p.durationDays} дн.
+            </option>
+          ))}
+        </select>
+        <Input
+          type="number"
+          min={1}
+          placeholder="Дней (необязательно)"
+          value={durationDays}
+          onChange={(e) => setDurationDays(e.target.value)}
+          className="rounded-none w-44"
+        />
+        <button
+          onClick={handleAssign}
+          disabled={!planId || isPending}
+          className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          Назначить / продлить
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function UserProfileEditor({ user }: { user: AdminUser }) {
+  const { mutate: updateProfile, isPending } = useUpdateUserProfile();
+  const { toast } = useToast();
+  const [name, setName] = useState(user.name ?? "");
+  const [email, setEmail] = useState(user.email);
+
+  function handleSave() {
+    const data: { name?: string | null; email?: string } = {};
+    if (name !== (user.name ?? "")) data.name = name || null;
+    if (email !== user.email) data.email = email;
+    if (Object.keys(data).length === 0) return;
+
+    updateProfile(
+      { userId: user.id, data },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+          toast({ title: "Профиль обновлён" });
+        },
+        onError: (err: unknown) =>
+          toast({
+            title: err instanceof Error ? err.message : "Ошибка обновления профиля",
+            variant: "destructive",
+          }),
+      },
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Input
+        placeholder="Имя"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="rounded-none max-w-48"
+      />
+      <Input
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="rounded-none max-w-64"
+      />
+      <button
+        onClick={handleSave}
+        disabled={isPending}
+        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+      >
+        Сохранить
+      </button>
+    </div>
+  );
+}
+
+function UserKeysAndPayments({ userId }: { userId: number }) {
+  const { data: keys } = useQuery<AdminVpnKey[]>({
+    queryKey: ["admin", "vpn-keys"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/vpn-keys", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+  const { data: payments } = useListAdminPayments();
+  const { toast } = useToast();
+
+  const revokeMutation = useMutation({
+    mutationFn: async (keyId: number) => {
+      const res = await fetch(`/api/admin/vpn-keys/${keyId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      toast({ title: "Ключ отозван" });
+      queryClient.invalidateQueries({ queryKey: ["admin", "vpn-keys"] });
+      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+    },
+    onError: () => toast({ title: "Ошибка отзыва ключа", variant: "destructive" }),
+  });
+
+  const userKeys = (keys ?? []).filter((k) => k.userId === userId);
+  const userPayments = (payments ?? []).filter((p) => p.userId === userId);
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div className="space-y-2">
+        <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">
+          Ключи VPN ({userKeys.length})
+        </div>
+        {userKeys.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Ключей нет.</p>
+        ) : (
+          userKeys.map((key) => (
+            <div key={key.id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
+              <div className="min-w-0 break-words">
+                <div className={key.revokedAt ? "text-muted-foreground line-through" : "font-medium"}>
+                  {key.label}
+                </div>
+                <div className="text-muted-foreground font-mono">
+                  {formatBytes(key.periodUpBytes + key.periodDownBytes)} за период
+                </div>
+              </div>
+              {!key.revokedAt && (
+                <button
+                  onClick={() => revokeMutation.mutate(key.id)}
+                  disabled={revokeMutation.isPending}
+                  className="shrink-0 text-destructive hover:opacity-70 transition-opacity"
+                  title="Отозвать"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      <div className="space-y-2">
+        <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">
+          Платежи ({userPayments.length})
+        </div>
+        {userPayments.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Платежей нет.</p>
+        ) : (
+          userPayments.map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
+              <div className="min-w-0">
+                <div className="font-medium">{p.planName ?? (p.type === "extra_device_slot" ? "Доп. устройство" : "Подписка")}</div>
+                <div className="text-muted-foreground font-mono">{formatDate(p.createdAt)}</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-mono font-bold">{p.amountRub} ₽</div>
+                <div
+                  className={
+                    p.status === "confirmed"
+                      ? "text-green-600"
+                      : p.status === "rejected"
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {p.status === "confirmed" ? "Оплачен" : p.status === "rejected" ? "Отклонён" : "Ожидает"}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 function UsersManagement() {
   const { data: users, isLoading } = useListAdminUsers();
   const { mutate: updateRole } = useUpdateUserRole();
   const { mutate: updateExtraSlots } = useUpdateUserExtraSlots();
   const { mutate: resetPassword, isPending: resettingPassword } = useAdminResetUserPassword();
+  const { mutate: deleteUser, isPending: deleting } = useDeleteUser();
   const { toast } = useToast();
   const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
+  const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   function toggleRole(userId: number, currentRole: string) {
     const role = currentRole === "admin" ? "user" : "admin";
@@ -574,75 +803,151 @@ function UsersManagement() {
     );
   }
 
+  function handleDelete(userId: number) {
+    if (confirmDeleteId !== userId) {
+      setConfirmDeleteId(userId);
+      return;
+    }
+    deleteUser(
+      { userId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+          toast({ title: "Пользователь удалён" });
+          setConfirmDeleteId(null);
+        },
+        onError: (err: unknown) => {
+          toast({
+            title: err instanceof Error ? err.message : "Ошибка удаления пользователя",
+            variant: "destructive",
+          });
+          setConfirmDeleteId(null);
+        },
+      },
+    );
+  }
+
   if (isLoading) return <Skeleton className="h-40 w-full" />;
+
+  const filtered = (users ?? []).filter(
+    (u) => !search || u.email.toLowerCase().includes(search.toLowerCase()) || (u.name ?? "").toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <div className="space-y-3">
-      {users?.map((user) => (
-        <div key={user.id} className="bg-card border border-border p-4 space-y-3">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="min-w-0 break-words">
-              <div className="font-bold break-all">{user.email}</div>
-              <div className="text-sm text-muted-foreground font-mono">
-                {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
+      <Input
+        placeholder="Поиск по email или имени..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="rounded-none max-w-xs"
+      />
+      {filtered.map((user) => {
+        const expanded = expandedId === user.id;
+        return (
+          <div key={user.id} className="bg-card border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0 break-words">
+                <div className="font-bold break-all">
+                  {user.name ? `${user.name} · ` : ""}
+                  {user.email}
+                </div>
+                <div className="text-sm text-muted-foreground font-mono">
+                  {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap shrink-0">
+                <button
+                  onClick={() => setExpandedId(expanded ? null : user.id)}
+                  className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
+                >
+                  {expanded ? "Скрыть детали" : "Подробнее"}
+                </button>
+                <button
+                  onClick={() => generateResetLink(user.id)}
+                  disabled={resettingPassword}
+                  className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+                >
+                  Сбросить пароль
+                </button>
+                <button
+                  onClick={() => toggleRole(user.id, user.role)}
+                  className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
+                >
+                  {user.role === "admin" ? "Понизить" : "Назначить админом"}
+                </button>
+                <button
+                  onClick={() => handleDelete(user.id)}
+                  disabled={deleting}
+                  className={`border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                    confirmDeleteId === user.id
+                      ? "border-destructive bg-destructive text-destructive-foreground"
+                      : "border-border text-destructive hover:border-destructive"
+                  }`}
+                >
+                  {confirmDeleteId === user.id ? "Точно удалить?" : "Удалить"}
+                </button>
               </div>
             </div>
-            <div className="flex gap-2 flex-wrap shrink-0">
-              <button
-                onClick={() => generateResetLink(user.id)}
-                disabled={resettingPassword}
-                className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-              >
-                Сбросить пароль
-              </button>
-              <button
-                onClick={() => toggleRole(user.id, user.role)}
-                className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
-              >
-                {user.role === "admin" ? "Понизить" : "Назначить админом"}
-              </button>
+            <div className="flex items-center gap-4 flex-wrap pt-1 text-xs font-mono">
+              <span className={user.trafficLimitExceeded ? "text-destructive font-bold" : "text-muted-foreground"}>
+                За период: {formatBytes(user.periodUpBytes + user.periodDownBytes)}
+                {user.trafficLimitGb != null && ` / ${user.trafficLimitGb} ГБ`}
+                {user.trafficLimitExceeded && " · лимит превышен"}
+              </span>
+              <span className="text-muted-foreground">
+                Всего: {formatBytes(user.trafficUpBytes + user.trafficDownBytes)}
+              </span>
+              {user.planName && (
+                <span className="text-muted-foreground">
+                  Тариф: <span className="text-foreground font-bold">{user.planName}</span>
+                </span>
+              )}
             </div>
-          </div>
-          <div className="flex items-center gap-4 flex-wrap pt-1 text-xs font-mono">
-            <span className={user.trafficLimitExceeded ? "text-destructive font-bold" : "text-muted-foreground"}>
-              За период: {formatBytes(user.periodUpBytes + user.periodDownBytes)}
-              {user.trafficLimitGb != null && ` / ${user.trafficLimitGb} ГБ`}
-              {user.trafficLimitExceeded && " · лимит превышен"}
-            </span>
-            <span className="text-muted-foreground">
-              Всего: {formatBytes(user.trafficUpBytes + user.trafficDownBytes)}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 pt-1">
-            <span className="text-xs text-muted-foreground font-mono">Доп. устройства:</span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, -1)}
-                disabled={user.extraDeviceSlots === 0}
-                className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors disabled:opacity-30"
-              >
-                −
-              </button>
-              <span className="w-8 text-center text-sm font-mono font-bold">{user.extraDeviceSlots}</span>
-              <button
-                onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, +1)}
-                className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors"
-              >
-                +
-              </button>
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-xs text-muted-foreground font-mono">Доп. устройства:</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, -1)}
+                  disabled={user.extraDeviceSlots === 0}
+                  className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors disabled:opacity-30"
+                >
+                  −
+                </button>
+                <span className="w-8 text-center text-sm font-mono font-bold">{user.extraDeviceSlots}</span>
+                <button
+                  onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, +1)}
+                  className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors"
+                >
+                  +
+                </button>
+              </div>
             </div>
+            {resetLinks[user.id] && (
+              <div className="bg-muted/30 border border-border p-3 space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  Одноразовая ссылка для сброса пароля (действует 30 минут). Передайте её пользователю через
+                  доверенный канал (например, поддержку):
+                </p>
+                <p className="text-sm font-mono break-all text-primary">{resetLinks[user.id]}</p>
+              </div>
+            )}
+            {expanded && (
+              <div className="border-t border-border pt-3 space-y-4">
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Профиль</div>
+                  <UserProfileEditor user={user} />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Подписка</div>
+                  <UserSubscriptionEditor user={user} />
+                </div>
+                <UserKeysAndPayments userId={user.id} />
+              </div>
+            )}
           </div>
-          {resetLinks[user.id] && (
-            <div className="bg-muted/30 border border-border p-3 space-y-1">
-              <p className="text-xs text-muted-foreground">
-                Одноразовая ссылка для сброса пароля (действует 30 минут). Передайте её пользователю через
-                доверенный канал (например, поддержку):
-              </p>
-              <p className="text-sm font-mono break-all text-primary">{resetLinks[user.id]}</p>
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
+      {filtered.length === 0 && <p className="text-muted-foreground text-sm">Пользователи не найдены.</p>}
     </div>
   );
 }

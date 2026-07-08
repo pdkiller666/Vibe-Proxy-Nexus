@@ -350,7 +350,7 @@ export default function Keys() {
                   <KeyRound className="w-4 h-4 text-primary shrink-0" />
                   {key.label} <span className="text-muted-foreground font-normal font-mono text-sm">· {key.nodeName}</span>
                 </div>
-                {!key.revokedAt && (
+                {!key.revokedAt && me?.role === "admin" && (
                   <button
                     onClick={() => handleRevoke(key.id)}
                     disabled={revokingId === key.id}

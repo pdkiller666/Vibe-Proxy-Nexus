@@ -8,7 +8,9 @@
 
 export * from './adminPasswordResetResult';
 export * from './adminPayment';
+export * from './adminSubscriptionUpdate';
 export * from './adminUser';
+export * from './adminUserProfileUpdate';
 export * from './cancelExtraSlotOrderResult';
 export * from './checkoutResult';
 export * from './dashboardSummary';

@@ -301,6 +301,7 @@ export const ListMyVpnKeysResponseItem = zod.object({
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullish(),
+  "userId": zod.number(),
   "userEmail": zod.string().optional(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
@@ -328,6 +329,7 @@ export const CreateVpnKeyResponse = zod.object({
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullish(),
+  "userId": zod.number(),
   "userEmail": zod.string().optional(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
@@ -608,6 +610,7 @@ export const ListAdminPaymentsQueryParams = zod.object({
 export const ListAdminPaymentsResponseItem = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
+  "userId": zod.number(),
   "userEmail": zod.string(),
   "planName": zod.string().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot']),
@@ -777,7 +780,11 @@ export const ListAdminUsersResponseItem = zod.object({
   "periodUpBytes": zod.number(),
   "periodDownBytes": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
-  "trafficLimitExceeded": zod.boolean()
+  "trafficLimitExceeded": zod.boolean(),
+  "planId": zod.number().nullish(),
+  "planName": zod.string().nullish(),
+  "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
@@ -794,6 +801,7 @@ export const ListAdminVpnKeysResponseItem = zod.object({
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullish(),
+  "userId": zod.number(),
   "userEmail": zod.string().optional(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
@@ -827,6 +835,49 @@ export const AdminResetUserPasswordResponse = zod.object({
 
 
 /**
+ * @summary Edit a user's name and/or email
+ */
+export const UpdateUserProfileParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const UpdateUserProfileBody = zod.object({
+  "name": zod.string().nullish(),
+  "email": zod.string().email().optional()
+})
+
+export const UpdateUserProfileResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "createdAt": zod.coerce.date(),
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
+  "trafficLimitExceeded": zod.boolean(),
+  "planId": zod.number().nullish(),
+  "planName": zod.string().nullish(),
+  "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Permanently delete a user and all of their data (keys, subscriptions, payments, tickets)
+ */
+export const DeleteUserParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const DeleteUserResponse = zod.void()
+
+
+/**
  * @summary Update a user's role
  */
 export const UpdateUserRoleParams = zod.object({
@@ -850,7 +901,47 @@ export const UpdateUserRoleResponse = zod.object({
   "periodUpBytes": zod.number(),
   "periodDownBytes": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
-  "trafficLimitExceeded": zod.boolean()
+  "trafficLimitExceeded": zod.boolean(),
+  "planId": zod.number().nullish(),
+  "planName": zod.string().nullish(),
+  "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Manually assign/change a user's plan and (re)activate or extend their subscription
+ */
+export const UpdateUserSubscriptionParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+
+
+
+export const UpdateUserSubscriptionBody = zod.object({
+  "planId": zod.number(),
+  "durationDays": zod.number().min(1).optional()
+})
+
+export const UpdateUserSubscriptionResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "createdAt": zod.coerce.date(),
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
+  "trafficLimitExceeded": zod.boolean(),
+  "planId": zod.number().nullish(),
+  "planName": zod.string().nullish(),
+  "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
 })
 
 
@@ -882,7 +973,11 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "periodUpBytes": zod.number(),
   "periodDownBytes": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
-  "trafficLimitExceeded": zod.boolean()
+  "trafficLimitExceeded": zod.boolean(),
+  "planId": zod.number().nullish(),
+  "planName": zod.string().nullish(),
+  "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
 })
 
 
