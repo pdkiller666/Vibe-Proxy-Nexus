@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm, cp } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -117,16 +117,6 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     },
   });
 
-  // esbuild only bundles JS — the vendored Xray gRPC .proto files under
-  // src/lib/xray-proto are loaded at runtime via protoLoader.loadSync(),
-  // relative to __dirname, so they must be copied alongside the bundle or
-  // that load throws ENOENT in production (every StatsService poll then
-  // fails silently into the catch in pollUserTrafficDeltas).
-  await cp(
-    path.resolve(artifactDir, "src/lib/xray-proto"),
-    path.resolve(distDir, "xray-proto"),
-    { recursive: true },
-  );
 }
 
 buildAll().catch((err) => {

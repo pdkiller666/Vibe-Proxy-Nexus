@@ -1084,6 +1084,9 @@ interface AdminVpnKey {
 function VpnKeysManagement() {
   const { toast } = useToast();
   const [issuingUserId, setIssuingUserId] = useState<number | null>(null);
+  const [issuingUserEmail, setIssuingUserEmail] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [showUserList, setShowUserList] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
   // Guards against a genuine double-click firing two overlapping issue
@@ -1123,6 +1126,8 @@ function VpnKeysManagement() {
     onSuccess: () => {
       toast({ title: "Ключ выдан" });
       setIssuingUserId(null);
+      setIssuingUserEmail("");
+      setUserSearch("");
       refetch();
     },
     onError: () => toast({ title: "Ошибка выдачи ключа", variant: "destructive" }),
@@ -1236,17 +1241,56 @@ function VpnKeysManagement() {
 
       <div className="border-t border-border pt-4">
         <div className="text-sm font-bold mb-3">Выдать ключ пользователю вручную</div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={issuingUserId ?? ""}
-            onChange={(e) => setIssuingUserId(Number(e.target.value) || null)}
-            className="border border-border bg-background px-3 py-2 text-sm rounded-none min-w-48"
-          >
-            <option value="">— Выберите пользователя —</option>
-            {users?.map((u) => (
-              <option key={u.id} value={u.id}>{u.email}</option>
-            ))}
-          </select>
+        <div className="flex items-start gap-2 flex-wrap">
+          {/* Searchable user picker */}
+          <div className="relative">
+            <Input
+              placeholder="Поиск пользователя по email..."
+              value={issuingUserId ? issuingUserEmail : userSearch}
+              onChange={(e) => {
+                setUserSearch(e.target.value);
+                setIssuingUserId(null);
+                setIssuingUserEmail("");
+                setShowUserList(true);
+              }}
+              onFocus={() => setShowUserList(true)}
+              onBlur={() => setTimeout(() => setShowUserList(false), 150)}
+              className="rounded-none w-72 text-sm"
+            />
+            {issuingUserId && (
+              <button
+                onClick={() => { setIssuingUserId(null); setIssuingUserEmail(""); setUserSearch(""); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                tabIndex={-1}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {showUserList && !issuingUserId && (
+              <div className="absolute z-50 top-full left-0 w-full mt-1 bg-background border border-border shadow-md max-h-52 overflow-y-auto">
+                {(users ?? [])
+                  .filter((u) => !userSearch || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                  .slice(0, 50)
+                  .map((u) => (
+                    <button
+                      key={u.id}
+                      onMouseDown={() => {
+                        setIssuingUserId(u.id);
+                        setIssuingUserEmail(u.email);
+                        setUserSearch("");
+                        setShowUserList(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors font-mono truncate"
+                    >
+                      {u.email}
+                    </button>
+                  ))}
+                {(users ?? []).filter((u) => !userSearch || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 && (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">Не найдено</p>
+                )}
+              </div>
+            )}
+          </div>
           <button
             onClick={handleIssueClick}
             disabled={!issuingUserId || issueMutation.isPending}
