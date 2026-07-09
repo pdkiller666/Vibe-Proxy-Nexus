@@ -167,7 +167,9 @@ export default function Keys() {
   const [showManualLinks, setShowManualLinks] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
+  const isAdmin = me?.role === "admin";
   const activeKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => !k.revokedAt);
+  const visibleKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => isAdmin || !k.revokedAt);
   const canIssue = !!me?.hasActiveSubscription;
   const activeNodes = (nodes ?? []).filter((n: { isActive: boolean }) => n.isActive);
   const defaultNodeId = activeNodes[0]?.id;
@@ -333,11 +335,11 @@ export default function Keys() {
           <Skeleton className="h-28 w-full" />
           <Skeleton className="h-28 w-full" />
         </div>
-      ) : !keys || keys.length === 0 ? (
+      ) : !visibleKeys || visibleKeys.length === 0 ? (
         <p className="text-muted-foreground">Ключей пока нет.</p>
       ) : !subscription?.url || activeKeys.length === 0 || showManualLinks ? (
         <div className="space-y-3">
-          {keys.map((key, i) => (
+          {visibleKeys.map((key, i) => (
             <div
               key={key.id}
               style={{ animationDelay: `${i * 60}ms` }}

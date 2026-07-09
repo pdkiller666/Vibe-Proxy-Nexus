@@ -98,7 +98,12 @@ function SummarySection() {
 }
 
 function PaymentsQueue() {
-  const { data: payments, isLoading } = useListAdminPayments({ status: "pending" });
+  const [statusFilter, setStatusFilter] = useState<"pending" | "confirmed" | "rejected" | "all">("pending");
+  const [sort, setSort] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc");
+  const [search, setSearch] = useState("");
+  const { data: payments, isLoading } = useListAdminPayments(
+    statusFilter === "all" ? undefined : { status: statusFilter },
+  );
   const { mutate: confirm } = useConfirmPayment();
   const { mutate: reject } = useRejectPayment();
   const { toast } = useToast();
@@ -146,12 +151,61 @@ function PaymentsQueue() {
   }
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
-  if (!payments || payments.length === 0)
-    return <p className="text-muted-foreground">Нет платежей, ожидающих подтверждения.</p>;
+
+  const filteredPayments = (payments ?? [])
+    .filter((p) => {
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return p.userEmail.toLowerCase().includes(q) || p.reference.toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      switch (sort) {
+        case "date_asc":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "amount_desc":
+          return b.amountRub - a.amountRub;
+        case "amount_asc":
+          return a.amountRub - b.amountRub;
+        case "date_desc":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
 
   return (
     <div className="space-y-3">
-      {payments.map((payment) => (
+      <div className="flex items-center gap-3 flex-wrap">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по email или референсу"
+          className="rounded-none min-w-0 flex-1 basis-48"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="pending">Ожидающие</option>
+          <option value="confirmed">Подтверждённые</option>
+          <option value="rejected">Отклонённые</option>
+          <option value="all">Все</option>
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="date_desc">Сначала новые</option>
+          <option value="date_asc">Сначала старые</option>
+          <option value="amount_desc">По сумме (убыв.)</option>
+          <option value="amount_asc">По сумме (возр.)</option>
+        </select>
+      </div>
+      {filteredPayments.length === 0 && (
+        <p className="text-muted-foreground">Платежей не найдено.</p>
+      )}
+      {filteredPayments.map((payment) => (
         <div key={payment.id} className="bg-card border border-border p-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
@@ -170,20 +224,28 @@ function PaymentsQueue() {
                 <div className="text-sm mt-1 italic text-muted-foreground">«{payment.userNote}»</div>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleConfirm(payment.id)}
-                className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity"
+            {payment.status === "pending" ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleConfirm(payment.id)}
+                  className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity"
+                >
+                  <Check className="w-4 h-4" /> Подтвердить
+                </button>
+                <button
+                  onClick={() => setRejectingId(rejectingId === payment.id ? null : payment.id)}
+                  className="flex items-center gap-1.5 border border-destructive text-destructive font-bold px-4 py-2 text-sm hover:bg-destructive/10 transition-colors"
+                >
+                  <X className="w-4 h-4" /> Отклонить
+                </button>
+              </div>
+            ) : (
+              <div
+                className={`text-xs font-bold uppercase px-3 py-1 ${payment.status === "confirmed" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}
               >
-                <Check className="w-4 h-4" /> Подтвердить
-              </button>
-              <button
-                onClick={() => setRejectingId(rejectingId === payment.id ? null : payment.id)}
-                className="flex items-center gap-1.5 border border-destructive text-destructive font-bold px-4 py-2 text-sm hover:bg-destructive/10 transition-colors"
-              >
-                <X className="w-4 h-4" /> Отклонить
-              </button>
-            </div>
+                {payment.status === "confirmed" ? "Подтверждён" : "Отклонён"}
+              </div>
+            )}
           </div>
           {rejectingId === payment.id && (
             <div className="mt-4 flex flex-wrap gap-2">
@@ -342,6 +404,9 @@ function PlansManagement() {
   const { mutate: deletePlan } = useDeletePlan();
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const [billingFilter, setBillingFilter] = useState<"all" | "monthly" | "hourly">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [sort, setSort] = useState<"default" | "price_asc" | "price_desc" | "name">("default");
 
   function handleDelete(planId: number) {
     deletePlan(
@@ -358,9 +423,60 @@ function PlansManagement() {
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
+  function effectivePrice(plan: Plan) {
+    return plan.billingType === "hourly" ? (plan.hourlyRateKopecks ?? 0) / 100 : plan.priceRub;
+  }
+
+  const filteredPlans = (plans ?? [])
+    .filter((p) => billingFilter === "all" || p.billingType === billingFilter)
+    .filter((p) => statusFilter === "all" || (statusFilter === "active" ? p.isActive : !p.isActive))
+    .sort((a, b) => {
+      switch (sort) {
+        case "price_asc":
+          return effectivePrice(a) - effectivePrice(b);
+        case "price_desc":
+          return effectivePrice(b) - effectivePrice(a);
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "default":
+        default:
+          return 0;
+      }
+    });
+
   return (
     <div className="space-y-3">
-      {plans?.map((plan) =>
+      <div className="flex items-center gap-3 flex-wrap">
+        <select
+          value={billingFilter}
+          onChange={(e) => setBillingFilter(e.target.value as typeof billingFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все тарифы</option>
+          <option value="monthly">Помесячные</option>
+          <option value="hourly">Почасовые</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="inactive">Неактивные</option>
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="default">Без сортировки</option>
+          <option value="price_asc">Цена: по возрастанию</option>
+          <option value="price_desc">Цена: по убыванию</option>
+          <option value="name">По названию</option>
+        </select>
+      </div>
+      {filteredPlans.map((plan) =>
         editingId === plan.id ? (
           <PlanForm key={plan.id} plan={plan} onDone={() => setEditingId(null)} />
         ) : (
@@ -516,6 +632,9 @@ function NodesManagement() {
   const { mutate: deleteNode } = useDeleteVpnNode();
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [sort, setSort] = useState<"default" | "clients_desc" | "name">("default");
 
   function handleDelete(nodeId: number) {
     deleteNode(
@@ -532,9 +651,58 @@ function NodesManagement() {
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
+  const regions = [...new Set((nodes ?? []).map((n) => n.region))];
+
+  const filteredNodes = (nodes ?? [])
+    .filter((n) => regionFilter === "all" || n.region === regionFilter)
+    .filter((n) => statusFilter === "all" || (statusFilter === "active" ? n.isActive : !n.isActive))
+    .sort((a, b) => {
+      switch (sort) {
+        case "clients_desc":
+          return (b.activeUserCount ?? 0) - (a.activeUserCount ?? 0);
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "default":
+        default:
+          return 0;
+      }
+    });
+
   return (
     <div className="space-y-3">
-      {nodes?.map((node) =>
+      <div className="flex items-center gap-3 flex-wrap">
+        <select
+          value={regionFilter}
+          onChange={(e) => setRegionFilter(e.target.value)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все регионы</option>
+          {regions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="inactive">Неактивные</option>
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="default">Без сортировки</option>
+          <option value="clients_desc">По числу клиентов</option>
+          <option value="name">По названию</option>
+        </select>
+      </div>
+      {filteredNodes.map((node) =>
         editingId === node.id ? (
           <NodeForm key={node.id} node={node} onDone={() => setEditingId(null)} />
         ) : (
@@ -819,6 +987,8 @@ function UsersManagement() {
   const { toast } = useToast();
   const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic">("date_desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
@@ -889,18 +1059,54 @@ function UsersManagement() {
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
-  const filtered = (users ?? []).filter(
-    (u) => !search || u.email.toLowerCase().includes(search.toLowerCase()) || (u.name ?? "").toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = (users ?? [])
+    .filter(
+      (u) => !search || u.email.toLowerCase().includes(search.toLowerCase()) || (u.name ?? "").toLowerCase().includes(search.toLowerCase()),
+    )
+    .filter((u) => roleFilter === "all" || u.role === roleFilter)
+    .sort((a, b) => {
+      switch (sort) {
+        case "date_asc":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "email":
+          return a.email.localeCompare(b.email);
+        case "traffic":
+          return b.trafficUpBytes + b.trafficDownBytes - (a.trafficUpBytes + a.trafficDownBytes);
+        case "date_desc":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
 
   return (
     <div className="space-y-3">
-      <Input
-        placeholder="Поиск по email или имени..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="rounded-none max-w-xs"
-      />
+      <div className="flex items-center gap-3 flex-wrap">
+        <Input
+          placeholder="Поиск по email или имени..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="rounded-none max-w-xs"
+        />
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все роли</option>
+          <option value="admin">Администраторы</option>
+          <option value="user">Пользователи</option>
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="date_desc">Сначала новые</option>
+          <option value="date_asc">Сначала старые</option>
+          <option value="email">По email</option>
+          <option value="traffic">По трафику</option>
+        </select>
+      </div>
       {filtered.map((user) => {
         const expanded = expandedId === user.id;
         return (
@@ -1157,6 +1363,8 @@ function VpnKeysManagement() {
   const [showUserList, setShowUserList] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "revoked">("all");
+  const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic">("date_desc");
   // Guards against a genuine double-click firing two overlapping issue
   // requests before React commits `issueMutation.isPending` and disables the
   // button — a slow issue request (Xray provisioning) made this window wide
@@ -1236,12 +1444,27 @@ function VpnKeysManagement() {
     setTimeout(() => setCopiedId(null), 2000);
   }
 
-  const filtered = (keys ?? []).filter(
-    (k) =>
-      !filter ||
-      k.userEmail.toLowerCase().includes(filter.toLowerCase()) ||
-      k.label.toLowerCase().includes(filter.toLowerCase()),
-  );
+  const filtered = (keys ?? [])
+    .filter(
+      (k) =>
+        !filter ||
+        k.userEmail.toLowerCase().includes(filter.toLowerCase()) ||
+        k.label.toLowerCase().includes(filter.toLowerCase()),
+    )
+    .filter((k) => (statusFilter === "all" ? true : statusFilter === "active" ? !k.revokedAt : !!k.revokedAt))
+    .sort((a, b) => {
+      switch (sort) {
+        case "date_asc":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "email":
+          return a.userEmail.localeCompare(b.userEmail);
+        case "traffic":
+          return b.trafficUpBytes + b.trafficDownBytes - (a.trafficUpBytes + a.trafficDownBytes);
+        case "date_desc":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
 
   const activeCount = (keys ?? []).filter((k) => !k.revokedAt).length;
 
@@ -1256,6 +1479,25 @@ function VpnKeysManagement() {
           onChange={(e) => setFilter(e.target.value)}
           className="rounded-none max-w-xs"
         />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="revoked">Отозванные</option>
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="date_desc">Сначала новые</option>
+          <option value="date_asc">Сначала старые</option>
+          <option value="email">По email</option>
+          <option value="traffic">По трафику</option>
+        </select>
         <span className="text-sm text-muted-foreground font-mono">
           Активных: {activeCount} / Всего: {keys?.length ?? 0}
         </span>
@@ -1480,6 +1722,8 @@ function TicketDetail({ ticketId, onBack }: { ticketId: number; onBack: () => vo
 function SupportManagement() {
   const [filterStatus, setFilterStatus] = useState<TicketStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"date_desc" | "date_asc" | "messages_desc">("date_desc");
   const { data: tickets, isLoading } = useListAdminTickets(
     filterStatus !== "all" ? { status: filterStatus } : undefined,
   );
@@ -1488,34 +1732,71 @@ function SupportManagement() {
     return <TicketDetail ticketId={selectedId} onBack={() => setSelectedId(null)} />;
   }
 
+  const filteredTickets = (tickets ?? [])
+    .filter((t: SupportTicket) => {
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return t.subject.toLowerCase().includes(q) || t.userEmail.toLowerCase().includes(q);
+    })
+    .sort((a: SupportTicket, b: SupportTicket) => {
+      switch (sort) {
+        case "date_asc":
+          return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+        case "messages_desc":
+          return b.messageCount - a.messageCount;
+        case "date_desc":
+        default:
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
+    });
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 flex-wrap">
-        {(["all", "open", "answered", "closed"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            className={`text-xs font-semibold px-3 py-1.5 transition-colors border ${
-              filterStatus === s
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background text-muted-foreground border-border hover:text-foreground"
-            }`}
+      <div className="flex gap-2 flex-wrap items-center justify-between">
+        <div className="flex gap-2 flex-wrap">
+          {(["all", "open", "answered", "closed"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className={`text-xs font-semibold px-3 py-1.5 transition-colors border ${
+                filterStatus === s
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-border hover:text-foreground"
+              }`}
+            >
+              {s === "all" ? "Все" : TICKET_STATUS_LABEL[s]}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по теме или email"
+            className="rounded-none min-w-0 flex-1 basis-48"
+          />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="border border-border bg-background px-3 py-2 text-sm rounded-none"
           >
-            {s === "all" ? "Все" : TICKET_STATUS_LABEL[s]}
-          </button>
-        ))}
+            <option value="date_desc">Сначала новые</option>
+            <option value="date_asc">Сначала старые</option>
+            <option value="messages_desc">По числу сообщений</option>
+          </select>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
-      ) : !tickets?.length ? (
+      ) : !filteredTickets.length ? (
         <div className="bg-muted/50 border border-border p-10 text-center text-sm text-muted-foreground">
           <MessageCircle className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
           Тикетов нет
         </div>
       ) : (
         <div className="divide-y divide-border border border-border">
-          {tickets.map((t: SupportTicket) => (
+          {filteredTickets.map((t: SupportTicket) => (
             <button
               key={t.id}
               onClick={() => setSelectedId(t.id)}
