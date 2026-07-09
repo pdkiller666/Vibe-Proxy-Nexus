@@ -110,7 +110,7 @@ export interface PlanInput {
   description?: string;
   /** @minimum 0 */
   priceRub: number;
-  /** @minimum 1 */
+  /** @minimum 0 */
   durationDays: number;
   /** @minimum 1 */
   devicesIncluded?: number;
@@ -134,7 +134,7 @@ export interface PlanUpdate {
   description?: string;
   /** @minimum 0 */
   priceRub?: number;
-  /** @minimum 1 */
+  /** @minimum 0 */
   durationDays?: number;
   /** @minimum 1 */
   devicesIncluded?: number;

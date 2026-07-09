@@ -540,6 +540,7 @@ export const GetAdminDashboardSummaryResponse = zod.object({
 
 export const createPlanBodyPriceRubMin = 0;
 
+export const createPlanBodyDurationDaysMin = 0;
 
 
 
@@ -550,7 +551,7 @@ export const CreatePlanBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string().optional(),
   "priceRub": zod.number().min(createPlanBodyPriceRubMin),
-  "durationDays": zod.number().min(1),
+  "durationDays": zod.number().min(createPlanBodyDurationDaysMin),
   "devicesIncluded": zod.number().min(1).optional(),
   "trafficLimitGb": zod.number().min(1).nullish(),
   "billingType": zod.enum(['monthly', 'hourly']).optional(),
@@ -583,6 +584,7 @@ export const UpdatePlanParams = zod.object({
 
 export const updatePlanBodyPriceRubMin = 0;
 
+export const updatePlanBodyDurationDaysMin = 0;
 
 
 
@@ -593,7 +595,7 @@ export const UpdatePlanBody = zod.object({
   "name": zod.string().min(1).optional(),
   "description": zod.string().optional(),
   "priceRub": zod.number().min(updatePlanBodyPriceRubMin).optional(),
-  "durationDays": zod.number().min(1).optional(),
+  "durationDays": zod.number().min(updatePlanBodyDurationDaysMin).optional(),
   "devicesIncluded": zod.number().min(1).optional(),
   "trafficLimitGb": zod.number().min(1).nullish(),
   "billingType": zod.enum(['monthly', 'hourly']).optional(),

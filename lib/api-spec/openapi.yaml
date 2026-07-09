@@ -1055,7 +1055,9 @@ components:
         name: { type: string, minLength: 1 }
         description: { type: string }
         priceRub: { type: integer, minimum: 0 }
-        durationDays: { type: integer, minimum: 1 }
+        # 0 is valid for hourly plans, which don't use a fixed duration
+        # (billed continuously from balance instead — see hourlyBilling.ts).
+        durationDays: { type: integer, minimum: 0 }
         devicesIncluded: { type: integer, minimum: 1 }
         trafficLimitGb: { type: ["integer", "null"], minimum: 1 }
         billingType:
@@ -1069,7 +1071,7 @@ components:
         name: { type: string, minLength: 1 }
         description: { type: string }
         priceRub: { type: integer, minimum: 0 }
-        durationDays: { type: integer, minimum: 1 }
+        durationDays: { type: integer, minimum: 0 }
         devicesIncluded: { type: integer, minimum: 1 }
         trafficLimitGb: { type: ["integer", "null"], minimum: 1 }
         billingType:
