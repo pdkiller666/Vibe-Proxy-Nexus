@@ -42,7 +42,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -222,6 +222,16 @@ function PaymentsQueue() {
               </div>
               {payment.userNote && (
                 <div className="text-sm mt-1 italic text-muted-foreground">«{payment.userNote}»</div>
+              )}
+              {payment.screenshotUrl && (
+                <a
+                  href={`/api/storage/objects/${payment.screenshotUrl.replace(/^\/objects\//, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm mt-1 text-primary hover:underline"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" /> Скриншот оплаты
+                </a>
               )}
             </div>
             {payment.status === "pending" ? (

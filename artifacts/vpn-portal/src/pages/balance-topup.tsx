@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle, Wallet } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
+import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
@@ -182,6 +183,8 @@ export default function BalanceTopup() {
               Администратор вручную сверит перевод и зачислит средства на ваш баланс.
             </p>
           </div>
+
+          <PaymentScreenshotUpload paymentId={payment.id} screenshotUrl={payment.screenshotUrl} />
 
           <div className="border-t border-border pt-6">
             {!confirmCancel ? (

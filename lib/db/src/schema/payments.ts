@@ -23,6 +23,9 @@ export const paymentsTable = pgTable(
     status: text("status", { enum: paymentStatusValues }).notNull().default("pending"),
     reference: text("reference").notNull(),
     userNote: text("user_note"),
+    // Object storage path to a screenshot the user uploaded as proof of SBP
+    // transfer (e.g. "/objects/uploads/uuid"). Null until attached.
+    screenshotUrl: text("screenshot_url"),
     rejectionReason: text("rejection_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),

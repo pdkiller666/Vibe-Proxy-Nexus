@@ -21,6 +21,8 @@ export interface Payment {
   /** @nullable */
   userNote?: string | null;
   /** @nullable */
+  screenshotUrl?: string | null;
+  /** @nullable */
   rejectionReason?: string | null;
   createdAt: Date;
   /** @nullable */

@@ -25,6 +25,8 @@ export interface AdminPayment {
   /** @nullable */
   userNote?: string | null;
   /** @nullable */
+  screenshotUrl?: string | null;
+  /** @nullable */
   rejectionReason?: string | null;
   createdAt: Date;
   /** @nullable */

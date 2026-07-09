@@ -254,6 +254,7 @@ export const CreateSubscriptionResponse = zod.object({
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
+  "screenshotUrl": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
@@ -273,6 +274,7 @@ export const ListMyPaymentsResponseItem = zod.object({
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
+  "screenshotUrl": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
@@ -303,10 +305,98 @@ export const UpdatePaymentNoteResponse = zod.object({
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
+  "screenshotUrl": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
 })
+
+
+/**
+ * @summary Attach a payment confirmation screenshot to a pending payment
+ */
+export const UpdatePaymentScreenshotParams = zod.object({
+  "paymentId": zod.coerce.number()
+})
+
+
+
+
+export const UpdatePaymentScreenshotBody = zod.object({
+  "screenshotUrl": zod.string().min(1)
+})
+
+export const UpdatePaymentScreenshotResponse = zod.object({
+  "id": zod.number(),
+  "subscriptionId": zod.number().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "provider": zod.enum(['manual_sbp', 'yookassa']),
+  "amountRub": zod.number(),
+  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "reference": zod.string(),
+  "userNote": zod.string().nullish(),
+  "screenshotUrl": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "confirmedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+ * metadata here, then uploads the file directly to the returned URL.
+ * @summary Request a presigned URL for file upload
+ */
+
+
+
+
+
+export const RequestUploadUrlBody = zod.object({
+  "name": zod.string().min(1).describe('Original file name.'),
+  "size": zod.number().min(1).describe('File size in bytes.'),
+  "contentType": zod.string().min(1).describe('MIME type of the file (e.g. `image\/jpeg`).')
+})
+
+
+
+
+
+
+export const RequestUploadUrlResponse = zod.object({
+  "uploadURL": zod.string().url().describe('Presigned GCS URL for PUT upload.'),
+  "objectPath": zod.string().describe('Normalized object path (e.g. `\/objects\/uploads\/uuid`). Store this in your database.'),
+  "metadata": zod.object({
+  "name": zod.string().min(1).describe('Original file name.'),
+  "size": zod.number().min(1).describe('File size in bytes.'),
+  "contentType": zod.string().min(1).describe('MIME type of the file (e.g. `image\/jpeg`).')
+}).optional()
+})
+
+
+/**
+ * Unconditionally public — no authentication or ACL checks.
+ * Searches PUBLIC_OBJECT_SEARCH_PATHS for the given file path.
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+export const GetPublicObjectParams = zod.object({
+  "filePath": zod.coerce.string().describe('Relative file path within the public search paths.')
+})
+
+export const GetPublicObjectResponse = zod.unknown()
+
+
+/**
+ * Serves object entities uploaded via presigned URLs. Requires an
+ * authenticated session; a user may only view their own screenshots
+ * unless they are an admin.
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+export const GetStorageObjectParams = zod.object({
+  "objectPath": zod.coerce.string().describe('Object path within the private object dir (e.g. `uploads\/some-uuid`).')
+})
+
+export const GetStorageObjectResponse = zod.unknown()
 
 
 /**
@@ -679,6 +769,7 @@ export const ListAdminPaymentsResponseItem = zod.object({
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
+  "screenshotUrl": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
@@ -702,6 +793,7 @@ export const ConfirmPaymentResponse = zod.object({
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
+  "screenshotUrl": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
@@ -728,6 +820,7 @@ export const RejectPaymentResponse = zod.object({
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
+  "screenshotUrl": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()

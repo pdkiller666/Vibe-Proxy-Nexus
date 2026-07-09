@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
@@ -184,6 +185,8 @@ export default function Checkout() {
               Это не автоматическая оплата картой — администратор вручную сверит перевод и активирует подписку. Обычно это занимает до нескольких часов. Статус обновится здесь автоматически.
             </p>
           </div>
+
+          <PaymentScreenshotUpload paymentId={payment.id} screenshotUrl={payment.screenshotUrl} />
 
           {/* Cancel pending subscription */}
           <div className="border-t border-border pt-6">
