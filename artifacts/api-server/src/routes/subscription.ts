@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
-import { db, subscriptionsTable, vpnKeysTable } from "@workspace/db";
+import { db, plansTable, subscriptionsTable, vpnKeysTable } from "@workspace/db";
 import { BRAND_NAME, SUBSCRIPTION_UPDATE_INTERVAL_HOURS, verifySubscriptionToken } from "../lib/subscription";
 import { subscriptionRateLimit } from "../lib/rateLimit";
 
@@ -53,8 +53,28 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
   res.setHeader("Profile-Title", `base64:${Buffer.from(BRAND_NAME, "utf8").toString("base64")}`);
   res.setHeader("Profile-Update-Interval", String(SUBSCRIPTION_UPDATE_INTERVAL_HOURS));
   if (activeSubscription?.endsAt) {
+    // Report real consumption for the current billing period (not lifetime —
+    // period counters reset on renewal, matching what the admin/user panels
+    // show as "this period's" usage). "download" carries the client's actual
+    // downstream traffic; "upload" the client's outbound. total=0 means
+    // "unlimited" to Happ/v2rayNG's progress bar, so only send a nonzero cap
+    // when the plan actually has one.
+    const periodUpBytes = keys.reduce((sum, key) => sum + key.periodUpBytes, 0);
+    const periodDownBytes = keys.reduce((sum, key) => sum + key.periodDownBytes, 0);
+
+    let totalBytes = 0;
+    if (activeSubscription.planId) {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, activeSubscription.planId));
+      if (plan?.trafficLimitGb) {
+        totalBytes = plan.trafficLimitGb * 1024 * 1024 * 1024;
+      }
+    }
+
     const expireUnix = Math.floor(activeSubscription.endsAt.getTime() / 1000);
-    res.setHeader("Subscription-Userinfo", `upload=0; download=0; total=0; expire=${expireUnix}`);
+    res.setHeader(
+      "Subscription-Userinfo",
+      `upload=${periodUpBytes}; download=${periodDownBytes}; total=${totalBytes}; expire=${expireUnix}`,
+    );
   }
   res.send(body);
 });
