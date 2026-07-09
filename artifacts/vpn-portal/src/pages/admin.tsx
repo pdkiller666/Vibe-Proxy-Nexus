@@ -218,16 +218,20 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
   const [devicesIncluded, setDevicesIncluded] = useState(plan?.devicesIncluded?.toString() ?? "1");
   const [trafficLimitGb, setTrafficLimitGb] = useState(plan?.trafficLimitGb?.toString() ?? "");
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
+  const [billingType, setBillingType] = useState<"monthly" | "hourly">(plan?.billingType ?? "monthly");
+  const [hourlyRateKopecks, setHourlyRateKopecks] = useState(plan?.hourlyRateKopecks?.toString() ?? "");
 
   function handleSubmit() {
     const body = {
       name,
       description,
-      priceRub: Number(priceRub),
-      durationDays: Number(durationDays),
+      priceRub: billingType === "hourly" ? 0 : Number(priceRub),
+      durationDays: billingType === "hourly" ? 0 : Number(durationDays),
       devicesIncluded: devicesIncluded ? Number(devicesIncluded) : 1,
       trafficLimitGb: trafficLimitGb ? Number(trafficLimitGb) : null,
       isActive,
+      billingType,
+      hourlyRateKopecks: billingType === "hourly" ? Number(hourlyRateKopecks) : null,
     };
     const onSuccess = () => {
       queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
@@ -247,20 +251,40 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
     <div className="bg-muted/30 border border-border p-4 space-y-3">
       <div className="grid md:grid-cols-2 gap-3">
         <Input placeholder="Название" value={name} onChange={(e) => setName(e.target.value)} className="rounded-none" />
-        <Input
-          type="number"
-          placeholder="Цена, ₽"
-          value={priceRub}
-          onChange={(e) => setPriceRub(e.target.value)}
-          className="rounded-none"
-        />
-        <Input
-          type="number"
-          placeholder="Длительность, дней"
-          value={durationDays}
-          onChange={(e) => setDurationDays(e.target.value)}
-          className="rounded-none"
-        />
+        <select
+          value={billingType}
+          onChange={(e) => setBillingType(e.target.value as "monthly" | "hourly")}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="monthly">Помесячный</option>
+          <option value="hourly">Почасовой</option>
+        </select>
+        {billingType === "hourly" ? (
+          <Input
+            type="number"
+            placeholder="Цена, коп./час"
+            value={hourlyRateKopecks}
+            onChange={(e) => setHourlyRateKopecks(e.target.value.replace(/[^0-9]/g, ""))}
+            className="rounded-none"
+          />
+        ) : (
+          <>
+            <Input
+              type="number"
+              placeholder="Цена, ₽"
+              value={priceRub}
+              onChange={(e) => setPriceRub(e.target.value)}
+              className="rounded-none"
+            />
+            <Input
+              type="number"
+              placeholder="Длительность, дней"
+              value={durationDays}
+              onChange={(e) => setDurationDays(e.target.value)}
+              className="rounded-none"
+            />
+          </>
+        )}
         <Input
           type="number"
           placeholder="Устройств включено"
@@ -291,7 +315,12 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
       <div className="flex gap-2">
         <button
           onClick={handleSubmit}
-          disabled={creating || updating || !name || !priceRub || !durationDays}
+          disabled={
+            creating ||
+            updating ||
+            !name ||
+            (billingType === "hourly" ? !hourlyRateKopecks : !priceRub || !durationDays)
+          }
           className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           Сохранить
@@ -337,7 +366,12 @@ function PlansManagement() {
                 {plan.name} {!plan.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
-                {plan.priceRub} ₽ · {plan.durationDays} дней · {plan.devicesIncluded} уст. ·{" "}
+                {plan.billingType === "hourly" ? (
+                  <>{((plan.hourlyRateKopecks ?? 0) / 100).toFixed(2)} ₽/час (почасовой)</>
+                ) : (
+                  <>{plan.priceRub} ₽ · {plan.durationDays} дней</>
+                )}{" "}
+                · {plan.devicesIncluded} уст. ·{" "}
                 {plan.trafficLimitGb ? `${plan.trafficLimitGb} ГБ/период` : "трафик без лимита"}
               </div>
             </div>
@@ -805,9 +839,9 @@ function UsersManagement() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-          toast({ title: `Дополнительных слотов: ${next}` });
+          toast({ title: `Дополнительных устройств: ${next}` });
         },
-        onError: () => toast({ title: "Ошибка изменения слотов", variant: "destructive" }),
+        onError: () => toast({ title: "Ошибка изменения устройств", variant: "destructive" }),
       },
     );
   }
@@ -1513,8 +1547,9 @@ export default function Admin() {
       <SummarySection />
 
       <Tabs defaultValue="payments">
-        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-          <TabsList className="rounded-none w-max min-w-full md:w-auto">
+        <div className="relative -mx-4 md:mx-0">
+          <div className="overflow-x-auto px-4 md:px-0">
+            <TabsList className="rounded-none w-max min-w-full md:w-auto">
             <TabsTrigger value="payments" className="rounded-none gap-1.5 whitespace-nowrap">
               <CreditCard className="w-4 h-4" /> Платежи
               <Badge count={pendingPayments} />
@@ -1538,7 +1573,9 @@ export default function Admin() {
               <MessageCircle className="w-4 h-4" /> Поддержка
               <Badge count={openTickets} />
             </TabsTrigger>
-          </TabsList>
+            </TabsList>
+          </div>
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent md:hidden" />
         </div>
         <TabsContent value="payments" className="pt-4">
           <PaymentsQueue />

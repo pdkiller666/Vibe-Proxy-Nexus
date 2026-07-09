@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PlanBillingType } from './planBillingType';
 import type { UserRole } from './userRole';
 
 export interface Me {
@@ -18,6 +19,11 @@ export interface Me {
   currentPlanName?: string | null;
   /** @nullable */
   subscriptionEndsAt?: Date | null;
+  currentPlanBillingType?: PlanBillingType | null;
+  /** @nullable */
+  hourlyRateKopecks?: number | null;
+  /** @nullable */
+  lastBilledAt?: Date | null;
   deviceSlots: number;
   activeKeyCount: number;
   balanceKopecks: number;

@@ -51,6 +51,60 @@ router.post("/subscriptions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (plan.billingType === "hourly") {
+    if (!plan.hourlyRateKopecks || plan.hourlyRateKopecks <= 0) {
+      res.status(400).json({ error: "Почасовой тариф настроен некорректно. Обратитесь в поддержку." });
+      return;
+    }
+
+    if (user.balanceKopecks < plan.hourlyRateKopecks / 12) {
+      res.status(400).json({
+        error: "Недостаточно средств на балансе для подключения почасового тарифа. Пополните баланс.",
+      });
+      return;
+    }
+
+    const [existingActiveHourly] = await db
+      .select({ id: subscriptionsTable.id })
+      .from(subscriptionsTable)
+      .where(
+        and(
+          eq(subscriptionsTable.userId, user.id),
+          eq(subscriptionsTable.planId, plan.id),
+          eq(subscriptionsTable.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    if (existingActiveHourly) {
+      res.status(409).json({ error: "Почасовой тариф уже подключён." });
+      return;
+    }
+
+    const [subscription] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId: user.id,
+        planId: plan.id,
+        status: "active",
+        startsAt: new Date(),
+      })
+      .returning();
+
+    if (!subscription) {
+      res.status(500).json({ error: "Failed to activate hourly plan" });
+      return;
+    }
+
+    res.status(201).json(
+      CreateSubscriptionResponse.parse({
+        subscription: { ...subscription, plan },
+        payment: null,
+      }),
+    );
+    return;
+  }
+
   // #1 — Prevent multiple pending subscriptions. A user must pay for the
   // existing one or cancel it before opening a new one. Without this check,
   // a user could spam the "Subscribe" button and flood the admin queue.

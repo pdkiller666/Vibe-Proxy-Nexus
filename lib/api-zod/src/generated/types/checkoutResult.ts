@@ -10,5 +10,5 @@ import type { Subscription } from './subscription';
 
 export interface CheckoutResult {
   subscription: Subscription;
-  payment: Payment;
+  payment: Payment | null;
 }

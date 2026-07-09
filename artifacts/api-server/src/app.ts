@@ -10,6 +10,7 @@ import { getSessionSecret, startSessionCleanupJob } from "./lib/session";
 import { corsOriginCheck } from "./lib/corsOrigins";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionLifecycle";
 import { startTrafficPollingJob } from "./lib/trafficPolling";
+import { startHourlyBillingJob } from "./lib/hourlyBilling";
 
 const app: Express = express();
 
@@ -60,5 +61,6 @@ mountStaticFrontend(app);
 startSessionCleanupJob();
 startSubscriptionExpiryJob();
 startTrafficPollingJob();
+startHourlyBillingJob();
 
 export default app;

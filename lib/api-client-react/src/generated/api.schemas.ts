@@ -58,6 +58,14 @@ export interface ResetPasswordResult {
   message: string;
 }
 
+export type PlanBillingType = typeof PlanBillingType[keyof typeof PlanBillingType];
+
+
+export const PlanBillingType = {
+  monthly: 'monthly',
+  hourly: 'hourly',
+} as const;
+
 export interface Me {
   id: number;
   email: string;
@@ -69,6 +77,11 @@ export interface Me {
   currentPlanName?: string | null;
   /** @nullable */
   subscriptionEndsAt?: string | null;
+  currentPlanBillingType?: PlanBillingType | null;
+  /** @nullable */
+  hourlyRateKopecks?: number | null;
+  /** @nullable */
+  lastBilledAt?: string | null;
   deviceSlots: number;
   activeKeyCount: number;
   balanceKopecks: number;
@@ -84,6 +97,9 @@ export interface Plan {
   devicesIncluded: number;
   /** @nullable */
   trafficLimitGb: number | null;
+  billingType: PlanBillingType;
+  /** @nullable */
+  hourlyRateKopecks: number | null;
   isActive: boolean;
   createdAt?: string;
 }
@@ -103,6 +119,12 @@ export interface PlanInput {
      * @nullable
      */
   trafficLimitGb?: number | null;
+  billingType?: PlanBillingType;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  hourlyRateKopecks?: number | null;
   isActive?: boolean;
 }
 
@@ -121,6 +143,12 @@ export interface PlanUpdate {
      * @nullable
      */
   trafficLimitGb?: number | null;
+  billingType?: PlanBillingType;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  hourlyRateKopecks?: number | null;
   isActive?: boolean;
 }
 
@@ -172,6 +200,8 @@ export interface Subscription {
   startsAt?: string | null;
   /** @nullable */
   endsAt?: string | null;
+  /** @nullable */
+  lastBilledAt?: string | null;
   createdAt: string;
 }
 
@@ -257,7 +287,7 @@ export interface PaymentReject {
 
 export interface CheckoutResult {
   subscription: Subscription;
-  payment: Payment;
+  payment: Payment | null;
 }
 
 export interface VpnNode {

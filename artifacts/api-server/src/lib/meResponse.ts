@@ -12,6 +12,9 @@ export async function buildMeData(user: User) {
       endsAt: subscriptionsTable.endsAt,
       planName: plansTable.name,
       devicesIncluded: plansTable.devicesIncluded,
+      billingType: plansTable.billingType,
+      hourlyRateKopecks: plansTable.hourlyRateKopecks,
+      lastBilledAt: subscriptionsTable.lastBilledAt,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
@@ -45,6 +48,9 @@ export async function buildMeData(user: User) {
     hasActiveSubscription: Boolean(activeSubscription),
     currentPlanName: activeSubscription?.planName ?? null,
     subscriptionEndsAt: activeSubscription?.endsAt ?? null,
+    currentPlanBillingType: activeSubscription?.billingType ?? null,
+    hourlyRateKopecks: activeSubscription?.hourlyRateKopecks ?? null,
+    lastBilledAt: activeSubscription?.lastBilledAt ?? null,
     deviceSlots,
     activeKeyCount,
     balanceKopecks: user.balanceKopecks,

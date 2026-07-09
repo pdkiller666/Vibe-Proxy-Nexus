@@ -37,7 +37,15 @@ export default function Checkout() {
   const { id } = useParams<{ id: string }>();
   const subscriptionId = Number(id);
   const [, setLocation] = useLocation();
-  const { data: payments, isLoading: paymentsLoading } = useListMyPayments();
+  const { data: payments, isLoading: paymentsLoading } = useListMyPayments({
+    query: { refetchInterval: (query) => {
+      const list = query.state.data;
+      const current = list
+        ?.filter((p) => p.subscriptionId === subscriptionId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      return !current || current.status === "pending" ? 15_000 : false;
+    } },
+  });
   const { data: settings, isLoading: settingsLoading } = useGetPaymentSettings();
   const { mutate: updateNote, isPending: notePending } = useUpdatePaymentNote();
   const { toast } = useToast();
@@ -173,7 +181,7 @@ export default function Checkout() {
               {notePending ? "Сохраняем..." : submitted || payment.userNote ? "Обновить отметку" : "Я оплатил(а)"}
             </button>
             <p className="text-xs text-muted-foreground">
-              Это не автоматическая оплата картой — администратор вручную сверит перевод и активирует подписку.
+              Это не автоматическая оплата картой — администратор вручную сверит перевод и активирует подписку. Обычно это занимает до нескольких часов. Статус обновится здесь автоматически.
             </p>
           </div>
 

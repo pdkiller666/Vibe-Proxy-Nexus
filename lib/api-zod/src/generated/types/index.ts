@@ -35,6 +35,7 @@ export * from './paymentSettingsUpdate';
 export * from './paymentStatus';
 export * from './paymentType';
 export * from './plan';
+export * from './planBillingType';
 export * from './planInput';
 export * from './planUpdate';
 export * from './registerInput';

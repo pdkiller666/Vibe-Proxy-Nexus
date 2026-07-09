@@ -17,5 +17,7 @@ export interface Subscription {
   startsAt?: Date | null;
   /** @nullable */
   endsAt?: Date | null;
+  /** @nullable */
+  lastBilledAt?: Date | null;
   createdAt: Date;
 }

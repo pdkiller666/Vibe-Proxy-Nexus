@@ -9,7 +9,7 @@
  * already short-circuits to an empty map in that case.
  */
 import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
-import { db, plansTable, subscriptionsTable, vpnKeysTable } from "@workspace/db";
+import { jobsDb, plansTable, subscriptionsTable, vpnKeysTable } from "@workspace/db";
 import { pollUserTrafficCounters } from "./xrayStats";
 import { isLocalXrayEnabled, removeXrayClient } from "./xray";
 import { logger } from "./logger";
@@ -42,6 +42,13 @@ const TRAFFIC_POLL_INTERVAL_MS = 60 * 1000; // 1 minute
  * A crash between the gRPC read and this commit no longer loses anything
  * either: `last_seen_*_bytes` in the DB wasn't advanced, so the next poll
  * simply recomputes the same (larger) delta from the same baseline.
+ *
+ * All rows are applied in a single batched UPDATE (via a VALUES list joined
+ * on uuid) rather than one round-trip per key. At scale (hundreds/thousands
+ * of active keys) a per-key sequential UPDATE loop would hold this
+ * transaction open for seconds and, combined with a small connection pool,
+ * would starve concurrent user-facing requests — see .agents/memory for the
+ * hourly-billing load analysis this was written for.
  */
 export async function applyTrafficDeltas(
   counters: Map<string, { uplinkBytes: number; downlinkBytes: number }>,
@@ -49,23 +56,27 @@ export async function applyTrafficDeltas(
   const entries = [...counters].filter(([, c]) => c.uplinkBytes !== 0 || c.downlinkBytes !== 0);
   if (entries.length === 0) return;
 
-  await db.transaction(async (tx) => {
-    for (const [uuid, { uplinkBytes, downlinkBytes }] of entries) {
-      const upDelta = sql`(case when ${uplinkBytes} >= ${vpnKeysTable.lastSeenUpBytes} then ${uplinkBytes} - ${vpnKeysTable.lastSeenUpBytes} else ${uplinkBytes} end)`;
-      const downDelta = sql`(case when ${downlinkBytes} >= ${vpnKeysTable.lastSeenDownBytes} then ${downlinkBytes} - ${vpnKeysTable.lastSeenDownBytes} else ${downlinkBytes} end)`;
-      await tx
-        .update(vpnKeysTable)
-        .set({
-          trafficUpBytes: sql`${vpnKeysTable.trafficUpBytes} + ${upDelta}`,
-          trafficDownBytes: sql`${vpnKeysTable.trafficDownBytes} + ${downDelta}`,
-          periodUpBytes: sql`${vpnKeysTable.periodUpBytes} + ${upDelta}`,
-          periodDownBytes: sql`${vpnKeysTable.periodDownBytes} + ${downDelta}`,
-          lastSeenUpBytes: uplinkBytes,
-          lastSeenDownBytes: downlinkBytes,
-        })
-        .where(eq(vpnKeysTable.uuid, uuid));
-    }
-  });
+  const values = sql.join(
+    entries.map(
+      ([uuid, { uplinkBytes, downlinkBytes }]) =>
+        sql`(${uuid}::text, ${uplinkBytes}::bigint, ${downlinkBytes}::bigint)`,
+    ),
+    sql`, `,
+  );
+
+  await jobsDb.execute(sql`
+    update vpn_keys as vk
+    set
+      traffic_up_bytes = vk.traffic_up_bytes + (case when c.up >= vk.last_seen_up_bytes then c.up - vk.last_seen_up_bytes else c.up end),
+      traffic_down_bytes = vk.traffic_down_bytes + (case when c.down >= vk.last_seen_down_bytes then c.down - vk.last_seen_down_bytes else c.down end),
+      period_up_bytes = vk.period_up_bytes + (case when c.up >= vk.last_seen_up_bytes then c.up - vk.last_seen_up_bytes else c.up end),
+      period_down_bytes = vk.period_down_bytes + (case when c.down >= vk.last_seen_down_bytes then c.down - vk.last_seen_down_bytes else c.down end),
+      last_seen_up_bytes = c.up,
+      last_seen_down_bytes = c.down,
+      last_traffic_at = now()
+    from (values ${values}) as c(uuid, up, down)
+    where vk.uuid = c.uuid
+  `);
 }
 
 /**
@@ -83,8 +94,8 @@ export async function enforceTrafficLimits(): Promise<number> {
   // each key's traffic out across every active subscription row a user
   // happens to have, multiplying periodBytes and triggering false
   // "exceeded" revocations.
-  const currentPlanLimitByUser = db.$with("current_plan_limit_by_user").as(
-    db
+  const currentPlanLimitByUser = jobsDb.$with("current_plan_limit_by_user").as(
+    jobsDb
       .selectDistinctOn([subscriptionsTable.userId], {
         userId: subscriptionsTable.userId,
         trafficLimitGb: plansTable.trafficLimitGb,
@@ -103,7 +114,7 @@ export async function enforceTrafficLimits(): Promise<number> {
   // sum(bigint + bigint) returns Postgres `numeric`, which the pg driver
   // hands back as a string — coerce explicitly with Number() rather than
   // relying on the `sql<number>` annotation, which is compile-time only.
-  const rawUsage = await db
+  const rawUsage = await jobsDb
     .with(currentPlanLimitByUser)
     .select({
       userId: vpnKeysTable.userId,
@@ -125,7 +136,7 @@ export async function enforceTrafficLimits(): Promise<number> {
     const limitBytes = row.trafficLimitGb * 1024 * 1024 * 1024;
     if (row.periodBytes < limitBytes) continue;
 
-    const keysToRevoke = await db
+    const keysToRevoke = await jobsDb
       .select()
       .from(vpnKeysTable)
       .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
@@ -142,7 +153,7 @@ export async function enforceTrafficLimits(): Promise<number> {
       }
     }
 
-    await db
+    await jobsDb
       .update(vpnKeysTable)
       .set({ revokedAt: now })
       .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));

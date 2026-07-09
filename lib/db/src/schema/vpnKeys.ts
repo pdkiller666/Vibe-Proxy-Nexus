@@ -40,6 +40,12 @@ export const vpnKeysTable = pgTable(
     // as the delta since the restart instead of discarding it.
     lastSeenUpBytes: bigint("last_seen_up_bytes", { mode: "number" }).notNull().default(0),
     lastSeenDownBytes: bigint("last_seen_down_bytes", { mode: "number" }).notNull().default(0),
+    // Set (in the same batched UPDATE as the counters above) whenever a
+    // traffic poll observes a nonzero delta for this key. Used by
+    // hourlyBilling.ts as the "is this device actually connected right now"
+    // signal for automatic start/stop of hourly billing — a key is
+    // considered idle once this falls outside the billing grace window.
+    lastTrafficAt: timestamp("last_traffic_at", { withTimezone: true }),
   },
   (table) => [index("vpn_keys_user_id_idx").on(table.userId)],
 );

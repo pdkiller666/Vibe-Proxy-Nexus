@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PlanBillingType } from './planBillingType';
 
 export interface Plan {
   id: number;
@@ -16,6 +17,9 @@ export interface Plan {
   devicesIncluded: number;
   /** @nullable */
   trafficLimitGb: number | null;
+  billingType: PlanBillingType;
+  /** @nullable */
+  hourlyRateKopecks: number | null;
   isActive: boolean;
   createdAt?: Date;
 }

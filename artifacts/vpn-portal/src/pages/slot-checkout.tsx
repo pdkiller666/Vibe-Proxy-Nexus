@@ -38,7 +38,13 @@ export default function SlotCheckout() {
   const { id } = useParams<{ id: string }>();
   const paymentId = Number(id);
   const [, setLocation] = useLocation();
-  const { data: payments, isLoading: paymentsLoading } = useListMyPayments();
+  const { data: payments, isLoading: paymentsLoading } = useListMyPayments({
+    query: { refetchInterval: (query) => {
+      const list = query.state.data;
+      const current = list?.find((p) => p.id === paymentId);
+      return !current || current.status === "pending" ? 15_000 : false;
+    } },
+  });
   const { data: settings, isLoading: settingsLoading } = useGetPaymentSettings();
   const { mutate: updateNote, isPending: notePending } = useUpdatePaymentNote();
   const { mutate: cancelOrder, isPending: cancelling } = useDeleteExtraSlotOrder();
@@ -133,7 +139,7 @@ export default function SlotCheckout() {
 
       {payment.status === "confirmed" && (
         <div className="bg-green-50 border border-green-200 p-4 text-sm text-green-800">
-          Слот добавлен — вернитесь на страницу «Ключи VPN» и выпустите ключ для нового устройства.
+          Устройство добавлено — вернитесь на страницу «Ключи VPN» и выпустите ключ для нового устройства.
         </div>
       )}
 
@@ -177,7 +183,7 @@ export default function SlotCheckout() {
               {notePending ? "Сохраняем..." : submitted || payment.userNote ? "Обновить отметку" : "Я оплатил(а)"}
             </button>
             <p className="text-xs text-muted-foreground">
-              Администратор вручную сверит перевод и добавит устройство к вашей подписке.
+              Администратор вручную сверит перевод и добавит устройство к вашей подписке — обычно это занимает до нескольких часов. Статус обновится здесь автоматически.
             </p>
           </div>
 

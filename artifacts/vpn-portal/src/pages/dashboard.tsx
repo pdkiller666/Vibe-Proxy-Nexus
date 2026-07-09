@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useGetMe, useListMyVpnKeys, useCreateBalanceTopupOrder, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Shield, Key, CreditCard, ArrowRight, AlertTriangle, CheckCircle2, Clock, Sparkles, Wallet, Plus } from "lucide-react";
+import { Shield, Key, CreditCard, ArrowRight, AlertTriangle, CheckCircle2, Clock, Sparkles, Wallet, Plus, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -159,6 +159,36 @@ export default function Dashboard() {
       {/* ── Subscription hero block ───────────────────────────────── */}
       {meLoading ? (
         <Skeleton className="h-40 w-full" />
+      ) : me?.hasActiveSubscription && me.currentPlanBillingType === "hourly" ? (
+        <div className="bg-card border border-border overflow-hidden">
+          <div className="h-1 w-full bg-primary" />
+          <div className="p-6 flex flex-col sm:flex-row sm:items-center gap-6">
+            <div className="w-14 h-14 bg-primary/10 flex items-center justify-center shrink-0">
+              <Zap className="w-7 h-7 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                  Подписка
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Активна
+                </span>
+              </div>
+              <div className="text-2xl font-black tracking-tight">{me.currentPlanName}</div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Почасовая оплата — {formatKopecks(me.hourlyRateKopecks ?? 0)}/час, списывается автоматически с баланса, пока есть трафик. Ничего останавливать не нужно.
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
+            >
+              Сменить тариф
+            </Link>
+          </div>
+        </div>
       ) : me?.hasActiveSubscription ? (
         <div className="bg-card border border-border overflow-hidden">
           {/* colour bar */}

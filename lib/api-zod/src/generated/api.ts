@@ -39,6 +39,9 @@ export const RegisterResponse = zod.object({
   "hasActiveSubscription": zod.boolean(),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "hourlyRateKopecks": zod.number().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number()
@@ -65,6 +68,9 @@ export const LoginResponse = zod.object({
   "hasActiveSubscription": zod.boolean(),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "hourlyRateKopecks": zod.number().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number()
@@ -119,6 +125,9 @@ export const GetMeResponse = zod.object({
   "hasActiveSubscription": zod.boolean(),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "hourlyRateKopecks": zod.number().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number()
@@ -136,6 +145,8 @@ export const ListPlansResponseItem = zod.object({
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -189,12 +200,15 @@ export const ListMySubscriptionsResponseItem = zod.object({
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 }),
   "status": zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),
   "startsAt": zod.coerce.date().nullish(),
   "endsAt": zod.coerce.date().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListMySubscriptionsResponse = zod.array(ListMySubscriptionsResponseItem)
@@ -220,15 +234,18 @@ export const CreateSubscriptionResponse = zod.object({
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 }),
   "status": zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),
   "startsAt": zod.coerce.date().nullish(),
   "endsAt": zod.coerce.date().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }),
-  "payment": zod.object({
+  "payment": zod.union([zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
@@ -240,7 +257,7 @@ export const CreateSubscriptionResponse = zod.object({
   "rejectionReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
   "confirmedAt": zod.coerce.date().nullish()
-})
+}),zod.null()])
 })
 
 
@@ -528,6 +545,7 @@ export const createPlanBodyPriceRubMin = 0;
 
 
 
+
 export const CreatePlanBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string().optional(),
@@ -535,6 +553,8 @@ export const CreatePlanBody = zod.object({
   "durationDays": zod.number().min(1),
   "devicesIncluded": zod.number().min(1).optional(),
   "trafficLimitGb": zod.number().min(1).nullish(),
+  "billingType": zod.enum(['monthly', 'hourly']).optional(),
+  "hourlyRateKopecks": zod.number().min(1).nullish(),
   "isActive": zod.boolean().optional()
 })
 
@@ -546,6 +566,8 @@ export const CreatePlanResponse = zod.object({
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })
@@ -566,6 +588,7 @@ export const updatePlanBodyPriceRubMin = 0;
 
 
 
+
 export const UpdatePlanBody = zod.object({
   "name": zod.string().min(1).optional(),
   "description": zod.string().optional(),
@@ -573,6 +596,8 @@ export const UpdatePlanBody = zod.object({
   "durationDays": zod.number().min(1).optional(),
   "devicesIncluded": zod.number().min(1).optional(),
   "trafficLimitGb": zod.number().min(1).nullish(),
+  "billingType": zod.enum(['monthly', 'hourly']).optional(),
+  "hourlyRateKopecks": zod.number().min(1).nullish(),
   "isActive": zod.boolean().optional()
 })
 
@@ -584,6 +609,8 @@ export const UpdatePlanResponse = zod.object({
   "durationDays": zod.number(),
   "devicesIncluded": zod.number(),
   "trafficLimitGb": zod.number().nullable(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date().optional()
 })

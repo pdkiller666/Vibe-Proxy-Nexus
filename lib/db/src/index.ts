@@ -11,7 +11,14 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool(resolvePgConnection(process.env.DATABASE_URL));
+export const pool = new Pool({ ...resolvePgConnection(process.env.DATABASE_URL), max: 15 });
 export const db = drizzle(pool, { schema });
+
+// Separate connection pool for background jobs (traffic polling, hourly
+// billing). These run periodic batch queries touching many rows at once;
+// without a dedicated pool, a slow batch job could starve the connections
+// needed to serve concurrent user-facing HTTP requests on `pool` above.
+export const jobsPool = new Pool({ ...resolvePgConnection(process.env.DATABASE_URL), max: 5 });
+export const jobsDb = drizzle(jobsPool, { schema });
 
 export * from "./schema";

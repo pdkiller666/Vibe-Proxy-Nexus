@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PlanBillingType } from './planBillingType';
 
 export interface PlanInput {
   /** @minLength 1 */
@@ -21,5 +22,11 @@ export interface PlanInput {
      * @nullable
      */
   trafficLimitGb?: number | null;
+  billingType?: PlanBillingType;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  hourlyRateKopecks?: number | null;
   isActive?: boolean;
 }

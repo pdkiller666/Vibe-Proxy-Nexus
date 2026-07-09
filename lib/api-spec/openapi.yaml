@@ -1013,13 +1013,23 @@ components:
         hasActiveSubscription: { type: boolean }
         currentPlanName: { type: ["string", "null"] }
         subscriptionEndsAt: { type: ["string", "null"], format: date-time }
+        currentPlanBillingType:
+          oneOf:
+            - $ref: "#/components/schemas/PlanBillingType"
+            - type: "null"
+        hourlyRateKopecks: { type: ["integer", "null"] }
+        lastBilledAt: { type: ["string", "null"], format: date-time }
         deviceSlots: { type: integer }
         activeKeyCount: { type: integer }
         balanceKopecks: { type: integer }
 
+    PlanBillingType:
+      type: string
+      enum: [monthly, hourly]
+
     Plan:
       type: object
-      required: [id, name, priceRub, durationDays, devicesIncluded, trafficLimitGb, isActive]
+      required: [id, name, priceRub, durationDays, devicesIncluded, trafficLimitGb, billingType, hourlyRateKopecks, isActive]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -1029,6 +1039,12 @@ components:
         devicesIncluded: { type: integer }
         # Traffic cap per subscription period, in gigabytes. Null = unlimited.
         trafficLimitGb: { type: ["integer", "null"] }
+        billingType:
+          $ref: "#/components/schemas/PlanBillingType"
+        # Per-hour rate in kopecks, billed automatically in 5-minute
+        # increments while the user's VPN client is actually sending
+        # traffic. Null for monthly plans.
+        hourlyRateKopecks: { type: ["integer", "null"] }
         isActive: { type: boolean }
         createdAt: { type: string, format: date-time }
 
@@ -1042,6 +1058,9 @@ components:
         durationDays: { type: integer, minimum: 1 }
         devicesIncluded: { type: integer, minimum: 1 }
         trafficLimitGb: { type: ["integer", "null"], minimum: 1 }
+        billingType:
+          $ref: "#/components/schemas/PlanBillingType"
+        hourlyRateKopecks: { type: ["integer", "null"], minimum: 1 }
         isActive: { type: boolean }
 
     PlanUpdate:
@@ -1053,6 +1072,9 @@ components:
         durationDays: { type: integer, minimum: 1 }
         devicesIncluded: { type: integer, minimum: 1 }
         trafficLimitGb: { type: ["integer", "null"], minimum: 1 }
+        billingType:
+          $ref: "#/components/schemas/PlanBillingType"
+        hourlyRateKopecks: { type: ["integer", "null"], minimum: 1 }
         isActive: { type: boolean }
 
     PaymentSettings:
@@ -1096,6 +1118,9 @@ components:
           $ref: "#/components/schemas/SubscriptionStatus"
         startsAt: { type: ["string", "null"], format: date-time }
         endsAt: { type: ["string", "null"], format: date-time }
+        # Hourly plans only: how far usage has already been charged. Null
+        # means no usage has been billed yet (device hasn't connected).
+        lastBilledAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
 
     SubscriptionInput:
@@ -1177,8 +1202,13 @@ components:
       properties:
         subscription:
           $ref: "#/components/schemas/Subscription"
+        # Null when activating an hourly plan: those are paid from the
+        # user's balance as usage accrues, so there's no upfront payment
+        # record to confirm.
         payment:
-          $ref: "#/components/schemas/Payment"
+          oneOf:
+            - $ref: "#/components/schemas/Payment"
+            - type: "null"
 
     VpnNode:
       type: object
