@@ -20,3 +20,13 @@ at `main`.
 **How to apply:** run `./deploy.sh "commit message"` after every successful
 task (per user's standing request) instead of trying `git push` or
 reconstructing the blob/tree/commit API calls by hand each time.
+
+**Standing user instruction (2026-07-09):** after finishing every task, deploy
+automatically without waiting to be asked, then report back deploy status —
+don't just claim success from the push script's own log. Re-verify: (1) fetch
+the GitHub API's `commits/main` sha/message and confirm it matches what was
+just pushed, (2) treat local `git log origin/main` as stale/unreliable for
+this (cached from clone, not updated by the API-based push) — always check
+via `fetch("https://api.github.com/repos/.../commits/main")` instead, (3)
+where possible spot-check the live prod URL/API reflects the change before
+telling the user it's live.

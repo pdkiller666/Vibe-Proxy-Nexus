@@ -219,7 +219,9 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
   const [trafficLimitGb, setTrafficLimitGb] = useState(plan?.trafficLimitGb?.toString() ?? "");
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
   const [billingType, setBillingType] = useState<"monthly" | "hourly">(plan?.billingType ?? "monthly");
-  const [hourlyRateKopecks, setHourlyRateKopecks] = useState(plan?.hourlyRateKopecks?.toString() ?? "");
+  const [hourlyRateRub, setHourlyRateRub] = useState(
+    plan?.hourlyRateKopecks != null ? (plan.hourlyRateKopecks / 100).toString() : "",
+  );
 
   function handleSubmit() {
     const body = {
@@ -231,7 +233,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
       trafficLimitGb: trafficLimitGb ? Number(trafficLimitGb) : null,
       isActive,
       billingType,
-      hourlyRateKopecks: billingType === "hourly" ? Number(hourlyRateKopecks) : null,
+      hourlyRateKopecks: billingType === "hourly" ? Math.round(Number(hourlyRateRub) * 100) : null,
     };
     const onSuccess = () => {
       queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
@@ -262,9 +264,11 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
         {billingType === "hourly" ? (
           <Input
             type="number"
-            placeholder="Цена, коп./час"
-            value={hourlyRateKopecks}
-            onChange={(e) => setHourlyRateKopecks(e.target.value.replace(/[^0-9]/g, ""))}
+            step="0.01"
+            min={0}
+            placeholder="Цена, ₽/час"
+            value={hourlyRateRub}
+            onChange={(e) => setHourlyRateRub(e.target.value.replace(/[^0-9.]/g, ""))}
             className="rounded-none"
           />
         ) : (
@@ -319,7 +323,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
             creating ||
             updating ||
             !name ||
-            (billingType === "hourly" ? !hourlyRateKopecks : !priceRub || !durationDays)
+            (billingType === "hourly" ? !hourlyRateRub : !priceRub || !durationDays)
           }
           className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
         >
