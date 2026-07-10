@@ -52,13 +52,20 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Profile-Title", `base64:${Buffer.from(BRAND_NAME, "utf8").toString("base64")}`);
   res.setHeader("Profile-Update-Interval", String(SUBSCRIPTION_UPDATE_INTERVAL_HOURS));
-  if (activeSubscription?.endsAt) {
+  // Deep link to the user's personal cabinet, shown by Happ/v2rayNG next to
+  // the subscription group. Built from the request host rather than a
+  // hardcoded domain so it stays correct across the prod domain and any
+  // future custom domain, without needing a config change.
+  res.setHeader("Profile-Web-Page-Url", `${req.protocol}://${req.get("host")}/dashboard`);
+  if (activeSubscription) {
     // Report real consumption for the current billing period (not lifetime —
     // period counters reset on renewal, matching what the admin/user panels
     // show as "this period's" usage). "download" carries the client's actual
     // downstream traffic; "upload" the client's outbound. total=0 means
     // "unlimited" to Happ/v2rayNG's progress bar, so only send a nonzero cap
-    // when the plan actually has one.
+    // when the plan actually has one. Sent even when the subscription has no
+    // endsAt (e.g. hourly plans) — omitting "expire" there is fine, but
+    // omitting the whole header made the usage bar disappear entirely.
     const periodUpBytes = keys.reduce((sum, key) => sum + key.periodUpBytes, 0);
     const periodDownBytes = keys.reduce((sum, key) => sum + key.periodDownBytes, 0);
 
@@ -70,11 +77,11 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
       }
     }
 
-    const expireUnix = Math.floor(activeSubscription.endsAt.getTime() / 1000);
-    res.setHeader(
-      "Subscription-Userinfo",
-      `upload=${periodUpBytes}; download=${periodDownBytes}; total=${totalBytes}; expire=${expireUnix}`,
-    );
+    const parts = [`upload=${periodUpBytes}`, `download=${periodDownBytes}`, `total=${totalBytes}`];
+    if (activeSubscription.endsAt) {
+      parts.push(`expire=${Math.floor(activeSubscription.endsAt.getTime() / 1000)}`);
+    }
+    res.setHeader("Subscription-Userinfo", parts.join("; "));
   }
   res.send(body);
 });
