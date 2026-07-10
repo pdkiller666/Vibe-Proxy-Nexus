@@ -48,8 +48,13 @@ app.use(
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({ credentials: true, origin: corsOriginCheck }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Payment screenshots are uploaded as base64 JSON (see payments.ts), which
+// inflates a ~10MB photo to ~13-14MB of JSON text. Express's default 100kb
+// body limit rejected these with a 413 before the request ever reached the
+// route handler. Cap at 15mb here to match the 10MB client-side file limit
+// enforced in payment-screenshot-upload.tsx (base64 + JSON overhead ~37%).
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 app.use(cookieParser(getSessionSecret()));
 
 app.use("/api", router);
