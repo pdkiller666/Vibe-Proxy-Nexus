@@ -24,4 +24,9 @@ export interface PaymentSettingsUpdate {
   /** @minimum 0 */
   minHourlyTopupRub?: number;
   primaryDomain?: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  referralCommissionPercent?: number;
 }

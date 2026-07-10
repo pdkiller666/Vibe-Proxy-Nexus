@@ -25,10 +25,12 @@ export const registerBodyPasswordMax = 200;
 
 
 
+
 export const RegisterBody = zod.object({
   "email": zod.string().email(),
   "password": zod.string().min(registerBodyPasswordMin).max(registerBodyPasswordMax),
-  "name": zod.string().optional()
+  "name": zod.string().optional(),
+  "ref": zod.string().min(1)
 })
 
 export const RegisterResponse = zod.object({
@@ -46,7 +48,11 @@ export const RegisterResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
-  "periodUsageBytes": zod.number().optional()
+  "periodUsageBytes": zod.number().optional(),
+  "referralCode": zod.string(),
+  "referralCommissionPercent": zod.number(),
+  "referralEarningsKopecks": zod.number(),
+  "referredUserCount": zod.number()
 })
 
 
@@ -77,7 +83,11 @@ export const LoginResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
-  "periodUsageBytes": zod.number().optional()
+  "periodUsageBytes": zod.number().optional(),
+  "referralCode": zod.string(),
+  "referralCommissionPercent": zod.number(),
+  "referralEarningsKopecks": zod.number(),
+  "referredUserCount": zod.number()
 })
 
 
@@ -136,7 +146,11 @@ export const GetMeResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
-  "periodUsageBytes": zod.number().optional()
+  "periodUsageBytes": zod.number().optional(),
+  "referralCode": zod.string(),
+  "referralCommissionPercent": zod.number(),
+  "referralEarningsKopecks": zod.number(),
+  "referredUserCount": zod.number()
 })
 
 
@@ -162,7 +176,11 @@ export const UpdateMeResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
-  "periodUsageBytes": zod.number().optional()
+  "periodUsageBytes": zod.number().optional(),
+  "referralCode": zod.string(),
+  "referralCommissionPercent": zod.number(),
+  "referralEarningsKopecks": zod.number(),
+  "referredUserCount": zod.number()
 })
 
 
@@ -193,7 +211,11 @@ export const ChangeMyEmailResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
-  "periodUsageBytes": zod.number().optional()
+  "periodUsageBytes": zod.number().optional(),
+  "referralCode": zod.string(),
+  "referralCommissionPercent": zod.number(),
+  "referralEarningsKopecks": zod.number(),
+  "referredUserCount": zod.number()
 })
 
 
@@ -250,7 +272,8 @@ export const GetPaymentSettingsResponse = zod.object({
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number(),
   "minHourlyTopupRub": zod.number().optional(),
-  "primaryDomain": zod.string().optional()
+  "primaryDomain": zod.string().optional(),
+  "referralCommissionPercent": zod.number().optional()
 })
 
 
@@ -803,6 +826,9 @@ export const updatePaymentSettingsBodyTrialDaysMax = 365;
 
 export const updatePaymentSettingsBodyMinHourlyTopupRubMin = 0;
 
+export const updatePaymentSettingsBodyReferralCommissionPercentMin = 0;
+export const updatePaymentSettingsBodyReferralCommissionPercentMax = 100;
+
 
 
 export const UpdatePaymentSettingsBody = zod.object({
@@ -816,7 +842,8 @@ export const UpdatePaymentSettingsBody = zod.object({
   "trialEnabled": zod.boolean().optional(),
   "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional(),
   "minHourlyTopupRub": zod.number().min(updatePaymentSettingsBodyMinHourlyTopupRubMin).optional(),
-  "primaryDomain": zod.string().optional()
+  "primaryDomain": zod.string().optional(),
+  "referralCommissionPercent": zod.number().min(updatePaymentSettingsBodyReferralCommissionPercentMin).max(updatePaymentSettingsBodyReferralCommissionPercentMax).optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -830,7 +857,8 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number(),
   "minHourlyTopupRub": zod.number().optional(),
-  "primaryDomain": zod.string().optional()
+  "primaryDomain": zod.string().optional(),
+  "referralCommissionPercent": zod.number().optional()
 })
 
 
@@ -1008,6 +1036,10 @@ export const ListAdminUsersResponseItem = zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string().nullish(),
+  "balanceKopecks": zod.number(),
+  "referralCode": zod.string(),
+  "referredByEmail": zod.string().nullish(),
+  "referredUserCount": zod.number(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
   "lastActiveAt": zod.coerce.date().nullish(),
@@ -1094,6 +1126,10 @@ export const UpdateUserProfileResponse = zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string().nullish(),
+  "balanceKopecks": zod.number(),
+  "referralCode": zod.string(),
+  "referredByEmail": zod.string().nullish(),
+  "referredUserCount": zod.number(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
   "lastActiveAt": zod.coerce.date().nullish(),
@@ -1141,6 +1177,10 @@ export const UpdateUserRoleResponse = zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string().nullish(),
+  "balanceKopecks": zod.number(),
+  "referralCode": zod.string(),
+  "referredByEmail": zod.string().nullish(),
+  "referredUserCount": zod.number(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
   "lastActiveAt": zod.coerce.date().nullish(),
@@ -1182,6 +1222,10 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string().nullish(),
+  "balanceKopecks": zod.number(),
+  "referralCode": zod.string(),
+  "referredByEmail": zod.string().nullish(),
+  "referredUserCount": zod.number(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
   "lastActiveAt": zod.coerce.date().nullish(),
@@ -1223,6 +1267,10 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string().nullish(),
+  "balanceKopecks": zod.number(),
+  "referralCode": zod.string(),
+  "referredByEmail": zod.string().nullish(),
+  "referredUserCount": zod.number(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
   "lastActiveAt": zod.coerce.date().nullish(),

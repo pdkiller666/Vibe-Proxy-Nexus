@@ -1255,6 +1255,18 @@ function UsersManagement() {
                   Тариф: <span className="text-foreground font-bold">{user.activePlanName}</span>
                 </span>
               )}
+              <span className="text-muted-foreground">
+                Баланс: <span className="text-foreground font-bold">{(user.balanceKopecks / 100).toFixed(2)} ₽</span>
+              </span>
+              <span className="text-muted-foreground">
+                Реф. код: <span className="text-foreground font-bold">{user.referralCode}</span>
+                {user.referredUserCount > 0 && ` · пригласил(а) ${user.referredUserCount}`}
+              </span>
+              {user.referredByEmail && (
+                <span className="text-muted-foreground">
+                  Приглашён(а): <span className="text-foreground">{user.referredByEmail}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 pt-1">
               <span className="text-xs text-muted-foreground font-mono">Доп. устройства:</span>
@@ -1319,6 +1331,7 @@ function PaymentSettingsForm() {
   const [trialDays, setTrialDays] = useState("5");
   const [minHourlyTopupRub, setMinHourlyTopupRub] = useState("0");
   const [primaryDomain, setPrimaryDomain] = useState("");
+  const [referralCommissionPercent, setReferralCommissionPercent] = useState("0");
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -1332,6 +1345,7 @@ function PaymentSettingsForm() {
     setTrialDays(String(settings.trialDays ?? 5));
     setMinHourlyTopupRub(String(settings.minHourlyTopupRub ?? 0));
     setPrimaryDomain(settings.primaryDomain ?? "");
+    setReferralCommissionPercent(String(settings.referralCommissionPercent ?? 0));
     setInitialized(true);
   }
 
@@ -1349,6 +1363,7 @@ function PaymentSettingsForm() {
           trialDays: Number(trialDays) || 5,
           minHourlyTopupRub: Number(minHourlyTopupRub) || 0,
           primaryDomain: primaryDomain.trim(),
+          referralCommissionPercent: Number(referralCommissionPercent) || 0,
         },
       },
       {
@@ -1477,6 +1492,28 @@ function PaymentSettingsForm() {
           onChange={(e) => setPrimaryDomain(e.target.value)}
           className="rounded-none max-w-[280px]"
         />
+      </div>
+
+      <div className="border border-border p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Реферальная программа</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Процент от суммы каждой реально оплаченной подписки, который начисляется на баланс пригласившего
+            пользователя. 0 — вознаграждение не начисляется.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            placeholder="0"
+            value={referralCommissionPercent}
+            onChange={(e) => setReferralCommissionPercent(e.target.value.replace(/[^0-9]/g, ""))}
+            className="rounded-none max-w-[140px]"
+          />
+          <span className="text-sm text-muted-foreground">%</span>
+        </div>
       </div>
 
       <button

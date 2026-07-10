@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db, paymentsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, balanceTransactionsTable } from "@workspace/db";
+import { db, paymentsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, balanceTransactionsTable } from "@workspace/db";
 import { isNull } from "drizzle-orm";
 import {
   ConfirmPaymentParams,
@@ -259,6 +259,34 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
         .update(vpnKeysTable)
         .set({ periodUpBytes: 0, periodDownBytes: 0, periodStartedAt: new Date() })
         .where(and(eq(vpnKeysTable.userId, subscription.userId), isNull(vpnKeysTable.revokedAt)));
+
+      // Referral commission: only for real subscription payments (not
+      // extra-slot or balance-topup purchases — those branches return
+      // earlier above and never reach here), and only if the payer was
+      // referred by someone and the admin has set a non-zero rate.
+      const [payer] = await tx.select({ referredByUserId: usersTable.referredByUserId }).from(usersTable).where(eq(usersTable.id, subscription.userId));
+      if (payer?.referredByUserId) {
+        const [settings] = await tx.select({ referralCommissionPercent: paymentSettingsTable.referralCommissionPercent }).from(paymentSettingsTable).limit(1);
+        const percent = settings?.referralCommissionPercent ?? 0;
+        if (percent > 0) {
+          const commissionKopecks = Math.round((payment.amountRub * percent * 100) / 100);
+          const [referrer] = await tx.select({ balanceKopecks: usersTable.balanceKopecks }).from(usersTable).where(eq(usersTable.id, payer.referredByUserId));
+          if (referrer) {
+            await tx
+              .update(usersTable)
+              .set({ balanceKopecks: referrer.balanceKopecks + commissionKopecks })
+              .where(eq(usersTable.id, payer.referredByUserId));
+
+            await tx.insert(balanceTransactionsTable).values({
+              userId: payer.referredByUserId,
+              amountKopecks: commissionKopecks,
+              type: "referral",
+              paymentId: payment.id,
+              description: `Реферальное вознаграждение (${percent}%) за оплату подписки — ${payment.amountRub} ₽`,
+            });
+          }
+        }
+      }
 
       return updatedPay;
     });

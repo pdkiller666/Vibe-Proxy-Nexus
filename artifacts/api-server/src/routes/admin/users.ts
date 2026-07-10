@@ -117,6 +117,21 @@ async function enrichUsersWithTraffic(users: User[]) {
   const activeSubscriptionIdByUser = new Map(activeRows.map((r) => [r.userId, r.subscriptionId]));
   const extraDeviceSlotsByUser = new Map(activeRows.map((r) => [r.userId, r.extraDeviceSlots]));
 
+  // Referral info: who referred each user in (by email, for display), and
+  // how many accounts each user has referred in themselves.
+  const referrerIds = [...new Set(users.map((u) => u.referredByUserId).filter((id): id is number => id != null))];
+  const referrerRows = referrerIds.length > 0
+    ? await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable).where(inArray(usersTable.id, referrerIds))
+    : [];
+  const referrerEmailById = new Map(referrerRows.map((r) => [r.id, r.email]));
+
+  const referredCountRows = await db
+    .select({ referredByUserId: usersTable.referredByUserId, count: sql<number>`count(*)::int` })
+    .from(usersTable)
+    .where(inArray(usersTable.referredByUserId, userIds))
+    .groupBy(usersTable.referredByUserId);
+  const referredCountByUser = new Map(referredCountRows.map((r) => [r.referredByUserId, r.count]));
+
   // Separately, the user's most recent subscription of *any* status (so the
   // admin panel can show an expired/cancelled/pending plan too, not just an
   // active one) — this is display-only and unrelated to the traffic-limit
@@ -155,6 +170,8 @@ async function enrichUsersWithTraffic(users: User[]) {
       activePlanName: activePlanNameByUser.get(user.id) ?? null,
       extraDeviceSlots: extraDeviceSlotsByUser.get(user.id) ?? 0,
       activeSubscriptionId: activeSubscriptionIdByUser.get(user.id) ?? null,
+      referredByEmail: user.referredByUserId != null ? (referrerEmailById.get(user.referredByUserId) ?? null) : null,
+      referredUserCount: referredCountByUser.get(user.id) ?? 0,
       planId: current?.planId ?? null,
       planName: current?.planName ?? null,
       subscriptionStatus: current?.status ?? null,

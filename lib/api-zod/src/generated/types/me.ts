@@ -30,4 +30,8 @@ export interface Me {
   /** @nullable */
   trafficLimitGb?: number | null;
   periodUsageBytes?: number;
+  referralCode: string;
+  referralCommissionPercent: number;
+  referralEarningsKopecks: number;
+  referredUserCount: number;
 }

@@ -1,5 +1,5 @@
 import { and, count, desc, eq, gt, isNull, or, sum } from "drizzle-orm";
-import { db, plansTable, subscriptionsTable, vpnKeysTable, type User } from "@workspace/db";
+import { db, balanceTransactionsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
 
 export async function buildMeData(user: User) {
   // Defense in depth: the background job in subscriptionLifecycle.ts flips
@@ -53,6 +53,18 @@ export async function buildMeData(user: User) {
   // bought under a since-expired/switched subscription do not carry over).
   const deviceSlots = activeSubscription ? activeSubscription.devicesIncluded + activeSubscription.extraDeviceSlots : 0;
 
+  const [settings] = await db.select({ referralCommissionPercent: paymentSettingsTable.referralCommissionPercent }).from(paymentSettingsTable).limit(1);
+
+  const [earningsResult] = await db
+    .select({ total: sum(balanceTransactionsTable.amountKopecks) })
+    .from(balanceTransactionsTable)
+    .where(and(eq(balanceTransactionsTable.userId, user.id), eq(balanceTransactionsTable.type, "referral")));
+
+  const [{ count: referredUserCount }] = await db
+    .select({ count: count() })
+    .from(usersTable)
+    .where(eq(usersTable.referredByUserId, user.id));
+
   return {
     id: user.id,
     email: user.email,
@@ -69,5 +81,9 @@ export async function buildMeData(user: User) {
     balanceKopecks: user.balanceKopecks,
     trafficLimitGb: activeSubscription?.trafficLimitGb ?? null,
     periodUsageBytes,
+    referralCode: user.referralCode,
+    referralCommissionPercent: settings?.referralCommissionPercent ?? 0,
+    referralEarningsKopecks: Number(earningsResult?.total ?? 0),
+    referredUserCount,
   };
 }

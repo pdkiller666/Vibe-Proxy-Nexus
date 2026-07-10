@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,9 +29,11 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const search = useSearch();
+  const ref = new URLSearchParams(search).get("ref")?.trim() ?? "";
 
   const form = useForm<RegisterFormValues>({
-    resolver: zodResolver(RegisterBody),
+    resolver: zodResolver(RegisterBody.omit({ ref: true })),
     defaultValues: { email: "", password: "", name: "" },
   });
 
@@ -53,7 +55,30 @@ export default function SignUpPage() {
         : null;
 
   function onSubmit(values: RegisterFormValues) {
-    registerMutation.mutate({ data: { ...values, name: values.name || undefined } });
+    registerMutation.mutate({ data: { ...values, name: values.name || undefined, ref } });
+  }
+
+  if (!ref) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#F4F4F5] px-4 font-sans">
+        <div className="w-[440px] max-w-full bg-white border border-black/10 p-8 text-center">
+          <div className="flex items-center gap-3 mb-8 justify-center">
+            <div className="w-8 h-8 bg-orange-600 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-bold text-lg tracking-tight">VPNexus</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-black mb-2">Регистрация только по приглашению</h1>
+          <p className="text-gray-500 mb-6">
+            Чтобы создать аккаунт, перейдите по реферальной ссылке действующего пользователя VPNexus — её можно найти
+            в профиле, в разделе «Реферальная программа».
+          </p>
+          <Link href={`${basePath}/sign-in`} className="text-orange-600 font-semibold hover:text-orange-700">
+            У меня уже есть аккаунт
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -3,6 +3,7 @@ import net from "net";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedDefaultAdmin } from "./lib/seedAdmin";
+import { backfillReferralCodes } from "./lib/referralCode";
 import { VPN_WS_PATH } from "./lib/vless";
 
 const rawPort = process.env["PORT"];
@@ -95,5 +96,5 @@ server.listen(port, () => {
   // Fire-and-forget: never block startup on the DB. If it's briefly
   // unreachable at boot, this just logs and does nothing — same as the
   // background schema push.
-  void seedDefaultAdmin();
+  void seedDefaultAdmin().then(() => backfillReferralCodes());
 });

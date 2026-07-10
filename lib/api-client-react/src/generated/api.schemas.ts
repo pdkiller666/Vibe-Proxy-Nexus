@@ -25,6 +25,8 @@ export interface RegisterInput {
      */
   password: string;
   name?: string;
+  /** @minLength 1 */
+  ref: string;
 }
 
 export interface LoginInput {
@@ -119,6 +121,10 @@ export interface Me {
   /** @nullable */
   trafficLimitGb?: number | null;
   periodUsageBytes?: number;
+  referralCode: string;
+  referralCommissionPercent: number;
+  referralEarningsKopecks: number;
+  referredUserCount: number;
 }
 
 export interface Plan {
@@ -199,6 +205,7 @@ export interface PaymentSettings {
   trialDays: number;
   minHourlyTopupRub?: number;
   primaryDomain?: string;
+  referralCommissionPercent?: number;
 }
 
 export interface PaymentSettingsUpdate {
@@ -219,6 +226,11 @@ export interface PaymentSettingsUpdate {
   /** @minimum 0 */
   minHourlyTopupRub?: number;
   primaryDomain?: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  referralCommissionPercent?: number;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
@@ -465,6 +477,11 @@ export interface AdminUser {
   email: string;
   /** @nullable */
   name?: string | null;
+  balanceKopecks: number;
+  referralCode: string;
+  /** @nullable */
+  referredByEmail?: string | null;
+  referredUserCount: number;
   role: UserRole;
   createdAt: string;
   /** @nullable */

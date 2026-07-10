@@ -30,6 +30,7 @@ import {
 } from "../lib/passwordReset";
 import { logger } from "../lib/logger";
 import { issueKeyForUser } from "../lib/keyIssuance";
+import { assignReferralCode } from "../lib/referralCode";
 
 const router: IRouter = Router();
 
@@ -46,7 +47,17 @@ router.post("/auth/register", registerRateLimit, async (req, res): Promise<void>
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const { password, name } = parsed.data;
+  const { password, name, ref } = parsed.data;
+
+  // Invite-only: every registration must carry a valid referrer's code. No
+  // bootstrap exception — the seeded admin account already has one (see
+  // seedAdmin.ts), so it's the root of every invite chain.
+  const [referrer] = await db.select().from(usersTable).where(eq(usersTable.referralCode, ref.trim()));
+
+  if (!referrer) {
+    res.status(400).json({ error: "Недействительная реферальная ссылка. Регистрация возможна только по приглашению." });
+    return;
+  }
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
 
@@ -59,7 +70,7 @@ router.post("/auth/register", registerRateLimit, async (req, res): Promise<void>
 
   const [user] = await db
     .insert(usersTable)
-    .values({ email, passwordHash, name: name ?? null })
+    .values({ email, passwordHash, name: name ?? null, referredByUserId: referrer.id })
     .onConflictDoNothing({ target: usersTable.email })
     .returning();
 
@@ -67,6 +78,8 @@ router.post("/auth/register", registerRateLimit, async (req, res): Promise<void>
     res.status(409).json({ error: "Пользователь с таким email уже зарегистрирован" });
     return;
   }
+
+  await assignReferralCode(user.id);
 
   // Trial subscription: if enabled in settings, create an active subscription
   // immediately so the user can try the service without paying first.
@@ -120,7 +133,9 @@ router.post("/auth/register", registerRateLimit, async (req, res): Promise<void>
   const { token, expiresAt } = await createSession(user.id);
   setSessionCookie(res, token, expiresAt);
 
-  res.json(RegisterResponse.parse(await buildMeData(user)));
+  // Re-fetch: assignReferralCode() updated the row after `user` was read.
+  const [freshUser] = await db.select().from(usersTable).where(eq(usersTable.id, user.id));
+  res.json(RegisterResponse.parse(await buildMeData(freshUser ?? user)));
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {

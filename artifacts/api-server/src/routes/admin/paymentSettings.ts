@@ -35,6 +35,7 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
           trialDays: parsed.data.trialDays ?? 5,
           minHourlyTopupRub: parsed.data.minHourlyTopupRub ?? 0,
           primaryDomain: parsed.data.primaryDomain ?? "",
+          referralCommissionPercent: parsed.data.referralCommissionPercent ?? 0,
         })
         .returning();
 

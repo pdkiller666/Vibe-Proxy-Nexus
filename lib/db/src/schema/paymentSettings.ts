@@ -24,6 +24,10 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   // (e.g. "vpnexus.pro"). Empty string means "use the built-in default".
   // Admin-editable so it can be swapped instantly if the domain is blocked.
   primaryDomain: text("primary_domain").notNull().default(""),
+  // % of a referred user's confirmed subscription payment (amountRub) credited
+  // to the referrer's wallet balance — see admin/payments.ts confirm route.
+  // Only applies to payment.type === "subscription"; 0 disables payouts.
+  referralCommissionPercent: integer("referral_commission_percent").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

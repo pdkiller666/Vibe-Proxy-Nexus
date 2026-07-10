@@ -1097,11 +1097,15 @@ components:
 
     RegisterInput:
       type: object
-      required: [email, password]
+      required: [email, password, ref]
       properties:
         email: { type: string, format: email }
         password: { type: string, minLength: 8, maxLength: 200 }
         name: { type: string }
+        # Invite-only signup: must match an existing user's referralCode.
+        # There is no bootstrap exception — the seeded admin account already
+        # has one, so it's the root of every invite chain.
+        ref: { type: string, minLength: 1 }
 
     LoginInput:
       type: object
@@ -1162,7 +1166,20 @@ components:
 
     Me:
       type: object
-      required: [id, email, role, hasActiveSubscription, deviceSlots, activeKeyCount, balanceKopecks]
+      required:
+        [
+          id,
+          email,
+          role,
+          hasActiveSubscription,
+          deviceSlots,
+          activeKeyCount,
+          balanceKopecks,
+          referralCode,
+          referralCommissionPercent,
+          referralEarningsKopecks,
+          referredUserCount,
+        ]
       properties:
         id: { type: integer }
         email: { type: string }
@@ -1187,6 +1204,17 @@ components:
         # Sum of periodUpBytes + periodDownBytes across all of the user's
         # non-revoked VPN keys, for showing usage vs trafficLimitGb.
         periodUsageBytes: { type: integer }
+        # Personal invite code, shown as a shareable link in the profile.
+        referralCode: { type: string }
+        # % of a referral's confirmed subscription payment credited to this
+        # user's wallet — pulled live from payment_settings, so it reflects
+        # the current admin-configured rate, not a snapshot.
+        referralCommissionPercent: { type: integer }
+        # Sum of all "referral" balance_transactions ever credited to this
+        # user (kopecks). Lifetime total, not tied to a billing period.
+        referralEarningsKopecks: { type: integer }
+        # Number of accounts registered using this user's referral code.
+        referredUserCount: { type: integer }
 
     PlanBillingType:
       type: string
@@ -1265,6 +1293,9 @@ components:
         # instantly (without a redeploy) if the domain is ever blocked.
         # Empty string means "use the built-in default".
         primaryDomain: { type: string }
+        # % of a referred user's confirmed subscription payment credited to
+        # the referrer's wallet balance. 0 disables referral payouts.
+        referralCommissionPercent: { type: integer }
 
     PaymentSettingsUpdate:
       type: object
@@ -1280,6 +1311,7 @@ components:
         trialDays: { type: integer, minimum: 1, maximum: 365 }
         minHourlyTopupRub: { type: integer, minimum: 0 }
         primaryDomain: { type: string }
+        referralCommissionPercent: { type: integer, minimum: 0, maximum: 100 }
 
     SubscriptionStatus:
       type: string
@@ -1549,11 +1581,20 @@ components:
           trafficLimitGb,
           trafficLimitExceeded,
           isOnline,
+          balanceKopecks,
+          referralCode,
+          referredUserCount,
         ]
       properties:
         id: { type: integer }
         email: { type: string }
         name: { type: ["string", "null"] }
+        balanceKopecks: { type: integer }
+        referralCode: { type: string }
+        # Who referred this user in, if anyone (null for the root admin).
+        referredByEmail: { type: ["string", "null"] }
+        # Number of accounts registered using this user's own referral code.
+        referredUserCount: { type: integer }
         role:
           $ref: "#/components/schemas/UserRole"
         createdAt: { type: string, format: date-time }

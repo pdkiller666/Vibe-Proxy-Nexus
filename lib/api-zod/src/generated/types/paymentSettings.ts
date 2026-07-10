@@ -19,4 +19,5 @@ export interface PaymentSettings {
   trialDays: number;
   minHourlyTopupRub?: number;
   primaryDomain?: string;
+  referralCommissionPercent?: number;
 }

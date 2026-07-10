@@ -14,4 +14,6 @@ export interface RegisterInput {
      */
   password: string;
   name?: string;
+  /** @minLength 1 */
+  ref: string;
 }

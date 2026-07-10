@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { paymentsTable } from "./payments";
 
-export const balanceTransactionTypeValues = ["topup", "debit", "refund"] as const;
+export const balanceTransactionTypeValues = ["topup", "debit", "refund", "referral"] as const;
 
 export const balanceTransactionsTable = pgTable(
   "balance_transactions",

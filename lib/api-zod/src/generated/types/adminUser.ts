@@ -13,6 +13,11 @@ export interface AdminUser {
   email: string;
   /** @nullable */
   name?: string | null;
+  balanceKopecks: number;
+  referralCode: string;
+  /** @nullable */
+  referredByEmail?: string | null;
+  referredUserCount: number;
   role: UserRole;
   createdAt: Date;
   /** @nullable */

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, useUpdateMe, useChangeMyEmail, useChangeMyPassword, getGetMeQueryKey } from "@workspace/api-client-react";
-import { UserCircle, Mail, KeyRound, Save } from "lucide-react";
+import { UserCircle, Mail, KeyRound, Save, Users, Copy, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
@@ -175,6 +177,57 @@ function PasswordSection() {
   );
 }
 
+function ReferralSection() {
+  const { data: me } = useGetMe();
+  const [copied, setCopied] = useState(false);
+
+  if (!me?.referralCode) return null;
+
+  const referralLink = `${window.location.origin}${basePath}/sign-up?ref=${me.referralCode}`;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Users className="w-4 h-4 text-primary" />
+        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+          Реферальная программа
+        </p>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Проект доступен только по приглашениям. Поделитесь своей ссылкой — за каждую оплаченную подписку
+        приглашённого пользователя вам начисляется{" "}
+        <span className="text-foreground font-bold">{me.referralCommissionPercent}%</span> от суммы на баланс.
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        <Input value={referralLink} readOnly className="rounded-none max-w-lg font-mono text-xs" />
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity"
+        >
+          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copied ? "Скопировано" : "Скопировать"}
+        </button>
+      </div>
+      <div className="flex gap-6 flex-wrap text-sm pt-1">
+        <div>
+          <span className="text-muted-foreground">Приглашено: </span>
+          <span className="font-bold">{me.referredUserCount}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Заработано: </span>
+          <span className="font-bold">{(me.referralEarningsKopecks / 100).toFixed(2)} ₽</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -188,6 +241,7 @@ export default function Profile() {
       <NameSection />
       <EmailSection />
       <PasswordSection />
+      <ReferralSection />
     </div>
   );
 }
