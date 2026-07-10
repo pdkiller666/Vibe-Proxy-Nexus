@@ -87,8 +87,10 @@ async function enrichUsersWithTraffic(users: User[]) {
   const activeRows = await db
     .selectDistinctOn([subscriptionsTable.userId], {
       userId: subscriptionsTable.userId,
+      subscriptionId: subscriptionsTable.id,
       trafficLimitGb: plansTable.trafficLimitGb,
       planName: plansTable.name,
+      extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
@@ -107,6 +109,12 @@ async function enrichUsersWithTraffic(users: User[]) {
   // use this one, not currentByUser, or a cancelled downgrade request looks
   // like it actually took effect.
   const activePlanNameByUser = new Map(activeRows.map((r) => [r.userId, r.planName]));
+  // Extra device slots live on the active subscription row (see schema
+  // comment), so a user with no active subscription has 0 usable slots —
+  // any slots purchased under a since-expired/switched subscription do not
+  // carry over.
+  const activeSubscriptionIdByUser = new Map(activeRows.map((r) => [r.userId, r.subscriptionId]));
+  const extraDeviceSlotsByUser = new Map(activeRows.map((r) => [r.userId, r.extraDeviceSlots]));
 
   // Separately, the user's most recent subscription of *any* status (so the
   // admin panel can show an expired/cancelled/pending plan too, not just an
@@ -141,6 +149,8 @@ async function enrichUsersWithTraffic(users: User[]) {
       trafficLimitGb,
       trafficLimitExceeded: trafficLimitGb != null && periodBytes >= trafficLimitGb * 1024 * 1024 * 1024,
       activePlanName: activePlanNameByUser.get(user.id) ?? null,
+      extraDeviceSlots: extraDeviceSlotsByUser.get(user.id) ?? 0,
+      activeSubscriptionId: activeSubscriptionIdByUser.get(user.id) ?? null,
       planId: current?.planId ?? null,
       planName: current?.planName ?? null,
       subscriptionStatus: current?.status ?? null,
@@ -414,16 +424,32 @@ router.patch("/admin/users/:userId/extra-slots", requireAuth, requireAdmin, asyn
     return;
   }
 
-  const [user] = await db
-    .update(usersTable)
-    .set({ extraDeviceSlots: parsed.data.extraDeviceSlots })
-    .where(eq(usersTable.id, params.data.userId))
-    .returning();
-
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.userId));
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
+
+  // Extra slots live on the active subscription row (see schema comment on
+  // subscriptions.extraDeviceSlots) — without one there is nothing to attach
+  // slots to, and per policy slots can't be granted/used without an active
+  // subscription anyway.
+  const [activeSub] = await db
+    .select({ id: subscriptionsTable.id })
+    .from(subscriptionsTable)
+    .where(and(eq(subscriptionsTable.userId, user.id), eq(subscriptionsTable.status, "active")))
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+    .limit(1);
+
+  if (!activeSub) {
+    res.status(409).json({ error: "У пользователя нет активной подписки — сначала назначьте тариф." });
+    return;
+  }
+
+  await db
+    .update(subscriptionsTable)
+    .set({ extraDeviceSlots: parsed.data.extraDeviceSlots })
+    .where(eq(subscriptionsTable.id, activeSub.id));
 
   const [enriched] = await enrichUsersWithTraffic([user]);
   res.json(UpdateUserExtraSlotsResponse.parse(enriched));

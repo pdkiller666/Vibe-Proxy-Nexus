@@ -11,6 +11,8 @@ export interface VpnKey {
   nodeId: number;
   nodeName: string;
   label: string;
+  /** @nullable */
+  description?: string | null;
   vlessLink: string;
   deepLink: string;
   createdAt: Date;

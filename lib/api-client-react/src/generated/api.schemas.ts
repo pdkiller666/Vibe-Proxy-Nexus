@@ -160,6 +160,7 @@ export interface PaymentSettings {
   instructions?: string | null;
   yookassaEnabled?: boolean;
   extraDeviceSlotPriceRub: number;
+  allowFreeExtraDeviceSlot: boolean;
   trialEnabled: boolean;
   trialDays: number;
 }
@@ -172,6 +173,7 @@ export interface PaymentSettingsUpdate {
   yookassaEnabled?: boolean;
   /** @minimum 0 */
   extraDeviceSlotPriceRub?: number;
+  allowFreeExtraDeviceSlot?: boolean;
   trialEnabled?: boolean;
   /**
      * @minimum 1
@@ -373,6 +375,8 @@ export interface VpnKey {
   nodeId: number;
   nodeName: string;
   label: string;
+  /** @nullable */
+  description?: string | null;
   vlessLink: string;
   deepLink: string;
   createdAt: string;
@@ -390,6 +394,7 @@ export interface VpnKey {
 export interface VpnKeyInput {
   nodeId?: number;
   label?: string;
+  description?: string;
 }
 
 export interface SubscriptionUrl {
@@ -405,6 +410,8 @@ export interface AdminUser {
   createdAt: string;
   activeSubscriptions?: number;
   extraDeviceSlots: number;
+  /** @nullable */
+  activeSubscriptionId?: number | null;
   trafficUpBytes: number;
   trafficDownBytes: number;
   periodUpBytes: number;
@@ -470,8 +477,9 @@ export interface CancelBalanceTopupOrderResult {
 }
 
 export interface ExtraSlotOrderResult {
-  paymentId: number;
+  paymentId?: number;
   amountRub: number;
+  freeGranted: boolean;
 }
 
 export interface CancelExtraSlotOrderResult {

@@ -33,7 +33,33 @@ const client = new Client({
 const statements = [
   `ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_data text`,
   `ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_mime_type text`,
+  `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_device_slots integer NOT NULL DEFAULT 0`,
+  `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text`,
 ];
+
+// One-time backfill: extraDeviceSlots used to live on `users`. Move any
+// existing value onto that user's currently active subscription (if any)
+// before the column is dropped from `users` below. Guarded so it's a no-op
+// once the users column is gone.
+const backfillSql = `
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'extra_device_slots'
+  ) THEN
+    UPDATE subscriptions s
+    SET extra_device_slots = u.extra_device_slots
+    FROM users u
+    WHERE s.user_id = u.id
+      AND s.status = 'active'
+      AND u.extra_device_slots > 0;
+
+    ALTER TABLE users DROP COLUMN extra_device_slots;
+  END IF;
+END $$;
+`;
 
 try {
   await client.connect();
@@ -41,6 +67,8 @@ try {
     await client.query(sql);
     console.log(`heal-schema: applied: ${sql}`);
   }
+  await client.query(backfillSql);
+  console.log("heal-schema: applied extra_device_slots backfill + users column drop");
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

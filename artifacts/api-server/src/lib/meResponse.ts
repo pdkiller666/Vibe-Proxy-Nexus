@@ -22,6 +22,7 @@ export async function buildMeData(user: User) {
       billingType: plansTable.billingType,
       hourlyRateKopecks: plansTable.hourlyRateKopecks,
       lastBilledAt: subscriptionsTable.lastBilledAt,
+      extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
@@ -41,11 +42,10 @@ export async function buildMeData(user: User) {
     .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)));
 
   const activeKeyCount = keyCountResult?.cnt ?? 0;
-  // Without an active subscription no keys can be issued, so report 0 total
-  // slots instead of a misleading non-zero number.
-  const deviceSlots = activeSubscription
-    ? activeSubscription.devicesIncluded + user.extraDeviceSlots
-    : user.extraDeviceSlots;
+  // Extra device slots live on the active subscription row, not the user —
+  // without an active subscription there is no slot to report at all (slots
+  // bought under a since-expired/switched subscription do not carry over).
+  const deviceSlots = activeSubscription ? activeSubscription.devicesIncluded + activeSubscription.extraDeviceSlots : 0;
 
   return {
     id: user.id,

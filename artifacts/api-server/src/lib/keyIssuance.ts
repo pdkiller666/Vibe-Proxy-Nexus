@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { db, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { buildDeepLink, buildVlessLink, generateKeyUuid } from "./vless";
 import { addXrayClient, isLocalXrayEnabled, removeXrayClient } from "./xray";
@@ -23,6 +23,7 @@ export async function issueKeyForUser(
   totalSlots: number,
   preferNodeId?: number,
   preferLabel?: string,
+  description?: string,
 ): Promise<IssueKeyResult> {
   const activeCounts = db
     .select({
@@ -127,7 +128,7 @@ export async function issueKeyForUser(
   try {
     [key] = await db
       .insert(vpnKeysTable)
-      .values({ userId, nodeId: node.id, uuid, label, vlessLink, deepLink })
+      .values({ userId, nodeId: node.id, uuid, label, description: description?.trim() || null, vlessLink, deepLink })
       .returning();
   } catch (err) {
     logger.error({ err }, "issueKeyForUser: failed to persist VPN key");
@@ -149,14 +150,17 @@ export async function issueKeyForUser(
 
 /**
  * Resolves devicesIncluded + extraDeviceSlots for a user who has an active
+ * subscription. extraDeviceSlots lives on the subscription row itself (see
+ * schema comment) — a user with no active subscription has no slots at all,
+ * including any they previously purchased under an expired/switched
  * subscription. Returns null if no active subscription exists.
  */
-export async function resolveTotalSlots(
-  userId: number,
-  extraDeviceSlots: number,
-): Promise<number | null> {
+export async function resolveTotalSlots(userId: number): Promise<number | null> {
   const [activeWithPlan] = await db
-    .select({ devicesIncluded: plansTable.devicesIncluded })
+    .select({
+      devicesIncluded: plansTable.devicesIncluded,
+      extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
+    })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
     .where(
@@ -165,8 +169,10 @@ export async function resolveTotalSlots(
         eq(subscriptionsTable.status, "active"),
         or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, new Date())),
       ),
-    );
+    )
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+    .limit(1);
 
   if (!activeWithPlan) return null;
-  return activeWithPlan.devicesIncluded + extraDeviceSlots;
+  return activeWithPlan.devicesIncluded + activeWithPlan.extraDeviceSlots;
 }

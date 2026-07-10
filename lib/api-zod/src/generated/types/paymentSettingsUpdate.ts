@@ -14,6 +14,7 @@ export interface PaymentSettingsUpdate {
   yookassaEnabled?: boolean;
   /** @minimum 0 */
   extraDeviceSlotPriceRub?: number;
+  allowFreeExtraDeviceSlot?: boolean;
   trialEnabled?: boolean;
   /**
      * @minimum 1

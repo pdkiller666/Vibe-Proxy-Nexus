@@ -10,6 +10,10 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   instructions: text("instructions"),
   yookassaEnabled: boolean("yookassa_enabled").notNull().default(false),
   extraDeviceSlotPriceRub: integer("extra_device_slot_price_rub").notNull().default(0),
+  // When extraDeviceSlotPriceRub is 0/unset, the "add device" button is
+  // disabled by default rather than silently offering a free slot. An admin
+  // must explicitly opt in here to allow issuing extra slots for free.
+  allowFreeExtraDeviceSlot: boolean("allow_free_extra_device_slot").notNull().default(false),
   trialEnabled: boolean("trial_enabled").notNull().default(false),
   trialDays: integer("trial_days").notNull().default(5),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

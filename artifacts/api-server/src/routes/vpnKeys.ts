@@ -47,7 +47,7 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
   // Fetch active subscription WITH plan for devicesIncluded.
   // See meResponse.ts for why endsAt is re-checked here rather than trusting
   // status alone: the expiry sweep runs periodically, not instantly.
-  const totalSlots = await resolveTotalSlots(user.id, user.extraDeviceSlots);
+  const totalSlots = await resolveTotalSlots(user.id);
 
   if (totalSlots === null) {
     res.status(403).json({ error: "An active subscription is required to issue a VPN key" });
@@ -59,6 +59,7 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
     totalSlots,
     parsed.data.nodeId ?? undefined,
     parsed.data.label ?? undefined,
+    parsed.data.description ?? undefined,
   );
 
   if (!result.ok) {

@@ -32,6 +32,16 @@ export const subscriptionsTable = pgTable(
     // hourlyBilling.ts as it bills elapsed 5-minute active ticks. Null for
     // monthly subscriptions and for hourly subscriptions not yet billed once.
     lastBilledAt: timestamp("last_billed_at", { withTimezone: true }),
+    // Extra device slots purchased while THIS subscription was the active
+    // one. Lives on the subscription row (not the user) on purpose: when a
+    // fixed-duration plan ends or the user switches plans, a brand new
+    // subscription row is created and this starts back at 0 — extra slots
+    // are tied to the subscription period they were bought under, not kept
+    // forever. Hourly plans reuse the same subscription row for their whole
+    // continuous billing lifetime (see hourlyBilling.ts), so slots bought
+    // there naturally persist for as long as that hourly subscription stays
+    // active, which is the correct behavior for usage-based billing.
+    extraDeviceSlots: integer("extra_device_slots").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("subscriptions_user_id_idx").on(table.userId)],

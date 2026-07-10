@@ -1139,7 +1139,7 @@ components:
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, trialEnabled, trialDays]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, trialEnabled, trialDays]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -1147,6 +1147,7 @@ components:
         instructions: { type: ["string", "null"] }
         yookassaEnabled: { type: boolean }
         extraDeviceSlotPriceRub: { type: integer }
+        allowFreeExtraDeviceSlot: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer }
 
@@ -1159,6 +1160,7 @@ components:
         instructions: { type: string }
         yookassaEnabled: { type: boolean }
         extraDeviceSlotPriceRub: { type: integer, minimum: 0 }
+        allowFreeExtraDeviceSlot: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer, minimum: 1, maximum: 365 }
 
@@ -1365,6 +1367,7 @@ components:
         nodeId: { type: integer }
         nodeName: { type: string }
         label: { type: string }
+        description: { type: ["string", "null"] }
         vlessLink: { type: string }
         deepLink: { type: string }
         createdAt: { type: string, format: date-time }
@@ -1386,6 +1389,7 @@ components:
       properties:
         nodeId: { type: integer }
         label: { type: string }
+        description: { type: string }
 
     SubscriptionUrl:
       type: object
@@ -1418,7 +1422,12 @@ components:
           $ref: "#/components/schemas/UserRole"
         createdAt: { type: string, format: date-time }
         activeSubscriptions: { type: integer }
+        # extraDeviceSlots is sourced from the user's currently ACTIVE
+        # subscription row (0 if none) — slots do not carry over across
+        # renewal/switch. activeSubscriptionId is what the admin extra-slots
+        # PATCH targets; null means there is nothing to grant slots against.
         extraDeviceSlots: { type: integer }
+        activeSubscriptionId: { type: ["integer", "null"] }
         # Aggregated across all of this user's own VPN keys.
         trafficUpBytes: { type: integer }
         trafficDownBytes: { type: integer }
@@ -1511,10 +1520,13 @@ components:
 
     ExtraSlotOrderResult:
       type: object
-      required: [paymentId, amountRub]
+      required: [amountRub, freeGranted]
       properties:
         paymentId: { type: integer }
         amountRub: { type: integer }
+        # true when the slot was granted immediately (admin enabled the free
+        # override at price 0) — no checkout/payment flow follows.
+        freeGranted: { type: boolean }
 
     CancelExtraSlotOrderResult:
       type: object

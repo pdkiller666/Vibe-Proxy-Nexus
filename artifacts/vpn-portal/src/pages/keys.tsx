@@ -40,6 +40,68 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function AddDeviceModal({
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  onClose: () => void;
+  onSubmit: (label: string, description: string) => void;
+  submitting: boolean;
+}) {
+  const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-white p-6 max-w-sm w-full mx-4 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-base">Новое устройство</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+              Название устройства
+            </label>
+            <input
+              autoFocus
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Например: iPhone Ани"
+              className="w-full border border-border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+              Описание (необязательно)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Заметка для себя"
+              rows={2}
+              className="w-full border border-border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+            />
+          </div>
+        </div>
+        <button
+          onClick={() => onSubmit(label.trim(), description.trim())}
+          disabled={submitting}
+          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
+        >
+          {submitting ? "Выпускаем..." : "Выпустить ключ"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function QRModal({ url, onClose }: { url: string; onClose: () => void }) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
@@ -166,6 +228,7 @@ export default function Keys() {
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [showManualLinks, setShowManualLinks] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
 
   const isAdmin = me?.role === "admin";
   const activeKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => !k.revokedAt);
@@ -178,13 +241,16 @@ export default function Keys() {
   const activeKeyCount = me?.activeKeyCount ?? activeKeys.length;
   const hasSlotAvailable = canIssue && activeKeyCount < deviceSlots;
   const slotPrice = paymentSettings?.extraDeviceSlotPriceRub ?? 0;
+  const allowFreeSlot = paymentSettings?.allowFreeExtraDeviceSlot ?? false;
+  const slotButtonDisabled = slotPrice <= 0 && !allowFreeSlot;
 
-  function handleCreate() {
+  function handleCreate(label: string, description: string) {
     createKey(
-      { data: { nodeId: defaultNodeId } },
+      { data: { nodeId: defaultNodeId, label: label || undefined, description: description || undefined } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+          setShowAddDeviceModal(false);
           toast({ title: "Ключ выпущен", description: "Импортируйте его в клиент VLESS." });
         },
         onError: (err: unknown) => {
@@ -219,6 +285,14 @@ export default function Keys() {
         <QRModal url={subscription.url} onClose={() => setShowQR(false)} />
       )}
 
+      {showAddDeviceModal && (
+        <AddDeviceModal
+          onClose={() => setShowAddDeviceModal(false)}
+          onSubmit={handleCreate}
+          submitting={creating}
+        />
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Ключи VPN</h1>
@@ -233,18 +307,26 @@ export default function Keys() {
             </span>
             {hasSlotAvailable ? (
               <button
-                onClick={handleCreate}
+                onClick={() => setShowAddDeviceModal(true)}
                 disabled={creating}
                 className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
               >
                 <Plus className="w-4 h-4" />
-                {creating ? "Выпускаем..." : "Добавить устройство"}
+                Добавить устройство
               </button>
             ) : (
               <button
                 onClick={() => {
                   createSlotOrder(undefined, {
-                    onSuccess: (data) => setLocation(`/checkout/slot/${data.paymentId}`),
+                    onSuccess: (data) => {
+                      if (data.freeGranted) {
+                        queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+                        setShowAddDeviceModal(true);
+                        toast({ title: "Слот добавлен бесплатно" });
+                        return;
+                      }
+                      setLocation(`/checkout/slot/${data.paymentId}`);
+                    },
                     onError: (err: unknown) => {
                       const body = err as { paymentId?: number; message?: string };
                       if (body?.paymentId) {
@@ -258,7 +340,8 @@ export default function Keys() {
                     },
                   });
                 }}
-                disabled={orderingSlot}
+                disabled={orderingSlot || slotButtonDisabled}
+                title={slotButtonDisabled ? "Покупка дополнительных устройств временно недоступна" : undefined}
                 className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
               >
                 <Plus className="w-4 h-4" />
@@ -348,9 +431,14 @@ export default function Keys() {
               }`}
             >
               <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
-                <div className="flex items-center gap-2 font-bold min-w-0 break-words">
-                  <KeyRound className="w-4 h-4 text-primary shrink-0" />
-                  {key.label} <span className="text-muted-foreground font-normal font-mono text-sm">· {key.nodeName}</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-bold min-w-0 break-words">
+                    <KeyRound className="w-4 h-4 text-primary shrink-0" />
+                    {key.label} <span className="text-muted-foreground font-normal font-mono text-sm">· {key.nodeName}</span>
+                  </div>
+                  {key.description && (
+                    <p className="text-xs text-muted-foreground mt-1 ml-6 break-words">{key.description}</p>
+                  )}
                 </div>
                 {!key.revokedAt && me?.role === "admin" && (
                   <button

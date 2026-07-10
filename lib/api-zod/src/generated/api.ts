@@ -163,6 +163,7 @@ export const GetPaymentSettingsResponse = zod.object({
   "instructions": zod.string().nullish(),
   "yookassaEnabled": zod.boolean().optional(),
   "extraDeviceSlotPriceRub": zod.number(),
+  "allowFreeExtraDeviceSlot": zod.boolean(),
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number()
 })
@@ -367,6 +368,7 @@ export const ListMyVpnKeysResponseItem = zod.object({
   "nodeId": zod.number(),
   "nodeName": zod.string(),
   "label": zod.string(),
+  "description": zod.string().nullish(),
   "vlessLink": zod.string(),
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
@@ -387,7 +389,8 @@ export const ListMyVpnKeysResponse = zod.array(ListMyVpnKeysResponseItem)
  */
 export const CreateVpnKeyBody = zod.object({
   "nodeId": zod.number().optional(),
-  "label": zod.string().optional()
+  "label": zod.string().optional(),
+  "description": zod.string().optional()
 })
 
 export const CreateVpnKeyResponse = zod.object({
@@ -395,6 +398,7 @@ export const CreateVpnKeyResponse = zod.object({
   "nodeId": zod.number(),
   "nodeName": zod.string(),
   "label": zod.string(),
+  "description": zod.string().nullish(),
   "vlessLink": zod.string(),
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
@@ -459,8 +463,9 @@ export const DeleteBalanceTopupOrderResponse = zod.object({
  * @summary Start a checkout for an extra VPN device slot (requires an active subscription)
  */
 export const CreateExtraSlotOrderResponse = zod.object({
-  "paymentId": zod.number(),
-  "amountRub": zod.number()
+  "paymentId": zod.number().optional(),
+  "amountRub": zod.number(),
+  "freeGranted": zod.boolean()
 })
 
 
@@ -694,6 +699,7 @@ export const UpdatePaymentSettingsBody = zod.object({
   "instructions": zod.string().optional(),
   "yookassaEnabled": zod.boolean().optional(),
   "extraDeviceSlotPriceRub": zod.number().min(updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin).optional(),
+  "allowFreeExtraDeviceSlot": zod.boolean().optional(),
   "trialEnabled": zod.boolean().optional(),
   "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional()
 })
@@ -705,6 +711,7 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "instructions": zod.string().nullish(),
   "yookassaEnabled": zod.boolean().optional(),
   "extraDeviceSlotPriceRub": zod.number(),
+  "allowFreeExtraDeviceSlot": zod.boolean(),
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number()
 })
@@ -888,6 +895,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "createdAt": zod.coerce.date(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
+  "activeSubscriptionId": zod.number().nullish(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),
@@ -912,6 +920,7 @@ export const ListAdminVpnKeysResponseItem = zod.object({
   "nodeId": zod.number(),
   "nodeName": zod.string(),
   "label": zod.string(),
+  "description": zod.string().nullish(),
   "vlessLink": zod.string(),
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
@@ -969,6 +978,7 @@ export const UpdateUserProfileResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
+  "activeSubscriptionId": zod.number().nullish(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),
@@ -1013,6 +1023,7 @@ export const UpdateUserRoleResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
+  "activeSubscriptionId": zod.number().nullish(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),
@@ -1051,6 +1062,7 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
+  "activeSubscriptionId": zod.number().nullish(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),
@@ -1089,6 +1101,7 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
+  "activeSubscriptionId": zod.number().nullish(),
   "trafficUpBytes": zod.number(),
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),

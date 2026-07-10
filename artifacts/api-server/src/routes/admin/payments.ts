@@ -76,7 +76,9 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     return;
   }
 
-  // Extra device slot: increment user's extra slots instead of activating a subscription
+  // Extra device slot: increment the slot count on the subscription the
+  // order was placed against (extraDeviceSlots lives on subscriptions, not
+  // users — see schema comment) instead of activating a new subscription.
   if (payment.type === "extra_device_slot") {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, payment.userId));
 
@@ -85,13 +87,27 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
       return;
     }
 
+    if (!payment.subscriptionId) {
+      res.status(409).json({ error: "У платежа не указана подписка — невозможно начислить слот." });
+      return;
+    }
+
     let updatedPayment;
     try {
       updatedPayment = await db.transaction(async (tx) => {
+        const [sub] = await tx
+          .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, extraDeviceSlots: subscriptionsTable.extraDeviceSlots })
+          .from(subscriptionsTable)
+          .where(eq(subscriptionsTable.id, payment.subscriptionId!));
+
+        if (!sub || sub.status !== "active") {
+          throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+        }
+
         await tx
-          .update(usersTable)
-          .set({ extraDeviceSlots: user.extraDeviceSlots + 1 })
-          .where(eq(usersTable.id, user.id));
+          .update(subscriptionsTable)
+          .set({ extraDeviceSlots: sub.extraDeviceSlots + 1 })
+          .where(eq(subscriptionsTable.id, sub.id));
 
         const [updatedPay] = await tx
           .update(paymentsTable)
@@ -105,7 +121,11 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
 
         return updatedPay;
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
+        res.status(409).json({ error: "Подписка, к которой относится платёж, больше не активна — слот не начислен." });
+        return;
+      }
       res.status(409).json({ error: "Payment state changed concurrently, please retry" });
       return;
     }

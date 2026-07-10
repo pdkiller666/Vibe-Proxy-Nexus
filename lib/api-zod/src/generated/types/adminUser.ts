@@ -17,6 +17,8 @@ export interface AdminUser {
   createdAt: Date;
   activeSubscriptions?: number;
   extraDeviceSlots: number;
+  /** @nullable */
+  activeSubscriptionId?: number | null;
   trafficUpBytes: number;
   trafficDownBytes: number;
   periodUpBytes: number;

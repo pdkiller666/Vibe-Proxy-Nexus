@@ -1245,6 +1245,7 @@ function PaymentSettingsForm() {
   const [sbpRecipientName, setSbpRecipientName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [extraDeviceSlotPriceRub, setExtraDeviceSlotPriceRub] = useState("");
+  const [allowFreeExtraDeviceSlot, setAllowFreeExtraDeviceSlot] = useState(false);
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialDays, setTrialDays] = useState("5");
   const [initialized, setInitialized] = useState(false);
@@ -1255,6 +1256,7 @@ function PaymentSettingsForm() {
     setSbpRecipientName(settings.sbpRecipientName);
     setInstructions(settings.instructions ?? "");
     setExtraDeviceSlotPriceRub(String(settings.extraDeviceSlotPriceRub ?? 0));
+    setAllowFreeExtraDeviceSlot(settings.allowFreeExtraDeviceSlot ?? false);
     setTrialEnabled(settings.trialEnabled ?? false);
     setTrialDays(String(settings.trialDays ?? 5));
     setInitialized(true);
@@ -1262,7 +1264,7 @@ function PaymentSettingsForm() {
 
   function handleSubmit() {
     update(
-      { data: { sbpPhone, sbpBank, sbpRecipientName, instructions, extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0, trialEnabled, trialDays: Number(trialDays) || 5 } },
+      { data: { sbpPhone, sbpBank, sbpRecipientName, instructions, extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0, allowFreeExtraDeviceSlot, trialEnabled, trialDays: Number(trialDays) || 5 } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
@@ -1301,6 +1303,26 @@ function PaymentSettingsForm() {
           onChange={(e) => setExtraDeviceSlotPriceRub(e.target.value)}
           className="rounded-none"
         />
+      </div>
+
+      <div className="border border-border p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Бесплатные доп. устройства</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Если цена не задана (0 ₽), выдавать слот без оплаты вместо блокировки кнопки
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={allowFreeExtraDeviceSlot}
+              onChange={(e) => setAllowFreeExtraDeviceSlot(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+        </div>
       </div>
 
       <div className="border border-border p-4 space-y-3">

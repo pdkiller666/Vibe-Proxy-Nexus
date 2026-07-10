@@ -16,6 +16,10 @@ export const vpnKeysTable = pgTable(
       .references(() => vpnNodesTable.id),
     uuid: text("uuid").notNull(),
     label: text("label").notNull(),
+    // Optional free-text note the user attaches when issuing the key (e.g.
+    // "iPhone 15" / "рабочий ноутбук"), shown alongside the label so
+    // multi-device users can tell their keys apart.
+    description: text("description"),
     vlessLink: text("vless_link").notNull(),
     deepLink: text("deep_link").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

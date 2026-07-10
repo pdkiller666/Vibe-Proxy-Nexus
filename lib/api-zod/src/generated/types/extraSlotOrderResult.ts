@@ -7,6 +7,7 @@
  */
 
 export interface ExtraSlotOrderResult {
-  paymentId: number;
+  paymentId?: number;
   amountRub: number;
+  freeGranted: boolean;
 }

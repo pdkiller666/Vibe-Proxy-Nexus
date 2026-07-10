@@ -9,4 +9,5 @@
 export interface VpnKeyInput {
   nodeId?: number;
   label?: string;
+  description?: string;
 }

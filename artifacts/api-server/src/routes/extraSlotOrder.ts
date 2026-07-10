@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, paymentsTable, paymentSettingsTable, subscriptionsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { generatePaymentReference } from "../lib/vless";
@@ -10,9 +10,10 @@ router.post("/extra-slot-order", requireAuth, async (req, res): Promise<void> =>
   const user = req.appUser!;
 
   const [activeSub] = await db
-    .select({ id: subscriptionsTable.id })
+    .select({ id: subscriptionsTable.id, extraDeviceSlots: subscriptionsTable.extraDeviceSlots })
     .from(subscriptionsTable)
     .where(and(eq(subscriptionsTable.userId, user.id), eq(subscriptionsTable.status, "active")))
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
     .limit(1);
 
   if (!activeSub) {
@@ -43,12 +44,30 @@ router.post("/extra-slot-order", requireAuth, async (req, res): Promise<void> =>
   const [settings] = await db.select().from(paymentSettingsTable).limit(1);
   const amountRub = settings?.extraDeviceSlotPriceRub ?? 0;
 
+  // Price 0 normally means "not configured" — block purchases unless the
+  // admin has explicitly opted into granting free slots, in which case we
+  // skip the payment/checkout flow entirely and grant the slot immediately.
+  if (amountRub <= 0) {
+    if (!settings?.allowFreeExtraDeviceSlot) {
+      res.status(403).json({ error: "Покупка дополнительных устройств временно недоступна." });
+      return;
+    }
+
+    await db
+      .update(subscriptionsTable)
+      .set({ extraDeviceSlots: activeSub.extraDeviceSlots + 1 })
+      .where(eq(subscriptionsTable.id, activeSub.id));
+
+    res.status(200).json({ freeGranted: true, amountRub: 0 });
+    return;
+  }
+
   const reference = generatePaymentReference(user.id * 10000 + (Date.now() % 10000));
 
   const [payment] = await db
     .insert(paymentsTable)
     .values({
-      subscriptionId: null,
+      subscriptionId: activeSub.id,
       userId: user.id,
       type: "extra_device_slot",
       provider: "manual_sbp",
@@ -63,7 +82,7 @@ router.post("/extra-slot-order", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  res.status(201).json({ paymentId: payment.id, amountRub });
+  res.status(201).json({ paymentId: payment.id, amountRub, freeGranted: false });
 });
 
 router.delete("/extra-slot-order/:paymentId", requireAuth, async (req, res): Promise<void> => {
