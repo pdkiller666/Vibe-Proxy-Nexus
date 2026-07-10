@@ -70,6 +70,11 @@ fi
 # immediately; the schema push just catches up whenever it finishes. stdin is
 # closed so it can never hang on an unexpected interactive prompt.
 (
+  echo "Applying non-interactive schema patches..."
+  if ! node /app/db-migrate/heal-schema.mjs; then
+    echo "WARNING: heal-schema.mjs failed — see above."
+  fi
+
   echo "Pushing database schema in the background..."
   if timeout 150 /app/db-migrate/node_modules/.bin/drizzle-kit push --force --config /app/db-migrate/drizzle.config.ts < /dev/null; then
     echo "Database schema is up to date."

@@ -58,6 +58,7 @@ COPY --from=builder /repo/artifacts/vpn-portal/dist/public ./public
 # Self-contained @workspace/db (schema + drizzle-kit) used by entrypoint.sh to
 # push schema changes on every boot.
 COPY --from=builder /tmp/db-deploy ./db-migrate
+COPY deploy/amvera-all-in-one/heal-schema.mjs ./db-migrate/heal-schema.mjs
 
 # Deployment glue.
 COPY deploy/amvera-all-in-one/xray-config.json.template ./xray/config.json.template
