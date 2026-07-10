@@ -1174,6 +1174,11 @@ components:
         # Minimum wallet balance (in rubles) a user must top up before an
         # hourly plan can be activated. 0 = no minimum required.
         minHourlyTopupRub: { type: integer }
+        # Public-facing domain embedded in subscription/vless links when it's
+        # healthy (e.g. "vpnexus.pro"). Admin-editable so it can be swapped
+        # instantly (without a redeploy) if the domain is ever blocked.
+        # Empty string means "use the built-in default".
+        primaryDomain: { type: string }
 
     PaymentSettingsUpdate:
       type: object
@@ -1188,6 +1193,7 @@ components:
         trialEnabled: { type: boolean }
         trialDays: { type: integer, minimum: 1, maximum: 365 }
         minHourlyTopupRub: { type: integer, minimum: 0 }
+        primaryDomain: { type: string }
 
     SubscriptionStatus:
       type: string

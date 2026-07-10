@@ -20,6 +20,10 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   // hourly plan can be activated. 0 = no minimum beyond the normal
   // one-tick balance check in subscriptions.ts.
   minHourlyTopupRub: integer("min_hourly_topup_rub").notNull().default(0),
+  // Public-facing domain embedded in subscription/vless links when healthy
+  // (e.g. "vpnexus.pro"). Empty string means "use the built-in default".
+  // Admin-editable so it can be swapped instantly if the domain is blocked.
+  primaryDomain: text("primary_domain").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

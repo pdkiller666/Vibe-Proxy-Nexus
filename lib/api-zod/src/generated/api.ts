@@ -172,7 +172,8 @@ export const GetPaymentSettingsResponse = zod.object({
   "allowFreeExtraDeviceSlot": zod.boolean(),
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number(),
-  "minHourlyTopupRub": zod.number().optional()
+  "minHourlyTopupRub": zod.number().optional(),
+  "primaryDomain": zod.string().optional()
 })
 
 
@@ -726,7 +727,8 @@ export const UpdatePaymentSettingsBody = zod.object({
   "allowFreeExtraDeviceSlot": zod.boolean().optional(),
   "trialEnabled": zod.boolean().optional(),
   "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional(),
-  "minHourlyTopupRub": zod.number().min(updatePaymentSettingsBodyMinHourlyTopupRubMin).optional()
+  "minHourlyTopupRub": zod.number().min(updatePaymentSettingsBodyMinHourlyTopupRubMin).optional(),
+  "primaryDomain": zod.string().optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -739,7 +741,8 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "allowFreeExtraDeviceSlot": zod.boolean(),
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number(),
-  "minHourlyTopupRub": zod.number().optional()
+  "minHourlyTopupRub": zod.number().optional(),
+  "primaryDomain": zod.string().optional()
 })
 
 

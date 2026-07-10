@@ -18,4 +18,5 @@ export interface PaymentSettings {
   trialEnabled: boolean;
   trialDays: number;
   minHourlyTopupRub?: number;
+  primaryDomain?: string;
 }

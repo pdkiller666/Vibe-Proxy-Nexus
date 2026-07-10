@@ -167,6 +167,7 @@ export interface PaymentSettings {
   trialEnabled: boolean;
   trialDays: number;
   minHourlyTopupRub?: number;
+  primaryDomain?: string;
 }
 
 export interface PaymentSettingsUpdate {
@@ -186,6 +187,7 @@ export interface PaymentSettingsUpdate {
   trialDays?: number;
   /** @minimum 0 */
   minHourlyTopupRub?: number;
+  primaryDomain?: string;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];

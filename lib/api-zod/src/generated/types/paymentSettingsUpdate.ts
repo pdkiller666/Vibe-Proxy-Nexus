@@ -23,4 +23,5 @@ export interface PaymentSettingsUpdate {
   trialDays?: number;
   /** @minimum 0 */
   minHourlyTopupRub?: number;
+  primaryDomain?: string;
 }

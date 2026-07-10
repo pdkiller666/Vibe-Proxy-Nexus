@@ -1249,6 +1249,7 @@ function PaymentSettingsForm() {
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialDays, setTrialDays] = useState("5");
   const [minHourlyTopupRub, setMinHourlyTopupRub] = useState("0");
+  const [primaryDomain, setPrimaryDomain] = useState("");
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -1261,6 +1262,7 @@ function PaymentSettingsForm() {
     setTrialEnabled(settings.trialEnabled ?? false);
     setTrialDays(String(settings.trialDays ?? 5));
     setMinHourlyTopupRub(String(settings.minHourlyTopupRub ?? 0));
+    setPrimaryDomain(settings.primaryDomain ?? "");
     setInitialized(true);
   }
 
@@ -1277,6 +1279,7 @@ function PaymentSettingsForm() {
           trialEnabled,
           trialDays: Number(trialDays) || 5,
           minHourlyTopupRub: Number(minHourlyTopupRub) || 0,
+          primaryDomain: primaryDomain.trim(),
         },
       },
       {
@@ -1388,6 +1391,22 @@ function PaymentSettingsForm() {
           value={minHourlyTopupRub}
           onChange={(e) => setMinHourlyTopupRub(e.target.value.replace(/[^0-9]/g, ""))}
           className="rounded-none max-w-[140px]"
+        />
+      </div>
+
+      <div className="border border-border p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Основной домен</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Показывается пользователям в ссылке подписки и ключах, пока доступен (проверяется автоматически). Если домен
+            заблокируют — измените здесь, сервер сразу переключится на резервный технический адрес, пока не примените новый.
+          </p>
+        </div>
+        <Input
+          placeholder="vpnexus.pro"
+          value={primaryDomain}
+          onChange={(e) => setPrimaryDomain(e.target.value)}
+          className="rounded-none max-w-[280px]"
         />
       </div>
 

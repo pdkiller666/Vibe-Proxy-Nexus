@@ -23,6 +23,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   RotateCcw,
+  ChevronDown,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
@@ -264,6 +265,27 @@ function BalanceWidget() {
   );
 }
 
+// Collapsed by default on mobile (to avoid a long scroll before reaching
+// Тарифы/Ключи/Платежи) but expanded by default on desktop, where there's
+// plenty of room. Purely a display toggle — content stays mounted either way.
+function CollapsibleOnMobile({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between py-2 md:hidden"
+      >
+        <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div className={open ? "block" : "hidden md:block"}>{children}</div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: me, isLoading: meLoading } = useGetMe();
   const { data: keys, isLoading: keysLoading } = useListMyVpnKeys();
@@ -415,35 +437,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Balance ───────────────────────────────────────────────── */}
-      <BalanceWidget />
-
-      {/* ── Usage detail ──────────────────────────────────────────── */}
-      <TrafficSection />
-      <BalanceHistorySection />
-
-      {/* ── Key count ─────────────────────────────────────────────── */}
-      <div className="bg-card border border-border p-5 flex items-center gap-5">
-        <div className="w-10 h-10 bg-primary/10 flex items-center justify-center shrink-0">
-          <Key className="w-5 h-5 text-primary" />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Активных ключей</p>
-          {keysLoading ? (
-            <Skeleton className="h-7 w-16 mt-1" />
-          ) : (
-            <div className="text-3xl font-black">{activeKeys.length}</div>
-          )}
-        </div>
-        <Link
-          href="/keys"
-          className="flex items-center gap-1 text-sm font-semibold text-primary hover:opacity-70 transition-opacity"
-        >
-          Управление <ArrowRight className="w-4 h-4" />
-        </Link>
-      </div>
-
-      {/* ── Quick nav ─────────────────────────────────────────────── */}
+      {/* ── Quick nav (moved up: most-used sections, no long scroll to reach them) ── */}
       <div className="grid md:grid-cols-3 gap-4">
         <Link
           href="/plans"
@@ -460,7 +454,14 @@ export default function Dashboard() {
           className="group bg-card border border-border p-5 flex items-center justify-between hover:border-primary transition-colors"
         >
           <div>
-            <div className="font-bold">Ключи VPN</div>
+            <div className="font-bold flex items-center gap-2">
+              Ключи VPN
+              {!keysLoading && (
+                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold bg-primary/10 text-primary rounded-full">
+                  {activeKeys.length}
+                </span>
+              )}
+            </div>
             <div className="text-sm text-muted-foreground">Управление доступом</div>
           </div>
           <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
@@ -476,6 +477,18 @@ export default function Dashboard() {
           <CreditCard className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-all" />
         </Link>
       </div>
+
+      {/* ── Balance ───────────────────────────────────────────────── */}
+      <BalanceWidget />
+
+      {/* ── Usage detail: collapsed by default on mobile so it doesn't add
+           scroll before the sections above; always expanded on desktop ── */}
+      <CollapsibleOnMobile title="Подробности использования">
+        <div className="space-y-6 pt-1">
+          <TrafficSection />
+          <BalanceHistorySection />
+        </div>
+      </CollapsibleOnMobile>
     </div>
   );
 }
