@@ -14,7 +14,6 @@ import extraSlotOrderRouter from "./extraSlotOrder";
 import balanceTopupOrderRouter from "./balanceTopupOrder";
 import supportRouter from "./support";
 import adminRouter from "./admin";
-import debugSchemaRouter from "./debugSchema";
 
 const router: IRouter = Router();
 
@@ -33,6 +32,5 @@ router.use(extraSlotOrderRouter);
 router.use(balanceTopupOrderRouter);
 router.use(supportRouter);
 router.use(adminRouter);
-router.use(debugSchemaRouter);
 
 export default router;
