@@ -7,7 +7,7 @@
 .agents
 .local
 .replit
-replit.md
+**/*.md
 **/.env
 **/.env.*
 deploy/amvera-vpn-node

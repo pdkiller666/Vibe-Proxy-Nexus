@@ -47,7 +47,10 @@
 ## Product
 
 - Invite-only VPN reselling: users sign up with email+password, pick a plan, pay via SBP transfer, get a subscription activated by an admin, then issue/revoke VLESS keys (or use the one-click subscription link) from a dashboard. Subscriptions auto-expire and revoke keys when they lapse; renewing before expiry chains the new period onto the current one instead of restarting the clock.
-- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject, transactional + idempotent), plans CRUD, VPN nodes CRUD (with optional per-node user capacity `maxUsers` and live `activeUserCount`), user role management, SBP payment settings, password-reset link generation for users.
+- Profile page (`/profile`): user can change their own name, email (requires current password, checks email uniqueness), and password (requires current password, invalidates other sessions).
+- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject, transactional + idempotent), plans CRUD, VPN nodes CRUD (with optional per-node user capacity `maxUsers` and live `activeUserCount`), user role management, SBP payment settings, password-reset link generation for users, and an analytics summary (users online now, new users last 7/30 days, plan distribution, 14-day revenue chart). "Online" is computed from `users.lastActiveAt`, touched at most once/minute per session and considered online within a 5-minute window.
+
+> **Note on "invite-only" positioning:** the sign-in/sign-up copy says "доступ только по приглашению", but there is currently no actual invite mechanism — anyone can self-register via `/sign-up` with just an email+password. See "Open product question" below.
 
 ## User preferences
 
@@ -56,8 +59,16 @@
 - Visual identity: technical, precise, quietly confident — not corporate SaaS blue, not playful. Bold, deliberate color choice (industrial orange accent). No emojis.
 - Every deploy commit message (the message passed to `./deploy.sh "..."`) must be written in Russian and clearly describe what changed, since the user reads deploy history in Amvera/GitHub to track what was shipped.
 
+## Open product question
+
+The product currently *says* "invite-only" (premium, not-for-everyone positioning) but *does* nothing to enforce it — `/sign-up` is a plain open self-registration form with no invite code, waitlist, referral gate, or manual approval step. This is a real gap between messaging and mechanics worth resolving deliberately (not fixed yet — no code changed, agent flagged it for the user to decide direction):
+- **Cheapest fix, keeps the promise literal:** require an invite code at signup (a `invite_codes` table admins generate, single-use or capped-use, checked in `POST /api/auth/register`).
+- **Softer/more common for paid products:** drop "invite-only" from the copy and lean on the premium feel elsewhere (price, design, limited node capacity, waitlist for full nodes) — arguably closer to what's actually built today.
+- **Middle ground:** keep open self-registration but gate the *paid/working* part behind manual admin activation (closer to how payments already work) and rename the copy to reflect "заявка на доступ" instead of "приглашение".
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Product overview for humans (features, stack, screenshots) — `README.md`
 - Full repo map and API/schema reference — `PROJECT_MAP.md`
 - Production deployment details — `deploy/amvera-all-in-one/README.md`
