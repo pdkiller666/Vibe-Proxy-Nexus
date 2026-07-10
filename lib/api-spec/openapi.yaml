@@ -1430,9 +1430,17 @@ components:
         # subscription or an unlimited plan.
         trafficLimitGb: { type: ["integer", "null"] }
         trafficLimitExceeded: { type: boolean }
+        # The user's genuinely active plan right now (status=active, not
+        # expired). Use this for any "what plan is this user on" display —
+        # e.g. the traffic summary line — since it can never show a
+        # cancelled/pending/rejected request as if it were in effect.
+        activePlanName: { type: ["string", "null"] }
         # Current (most recently started) subscription, regardless of status,
         # so the admin panel can show what a user has even if it's expired,
         # cancelled, or awaiting payment. Null fields = no subscription at all.
+        # This intentionally can differ from activePlanName (e.g. a cancelled
+        # downgrade request shows up here with status "cancelled" while
+        # activePlanName still reflects the real, unaffected active plan).
         planId: { type: ["integer", "null"] }
         planName: { type: ["string", "null"] }
         subscriptionStatus:

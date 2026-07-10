@@ -84,10 +84,11 @@ async function enrichUsersWithTraffic(users: User[]) {
   // A user should only have one currently-active subscription, but pick the
   // most recently started one defensively (DISTINCT ON) so a data anomaly
   // can't fan this join out into multiple limit rows per user.
-  const limitRows = await db
+  const activeRows = await db
     .selectDistinctOn([subscriptionsTable.userId], {
       userId: subscriptionsTable.userId,
       trafficLimitGb: plansTable.trafficLimitGb,
+      planName: plansTable.name,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
@@ -99,7 +100,13 @@ async function enrichUsersWithTraffic(users: User[]) {
       ),
     )
     .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id));
-  const limitByUser = new Map(limitRows.map((r) => [r.userId, r.trafficLimitGb]));
+  const limitByUser = new Map(activeRows.map((r) => [r.userId, r.trafficLimitGb]));
+  // The genuinely active plan (status=active, not expired) — separate from
+  // `currentByUser` below, which can point at a cancelled/pending/rejected
+  // request instead. Any "what plan is this user on right now" display must
+  // use this one, not currentByUser, or a cancelled downgrade request looks
+  // like it actually took effect.
+  const activePlanNameByUser = new Map(activeRows.map((r) => [r.userId, r.planName]));
 
   // Separately, the user's most recent subscription of *any* status (so the
   // admin panel can show an expired/cancelled/pending plan too, not just an
@@ -133,6 +140,7 @@ async function enrichUsersWithTraffic(users: User[]) {
       periodStartedAt: traffic?.periodStartedAt ?? null,
       trafficLimitGb,
       trafficLimitExceeded: trafficLimitGb != null && periodBytes >= trafficLimitGb * 1024 * 1024 * 1024,
+      activePlanName: activePlanNameByUser.get(user.id) ?? null,
       planId: current?.planId ?? null,
       planName: current?.planName ?? null,
       subscriptionStatus: current?.status ?? null,
@@ -358,7 +366,7 @@ router.patch("/admin/users/:userId/subscription", requireAuth, requireAdmin, asy
     .select()
     .from(subscriptionsTable)
     .where(and(eq(subscriptionsTable.userId, userId), eq(subscriptionsTable.status, "active")))
-    .orderBy(desc(subscriptionsTable.endsAt))
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
     .limit(1);
 
   // Extend from the current active period's end if it hasn't lapsed yet

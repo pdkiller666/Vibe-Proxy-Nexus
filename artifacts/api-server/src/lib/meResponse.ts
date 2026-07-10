@@ -7,6 +7,13 @@ export async function buildMeData(user: User) {
   // window (up to its interval) where a row can still say "active" despite
   // endsAt already being in the past. Re-check endsAt here so access reads
   // are never stale even if the sweep hasn't run yet.
+  // Order by startsAt/id (always set), not endsAt: an indefinite hourly plan
+  // has endsAt = null, and Postgres sorts NULLs FIRST in a DESC order by
+  // default — so ordering by desc(endsAt) would surface a stale hourly
+  // subscription ahead of a newer, dated plan the user just switched to.
+  // There should only ever be one "active" row per user (the admin confirm
+  // route retires the previous one), but this ordering is also the correct
+  // tiebreaker defensively if that invariant is ever violated.
   const [activeSubscription] = await db
     .select({
       endsAt: subscriptionsTable.endsAt,
@@ -25,7 +32,7 @@ export async function buildMeData(user: User) {
         or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, new Date())),
       ),
     )
-    .orderBy(desc(subscriptionsTable.endsAt))
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
     .limit(1);
 
   const [keyCountResult] = await db

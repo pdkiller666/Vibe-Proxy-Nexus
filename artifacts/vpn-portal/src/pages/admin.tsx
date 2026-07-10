@@ -1181,9 +1181,9 @@ function UsersManagement() {
               <span className="text-muted-foreground">
                 Всего: {formatBytes(user.trafficUpBytes + user.trafficDownBytes)}
               </span>
-              {user.planName && (
+              {user.activePlanName && (
                 <span className="text-muted-foreground">
-                  Тариф: <span className="text-foreground font-bold">{user.planName}</span>
+                  Тариф: <span className="text-foreground font-bold">{user.activePlanName}</span>
                 </span>
               )}
             </div>

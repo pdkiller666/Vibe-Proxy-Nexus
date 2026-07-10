@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, balanceTransactionsTable } from "@workspace/db";
 import { isNull } from "drizzle-orm";
 import {
@@ -182,7 +182,7 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     .select()
     .from(subscriptionsTable)
     .where(and(eq(subscriptionsTable.userId, subscription.userId), eq(subscriptionsTable.status, "active")))
-    .orderBy(desc(subscriptionsTable.endsAt))
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
     .limit(1);
 
   const now = new Date();
@@ -201,6 +201,24 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
       if (!updatedSubscription) {
         throw new Error("Subscription state changed concurrently");
       }
+
+      // Retire any other subscription still marked "active" for this user
+      // (e.g. an hourly plan with no endsAt, or a plan the user just
+      // switched away from). Without this, two rows can both say "active"
+      // at once: the dashboard's "/me" and the admin panel's "current plan"
+      // queries pick between them differently, so one screen shows the old
+      // plan and the other shows the new one. Only one subscription should
+      // ever be "active" for a user at a time.
+      await tx
+        .update(subscriptionsTable)
+        .set({ status: "expired", endsAt: now })
+        .where(
+          and(
+            eq(subscriptionsTable.userId, subscription.userId),
+            eq(subscriptionsTable.status, "active"),
+            sql`${subscriptionsTable.id} != ${updatedSubscription.id}`,
+          ),
+        );
 
       const [updatedPay] = await tx
         .update(paymentsTable)

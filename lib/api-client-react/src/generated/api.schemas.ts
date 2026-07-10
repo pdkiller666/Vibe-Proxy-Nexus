@@ -415,6 +415,8 @@ export interface AdminUser {
   trafficLimitGb: number | null;
   trafficLimitExceeded: boolean;
   /** @nullable */
+  activePlanName?: string | null;
+  /** @nullable */
   planId?: number | null;
   /** @nullable */
   planName?: string | null;
