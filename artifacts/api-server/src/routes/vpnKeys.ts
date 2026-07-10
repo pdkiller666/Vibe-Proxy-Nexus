@@ -11,6 +11,7 @@ import {
 import { requireAuth } from "../lib/auth";
 import { removeXrayClient, isLocalXrayEnabled } from "../lib/xray";
 import { buildSubscriptionUrl } from "../lib/subscription";
+import { buildServingVlessLink } from "../lib/vless";
 import { issueKeyForUser, resolveTotalSlots } from "../lib/keyIssuance";
 
 const router: IRouter = Router();
@@ -21,18 +22,26 @@ router.get("/vpn-keys/me", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select({
       key: vpnKeysTable,
-      nodeName: vpnNodesTable.name,
+      node: vpnNodesTable,
     })
     .from(vpnKeysTable)
     .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
     .where(eq(vpnKeysTable.userId, user.id))
     .orderBy(desc(vpnKeysTable.createdAt));
 
-  res.json(
-    ListMyVpnKeysResponse.parse(
-      rows.map(({ key, nodeName }) => ({ ...key, nodeName })),
-    ),
+  // Regenerate the vless link per-request (instead of trusting the stored
+  // column) so an already-issued key transparently starts using the primary
+  // public domain — or falls back to the technical one — without needing to
+  // be re-issued. See buildServingVlessLink for the domain selection logic.
+  const keys = await Promise.all(
+    rows.map(async ({ key, node }) => ({
+      ...key,
+      nodeName: node.name,
+      vlessLink: key.revokedAt ? key.vlessLink : await buildServingVlessLink(node, key.uuid, key.label),
+    })),
   );
+
+  res.json(ListMyVpnKeysResponse.parse(keys));
 });
 
 router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
@@ -76,7 +85,7 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
 // refresh, and the app overwrites any local edits the user makes.
 router.get("/vpn-keys/subscription-url", requireAuth, async (req, res): Promise<void> => {
   const user = req.appUser!;
-  const url = buildSubscriptionUrl(req, user.id);
+  const url = await buildSubscriptionUrl(req, user.id);
   res.json(GetSubscriptionUrlResponse.parse({ url }));
 });
 

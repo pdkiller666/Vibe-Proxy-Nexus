@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import type { VpnNode } from "@workspace/db";
+import { resolvePublicAddress } from "./domain";
 
 /**
  * WebSocket path that Xray listens on inside the container and that the Node
@@ -50,6 +51,19 @@ export function buildVlessLink(node: VpnNode, uuid: string, label: string): stri
   });
 
   return `vless://${uuid}@${host}:${port}?${params.toString()}#${encodeURIComponent(label)}`;
+}
+
+/**
+ * Same as buildVlessLink, but for links actually handed to a user/client
+ * (subscription body, "me" key list): swaps in the primary public domain
+ * (vpnexus.pro) when it's healthy, otherwise keeps the node's own technical
+ * Amvera host/SNI. The persisted `vlessLink` column always uses the raw node
+ * address (see buildVlessLink call sites in keyIssuance.ts / admin/vpnKeys.ts)
+ * so this never needs to "unwind" a baked-in domain choice.
+ */
+export async function buildServingVlessLink(node: VpnNode, uuid: string, label: string): Promise<string> {
+  const address = await resolvePublicAddress({ host: node.host || node.sni, sni: node.sni });
+  return buildVlessLink({ ...node, host: address.host, sni: address.sni }, uuid, label);
 }
 
 export function buildDeepLink(vlessLink: string): string {

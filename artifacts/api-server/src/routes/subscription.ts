@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
-import { db, plansTable, subscriptionsTable, vpnKeysTable } from "@workspace/db";
+import { db, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { BRAND_NAME, SUBSCRIPTION_UPDATE_INTERVAL_HOURS, verifySubscriptionToken } from "../lib/subscription";
+import { buildServingVlessLink } from "../lib/vless";
+import { resolvePublicAddress } from "../lib/domain";
 import { subscriptionRateLimit } from "../lib/rateLimit";
 
 const router: IRouter = Router();
@@ -40,14 +42,24 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
     .orderBy(desc(subscriptionsTable.endsAt))
     .limit(1);
 
-  const keys = activeSubscription
+  const keyRows = activeSubscription
     ? await db
-        .select()
+        .select({ key: vpnKeysTable, node: vpnNodesTable })
         .from(vpnKeysTable)
+        .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
         .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)))
     : [];
 
-  const body = Buffer.from(keys.map((key) => key.vlessLink).join("\n"), "utf8").toString("base64");
+  const keys = keyRows.map((row) => row.key);
+
+  // Regenerate each link per-request so already-issued keys transparently
+  // start using the primary public domain (or fall back to the technical
+  // one) without needing to be re-issued.
+  const vlessLinks = await Promise.all(
+    keyRows.map(({ key, node }) => buildServingVlessLink(node, key.uuid, key.label)),
+  );
+
+  const body = Buffer.from(vlessLinks.join("\n"), "utf8").toString("base64");
 
   // Show the user's actual plan name in the client's subscription group title
   // (falls back to the bare brand name if there's no active plan/subscription)
@@ -61,10 +73,12 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
   res.setHeader("Profile-Title", `base64:${Buffer.from(profileTitle, "utf8").toString("base64")}`);
   res.setHeader("Profile-Update-Interval", String(SUBSCRIPTION_UPDATE_INTERVAL_HOURS));
   // Deep link to the user's personal cabinet, shown by Happ/v2rayNG next to
-  // the subscription group. Built from the request host rather than a
-  // hardcoded domain so it stays correct across the prod domain and any
-  // future custom domain, without needing a config change.
-  res.setHeader("Profile-Web-Page-Url", `${req.protocol}://${req.get("host")}/dashboard`);
+  // the subscription group. Prefers the primary public domain (vpnexus.pro)
+  // when healthy, falling back to whatever host the request actually came
+  // in on so it keeps working even if vpnexus.pro's DNS/cert breaks.
+  const requestHost = req.get("host") ?? "";
+  const webPageAddress = await resolvePublicAddress({ host: requestHost, sni: requestHost });
+  res.setHeader("Profile-Web-Page-Url", `${req.protocol}://${webPageAddress.host}/dashboard`);
   if (activeSubscription) {
     // Report real consumption for the current billing period (not lifetime —
     // period counters reset on renewal, matching what the admin/user panels

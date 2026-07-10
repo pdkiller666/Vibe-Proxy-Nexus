@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getSessionSecret } from "./session";
+import { resolvePublicAddress } from "./domain";
 
 /**
  * Human/brand-facing name shown as the subscription group title in client
@@ -48,8 +49,19 @@ export function verifySubscriptionToken(token: string): number | null {
   return userId;
 }
 
-export function buildSubscriptionUrl(req: { protocol: string; get(name: string): string | undefined }, userId: number): string {
-  const host = req.get("host");
+/**
+ * Builds the self-updating subscription URL. Prefers the primary public
+ * domain (vpnexus.pro) when it's healthy, so users never see the technical
+ * Amvera hostname; falls back to whatever host the request actually came in
+ * on (which keeps working even if vpnexus.pro's DNS/cert breaks, since the
+ * request reaching us at all proves that host currently resolves).
+ */
+export async function buildSubscriptionUrl(
+  req: { protocol: string; get(name: string): string | undefined },
+  userId: number,
+): Promise<string> {
   const token = buildSubscriptionToken(userId);
-  return `${req.protocol}://${host}/api/sub/${token}`;
+  const requestHost = req.get("host") ?? "";
+  const address = await resolvePublicAddress({ host: requestHost, sni: requestHost });
+  return `${req.protocol}://${address.host}/api/sub/${token}`;
 }
