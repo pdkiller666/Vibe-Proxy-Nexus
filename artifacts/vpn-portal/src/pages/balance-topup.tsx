@@ -184,7 +184,7 @@ export default function BalanceTopup() {
             </p>
           </div>
 
-          <PaymentScreenshotUpload paymentId={payment.id} screenshotUrl={payment.screenshotUrl} />
+          <PaymentScreenshotUpload paymentId={payment.id} hasScreenshot={payment.hasScreenshot} />
 
           <div className="border-t border-border pt-6">
             {!confirmCancel ? (

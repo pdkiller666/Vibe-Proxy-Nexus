@@ -13,7 +13,6 @@ import extraSlotOrderRouter from "./extraSlotOrder";
 import balanceTopupOrderRouter from "./balanceTopupOrder";
 import supportRouter from "./support";
 import adminRouter from "./admin";
-import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -31,6 +30,5 @@ router.use(extraSlotOrderRouter);
 router.use(balanceTopupOrderRouter);
 router.use(supportRouter);
 router.use(adminRouter);
-router.use(storageRouter);
 
 export default router;

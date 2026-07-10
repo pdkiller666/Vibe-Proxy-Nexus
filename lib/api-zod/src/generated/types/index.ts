@@ -56,8 +56,6 @@ export * from './supportTicketDetail';
 export * from './ticketStatus';
 export * from './ticketStatusFilter';
 export * from './ticketStatusUpdate';
-export * from './uploadUrlRequest';
-export * from './uploadUrlResponse';
 export * from './userRole';
 export * from './userRoleUpdate';
 export * from './vpnKey';

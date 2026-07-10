@@ -7,6 +7,14 @@
  */
 
 export interface PaymentScreenshotUpdate {
-  /** @minLength 1 */
-  screenshotUrl: string;
+  /**
+     * Base64-encoded image bytes (no data: URL prefix).
+     * @minLength 1
+     */
+  data: string;
+  /**
+     * MIME type of the image (e.g. `image/jpeg`).
+     * @minLength 1
+     */
+  mimeType: string;
 }

@@ -223,9 +223,9 @@ function PaymentsQueue() {
               {payment.userNote && (
                 <div className="text-sm mt-1 italic text-muted-foreground">«{payment.userNote}»</div>
               )}
-              {payment.screenshotUrl && (
+              {payment.hasScreenshot && (
                 <a
-                  href={`/api/storage/objects/${payment.screenshotUrl.replace(/^\/objects\//, "")}`}
+                  href={`/api/payments/${payment.id}/screenshot/image`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-sm mt-1 text-primary hover:underline"

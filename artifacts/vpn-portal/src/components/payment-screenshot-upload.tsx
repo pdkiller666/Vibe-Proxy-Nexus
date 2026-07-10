@@ -1,21 +1,33 @@
 import { useRef, useState } from "react";
-import { useRequestUploadUrl, useUpdatePaymentScreenshot } from "@workspace/api-client-react";
+import { useUpdatePaymentScreenshot } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { ImageUp, CheckCircle2, Loader2 } from "lucide-react";
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1] ?? "";
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Не удалось прочитать файл"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function PaymentScreenshotUpload({
   paymentId,
-  screenshotUrl,
+  hasScreenshot,
 }: {
   paymentId: number;
-  screenshotUrl?: string | null;
+  hasScreenshot?: boolean | null;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const { mutateAsync: requestUploadUrl } = useRequestUploadUrl();
   const { mutateAsync: updateScreenshot } = useUpdatePaymentScreenshot();
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -24,22 +36,11 @@ export function PaymentScreenshotUpload({
 
     setUploading(true);
     try {
-      const { uploadURL, objectPath } = await requestUploadUrl({
-        data: {
-          name: file.name,
-          size: file.size,
-          contentType: file.type || "application/octet-stream",
-        },
+      const data = await fileToBase64(file);
+      await updateScreenshot({
+        paymentId,
+        data: { data, mimeType: file.type || "application/octet-stream" },
       });
-
-      const putRes = await fetch(uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-      });
-      if (!putRes.ok) throw new Error("Не удалось загрузить файл");
-
-      await updateScreenshot({ paymentId, data: { screenshotUrl: objectPath } });
       queryClient.invalidateQueries({ queryKey: ["payments", "me"] });
       toast({ title: "Скриншот загружен" });
     } catch (err) {
@@ -70,12 +71,12 @@ export function PaymentScreenshotUpload({
       >
         {uploading ? (
           <Loader2 className="w-4 h-4 animate-spin" />
-        ) : screenshotUrl ? (
+        ) : hasScreenshot ? (
           <CheckCircle2 className="w-4 h-4 text-green-600" />
         ) : (
           <ImageUp className="w-4 h-4" />
         )}
-        {uploading ? "Загружаем..." : screenshotUrl ? "Скриншот прикреплён — заменить" : "Прикрепить скриншот"}
+        {uploading ? "Загружаем..." : hasScreenshot ? "Скриншот прикреплён — заменить" : "Прикрепить скриншот"}
       </button>
     </div>
   );

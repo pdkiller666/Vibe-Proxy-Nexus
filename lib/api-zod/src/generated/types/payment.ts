@@ -20,8 +20,7 @@ export interface Payment {
   reference: string;
   /** @nullable */
   userNote?: string | null;
-  /** @nullable */
-  screenshotUrl?: string | null;
+  hasScreenshot?: boolean;
   /** @nullable */
   rejectionReason?: string | null;
   createdAt: Date;

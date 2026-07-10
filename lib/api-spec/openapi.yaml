@@ -28,8 +28,6 @@ tags:
     description: Support tickets
   - name: admin
     description: Admin operations
-  - name: Storage
-    description: Object storage upload and serving endpoints.
 paths:
   /healthz:
     get:
@@ -265,6 +263,10 @@ paths:
       operationId: updatePaymentScreenshot
       tags: [payments]
       summary: Attach a payment confirmation screenshot to a pending payment
+      description: |
+        The screenshot is stored directly in Postgres as base64 (this app
+        runs as a single Docker container outside Replit, so no external
+        object storage is used).
       parameters:
         - name: paymentId
           in: path
@@ -285,108 +287,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/Payment"
 
-  /storage/uploads/request-url:
-    post:
-      tags: [Storage]
-      operationId: requestUploadUrl
-      summary: Request a presigned URL for file upload
-      description: |
-        Returns a presigned GCS URL for direct upload. The client sends JSON
-        metadata here, then uploads the file directly to the returned URL.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UploadUrlRequest"
-      responses:
-        "200":
-          description: Presigned upload URL generated.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UploadUrlResponse"
-        "400":
-          description: Missing or invalid required fields.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "500":
-          description: Failed to generate upload URL.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-
-  /storage/public-objects/{filePath}:
+  /payments/{paymentId}/screenshot/image:
     get:
-      tags: [Storage]
-      operationId: getPublicObject
-      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+      operationId: getPaymentScreenshot
+      tags: [payments]
+      summary: Serve a payment's confirmation screenshot
       description: |
-        Unconditionally public — no authentication or ACL checks.
-        Searches PUBLIC_OBJECT_SEARCH_PATHS for the given file path.
+        Requires an authenticated session; a user may only view their own
+        screenshot unless they are an admin.
       parameters:
-        - name: filePath
+        - name: paymentId
           in: path
           required: true
           schema:
-            type: string
-          description: Relative file path within the public search paths.
+            type: integer
       responses:
         "200":
-          description: Object content streamed with correct Content-Type.
+          description: Image content streamed with correct Content-Type.
           content:
             "*/*":
               schema:
                 type: string
                 format: binary
         "404":
-          description: File not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "500":
-          description: Failed to serve public object.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-
-  /storage/objects/{objectPath}:
-    get:
-      tags: [Storage]
-      operationId: getStorageObject
-      summary: Serve an object entity from PRIVATE_OBJECT_DIR
-      description: |
-        Serves object entities uploaded via presigned URLs. Requires an
-        authenticated session; a user may only view their own screenshots
-        unless they are an admin.
-      parameters:
-        - name: objectPath
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Object path within the private object dir (e.g. `uploads/some-uuid`).
-      responses:
-        "200":
-          description: Object content streamed with correct Content-Type.
-          content:
-            "*/*":
-              schema:
-                type: string
-                format: binary
-        "404":
-          description: Object not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "500":
-          description: Failed to serve object.
+          description: Screenshot not found.
           content:
             application/json:
               schema:
@@ -1294,9 +1218,9 @@ components:
           $ref: "#/components/schemas/PaymentStatus"
         reference: { type: string }
         userNote: { type: ["string", "null"] }
-        # Object storage path to a screenshot the user uploaded as proof of
-        # SBP transfer (e.g. `/objects/uploads/uuid`). Null until attached.
-        screenshotUrl: { type: ["string", "null"] }
+        # Whether the user has attached a payment confirmation screenshot.
+        # The image itself is fetched separately via GET .../screenshot/image.
+        hasScreenshot: { type: boolean }
         rejectionReason: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: ["string", "null"], format: date-time }
@@ -1320,7 +1244,7 @@ components:
           $ref: "#/components/schemas/PaymentStatus"
         reference: { type: string }
         userNote: { type: ["string", "null"] }
-        screenshotUrl: { type: ["string", "null"] }
+        hasScreenshot: { type: boolean }
         rejectionReason: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: ["string", "null"], format: date-time }
@@ -1333,45 +1257,21 @@ components:
 
     PaymentScreenshotUpdate:
       type: object
-      required: [screenshotUrl]
+      required: [data, mimeType]
       properties:
-        screenshotUrl: { type: string, minLength: 1 }
+        data:
+          type: string
+          minLength: 1
+          description: "Base64-encoded image bytes (no data: URL prefix)."
+        mimeType:
+          type: string
+          minLength: 1
+          description: MIME type of the image (e.g. `image/jpeg`).
 
     PaymentReject:
       type: object
       properties:
         reason: { type: string }
-
-    UploadUrlRequest:
-      type: object
-      required: [name, size, contentType]
-      properties:
-        name:
-          type: string
-          minLength: 1
-          description: Original file name.
-        size:
-          type: integer
-          minimum: 1
-          description: File size in bytes.
-        contentType:
-          type: string
-          minLength: 1
-          description: MIME type of the file (e.g. `image/jpeg`).
-
-    UploadUrlResponse:
-      type: object
-      required: [uploadURL, objectPath]
-      properties:
-        uploadURL:
-          type: string
-          format: uri
-          description: Presigned GCS URL for PUT upload.
-        objectPath:
-          type: string
-          description: Normalized object path (e.g. `/objects/uploads/uuid`). Store this in your database.
-        metadata:
-          $ref: "#/components/schemas/UploadUrlRequest"
 
     ErrorEnvelope:
       type: object

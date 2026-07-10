@@ -15,6 +15,13 @@ import { requireAdmin, requireAuth } from "../../lib/auth";
 
 const router: IRouter = Router();
 
+function withHasScreenshot<T extends { screenshotData: string | null; screenshotMimeType: string | null }>(
+  payment: T,
+) {
+  const { screenshotData, screenshotMimeType: _screenshotMimeType, ...rest } = payment;
+  return { ...rest, hasScreenshot: Boolean(screenshotData) };
+}
+
 router.get("/admin/payments", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const query = ListAdminPaymentsQueryParams.safeParse(req.query);
 
@@ -38,7 +45,10 @@ router.get("/admin/payments", requireAuth, requireAdmin, async (req, res): Promi
 
   res.json(
     ListAdminPaymentsResponse.parse(
-      rows.map(({ payment, userEmail, planName }) => ({ ...payment, userEmail, planName: planName ?? null })),
+      rows.map(({ payment, userEmail, planName }) => {
+        const { screenshotData, screenshotMimeType: _screenshotMimeType, ...rest } = payment;
+        return { ...rest, userEmail, planName: planName ?? null, hasScreenshot: Boolean(screenshotData) };
+      }),
     ),
   );
 });
@@ -100,7 +110,7 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
       return;
     }
 
-    res.json(ConfirmPaymentResponse.parse(updatedPayment));
+    res.json(ConfirmPaymentResponse.parse(withHasScreenshot(updatedPayment)));
     return;
   }
 
@@ -141,7 +151,7 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
       return;
     }
 
-    res.json(ConfirmPaymentResponse.parse(updatedPayment));
+    res.json(ConfirmPaymentResponse.parse(withHasScreenshot(updatedPayment)));
     return;
   }
 
@@ -219,7 +229,7 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     return;
   }
 
-  res.json(ConfirmPaymentResponse.parse(updatedPayment));
+  res.json(ConfirmPaymentResponse.parse(withHasScreenshot(updatedPayment)));
 });
 
 router.post("/admin/payments/:paymentId/reject", requireAuth, requireAdmin, async (req, res): Promise<void> => {
@@ -282,7 +292,7 @@ router.post("/admin/payments/:paymentId/reject", requireAuth, requireAdmin, asyn
     return;
   }
 
-  res.json(RejectPaymentResponse.parse(updatedPayment));
+  res.json(RejectPaymentResponse.parse(withHasScreenshot(updatedPayment)));
 });
 
 export default router;
