@@ -146,7 +146,7 @@ const CLIENTS = [
   { name: "macOS: V2Box", url: "https://apps.apple.com/app/v2box-v2ray-client/id6446814690" },
 ];
 
-function ConnectionGuide({ subscriptionUrl }: { subscriptionUrl?: string }) {
+function ConnectionGuide({ subscriptionUrl, isAdmin }: { subscriptionUrl?: string; isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="bg-card border border-border">
@@ -196,15 +196,17 @@ function ConnectionGuide({ subscriptionUrl }: { subscriptionUrl?: string }) {
               </p>
             )}
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
-              <KeyRound className="w-3.5 h-3.5" /> Альтернатива — импорт отдельного ключа
+          {isAdmin && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
+                <KeyRound className="w-3.5 h-3.5" /> Альтернатива — импорт отдельного ключа (админ)
+              </div>
+              <p className="text-muted-foreground">
+                Скопируйте <strong>vless://...</strong> ссылку и вставьте в приложение через
+                «Импорт из буфера обмена» / «Import from clipboard».
+              </p>
             </div>
-            <p className="text-muted-foreground">
-              Скопируйте <strong>vless://...</strong> ссылку и вставьте в приложение через
-              «Импорт из буфера обмена» / «Import from clipboard».
-            </p>
-          </div>
+          )}
           <div className="bg-muted/40 border border-border p-3 text-xs text-muted-foreground">
             После добавления нажмите кнопку подключения в приложении. Если VPN не работает — обратитесь в поддержку.
           </div>
@@ -300,7 +302,7 @@ export default function Keys() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Ключи VPN</h1>
           <p className="text-muted-foreground font-mono text-sm mt-1">
-            Учётные данные подключения. Импортируйте vless-ссылку в свой клиент.
+            Добавьте ссылку подписки в свой клиент — конфигурация подключится автоматически.
           </p>
         </div>
         {canIssue && (
@@ -381,7 +383,7 @@ export default function Keys() {
         </p>
       )}
 
-      <ConnectionGuide subscriptionUrl={subscription?.url} />
+      <ConnectionGuide subscriptionUrl={subscription?.url} isAdmin={isAdmin} />
 
       {subscription?.url && activeKeys.length > 0 && (
         <div className="bg-card border border-border p-5 space-y-3">
@@ -406,13 +408,15 @@ export default function Keys() {
             </button>
             <CopyButton text={subscription.url} />
           </div>
-          <button
-            onClick={() => setShowManualLinks((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showManualLinks ? "rotate-180" : ""}`} />
-            {showManualLinks ? "Скрыть отдельные ключи" : "Показать отдельные ключи для ручного импорта"}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowManualLinks((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showManualLinks ? "rotate-180" : ""}`} />
+              {showManualLinks ? "Скрыть отдельные ключи (админ)" : "Показать отдельные ключи (админ)"}
+            </button>
+          )}
         </div>
       )}
 
@@ -456,11 +460,15 @@ export default function Keys() {
               </div>
               {key.revokedAt ? (
                 <span className="text-xs font-mono text-muted-foreground">Отозван</span>
-              ) : (
+              ) : isAdmin ? (
                 <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
                   <span className="truncate flex-1">{key.vlessLink}</span>
                   <CopyButton text={key.vlessLink} />
                 </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Для подключения используйте «Ссылку подписки» выше.
+                </p>
               )}
             </div>
           ))}

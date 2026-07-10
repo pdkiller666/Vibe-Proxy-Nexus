@@ -13,7 +13,7 @@ export const BRAND_NAME = "VPNexus";
  * Advertised via the `profile-update-interval` header, the same convention
  * used by commercial VLESS subscription providers.
  */
-export const SUBSCRIPTION_UPDATE_INTERVAL_HOURS = 12;
+export const SUBSCRIPTION_UPDATE_INTERVAL_HOURS = 3;
 
 /**
  * Subscription tokens are stateless and HMAC-signed (userId.signature)

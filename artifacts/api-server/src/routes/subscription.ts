@@ -49,8 +49,16 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
 
   const body = Buffer.from(keys.map((key) => key.vlessLink).join("\n"), "utf8").toString("base64");
 
+  // Show the user's actual plan name in the client's subscription group title
+  // (falls back to the bare brand name if there's no active plan/subscription)
+  // so the user can tell at a glance which tariff is currently applied.
+  const activePlan = activeSubscription?.planId
+    ? (await db.select().from(plansTable).where(eq(plansTable.id, activeSubscription.planId)))[0]
+    : undefined;
+  const profileTitle = activePlan?.name ? `${BRAND_NAME} — ${activePlan.name}` : BRAND_NAME;
+
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.setHeader("Profile-Title", `base64:${Buffer.from(BRAND_NAME, "utf8").toString("base64")}`);
+  res.setHeader("Profile-Title", `base64:${Buffer.from(profileTitle, "utf8").toString("base64")}`);
   res.setHeader("Profile-Update-Interval", String(SUBSCRIPTION_UPDATE_INTERVAL_HOURS));
   // Deep link to the user's personal cabinet, shown by Happ/v2rayNG next to
   // the subscription group. Built from the request host rather than a
@@ -69,13 +77,7 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
     const periodUpBytes = keys.reduce((sum, key) => sum + key.periodUpBytes, 0);
     const periodDownBytes = keys.reduce((sum, key) => sum + key.periodDownBytes, 0);
 
-    let totalBytes = 0;
-    if (activeSubscription.planId) {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, activeSubscription.planId));
-      if (plan?.trafficLimitGb) {
-        totalBytes = plan.trafficLimitGb * 1024 * 1024 * 1024;
-      }
-    }
+    const totalBytes = activePlan?.trafficLimitGb ? activePlan.trafficLimitGb * 1024 * 1024 * 1024 : 0;
 
     const parts = [`upload=${periodUpBytes}`, `download=${periodDownBytes}`, `total=${totalBytes}`];
     if (activeSubscription.endsAt) {
