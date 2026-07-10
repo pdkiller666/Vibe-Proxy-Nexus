@@ -30,6 +30,8 @@ export default function Plans() {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const programmaticScrollRef = useRef(false);
+  const programmaticScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activePlans = plans?.filter((p) => p.isActive) ?? [];
 
@@ -44,11 +46,22 @@ export default function Plans() {
     const el = cardRefs.current[planId];
     const track = trackRef.current;
     if (!el || !track) return;
+    const maxScroll = track.scrollWidth - track.clientWidth;
     const target = el.offsetLeft - (track.clientWidth - el.clientWidth) / 2;
-    track.scrollTo({ left: target, behavior });
+    const clamped = Math.max(0, Math.min(target, maxScroll));
+
+    programmaticScrollRef.current = true;
+    if (programmaticScrollTimeoutRef.current) clearTimeout(programmaticScrollTimeoutRef.current);
+    programmaticScrollTimeoutRef.current = setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 500);
+
+    track.scrollTo({ left: clamped, behavior });
   }
 
   function handleCardClick(planId: number) {
+    const index = activePlans.findIndex((p) => p.id === planId);
+    if (index !== -1) setActiveIndex(index);
     setSelectedPlanId(planId);
     scrollToCard(planId);
   }
@@ -58,6 +71,7 @@ export default function Plans() {
     if (!track) return;
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => {
+      if (programmaticScrollRef.current) return;
       const trackCenter = track.scrollLeft + track.clientWidth / 2;
       let closestId: number | null = null;
       let closestIndex = 0;
