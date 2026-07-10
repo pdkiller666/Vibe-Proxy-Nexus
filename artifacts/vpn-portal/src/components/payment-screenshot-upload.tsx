@@ -34,11 +34,11 @@ export function PaymentScreenshotUpload({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const MAX_FILE_BYTES = 10 * 1024 * 1024;
+    const MAX_FILE_BYTES = 5.5 * 1024 * 1024;
     if (file.size > MAX_FILE_BYTES) {
       toast({
         title: "Файл слишком большой",
-        description: "Максимальный размер скриншота — 10 МБ. Сожмите изображение и попробуйте снова.",
+        description: "Максимальный размер скриншота — 5,5 МБ. Сожмите изображение и попробуйте снова.",
         variant: "destructive",
       });
       if (inputRef.current) inputRef.current.value = "";

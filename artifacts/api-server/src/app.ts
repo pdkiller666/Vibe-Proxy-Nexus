@@ -49,12 +49,21 @@ app.use(
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({ credentials: true, origin: corsOriginCheck }));
 // Payment screenshots are uploaded as base64 JSON (see payments.ts), which
-// inflates a ~10MB photo to ~13-14MB of JSON text. Express's default 100kb
+// inflates a photo to ~1.37x its size as JSON text. Express's default 100kb
 // body limit rejected these with a 413 before the request ever reached the
-// route handler. Cap at 15mb here to match the 10MB client-side file limit
-// enforced in payment-screenshot-upload.tsx (base64 + JSON overhead ~37%).
-app.use(express.json({ limit: "15mb" }));
-app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+// route handler.
+//
+// Amvera's edge (Traefik) also enforces its OWN hard request-body cap around
+// 10MB, confirmed empirically (payloads >~10MB get rejected by the edge with
+// its own JSON 413 before even reaching this app — amvera.yaml has no config
+// knob to raise it). So our own limit here must stay comfortably below that,
+// or requests just above our limit but under the edge's would get our JSON
+// error while ones above the edge's get a less friendly one; keeping both
+// close means the app is always the one answering. 8mb here pairs with the
+// 5.5MB client-side file cap in payment-screenshot-upload.tsx (5.5 * 1.37 ~
+// 7.5MB, leaving headroom under both this limit and the edge's ~10MB one).
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 app.use(cookieParser(getSessionSecret()));
 
 app.use("/api", router);
