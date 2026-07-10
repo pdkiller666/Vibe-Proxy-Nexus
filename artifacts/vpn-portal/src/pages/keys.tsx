@@ -13,7 +13,7 @@ import { useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
-import { getListMyVpnKeysQueryKey } from "@workspace/api-client-react";
+import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
@@ -250,10 +250,12 @@ export default function Keys() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setShowAddDeviceModal(false);
           toast({ title: "Ключ выпущен", description: "Импортируйте его в клиент VLESS." });
         },
         onError: (err: unknown) => {
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           const msg = err instanceof Error ? err.message : undefined;
           toast({ title: msg ?? "Не удалось выпустить ключ", variant: "destructive" });
         },
@@ -268,6 +270,7 @@ export default function Keys() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           toast({ title: "Ключ отозван" });
           setRevokingId(null);
         },
