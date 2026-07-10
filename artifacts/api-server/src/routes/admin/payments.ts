@@ -140,10 +140,12 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
     let updatedPayment;
     try {
       updatedPayment = await db.transaction(async (tx) => {
-        // Atomically increment balance
+        // Atomically increment balance in the SQL itself (not read-then-write
+        // in application code) so two concurrent confirmations never lose an
+        // update under read-committed isolation.
         await tx
           .update(usersTable)
-          .set({ balanceKopecks: (await tx.select({ bal: usersTable.balanceKopecks }).from(usersTable).where(eq(usersTable.id, payment.userId)).then(([r]) => (r?.bal ?? 0))) + amountKopecks })
+          .set({ balanceKopecks: sql`${usersTable.balanceKopecks} + ${amountKopecks}` })
           .where(eq(usersTable.id, payment.userId));
 
         await tx.insert(balanceTransactionsTable).values({
@@ -270,11 +272,14 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
         const percent = settings?.referralCommissionPercent ?? 0;
         if (percent > 0) {
           const commissionKopecks = Math.round((payment.amountRub * percent * 100) / 100);
-          const [referrer] = await tx.select({ balanceKopecks: usersTable.balanceKopecks }).from(usersTable).where(eq(usersTable.id, payer.referredByUserId));
+          const [referrer] = await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, payer.referredByUserId));
           if (referrer) {
+            // Atomic increment (see balance_topup branch above) — avoids a
+            // lost update if two of this referrer's referrals are confirmed
+            // concurrently.
             await tx
               .update(usersTable)
-              .set({ balanceKopecks: referrer.balanceKopecks + commissionKopecks })
+              .set({ balanceKopecks: sql`${usersTable.balanceKopecks} + ${commissionKopecks}` })
               .where(eq(usersTable.id, payer.referredByUserId));
 
             await tx.insert(balanceTransactionsTable).values({
