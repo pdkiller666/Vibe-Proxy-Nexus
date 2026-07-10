@@ -140,6 +140,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Me"
+    patch:
+      operationId: updateMe
+      tags: [me]
+      summary: Update the current user's display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+
+  /me/email:
+    patch:
+      operationId: changeMyEmail
+      tags: [me]
+      summary: Change the current user's login email (requires current password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeEmailInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /me/password:
+    patch:
+      operationId: changeMyPassword
+      tags: [me]
+      summary: Change the current user's password (requires current password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangePasswordResult"
 
   /plans:
     get:
@@ -1074,6 +1135,31 @@ components:
       properties:
         message: { type: string }
 
+    UpdateMeInput:
+      type: object
+      properties:
+        name: { type: ["string", "null"] }
+
+    ChangeEmailInput:
+      type: object
+      required: [newEmail, currentPassword]
+      properties:
+        newEmail: { type: string, format: email }
+        currentPassword: { type: string, minLength: 1, maxLength: 200 }
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 200 }
+        newPassword: { type: string, minLength: 8, maxLength: 200 }
+
+    ChangePasswordResult:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
     Me:
       type: object
       required: [id, email, role, hasActiveSubscription, deviceSlots, activeKeyCount, balanceKopecks]
@@ -1462,6 +1548,7 @@ components:
           periodStartedAt,
           trafficLimitGb,
           trafficLimitExceeded,
+          isOnline,
         ]
       properties:
         id: { type: integer }
@@ -1470,6 +1557,10 @@ components:
         role:
           $ref: "#/components/schemas/UserRole"
         createdAt: { type: string, format: date-time }
+        # Last authenticated request (throttled to ~1/min server-side).
+        lastActiveAt: { type: ["string", "null"], format: date-time }
+        # true if lastActiveAt is within the last 5 minutes.
+        isOnline: { type: boolean }
         activeSubscriptions: { type: integer }
         # extraDeviceSlots is sourced from the user's currently ACTIVE
         # subscription row (0 if none) — slots do not carry over across
@@ -1538,7 +1629,7 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets]
+      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets, activeNow, newUsersLast7Days, newUsersLast30Days, planDistribution, revenueByDay]
       properties:
         totalUsers: { type: integer }
         activeSubscriptions: { type: integer }
@@ -1547,6 +1638,35 @@ components:
         last30DaysRevenueRub: { type: integer }
         totalVpnKeys: { type: integer }
         openTickets: { type: integer }
+        # Users with lastActiveAt within the last 5 minutes.
+        activeNow: { type: integer }
+        newUsersLast7Days: { type: integer }
+        newUsersLast30Days: { type: integer }
+        # Count of currently-active subscriptions grouped by plan name.
+        planDistribution:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanDistributionEntry"
+        # Confirmed revenue (rubles) per calendar day, oldest first, for the
+        # last 14 days (days with no confirmed payments still appear, with 0).
+        revenueByDay:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueByDayEntry"
+
+    PlanDistributionEntry:
+      type: object
+      required: [planName, count]
+      properties:
+        planName: { type: string }
+        count: { type: integer }
+
+    RevenueByDayEntry:
+      type: object
+      required: [date, amountRub]
+      properties:
+        date: { type: string, format: date }
+        amountRub: { type: integer }
 
     BalanceTopupOrderBody:
       type: object

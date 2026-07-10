@@ -7,7 +7,7 @@ import {
   useGetAdminDashboardSummary,
   getGetAdminDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
-import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle } from "lucide-react";
+import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle, UserCircle } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
@@ -38,6 +38,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/keys", label: "Ключи VPN", icon: Key },
     { href: "/payments", label: "Платежи", icon: CreditCard },
     { href: "/support", label: "Поддержка", icon: MessageCircle },
+    { href: "/profile", label: "Профиль", icon: UserCircle },
   ];
 
   if (isAdmin) {

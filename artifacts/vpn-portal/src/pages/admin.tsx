@@ -75,7 +75,9 @@ function Badge({ count }: { count: number }) {
 }
 
 function SummarySection() {
-  const { data, isLoading } = useGetAdminDashboardSummary();
+  const { data, isLoading } = useGetAdminDashboardSummary({
+    query: { queryKey: getGetAdminDashboardSummaryQueryKey(), refetchInterval: 30_000 },
+  });
   if (isLoading || !data) {
     return (
       <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -85,14 +87,68 @@ function SummarySection() {
       </div>
     );
   }
+
+  const maxRevenue = Math.max(1, ...data.revenueByDay.map((d) => d.amountRub));
+
   return (
-    <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
-      <Metric label="Пользователи" value={data.totalUsers} />
-      <Metric label="Активные подписки" value={data.activeSubscriptions} />
-      <Metric label="Ожидают оплаты" value={data.pendingPayments} highlight={data.pendingPayments > 0} />
-      <Metric label="Доход (30 дней)" value={`${data.last30DaysRevenueRub} ₽`} />
-      <Metric label="Выпущено ключей" value={data.totalVpnKeys} />
-      <Metric label="Открытых тикетов" value={data.openTickets} highlight={data.openTickets > 0} />
+    <div className="space-y-4">
+      <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Metric label="Пользователи" value={data.totalUsers} />
+        <Metric label="Онлайн сейчас" value={data.activeNow} highlight={data.activeNow > 0} />
+        <Metric label="Активные подписки" value={data.activeSubscriptions} />
+        <Metric label="Ожидают оплаты" value={data.pendingPayments} highlight={data.pendingPayments > 0} />
+        <Metric label="Доход (30 дней)" value={`${data.last30DaysRevenueRub} ₽`} />
+        <Metric label="Открытых тикетов" value={data.openTickets} highlight={data.openTickets > 0} />
+      </div>
+      <div className="grid md:grid-cols-3 gap-4">
+        <Metric label="Выпущено ключей" value={data.totalVpnKeys} />
+        <Metric label="Новых за 7 дней" value={data.newUsersLast7Days} />
+        <Metric label="Новых за 30 дней" value={data.newUsersLast30Days} />
+      </div>
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="bg-card border border-border p-5">
+          <div className="text-xs font-mono uppercase mb-3 text-muted-foreground">Доход по дням (14 дней)</div>
+          <div className="flex items-end gap-1 h-32">
+            {data.revenueByDay.map((d) => (
+              <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 group relative">
+                <div
+                  className="w-full bg-orange-500/80 hover:bg-orange-500 transition-colors min-h-[2px]"
+                  style={{ height: `${(d.amountRub / maxRevenue) * 100}%` }}
+                  title={`${new Date(d.date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}: ${d.amountRub} ₽`}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1 font-mono">
+            <span>{new Date(data.revenueByDay[0]!.date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</span>
+            <span>{new Date(data.revenueByDay[data.revenueByDay.length - 1]!.date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</span>
+          </div>
+        </div>
+        <div className="bg-card border border-border p-5">
+          <div className="text-xs font-mono uppercase mb-3 text-muted-foreground">Распределение по тарифам</div>
+          {data.planDistribution.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Нет активных подписок</p>
+          ) : (
+            <div className="space-y-2">
+              {data.planDistribution.map((p) => {
+                const total = data.planDistribution.reduce((s, x) => s + x.count, 0);
+                const pct = total > 0 ? (p.count / total) * 100 : 0;
+                return (
+                  <div key={p.planName}>
+                    <div className="flex justify-between text-xs mb-0.5">
+                      <span className="font-semibold">{p.planName}</span>
+                      <span className="text-muted-foreground">{p.count}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -998,7 +1054,7 @@ function UsersManagement() {
   const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
-  const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic">("date_desc");
+  const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic" | "online">("date_desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
@@ -1082,6 +1138,8 @@ function UsersManagement() {
           return a.email.localeCompare(b.email);
         case "traffic":
           return b.trafficUpBytes + b.trafficDownBytes - (a.trafficUpBytes + a.trafficDownBytes);
+        case "online":
+          return Number(b.isOnline) - Number(a.isOnline);
         case "date_desc":
         default:
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -1115,6 +1173,7 @@ function UsersManagement() {
           <option value="date_asc">Сначала старые</option>
           <option value="email">По email</option>
           <option value="traffic">По трафику</option>
+          <option value="online">Сначала онлайн</option>
         </select>
       </div>
       {filtered.map((user) => {
@@ -1123,12 +1182,22 @@ function UsersManagement() {
           <div key={user.id} className="bg-card border border-border p-4 space-y-3">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="min-w-0 break-words">
-                <div className="font-bold break-all">
+                <div className="font-bold break-all flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full shrink-0 ${user.isOnline ? "bg-green-500" : "bg-gray-300"}`}
+                    title={user.isOnline ? "Онлайн" : "Не в сети"}
+                  />
                   {user.name ? `${user.name} · ` : ""}
                   {user.email}
+                  {user.isOnline && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
+                      Онлайн
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-muted-foreground font-mono">
                   {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
+                  {!user.isOnline && user.lastActiveAt && ` · был(а) в сети ${formatDate(user.lastActiveAt)}`}
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap shrink-0">

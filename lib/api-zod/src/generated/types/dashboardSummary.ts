@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PlanDistributionEntry } from './planDistributionEntry';
+import type { RevenueByDayEntry } from './revenueByDayEntry';
 
 export interface DashboardSummary {
   totalUsers: number;
@@ -14,4 +16,9 @@ export interface DashboardSummary {
   last30DaysRevenueRub: number;
   totalVpnKeys: number;
   openTickets: number;
+  activeNow: number;
+  newUsersLast7Days: number;
+  newUsersLast30Days: number;
+  planDistribution: PlanDistributionEntry[];
+  revenueByDay: RevenueByDayEntry[];
 }

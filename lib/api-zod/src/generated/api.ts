@@ -141,6 +141,83 @@ export const GetMeResponse = zod.object({
 
 
 /**
+ * @summary Update the current user's display name
+ */
+export const UpdateMeBody = zod.object({
+  "name": zod.string().nullish()
+})
+
+export const UpdateMeResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "hasActiveSubscription": zod.boolean(),
+  "currentPlanName": zod.string().nullish(),
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "hourlyRateKopecks": zod.number().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
+  "deviceSlots": zod.number(),
+  "activeKeyCount": zod.number(),
+  "balanceKopecks": zod.number(),
+  "trafficLimitGb": zod.number().nullish(),
+  "periodUsageBytes": zod.number().optional()
+})
+
+
+/**
+ * @summary Change the current user's login email (requires current password)
+ */
+export const changeMyEmailBodyCurrentPasswordMax = 200;
+
+
+
+export const ChangeMyEmailBody = zod.object({
+  "newEmail": zod.string().email(),
+  "currentPassword": zod.string().min(1).max(changeMyEmailBodyCurrentPasswordMax)
+})
+
+export const ChangeMyEmailResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "hasActiveSubscription": zod.boolean(),
+  "currentPlanName": zod.string().nullish(),
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "hourlyRateKopecks": zod.number().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
+  "deviceSlots": zod.number(),
+  "activeKeyCount": zod.number(),
+  "balanceKopecks": zod.number(),
+  "trafficLimitGb": zod.number().nullish(),
+  "periodUsageBytes": zod.number().optional()
+})
+
+
+/**
+ * @summary Change the current user's password (requires current password)
+ */
+export const changeMyPasswordBodyCurrentPasswordMax = 200;
+
+export const changeMyPasswordBodyNewPasswordMin = 8;
+export const changeMyPasswordBodyNewPasswordMax = 200;
+
+
+
+export const ChangeMyPasswordBody = zod.object({
+  "currentPassword": zod.string().min(1).max(changeMyPasswordBodyCurrentPasswordMax),
+  "newPassword": zod.string().min(changeMyPasswordBodyNewPasswordMin).max(changeMyPasswordBodyNewPasswordMax)
+})
+
+export const ChangeMyPasswordResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
  * @summary List subscription plans
  */
 export const ListPlansResponseItem = zod.object({
@@ -608,7 +685,18 @@ export const GetAdminDashboardSummaryResponse = zod.object({
   "monthlyRevenueRub": zod.number(),
   "last30DaysRevenueRub": zod.number(),
   "totalVpnKeys": zod.number(),
-  "openTickets": zod.number()
+  "openTickets": zod.number(),
+  "activeNow": zod.number(),
+  "newUsersLast7Days": zod.number(),
+  "newUsersLast30Days": zod.number(),
+  "planDistribution": zod.array(zod.object({
+  "planName": zod.string(),
+  "count": zod.number()
+})),
+  "revenueByDay": zod.array(zod.object({
+  "date": zod.coerce.date(),
+  "amountRub": zod.number()
+}))
 })
 
 
@@ -922,6 +1010,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
+  "lastActiveAt": zod.coerce.date().nullish(),
+  "isOnline": zod.boolean(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
   "activeSubscriptionId": zod.number().nullish(),
@@ -1006,6 +1096,8 @@ export const UpdateUserProfileResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
+  "lastActiveAt": zod.coerce.date().nullish(),
+  "isOnline": zod.boolean(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
   "activeSubscriptionId": zod.number().nullish(),
@@ -1051,6 +1143,8 @@ export const UpdateUserRoleResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
+  "lastActiveAt": zod.coerce.date().nullish(),
+  "isOnline": zod.boolean(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
   "activeSubscriptionId": zod.number().nullish(),
@@ -1090,6 +1184,8 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
+  "lastActiveAt": zod.coerce.date().nullish(),
+  "isOnline": zod.boolean(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
   "activeSubscriptionId": zod.number().nullish(),
@@ -1129,6 +1225,8 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "createdAt": zod.coerce.date(),
+  "lastActiveAt": zod.coerce.date().nullish(),
+  "isOnline": zod.boolean(),
   "activeSubscriptions": zod.number().optional(),
   "extraDeviceSlots": zod.number(),
   "activeSubscriptionId": zod.number().nullish(),

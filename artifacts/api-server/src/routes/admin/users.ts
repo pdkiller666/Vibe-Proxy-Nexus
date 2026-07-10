@@ -32,6 +32,7 @@ import {
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { logger } from "../../lib/logger";
+import { ONLINE_THRESHOLD_MS } from "../../lib/session";
 
 const router: IRouter = Router();
 
@@ -134,6 +135,8 @@ async function enrichUsersWithTraffic(users: User[]) {
     .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id));
   const currentByUser = new Map(currentRows.map((r) => [r.userId, r]));
 
+  const now = Date.now();
+
   return users.map((user) => {
     const traffic = trafficByUser.get(user.id);
     const trafficLimitGb = limitByUser.get(user.id) ?? null;
@@ -141,6 +144,7 @@ async function enrichUsersWithTraffic(users: User[]) {
     const periodBytes = (traffic?.periodUpBytes ?? 0) + (traffic?.periodDownBytes ?? 0);
     return {
       ...user,
+      isOnline: Boolean(user.lastActiveAt) && now - user.lastActiveAt!.getTime() <= ONLINE_THRESHOLD_MS,
       trafficUpBytes: traffic?.trafficUpBytes ?? 0,
       trafficDownBytes: traffic?.trafficDownBytes ?? 0,
       periodUpBytes: traffic?.periodUpBytes ?? 0,

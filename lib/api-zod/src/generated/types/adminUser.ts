@@ -15,6 +15,9 @@ export interface AdminUser {
   name?: string | null;
   role: UserRole;
   createdAt: Date;
+  /** @nullable */
+  lastActiveAt?: Date | null;
+  isOnline: boolean;
   activeSubscriptions?: number;
   extraDeviceSlots: number;
   /** @nullable */

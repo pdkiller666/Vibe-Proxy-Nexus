@@ -1,0 +1,193 @@
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGetMe, useUpdateMe, useChangeMyEmail, useChangeMyPassword, getGetMeQueryKey } from "@workspace/api-client-react";
+import { UserCircle, Mail, KeyRound, Save } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function NameSection() {
+  const { data: me } = useGetMe();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(me?.name ?? "");
+  const [dirty, setDirty] = useState(false);
+
+  const { mutate, isPending } = useUpdateMe({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        setDirty(false);
+        toast({ title: "Имя обновлено" });
+      },
+      onError: (err) => toast({ title: errorMessage(err, "Не удалось обновить имя"), variant: "destructive" }),
+    },
+  });
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <UserCircle className="w-4 h-4 text-primary" />
+        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Имя</p>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        <Input
+          value={dirty ? name : (me?.name ?? name)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setDirty(true);
+          }}
+          placeholder="Ваше имя"
+          className="rounded-none max-w-sm"
+        />
+        <button
+          onClick={() => mutate({ data: { name: name.trim() || null } })}
+          disabled={isPending || !dirty}
+          className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          <Save className="w-4 h-4" />
+          {isPending ? "Сохраняем..." : "Сохранить"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmailSection() {
+  const { data: me } = useGetMe();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [newEmail, setNewEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+
+  const { mutate, isPending } = useChangeMyEmail({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        setNewEmail("");
+        setCurrentPassword("");
+        toast({ title: "Email изменён" });
+      },
+      onError: (err) => toast({ title: errorMessage(err, "Не удалось изменить email"), variant: "destructive" }),
+    },
+  });
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Mail className="w-4 h-4 text-primary" />
+        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Email для входа</p>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Текущий: <span className="font-mono text-foreground">{me?.email}</span>
+      </p>
+      <div className="grid sm:grid-cols-2 gap-2 max-w-lg">
+        <Input
+          type="email"
+          placeholder="Новый email"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          className="rounded-none"
+        />
+        <Input
+          type="password"
+          placeholder="Текущий пароль"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="rounded-none"
+        />
+      </div>
+      <button
+        onClick={() => mutate({ data: { newEmail, currentPassword } })}
+        disabled={isPending || !newEmail || !currentPassword}
+        className="bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+      >
+        {isPending ? "Сохраняем..." : "Изменить email"}
+      </button>
+    </div>
+  );
+}
+
+function PasswordSection() {
+  const { toast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const { mutate, isPending } = useChangeMyPassword({
+    mutation: {
+      onSuccess: () => {
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        toast({ title: "Пароль изменён" });
+      },
+      onError: (err) => toast({ title: errorMessage(err, "Не удалось изменить пароль"), variant: "destructive" }),
+    },
+  });
+
+  const mismatch = newPassword.length > 0 && confirmPassword.length > 0 && newPassword !== confirmPassword;
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <KeyRound className="w-4 h-4 text-primary" />
+        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Пароль</p>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-2 max-w-2xl">
+        <Input
+          type="password"
+          placeholder="Текущий пароль"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="rounded-none"
+        />
+        <Input
+          type="password"
+          placeholder="Новый пароль"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="rounded-none"
+        />
+        <Input
+          type="password"
+          placeholder="Повторите новый пароль"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          className="rounded-none"
+        />
+      </div>
+      {mismatch && <p className="text-sm text-destructive">Пароли не совпадают</p>}
+      <button
+        onClick={() => mutate({ data: { currentPassword, newPassword } })}
+        disabled={isPending || !currentPassword || newPassword.length < 8 || mismatch}
+        className="bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+      >
+        {isPending ? "Сохраняем..." : "Изменить пароль"}
+      </button>
+      <p className="text-xs text-muted-foreground">
+        Минимум 8 символов. После смены пароля все остальные ваши сеансы входа будут завершены.
+      </p>
+    </div>
+  );
+}
+
+export default function Profile() {
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Профиль</h1>
+        <p className="text-muted-foreground font-mono text-sm mt-1">
+          Управляйте своими учётными данными.
+        </p>
+      </div>
+
+      <NameSection />
+      <EmailSection />
+      <PasswordSection />
+    </div>
+  );
+}

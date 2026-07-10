@@ -35,6 +35,14 @@ export async function invalidateUserSessions(userId: number): Promise<void> {
   await db.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
 }
 
+// How often lastActiveAt is written per user, to avoid a write on every
+// single request (this runs on every authenticated call).
+const LAST_ACTIVE_THROTTLE_MS = 60 * 1000;
+// "Online" threshold used by the admin panel — see admin/users.ts and
+// admin/dashboard.ts, which both treat lastActiveAt within this window as
+// "active now".
+export const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+
 export async function getUserBySessionToken(token: string): Promise<User | null> {
   const [row] = await db
     .select({ user: usersTable })
@@ -42,7 +50,23 @@ export async function getUserBySessionToken(token: string): Promise<User | null>
     .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
     .where(and(eq(sessionsTable.token, token), gt(sessionsTable.expiresAt, new Date())));
 
-  return row?.user ?? null;
+  const user = row?.user ?? null;
+  if (user) {
+    const now = new Date();
+    if (!user.lastActiveAt || now.getTime() - user.lastActiveAt.getTime() > LAST_ACTIVE_THROTTLE_MS) {
+      // Fire-and-forget: activity tracking must never slow down or fail the
+      // actual request it's piggybacking on.
+      db.update(usersTable)
+        .set({ lastActiveAt: now })
+        .where(eq(usersTable.id, user.id))
+        .catch((err) => {
+          logger.error({ err, userId: user.id }, "Failed to update lastActiveAt");
+        });
+      user.lastActiveAt = now;
+    }
+  }
+
+  return user;
 }
 
 export function setSessionCookie(res: Response, token: string, expiresAt: Date): void {

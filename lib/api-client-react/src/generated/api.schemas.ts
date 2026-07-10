@@ -58,6 +58,37 @@ export interface ResetPasswordResult {
   message: string;
 }
 
+export interface UpdateMeInput {
+  /** @nullable */
+  name?: string | null;
+}
+
+export interface ChangeEmailInput {
+  newEmail: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  currentPassword: string;
+}
+
+export interface ChangePasswordInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  currentPassword: string;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  newPassword: string;
+}
+
+export interface ChangePasswordResult {
+  message: string;
+}
+
 export type PlanBillingType = typeof PlanBillingType[keyof typeof PlanBillingType];
 
 
@@ -436,6 +467,9 @@ export interface AdminUser {
   name?: string | null;
   role: UserRole;
   createdAt: string;
+  /** @nullable */
+  lastActiveAt?: string | null;
+  isOnline: boolean;
   activeSubscriptions?: number;
   extraDeviceSlots: number;
   /** @nullable */
@@ -480,6 +514,16 @@ export interface UserRoleUpdate {
   role: UserRole;
 }
 
+export interface PlanDistributionEntry {
+  planName: string;
+  count: number;
+}
+
+export interface RevenueByDayEntry {
+  date: string;
+  amountRub: number;
+}
+
 export interface DashboardSummary {
   totalUsers: number;
   activeSubscriptions: number;
@@ -488,6 +532,11 @@ export interface DashboardSummary {
   last30DaysRevenueRub: number;
   totalVpnKeys: number;
   openTickets: number;
+  activeNow: number;
+  newUsersLast7Days: number;
+  newUsersLast30Days: number;
+  planDistribution: PlanDistributionEntry[];
+  revenueByDay: RevenueByDayEntry[];
 }
 
 export interface BalanceTopupOrderBody {

@@ -10,6 +10,10 @@ export const usersTable = pgTable("users", {
   role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
   balanceKopecks: integer("balance_kopecks").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Updated (throttled, at most once/minute) on any authenticated request —
+  // see requireAuth/getUserBySessionToken in the api-server. Used by the
+  // admin panel to show who is "online" (active within the last 5 minutes).
+  lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({
