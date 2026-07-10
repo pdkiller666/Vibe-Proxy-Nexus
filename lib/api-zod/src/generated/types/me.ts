@@ -34,4 +34,5 @@ export interface Me {
   referralCommissionPercent: number;
   referralEarningsKopecks: number;
   referredUserCount: number;
+  referralLinkHost: string;
 }

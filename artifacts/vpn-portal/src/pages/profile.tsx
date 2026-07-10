@@ -183,7 +183,11 @@ function ReferralSection() {
 
   if (!me?.referralCode) return null;
 
-  const referralLink = `${window.location.origin}${basePath}/sign-up?ref=${me.referralCode}`;
+  // Use the backend-resolved host (admin's configured primary domain, or the
+  // technical domain as a safety-net fallback) instead of window.location —
+  // otherwise a user browsing via the technical Amvera URL would share links
+  // pointing at that hidden domain instead of the public one.
+  const referralLink = `https://${me.referralLinkHost}${basePath}/sign-up?ref=${me.referralCode}`;
 
   function handleCopy() {
     navigator.clipboard.writeText(referralLink);

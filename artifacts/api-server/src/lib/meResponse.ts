@@ -1,7 +1,8 @@
 import { and, count, desc, eq, gt, isNull, or, sum } from "drizzle-orm";
 import { db, balanceTransactionsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
+import { resolvePublicAddress } from "./domain";
 
-export async function buildMeData(user: User) {
+export async function buildMeData(user: User, requestHost?: string) {
   // Defense in depth: the background job in subscriptionLifecycle.ts flips
   // "active" subscriptions to "expired" on a periodic sweep, so there's a
   // window (up to its interval) where a row can still say "active" despite
@@ -65,6 +66,9 @@ export async function buildMeData(user: User) {
     .from(usersTable)
     .where(eq(usersTable.referredByUserId, user.id));
 
+  const fallbackHost = requestHost || "";
+  const { host: referralLinkHost } = await resolvePublicAddress({ host: fallbackHost, sni: fallbackHost });
+
   return {
     id: user.id,
     email: user.email,
@@ -85,5 +89,6 @@ export async function buildMeData(user: User) {
     referralCommissionPercent: settings?.referralCommissionPercent ?? 0,
     referralEarningsKopecks: Number(earningsResult?.total ?? 0),
     referredUserCount,
+    referralLinkHost,
   };
 }

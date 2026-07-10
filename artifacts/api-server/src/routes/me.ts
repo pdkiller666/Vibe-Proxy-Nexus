@@ -23,7 +23,7 @@ function normalizeEmail(email: string): string {
 
 router.get("/me", requireAuth, async (req, res): Promise<void> => {
   const user = req.appUser!;
-  res.json(GetMeResponse.parse(await buildMeData(user)));
+  res.json(GetMeResponse.parse(await buildMeData(user, req.get("host") ?? "")));
 });
 
 router.patch("/me", requireAuth, async (req, res): Promise<void> => {
@@ -40,7 +40,7 @@ router.patch("/me", requireAuth, async (req, res): Promise<void> => {
     .where(eq(usersTable.id, req.appUser!.id))
     .returning();
 
-  res.json(UpdateMeResponse.parse(await buildMeData(user!)));
+  res.json(UpdateMeResponse.parse(await buildMeData(user!, req.get("host") ?? "")));
 });
 
 router.patch("/me/email", requireAuth, async (req, res): Promise<void> => {
@@ -75,7 +75,7 @@ router.patch("/me/email", requireAuth, async (req, res): Promise<void> => {
     throw err;
   }
 
-  res.json(ChangeMyEmailResponse.parse(await buildMeData(user!)));
+  res.json(ChangeMyEmailResponse.parse(await buildMeData(user!, req.get("host") ?? "")));
 });
 
 router.patch("/me/password", requireAuth, async (req, res): Promise<void> => {

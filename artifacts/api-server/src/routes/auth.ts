@@ -135,7 +135,7 @@ router.post("/auth/register", registerRateLimit, async (req, res): Promise<void>
 
   // Re-fetch: assignReferralCode() updated the row after `user` was read.
   const [freshUser] = await db.select().from(usersTable).where(eq(usersTable.id, user.id));
-  res.json(RegisterResponse.parse(await buildMeData(freshUser ?? user)));
+  res.json(RegisterResponse.parse(await buildMeData(freshUser ?? user, req.get("host") ?? "")));
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
@@ -168,7 +168,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   const { token, expiresAt } = await createSession(user.id);
   setSessionCookie(res, token, expiresAt);
 
-  res.json(LoginResponse.parse(await buildMeData(user)));
+  res.json(LoginResponse.parse(await buildMeData(user, req.get("host") ?? "")));
 });
 
 router.post("/auth/logout", requireAuth, async (req, res): Promise<void> => {

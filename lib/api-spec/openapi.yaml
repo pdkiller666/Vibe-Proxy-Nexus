@@ -1179,6 +1179,7 @@ components:
           referralCommissionPercent,
           referralEarningsKopecks,
           referredUserCount,
+          referralLinkHost,
         ]
       properties:
         id: { type: integer }
@@ -1215,6 +1216,11 @@ components:
         referralEarningsKopecks: { type: integer }
         # Number of accounts registered using this user's referral code.
         referredUserCount: { type: integer }
+        # Host to build the shareable referral link against: the
+        # admin-configured primary public domain if it's currently healthy,
+        # otherwise the request's own (technical) host as a safety-net
+        # fallback. Frontend must use this instead of window.location.origin.
+        referralLinkHost: { type: string }
 
     PlanBillingType:
       type: string

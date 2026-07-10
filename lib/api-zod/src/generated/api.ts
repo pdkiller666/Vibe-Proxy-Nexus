@@ -52,7 +52,8 @@ export const RegisterResponse = zod.object({
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
-  "referredUserCount": zod.number()
+  "referredUserCount": zod.number(),
+  "referralLinkHost": zod.string()
 })
 
 
@@ -87,7 +88,8 @@ export const LoginResponse = zod.object({
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
-  "referredUserCount": zod.number()
+  "referredUserCount": zod.number(),
+  "referralLinkHost": zod.string()
 })
 
 
@@ -150,7 +152,8 @@ export const GetMeResponse = zod.object({
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
-  "referredUserCount": zod.number()
+  "referredUserCount": zod.number(),
+  "referralLinkHost": zod.string()
 })
 
 
@@ -180,7 +183,8 @@ export const UpdateMeResponse = zod.object({
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
-  "referredUserCount": zod.number()
+  "referredUserCount": zod.number(),
+  "referralLinkHost": zod.string()
 })
 
 
@@ -215,7 +219,8 @@ export const ChangeMyEmailResponse = zod.object({
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
-  "referredUserCount": zod.number()
+  "referredUserCount": zod.number(),
+  "referralLinkHost": zod.string()
 })
 
 
