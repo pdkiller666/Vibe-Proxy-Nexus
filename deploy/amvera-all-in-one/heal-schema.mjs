@@ -37,7 +37,48 @@ const statements = [
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false`,
   `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text`,
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS min_hourly_topup_rub integer NOT NULL DEFAULT 0`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id)`,
+  `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS referral_commission_percent integer NOT NULL DEFAULT 0`,
 ];
+
+// Referral codes must be unique and non-empty before the `users_referral_code_unique`
+// constraint (declared in the Drizzle schema) can be applied by `drizzle-kit push`.
+// Existing rows all default to '' when the column is first added, so backfill each
+// with a random 8-char code (retrying on collision) before drizzle-kit push runs.
+const referralBackfillSql = `
+DO $$
+DECLARE
+  r RECORD;
+  candidate text;
+BEGIN
+  FOR r IN SELECT id FROM users WHERE referral_code = '' LOOP
+    LOOP
+      candidate := lower(substr(md5(random()::text || clock_timestamp()::text), 1, 8));
+      BEGIN
+        UPDATE users SET referral_code = candidate WHERE id = r.id;
+        EXIT;
+      EXCEPTION WHEN unique_violation THEN
+        -- collision on the (not-yet-created) unique index/constraint; retry
+        NULL;
+      END;
+    END LOOP;
+  END LOOP;
+END $$;
+`;
+
+// Add the unique constraint only once codes are backfilled and only if it
+// doesn't already exist (ADD CONSTRAINT has no IF NOT EXISTS in Postgres).
+const referralUniqueConstraintSql = `
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'users_referral_code_unique'
+  ) THEN
+    ALTER TABLE users ADD CONSTRAINT users_referral_code_unique UNIQUE (referral_code);
+  END IF;
+END $$;
+`;
 
 // One-time backfill: extraDeviceSlots used to live on `users`. Move any
 // existing value onto that user's currently active subscription (if any)
@@ -70,6 +111,10 @@ try {
   }
   await client.query(backfillSql);
   console.log("heal-schema: applied extra_device_slots backfill + users column drop");
+  await client.query(referralBackfillSql);
+  console.log("heal-schema: applied referral_code backfill");
+  await client.query(referralUniqueConstraintSql);
+  console.log("heal-schema: applied users_referral_code_unique constraint");
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
