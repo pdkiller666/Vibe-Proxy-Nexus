@@ -4,6 +4,7 @@ import {
   useListMyPayments,
   useGetPaymentSettings,
   useUpdatePaymentNote,
+  getListMyPaymentsQueryKey,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,13 +40,16 @@ export default function Checkout() {
   const subscriptionId = Number(id);
   const [, setLocation] = useLocation();
   const { data: payments, isLoading: paymentsLoading } = useListMyPayments({
-    query: { refetchInterval: (query) => {
-      const list = query.state.data;
-      const current = list
-        ?.filter((p) => p.subscriptionId === subscriptionId)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-      return !current || current.status === "pending" ? 15_000 : false;
-    } },
+    query: {
+      queryKey: getListMyPaymentsQueryKey(),
+      refetchInterval: (query) => {
+        const list = query.state.data;
+        const current = list
+          ?.filter((p) => p.subscriptionId === subscriptionId)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        return !current || current.status === "pending" ? 15_000 : false;
+      },
+    },
   });
   const { data: settings, isLoading: settingsLoading } = useGetPaymentSettings();
   const { mutate: updateNote, isPending: notePending } = useUpdatePaymentNote();

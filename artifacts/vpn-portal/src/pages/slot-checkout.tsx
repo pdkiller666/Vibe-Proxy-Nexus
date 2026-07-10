@@ -5,6 +5,7 @@ import {
   useGetPaymentSettings,
   useUpdatePaymentNote,
   useDeleteExtraSlotOrder,
+  getListMyPaymentsQueryKey,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,11 +41,14 @@ export default function SlotCheckout() {
   const paymentId = Number(id);
   const [, setLocation] = useLocation();
   const { data: payments, isLoading: paymentsLoading } = useListMyPayments({
-    query: { refetchInterval: (query) => {
-      const list = query.state.data;
-      const current = list?.find((p) => p.id === paymentId);
-      return !current || current.status === "pending" ? 15_000 : false;
-    } },
+    query: {
+      queryKey: getListMyPaymentsQueryKey(),
+      refetchInterval: (query) => {
+        const list = query.state.data;
+        const current = list?.find((p) => p.id === paymentId);
+        return !current || current.status === "pending" ? 15_000 : false;
+      },
+    },
   });
   const { data: settings, isLoading: settingsLoading } = useGetPaymentSettings();
   const { mutate: updateNote, isPending: notePending } = useUpdatePaymentNote();
