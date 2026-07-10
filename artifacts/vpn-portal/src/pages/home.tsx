@@ -3,6 +3,10 @@ import { Link } from "wouter";
 import { Shield, ArrowRight, Check, Zap, Eye, Lock, Globe, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+function formatKopecks(kopecks: number): string {
+  return `${(kopecks / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽`;
+}
+
 function useCountUp(target: number, duration = 1200) {
   const [count, setCount] = useState(0);
   const started = useRef(false);
@@ -396,10 +400,22 @@ export default function Home() {
               }`}
             >
               {activePlans.map(
-                (plan: { id: number; name: string; description?: string | null; priceRub: number; durationDays: number; devicesIncluded: number },
-                  i: number) => {
+                (
+                  plan: {
+                    id: number;
+                    name: string;
+                    description?: string | null;
+                    priceRub: number;
+                    durationDays: number;
+                    devicesIncluded: number;
+                    billingType?: string;
+                    hourlyRateKopecks?: number | null;
+                  },
+                  i: number,
+                ) => {
                   const featured =
                     activePlans.length > 1 && i === Math.floor(activePlans.length / 2);
+                  const isHourly = plan.billingType === "hourly";
                   return (
                     <div
                       key={plan.id}
@@ -414,19 +430,35 @@ export default function Home() {
                         </div>
                       )}
                       <div className="mb-5">
-                        <h3 className="font-black text-xl mb-1 text-gray-900">{plan.name}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-black text-xl mb-1 text-gray-900">{plan.name}</h3>
+                          {isHourly && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 mb-1 rounded-full bg-orange-100 text-orange-700">
+                              <Zap className="w-3 h-3" /> Почасовой
+                            </span>
+                          )}
+                        </div>
                         {plan.description && (
                           <p className="text-gray-400 text-sm">{plan.description}</p>
                         )}
                       </div>
-                      <div className="mb-6 flex items-end gap-2">
-                        <span className="text-5xl font-black text-gray-900">
-                          {plan.priceRub.toLocaleString()}
-                        </span>
-                        <span className="text-gray-400 text-sm mb-1.5">
-                          ₽&nbsp;/&nbsp;{plan.durationDays}&nbsp;дней
-                        </span>
-                      </div>
+                      {isHourly ? (
+                        <div className="mb-6 flex items-end gap-2">
+                          <span className="text-5xl font-black text-gray-900">
+                            {formatKopecks(plan.hourlyRateKopecks ?? 0)}
+                          </span>
+                          <span className="text-gray-400 text-sm mb-1.5">за час</span>
+                        </div>
+                      ) : (
+                        <div className="mb-6 flex items-end gap-2">
+                          <span className="text-5xl font-black text-gray-900">
+                            {plan.priceRub.toLocaleString()}
+                          </span>
+                          <span className="text-gray-400 text-sm mb-1.5">
+                            ₽&nbsp;/&nbsp;{plan.durationDays}&nbsp;дней
+                          </span>
+                        </div>
+                      )}
                       <ul className="space-y-2.5 mb-8 flex-1">
                         {[
                           `${plan.devicesIncluded} ${
