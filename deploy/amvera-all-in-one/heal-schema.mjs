@@ -23,7 +23,16 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const useSSL = /sslmode=require/.test(DATABASE_URL) || process.env.PGSSLMODE === "require";
+// Match lib/db/src/ssl.ts: any sslmode other than "disable" (including the
+// common provider default of no sslmode param at all, or "require"/"prefer")
+// must connect with encryption but without strict CA verification, since
+// Amvera's internal CNPG Postgres presents a private-CA/self-signed cert that
+// isn't in the default trust store. A previous version of this script only
+// special-cased the literal string "sslmode=require" and missed every other
+// case, causing "self-signed certificate in certificate chain" failures here
+// (see .agents/memory/amvera-internal-db-tls.md).
+const sslMode = new URL(DATABASE_URL).searchParams.get("sslmode");
+const useSSL = sslMode !== "disable";
 
 const client = new Client({
   connectionString: DATABASE_URL,
