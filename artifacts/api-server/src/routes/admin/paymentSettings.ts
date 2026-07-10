@@ -33,6 +33,7 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
           extraDeviceSlotPriceRub: parsed.data.extraDeviceSlotPriceRub,
           trialEnabled: parsed.data.trialEnabled ?? false,
           trialDays: parsed.data.trialDays ?? 5,
+          minHourlyTopupRub: parsed.data.minHourlyTopupRub ?? 0,
         })
         .returning();
 

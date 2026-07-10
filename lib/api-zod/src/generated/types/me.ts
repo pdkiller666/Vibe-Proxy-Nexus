@@ -27,4 +27,7 @@ export interface Me {
   deviceSlots: number;
   activeKeyCount: number;
   balanceKopecks: number;
+  /** @nullable */
+  trafficLimitGb?: number | null;
+  periodUsageBytes?: number;
 }

@@ -25,4 +25,6 @@ export interface VpnKey {
   periodUpBytes: number;
   periodDownBytes: number;
   periodStartedAt: Date;
+  /** @nullable */
+  lastTrafficAt?: Date | null;
 }

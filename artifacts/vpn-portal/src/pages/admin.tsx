@@ -1248,6 +1248,7 @@ function PaymentSettingsForm() {
   const [allowFreeExtraDeviceSlot, setAllowFreeExtraDeviceSlot] = useState(false);
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialDays, setTrialDays] = useState("5");
+  const [minHourlyTopupRub, setMinHourlyTopupRub] = useState("0");
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -1259,12 +1260,25 @@ function PaymentSettingsForm() {
     setAllowFreeExtraDeviceSlot(settings.allowFreeExtraDeviceSlot ?? false);
     setTrialEnabled(settings.trialEnabled ?? false);
     setTrialDays(String(settings.trialDays ?? 5));
+    setMinHourlyTopupRub(String(settings.minHourlyTopupRub ?? 0));
     setInitialized(true);
   }
 
   function handleSubmit() {
     update(
-      { data: { sbpPhone, sbpBank, sbpRecipientName, instructions, extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0, allowFreeExtraDeviceSlot, trialEnabled, trialDays: Number(trialDays) || 5 } },
+      {
+        data: {
+          sbpPhone,
+          sbpBank,
+          sbpRecipientName,
+          instructions,
+          extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0,
+          allowFreeExtraDeviceSlot,
+          trialEnabled,
+          trialDays: Number(trialDays) || 5,
+          minHourlyTopupRub: Number(minHourlyTopupRub) || 0,
+        },
+      },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
@@ -1358,6 +1372,23 @@ function PaymentSettingsForm() {
             </p>
           </div>
         )}
+      </div>
+
+      <div className="border border-border p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Минимальное пополнение для почасового тарифа</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Пользователь не сможет подключить почасовой тариф, пока баланс не достигнет этой суммы. 0 — без ограничения.
+          </p>
+        </div>
+        <Input
+          type="number"
+          min="0"
+          placeholder="0"
+          value={minHourlyTopupRub}
+          onChange={(e) => setMinHourlyTopupRub(e.target.value.replace(/[^0-9]/g, ""))}
+          className="rounded-none max-w-[140px]"
+        />
       </div>
 
       <button

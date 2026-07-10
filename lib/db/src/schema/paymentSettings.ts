@@ -16,6 +16,10 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   allowFreeExtraDeviceSlot: boolean("allow_free_extra_device_slot").notNull().default(false),
   trialEnabled: boolean("trial_enabled").notNull().default(false),
   trialDays: integer("trial_days").notNull().default(5),
+  // Minimum wallet balance (in rubles) a user must hold/top up before an
+  // hourly plan can be activated. 0 = no minimum beyond the normal
+  // one-tick balance check in subscriptions.ts.
+  minHourlyTopupRub: integer("min_hourly_topup_rub").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

@@ -44,7 +44,9 @@ export const RegisterResponse = zod.object({
   "lastBilledAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
   "activeKeyCount": zod.number(),
-  "balanceKopecks": zod.number()
+  "balanceKopecks": zod.number(),
+  "trafficLimitGb": zod.number().nullish(),
+  "periodUsageBytes": zod.number().optional()
 })
 
 
@@ -73,7 +75,9 @@ export const LoginResponse = zod.object({
   "lastBilledAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
   "activeKeyCount": zod.number(),
-  "balanceKopecks": zod.number()
+  "balanceKopecks": zod.number(),
+  "trafficLimitGb": zod.number().nullish(),
+  "periodUsageBytes": zod.number().optional()
 })
 
 
@@ -130,7 +134,9 @@ export const GetMeResponse = zod.object({
   "lastBilledAt": zod.coerce.date().nullish(),
   "deviceSlots": zod.number(),
   "activeKeyCount": zod.number(),
-  "balanceKopecks": zod.number()
+  "balanceKopecks": zod.number(),
+  "trafficLimitGb": zod.number().nullish(),
+  "periodUsageBytes": zod.number().optional()
 })
 
 
@@ -165,7 +171,8 @@ export const GetPaymentSettingsResponse = zod.object({
   "extraDeviceSlotPriceRub": zod.number(),
   "allowFreeExtraDeviceSlot": zod.boolean(),
   "trialEnabled": zod.boolean(),
-  "trialDays": zod.number()
+  "trialDays": zod.number(),
+  "minHourlyTopupRub": zod.number().optional()
 })
 
 
@@ -361,6 +368,19 @@ export const GetPaymentScreenshotResponse = zod.unknown()
 
 
 /**
+ * @summary List current user's balance transaction history (top-ups, hourly debits, refunds)
+ */
+export const ListMyBalanceTransactionsResponseItem = zod.object({
+  "id": zod.number(),
+  "amountKopecks": zod.number(),
+  "type": zod.enum(['topup', 'debit', 'refund']),
+  "description": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListMyBalanceTransactionsResponse = zod.array(ListMyBalanceTransactionsResponseItem)
+
+
+/**
  * @summary List current user's VPN keys
  */
 export const ListMyVpnKeysResponseItem = zod.object({
@@ -379,7 +399,8 @@ export const ListMyVpnKeysResponseItem = zod.object({
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),
   "periodDownBytes": zod.number(),
-  "periodStartedAt": zod.coerce.date()
+  "periodStartedAt": zod.coerce.date(),
+  "lastTrafficAt": zod.coerce.date().nullish()
 })
 export const ListMyVpnKeysResponse = zod.array(ListMyVpnKeysResponseItem)
 
@@ -409,7 +430,8 @@ export const CreateVpnKeyResponse = zod.object({
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),
   "periodDownBytes": zod.number(),
-  "periodStartedAt": zod.coerce.date()
+  "periodStartedAt": zod.coerce.date(),
+  "lastTrafficAt": zod.coerce.date().nullish()
 })
 
 
@@ -690,6 +712,8 @@ export const updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin = 0;
 
 export const updatePaymentSettingsBodyTrialDaysMax = 365;
 
+export const updatePaymentSettingsBodyMinHourlyTopupRubMin = 0;
+
 
 
 export const UpdatePaymentSettingsBody = zod.object({
@@ -701,7 +725,8 @@ export const UpdatePaymentSettingsBody = zod.object({
   "extraDeviceSlotPriceRub": zod.number().min(updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin).optional(),
   "allowFreeExtraDeviceSlot": zod.boolean().optional(),
   "trialEnabled": zod.boolean().optional(),
-  "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional()
+  "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional(),
+  "minHourlyTopupRub": zod.number().min(updatePaymentSettingsBodyMinHourlyTopupRubMin).optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -713,7 +738,8 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "extraDeviceSlotPriceRub": zod.number(),
   "allowFreeExtraDeviceSlot": zod.boolean(),
   "trialEnabled": zod.boolean(),
-  "trialDays": zod.number()
+  "trialDays": zod.number(),
+  "minHourlyTopupRub": zod.number().optional()
 })
 
 
@@ -931,7 +957,8 @@ export const ListAdminVpnKeysResponseItem = zod.object({
   "trafficDownBytes": zod.number(),
   "periodUpBytes": zod.number(),
   "periodDownBytes": zod.number(),
-  "periodStartedAt": zod.coerce.date()
+  "periodStartedAt": zod.coerce.date(),
+  "lastTrafficAt": zod.coerce.date().nullish()
 })
 export const ListAdminVpnKeysResponse = zod.array(ListAdminVpnKeysResponseItem)
 

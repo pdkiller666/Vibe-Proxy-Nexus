@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, or, sum } from "drizzle-orm";
 import { db, plansTable, subscriptionsTable, vpnKeysTable, type User } from "@workspace/db";
 
 export async function buildMeData(user: User) {
@@ -23,6 +23,7 @@ export async function buildMeData(user: User) {
       hourlyRateKopecks: plansTable.hourlyRateKopecks,
       lastBilledAt: subscriptionsTable.lastBilledAt,
       extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
+      trafficLimitGb: plansTable.trafficLimitGb,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
@@ -37,11 +38,16 @@ export async function buildMeData(user: User) {
     .limit(1);
 
   const [keyCountResult] = await db
-    .select({ cnt: count() })
+    .select({
+      cnt: count(),
+      periodUp: sum(vpnKeysTable.periodUpBytes),
+      periodDown: sum(vpnKeysTable.periodDownBytes),
+    })
     .from(vpnKeysTable)
     .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)));
 
   const activeKeyCount = keyCountResult?.cnt ?? 0;
+  const periodUsageBytes = Number(keyCountResult?.periodUp ?? 0) + Number(keyCountResult?.periodDown ?? 0);
   // Extra device slots live on the active subscription row, not the user —
   // without an active subscription there is no slot to report at all (slots
   // bought under a since-expired/switched subscription do not carry over).
@@ -61,5 +67,7 @@ export async function buildMeData(user: User) {
     deviceSlots,
     activeKeyCount,
     balanceKopecks: user.balanceKopecks,
+    trafficLimitGb: activeSubscription?.trafficLimitGb ?? null,
+    periodUsageBytes,
   };
 }

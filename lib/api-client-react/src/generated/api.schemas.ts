@@ -85,6 +85,9 @@ export interface Me {
   deviceSlots: number;
   activeKeyCount: number;
   balanceKopecks: number;
+  /** @nullable */
+  trafficLimitGb?: number | null;
+  periodUsageBytes?: number;
 }
 
 export interface Plan {
@@ -163,6 +166,7 @@ export interface PaymentSettings {
   allowFreeExtraDeviceSlot: boolean;
   trialEnabled: boolean;
   trialDays: number;
+  minHourlyTopupRub?: number;
 }
 
 export interface PaymentSettingsUpdate {
@@ -180,6 +184,8 @@ export interface PaymentSettingsUpdate {
      * @maximum 365
      */
   trialDays?: number;
+  /** @minimum 0 */
+  minHourlyTopupRub?: number;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
@@ -389,6 +395,8 @@ export interface VpnKey {
   periodUpBytes: number;
   periodDownBytes: number;
   periodStartedAt: string;
+  /** @nullable */
+  lastTrafficAt?: string | null;
 }
 
 export interface VpnKeyInput {
@@ -399,6 +407,24 @@ export interface VpnKeyInput {
 
 export interface SubscriptionUrl {
   url: string;
+}
+
+export type BalanceTransactionType = typeof BalanceTransactionType[keyof typeof BalanceTransactionType];
+
+
+export const BalanceTransactionType = {
+  topup: 'topup',
+  debit: 'debit',
+  refund: 'refund',
+} as const;
+
+export interface BalanceTransaction {
+  id: number;
+  amountKopecks: number;
+  type: BalanceTransactionType;
+  /** @nullable */
+  description?: string | null;
+  createdAt: string;
 }
 
 export interface AdminUser {

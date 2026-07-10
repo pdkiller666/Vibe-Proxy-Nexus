@@ -316,6 +316,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /balance-transactions/me:
+    get:
+      operationId: listMyBalanceTransactions
+      tags: [payments]
+      summary: List current user's balance transaction history (top-ups, hourly debits, refunds)
+      responses:
+        "200":
+          description: List of balance transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BalanceTransaction"
+
   /vpn-keys/me:
     get:
       operationId: listMyVpnKeys
@@ -1080,6 +1095,12 @@ components:
         deviceSlots: { type: integer }
         activeKeyCount: { type: integer }
         balanceKopecks: { type: integer }
+        # Traffic cap for the current plan's period, in gigabytes. Null when
+        # there is no active subscription or the plan has no cap.
+        trafficLimitGb: { type: ["integer", "null"] }
+        # Sum of periodUpBytes + periodDownBytes across all of the user's
+        # non-revoked VPN keys, for showing usage vs trafficLimitGb.
+        periodUsageBytes: { type: integer }
 
     PlanBillingType:
       type: string
@@ -1150,6 +1171,9 @@ components:
         allowFreeExtraDeviceSlot: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer }
+        # Minimum wallet balance (in rubles) a user must top up before an
+        # hourly plan can be activated. 0 = no minimum required.
+        minHourlyTopupRub: { type: integer }
 
     PaymentSettingsUpdate:
       type: object
@@ -1163,6 +1187,7 @@ components:
         allowFreeExtraDeviceSlot: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer, minimum: 1, maximum: 365 }
+        minHourlyTopupRub: { type: integer, minimum: 0 }
 
     SubscriptionStatus:
       type: string
@@ -1383,6 +1408,9 @@ components:
         periodUpBytes: { type: integer }
         periodDownBytes: { type: integer }
         periodStartedAt: { type: string, format: date-time }
+        # Timestamp of the last observed traffic on this key (from the
+        # background Xray stats poller). Null if never seen any traffic.
+        lastTrafficAt: { type: ["string", "null"], format: date-time }
 
     VpnKeyInput:
       type: object
@@ -1396,6 +1424,21 @@ components:
       required: [url]
       properties:
         url: { type: string }
+
+    BalanceTransactionType:
+      type: string
+      enum: [topup, debit, refund]
+
+    BalanceTransaction:
+      type: object
+      required: [id, amountKopecks, type, createdAt]
+      properties:
+        id: { type: integer }
+        amountKopecks: { type: integer }
+        type:
+          $ref: "#/components/schemas/BalanceTransactionType"
+        description: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
 
     AdminUser:
       type: object

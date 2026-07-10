@@ -17,4 +17,5 @@ export interface PaymentSettings {
   allowFreeExtraDeviceSlot: boolean;
   trialEnabled: boolean;
   trialDays: number;
+  minHourlyTopupRub?: number;
 }

@@ -36,6 +36,7 @@ const statements = [
   `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_device_slots integer NOT NULL DEFAULT 0`,
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false`,
   `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text`,
+  `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS min_hourly_topup_rub integer NOT NULL DEFAULT 0`,
 ];
 
 // One-time backfill: extraDeviceSlots used to live on `users`. Move any

@@ -1,7 +1,29 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useGetMe, useListMyVpnKeys, useCreateBalanceTopupOrder, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Shield, Key, CreditCard, ArrowRight, AlertTriangle, CheckCircle2, Clock, Sparkles, Wallet, Plus, Zap } from "lucide-react";
+import {
+  useGetMe,
+  useListMyVpnKeys,
+  useCreateBalanceTopupOrder,
+  useListMyBalanceTransactions,
+  getGetMeQueryKey,
+} from "@workspace/api-client-react";
+import {
+  Shield,
+  Key,
+  CreditCard,
+  ArrowRight,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  Wallet,
+  Plus,
+  Zap,
+  Gauge,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  RotateCcw,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,6 +56,137 @@ function formatKopecks(kopecks: number): string {
   const cents = kopecks % 100;
   if (cents === 0) return `${rubles} ₽`;
   return `${rubles},${String(cents).padStart(2, "0")} ₽`;
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 МБ";
+  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  let value = bytes;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i++;
+  }
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function formatDateTime(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function TrafficSection() {
+  const { data: me } = useGetMe();
+  const { data: keys, isLoading } = useListMyVpnKeys();
+  const activeKeys = (keys ?? []).filter((k) => !k.revokedAt);
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+  if (activeKeys.length === 0) return null;
+
+  const limitBytes = me?.trafficLimitGb ? me.trafficLimitGb * 1024 * 1024 * 1024 : null;
+  const usedBytes = me?.periodUsageBytes ?? 0;
+  const usagePct = limitBytes ? Math.min(100, (usedBytes / limitBytes) * 100) : null;
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Gauge className="w-4 h-4 text-primary" />
+        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+          Трафик за текущий период
+        </p>
+      </div>
+
+      {limitBytes !== null && (
+        <div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+            <span>
+              {formatBytes(usedBytes)} из {formatBytes(limitBytes)}
+            </span>
+            <span>{usagePct!.toFixed(0)}%</span>
+          </div>
+          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${usagePct! >= 90 ? "bg-orange-500" : "bg-primary"}`}
+              style={{ width: `${Math.max(2, usagePct!)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {limitBytes === null && (
+        <p className="text-sm text-muted-foreground">
+          Использовано: <strong className="text-foreground">{formatBytes(usedBytes)}</strong> (без лимита)
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {activeKeys.map((key) => (
+          <div key={key.id} className="flex items-center justify-between gap-3 border-t border-border pt-2 first:border-0 first:pt-0">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate">{key.label}</p>
+              <p className="text-xs text-muted-foreground font-mono">
+                Активность: {key.lastTrafficAt ? formatDateTime(key.lastTrafficAt) : "нет данных"}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-sm font-bold">{formatBytes(key.periodUpBytes + key.periodDownBytes)}</p>
+              <p className="text-xs text-muted-foreground">за период</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const balanceTxLabel: Record<string, string> = {
+  topup: "Пополнение",
+  debit: "Списание",
+  refund: "Возврат",
+};
+
+function BalanceHistorySection() {
+  const { data: transactions, isLoading } = useListMyBalanceTransactions();
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+  if (!transactions || transactions.length === 0) return null;
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-3">
+      <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+        История операций с балансом
+      </p>
+      <div className="space-y-2 max-h-80 overflow-y-auto">
+        {transactions.slice(0, 30).map((tx) => {
+          const isPositive = tx.type === "topup" || tx.type === "refund";
+          const Icon = tx.type === "topup" ? ArrowUpCircle : tx.type === "refund" ? RotateCcw : ArrowDownCircle;
+          return (
+            <div key={tx.id} className="flex items-center justify-between gap-3 border-t border-border pt-2 first:border-0 first:pt-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Icon className={`w-4 h-4 shrink-0 ${isPositive ? "text-green-600" : "text-muted-foreground"}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{balanceTxLabel[tx.type] ?? tx.type}</p>
+                  {tx.description && <p className="text-xs text-muted-foreground truncate">{tx.description}</p>}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`text-sm font-bold ${isPositive ? "text-green-600" : "text-foreground"}`}>
+                  {isPositive ? "+" : "-"}
+                  {formatKopecks(Math.abs(tx.amountKopecks))}
+                </p>
+                <p className="text-xs text-muted-foreground font-mono">{formatDateTime(tx.createdAt)}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function BalanceWidget() {
@@ -264,6 +417,10 @@ export default function Dashboard() {
 
       {/* ── Balance ───────────────────────────────────────────────── */}
       <BalanceWidget />
+
+      {/* ── Usage detail ──────────────────────────────────────────── */}
+      <TrafficSection />
+      <BalanceHistorySection />
 
       {/* ── Key count ─────────────────────────────────────────────── */}
       <div className="bg-card border border-border p-5 flex items-center gap-5">

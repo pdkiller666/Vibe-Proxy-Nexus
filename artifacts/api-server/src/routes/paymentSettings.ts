@@ -15,6 +15,11 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
         sbpRecipientName: "",
         instructions: "Платёжные реквизиты ещё не настроены администратором.",
         yookassaEnabled: false,
+        extraDeviceSlotPriceRub: 0,
+        allowFreeExtraDeviceSlot: false,
+        trialEnabled: false,
+        trialDays: 5,
+        minHourlyTopupRub: 0,
       }),
     );
     return;

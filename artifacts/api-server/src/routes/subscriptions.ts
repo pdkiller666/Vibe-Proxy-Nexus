@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
-import { db, plansTable, subscriptionsTable, paymentsTable } from "@workspace/db";
+import { db, plansTable, subscriptionsTable, paymentsTable, paymentSettingsTable } from "@workspace/db";
 import { CreateSubscriptionBody, CreateSubscriptionResponse, ListMySubscriptionsResponse } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { generatePaymentReference } from "../lib/vless";
@@ -60,6 +60,21 @@ router.post("/subscriptions", requireAuth, async (req, res): Promise<void> => {
     if (user.balanceKopecks < plan.hourlyRateKopecks / 12) {
       res.status(400).json({
         error: "Недостаточно средств на балансе для подключения почасового тарифа. Пополните баланс.",
+      });
+      return;
+    }
+
+    // Admin-configured minimum wallet balance for hourly plans, independent
+    // of (and typically larger than) the one-tick check above — this exists
+    // so the admin can require a meaningful top-up upfront rather than
+    // letting users activate with a near-empty wallet.
+    const [settings] = await db.select().from(paymentSettingsTable).limit(1);
+    const minHourlyTopupKopecks = (settings?.minHourlyTopupRub ?? 0) * 100;
+
+    if (minHourlyTopupKopecks > 0 && user.balanceKopecks < minHourlyTopupKopecks) {
+      res.status(400).json({
+        error: `Для подключения почасового тарифа пополните баланс минимум на ${settings!.minHourlyTopupRub} ₽.`,
+        minTopupRub: settings!.minHourlyTopupRub,
       });
       return;
     }

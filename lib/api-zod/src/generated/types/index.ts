@@ -13,6 +13,8 @@ export * from './adminUser';
 export * from './adminUserProfileUpdate';
 export * from './balanceTopupOrderBody';
 export * from './balanceTopupOrderResult';
+export * from './balanceTransaction';
+export * from './balanceTransactionType';
 export * from './cancelBalanceTopupOrderResult';
 export * from './cancelExtraSlotOrderResult';
 export * from './checkoutResult';

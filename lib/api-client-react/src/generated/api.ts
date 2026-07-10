@@ -27,6 +27,7 @@ import type {
   AdminUserProfileUpdate,
   BalanceTopupOrderBody,
   BalanceTopupOrderResult,
+  BalanceTransaction,
   CancelBalanceTopupOrderResult,
   CancelExtraSlotOrderResult,
   CheckoutResult,
@@ -1270,6 +1271,83 @@ export function useGetPaymentScreenshot<TData = Awaited<ReturnType<typeof getPay
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPaymentScreenshotQueryOptions(paymentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListMyBalanceTransactionsUrl = () => {
+
+
+
+
+  return `/api/balance-transactions/me`
+}
+
+/**
+ * @summary List current user's balance transaction history (top-ups, hourly debits, refunds)
+ */
+export const listMyBalanceTransactions = async ( options?: RequestInit): Promise<BalanceTransaction[]> => {
+
+  return customFetch<BalanceTransaction[]>(getListMyBalanceTransactionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyBalanceTransactionsQueryKey = () => {
+    return [
+    `/api/balance-transactions/me`
+    ] as const;
+    }
+
+
+export const getListMyBalanceTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listMyBalanceTransactions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyBalanceTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyBalanceTransactionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyBalanceTransactions>>> = ({ signal }) => listMyBalanceTransactions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyBalanceTransactions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyBalanceTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listMyBalanceTransactions>>>
+export type ListMyBalanceTransactionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List current user's balance transaction history (top-ups, hourly debits, refunds)
+ */
+
+export function useListMyBalanceTransactions<TData = Awaited<ReturnType<typeof listMyBalanceTransactions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyBalanceTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyBalanceTransactionsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

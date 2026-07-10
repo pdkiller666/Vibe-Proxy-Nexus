@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useListPlans, useCreateSubscription, useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
+import { useListPlans, useCreateSubscription, useGetMe, useGetPaymentSettings, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +18,7 @@ function formatKopecks(kopecks: number): string {
 export default function Plans() {
   const { data: plans, isLoading } = useListPlans();
   const { data: me } = useGetMe();
+  const { data: paymentSettings } = useGetPaymentSettings();
   const { mutate: createSubscription, isPending } = useCreateSubscription();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -80,7 +81,20 @@ export default function Plans() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePlans]);
 
+  const minHourlyTopupRub = paymentSettings?.minHourlyTopupRub ?? 0;
+  const balanceRub = me ? Math.floor(me.balanceKopecks / 100) : 0;
+
   function handleSelect(planId: number, billingType?: string) {
+    if (billingType === "hourly" && minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub) {
+      toast({
+        title: "Пополните баланс",
+        description: `Для подключения почасового тарифа нужно минимум ${minHourlyTopupRub} ₽ на балансе.`,
+        variant: "destructive",
+      });
+      setLocation("/dashboard");
+      return;
+    }
+
     setLoadingPlanId(planId);
     createSubscription(
       { data: { planId, provider: "manual_sbp" } },
@@ -205,7 +219,11 @@ export default function Plans() {
                       handleCardClick(plan.id);
                       handleSelect(plan.id, plan.billingType);
                     }}
-                    disabled={isPending || (plan.billingType === "hourly" && !me?.balanceKopecks)}
+                    disabled={
+                      isPending ||
+                      (plan.billingType === "hourly" && !me?.balanceKopecks) ||
+                      (plan.billingType === "hourly" && minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub)
+                    }
                     className="w-full bg-primary text-primary-foreground font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {loadingPlanId === plan.id ? (
@@ -218,6 +236,11 @@ export default function Plans() {
                   </button>
                   {plan.billingType === "hourly" && !me?.balanceKopecks && (
                     <p className="text-xs text-orange-600 mt-2">Пополните баланс, чтобы подключить тариф.</p>
+                  )}
+                  {plan.billingType === "hourly" && minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub && (
+                    <p className="text-xs text-orange-600 mt-2">
+                      Минимальное пополнение для подключения — {minHourlyTopupRub} ₽.
+                    </p>
                   )}
                 </div>
               );

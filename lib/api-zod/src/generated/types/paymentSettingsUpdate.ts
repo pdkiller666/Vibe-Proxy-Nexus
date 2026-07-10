@@ -21,4 +21,6 @@ export interface PaymentSettingsUpdate {
      * @maximum 365
      */
   trialDays?: number;
+  /** @minimum 0 */
+  minHourlyTopupRub?: number;
 }
