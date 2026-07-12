@@ -24,6 +24,9 @@ import {
   ArrowDownCircle,
   RotateCcw,
   ChevronDown,
+  Users,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
@@ -265,6 +268,64 @@ function BalanceWidget() {
   );
 }
 
+function ReferralSection() {
+  const { data: me } = useGetMe();
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  if (!me?.referralCode) return null;
+
+  const referralLink = `https://${me.referralLinkHost}/sign-up?ref=${me.referralCode}`;
+
+  function copyLink() {
+    navigator.clipboard.writeText(referralLink).then(() => {
+      setCopied(true);
+      toast({ title: "Реферальная ссылка скопирована" });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Users className="w-4 h-4 text-primary" />
+        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+          Реферальная программа
+        </p>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0 font-mono text-sm bg-muted px-3 py-2 truncate select-all">
+          {referralLink}
+        </div>
+        <button
+          onClick={copyLink}
+          className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
+        >
+          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copied ? "Скопировано" : "Копировать"}
+        </button>
+      </div>
+      <div className="flex items-center gap-6 flex-wrap text-sm border-t border-border pt-3">
+        <div>
+          <span className="text-muted-foreground">Приглашено:</span>{" "}
+          <strong className="text-foreground">{me.referredUserCount}</strong>
+        </div>
+        {me.referralCommissionPercent > 0 && (
+          <>
+            <div>
+              <span className="text-muted-foreground">Заработано:</span>{" "}
+              <strong className="text-green-600">{formatKopecks(me.referralEarningsKopecks)}</strong>
+            </div>
+            <div className="text-xs text-muted-foreground font-mono">
+              {me.referralCommissionPercent}% от оплат ваших рефералов
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Collapsed by default on mobile (to avoid a long scroll before reaching
 // Тарифы/Ключи/Платежи) but expanded by default on desktop, where there's
 // plenty of room. Purely a display toggle — content stays mounted either way.
@@ -480,6 +541,9 @@ export default function Dashboard() {
 
       {/* ── Balance ───────────────────────────────────────────────── */}
       <BalanceWidget />
+
+      {/* ── Referral ──────────────────────────────────────────────── */}
+      <ReferralSection />
 
       {/* ── Usage detail: collapsed by default on mobile so it doesn't add
            scroll before the sections above; always expanded on desktop ── */}
