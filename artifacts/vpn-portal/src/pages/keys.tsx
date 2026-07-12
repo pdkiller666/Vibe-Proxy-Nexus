@@ -228,7 +228,6 @@ export default function Keys() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [revokingId, setRevokingId] = useState<number | null>(null);
-  const [showManualLinks, setShowManualLinks] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
 
@@ -408,15 +407,6 @@ export default function Keys() {
             </button>
             <CopyButton text={subscription.url} />
           </div>
-          {isAdmin && (
-            <button
-              onClick={() => setShowManualLinks((v) => !v)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showManualLinks ? "rotate-180" : ""}`} />
-              {showManualLinks ? "Скрыть отдельные ключи (админ)" : "Показать отдельные ключи (админ)"}
-            </button>
-          )}
         </div>
       )}
 
@@ -427,7 +417,7 @@ export default function Keys() {
         </div>
       ) : !visibleKeys || visibleKeys.length === 0 ? (
         <p className="text-muted-foreground">Ключей пока нет.</p>
-      ) : !subscription?.url || activeKeys.length === 0 || showManualLinks ? (
+      ) : (
         <div className="space-y-3">
           {visibleKeys.map((key, i) => (
             <div
@@ -473,7 +463,7 @@ export default function Keys() {
             </div>
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
