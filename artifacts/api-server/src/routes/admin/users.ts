@@ -173,7 +173,18 @@ async function enrichUsersWithTraffic(users: User[]) {
     const vpnLastActiveAt = vpnLastActiveAtRaw ? new Date(vpnLastActiveAtRaw) : null;
     const onSite = Boolean(user.lastActiveAt) && now - user.lastActiveAt!.getTime() <= ONLINE_THRESHOLD_MS;
     const usingVpn = Boolean(vpnLastActiveAt) && now - vpnLastActiveAt!.getTime() <= VPN_ONLINE_THRESHOLD_MS;
-    const activityStatus: "site" | "vpn" | "offline" = onSite ? "site" : usingVpn ? "vpn" : "offline";
+    // When both are active, pick whichever signal is MORE RECENT.
+    // Without this, a browser closed 4 min ago beats VPN active right now.
+    let activityStatus: "site" | "vpn" | "offline";
+    if (onSite && usingVpn) {
+      activityStatus = vpnLastActiveAt!.getTime() > user.lastActiveAt!.getTime() ? "vpn" : "site";
+    } else if (onSite) {
+      activityStatus = "site";
+    } else if (usingVpn) {
+      activityStatus = "vpn";
+    } else {
+      activityStatus = "offline";
+    }
     return {
       ...user,
       isOnline: onSite || usingVpn,
