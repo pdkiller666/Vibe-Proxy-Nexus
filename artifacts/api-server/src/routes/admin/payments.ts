@@ -1,7 +1,6 @@
-import { Router, type IRouter } from "express"; 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { Router, type IRouter } from "express";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, paymentsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, balanceTransactionsTable } from "@workspace/db";
-import { isNull } from "drizzle-orm";
 import {
   ConfirmPaymentParams,
   ConfirmPaymentResponse,
@@ -113,9 +112,11 @@ router.post("/admin/payments/:paymentId/confirm", requireAuth, requireAdmin, asy
           throw new Error("SUBSCRIPTION_NOT_ACTIVE");
         }
 
+        // Atomic SQL increment — same pattern as confirmPayment.ts to prevent
+        // lost updates when two admin tabs confirm concurrently.
         await tx
           .update(subscriptionsTable)
-          .set({ extraDeviceSlots: sub.extraDeviceSlots + 1 })
+          .set({ extraDeviceSlots: sql`${subscriptionsTable.extraDeviceSlots} + 1` })
           .where(eq(subscriptionsTable.id, sub.id));
 
         const [updatedPay] = await tx

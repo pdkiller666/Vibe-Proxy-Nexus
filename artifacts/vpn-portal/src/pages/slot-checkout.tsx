@@ -131,9 +131,9 @@ export default function SlotCheckout() {
           <Smartphone className="w-4 h-4" />
           <span className="text-sm font-mono">Дополнительное устройство</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Оплата через СБП</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Оплата за доп. устройство</h1>
         <p className="text-muted-foreground font-mono text-sm mt-1">
-          Переведите указанную сумму и подтвердите оплату ниже.
+          Выберите удобный способ оплаты.
         </p>
       </div>
 
@@ -154,45 +154,69 @@ export default function SlotCheckout() {
         </div>
       )}
 
-      <div className="bg-card border border-border p-6">
-        <CopyField label="Сумма" value={`${payment.amountRub} ₽`} />
-        <CopyField label="Телефон СБП" value={settings?.sbpPhone ?? "—"} />
-        <CopyField label="Банк" value={settings?.sbpBank ?? "—"} />
-        <CopyField label="Получатель" value={settings?.sbpRecipientName ?? "—"} />
-        <CopyField label="Референс платежа" value={payment.reference} />
-      </div>
-
-      {settings?.instructions && (
-        <p className="text-sm text-muted-foreground font-mono whitespace-pre-line">
-          {settings.instructions}
-        </p>
-      )}
-
       {payment.status === "pending" && (
         <>
-          <div className="space-y-3">
-            <label className="text-sm font-bold block">
-              Отметка об оплате (например, время перевода)
-            </label>
-            <Textarea
-              value={note || payment.userNote || ""}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Оплатил(а) в 14:32, перевод прошёл"
-              className="rounded-none"
-            />
-            <button
-              onClick={handleSubmitNote}
-              disabled={notePending || (!note.trim() && !payment.userNote)}
-              className="bg-primary text-primary-foreground font-bold px-6 py-3 hover:opacity-90 transition-opacity disabled:opacity-50"
+          {/* Primary: FreeKassa card payment */}
+          <div className="bg-card border border-primary/40 p-6 space-y-4">
+            <div>
+              <div className="font-bold text-lg">Оплата картой</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Мгновенное подтверждение — устройство добавляется автоматически.
+              </div>
+            </div>
+            <div className="text-2xl font-bold">{payment.amountRub} ₽</div>
+            <a
+              href={`/api/payments/freekassa/checkout/${payment.id}`}
+              className="block w-full bg-primary text-primary-foreground font-bold py-3 text-center hover:opacity-90 transition-opacity"
             >
-              {notePending ? "Сохраняем..." : submitted || payment.userNote ? "Обновить отметку" : "Я оплатил(а)"}
-            </button>
-            <p className="text-xs text-muted-foreground">
-              Администратор вручную сверит перевод и добавит устройство к вашей подписке — обычно это занимает до нескольких часов. Статус обновится здесь автоматически.
-            </p>
+              Оплатить картой →
+            </a>
           </div>
 
-          <PaymentScreenshotUpload paymentId={payment.id} hasScreenshot={payment.hasScreenshot} />
+          {/* Fallback: manual SBP transfer */}
+          <details className="group">
+            <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors select-none list-none flex items-center gap-2">
+              <span className="border border-border px-3 py-1.5 hover:bg-muted transition-colors inline-block">
+                Альтернатива: перевод по СБП вручную
+              </span>
+            </summary>
+            <div className="mt-4 space-y-4">
+              <div className="bg-card border border-border p-6">
+                <CopyField label="Сумма" value={`${payment.amountRub} ₽`} />
+                <CopyField label="Телефон СБП" value={settings?.sbpPhone ?? "—"} />
+                <CopyField label="Банк" value={settings?.sbpBank ?? "—"} />
+                <CopyField label="Получатель" value={settings?.sbpRecipientName ?? "—"} />
+                <CopyField label="Референс платежа" value={payment.reference} />
+              </div>
+              {settings?.instructions && (
+                <p className="text-sm text-muted-foreground font-mono whitespace-pre-line">
+                  {settings.instructions}
+                </p>
+              )}
+              <div className="space-y-3">
+                <label className="text-sm font-bold block">
+                  Отметка об оплате (например, время перевода)
+                </label>
+                <Textarea
+                  value={note || payment.userNote || ""}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Оплатил(а) в 14:32, перевод прошёл"
+                  className="rounded-none"
+                />
+                <button
+                  onClick={handleSubmitNote}
+                  disabled={notePending || (!note.trim() && !payment.userNote)}
+                  className="bg-primary text-primary-foreground font-bold px-6 py-3 hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {notePending ? "Сохраняем..." : submitted || payment.userNote ? "Обновить отметку" : "Я оплатил(а)"}
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  Администратор вручную сверит перевод и добавит устройство — обычно до нескольких часов.
+                </p>
+              </div>
+              <PaymentScreenshotUpload paymentId={payment.id} hasScreenshot={payment.hasScreenshot} />
+            </div>
+          </details>
 
           <div className="border-t border-border pt-6">
             {!confirmCancel ? (

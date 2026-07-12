@@ -48,7 +48,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
   }
 
   const [payment] = await db
-    .select({ id: paymentsTable.id, userId: paymentsTable.userId, amountRub: paymentsTable.amountRub, status: paymentsTable.status, reference: paymentsTable.reference })
+    .select({ id: paymentsTable.id, userId: paymentsTable.userId, amountRub: paymentsTable.amountRub, status: paymentsTable.status, reference: paymentsTable.reference, type: paymentsTable.type, subscriptionId: paymentsTable.subscriptionId })
     .from(paymentsTable)
     .where(eq(paymentsTable.id, paymentId));
 
@@ -71,7 +71,21 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
   url.searchParams.set("s", sign);
   url.searchParams.set("lang", "ru");
 
-  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub }, "Redirecting to FreeKassa checkout");
+  // Return URLs — FreeKassa redirects the user back after payment.
+  // We point to the same checkout page so the user sees "Confirmed" status.
+  const origin = `${req.protocol}://${req.get("host")}`;
+  let returnPath: string;
+  if (payment.type === "balance_topup") {
+    returnPath = `/balance-topup/${payment.id}`;
+  } else if (payment.type === "extra_device_slot") {
+    returnPath = `/slot-checkout/${payment.id}`;
+  } else {
+    returnPath = `/checkout/${payment.subscriptionId ?? payment.id}`;
+  }
+  url.searchParams.set("us", `${origin}${returnPath}`);
+  url.searchParams.set("uf", `${origin}${returnPath}`);
+
+  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "Redirecting to FreeKassa checkout");
   res.redirect(302, url.toString());
 });
 
@@ -139,7 +153,9 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  if (String(fullPayment.amountRub) !== String(AMOUNT)) {
+  // FreeKassa sends AMOUNT as a decimal string e.g. "100.00", while
+  // amountRub is stored as an integer. Compare numerically after rounding.
+  if (Math.round(parseFloat(String(AMOUNT))) !== fullPayment.amountRub) {
     logger.error({ expected: fullPayment.amountRub, received: AMOUNT, paymentId: payment.id }, "FreeKassa IPN: amount mismatch");
     res.status(400).send("Amount mismatch");
     return;
