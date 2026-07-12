@@ -59,6 +59,11 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
     keyRows.map(({ key, node }) => buildServingVlessLink(node, key.uuid, key.label)),
   );
 
+  // Resolve the public domain once, used for both the dashboard info entry
+  // and the Profile-Web-Page-Url header.
+  const requestHost = req.get("host") ?? "";
+  const webPageAddress = await resolvePublicAddress({ host: requestHost, sni: requestHost });
+
   // Prepend a clearly-labelled informational entry so users see the personal
   // cabinet URL directly in the server list — no need to dig into ℹ️ info.
   // UUID is all-zeros, so if anyone accidentally taps "Connect" it fails
@@ -88,8 +93,6 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
   // the subscription group. Prefers the primary public domain (vpnexus.pro)
   // when healthy, falling back to whatever host the request actually came
   // in on so it keeps working even if vpnexus.pro's DNS/cert breaks.
-  const requestHost = req.get("host") ?? "";
-  const webPageAddress = await resolvePublicAddress({ host: requestHost, sni: requestHost });
   res.setHeader("Profile-Web-Page-Url", `${req.protocol}://${webPageAddress.host}/dashboard`);
   if (activeSubscription) {
     // Report real consumption for the current billing period (not lifetime —

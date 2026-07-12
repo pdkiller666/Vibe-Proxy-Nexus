@@ -128,8 +128,31 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // Validate amount matches our record (prevents manipulated webhook amounts)
+  const [fullPayment] = await db
+    .select({ amountRub: paymentsTable.amountRub, provider: paymentsTable.provider })
+    .from(paymentsTable)
+    .where(eq(paymentsTable.id, payment.id));
+
+  if (!fullPayment) {
+    res.send("YES");
+    return;
+  }
+
+  if (String(fullPayment.amountRub) !== String(AMOUNT)) {
+    logger.error({ expected: fullPayment.amountRub, received: AMOUNT, paymentId: payment.id }, "FreeKassa IPN: amount mismatch");
+    res.status(400).send("Amount mismatch");
+    return;
+  }
+
   const result = await confirmPaymentById(payment.id);
   if (!result.ok) {
+    // 409 = concurrent race, already confirmed — idempotent success
+    if (result.status === 409) {
+      logger.info({ paymentId: payment.id }, "FreeKassa IPN: concurrent confirm, treating as success");
+      res.send("YES");
+      return;
+    }
     logger.error({ error: result.error, paymentId: payment.id }, "FreeKassa IPN: confirm failed");
     res.status(500).send(result.error);
     return;

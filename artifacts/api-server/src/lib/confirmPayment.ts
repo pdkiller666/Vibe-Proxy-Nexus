@@ -37,12 +37,13 @@ export async function confirmPaymentById(paymentId: number): Promise<ConfirmResu
     try {
       const updatedPayment = await db.transaction(async (tx) => {
         const [sub] = await tx
-          .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, extraDeviceSlots: subscriptionsTable.extraDeviceSlots })
+          .select({ id: subscriptionsTable.id, status: subscriptionsTable.status })
           .from(subscriptionsTable)
           .where(eq(subscriptionsTable.id, payment.subscriptionId!));
         if (!sub || sub.status !== "active") throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+        // Atomic SQL increment — prevents lost update under concurrent confirmations
         await tx.update(subscriptionsTable)
-          .set({ extraDeviceSlots: sub.extraDeviceSlots + 1 })
+          .set({ extraDeviceSlots: sql`${subscriptionsTable.extraDeviceSlots} + 1` })
           .where(eq(subscriptionsTable.id, sub.id));
         const [updatedPay] = await tx
           .update(paymentsTable)
