@@ -23,19 +23,21 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-// Match lib/db/src/ssl.ts: any sslmode other than "disable" (including the
-// common provider default of no sslmode param at all, or "require"/"prefer")
-// must connect with encryption but without strict CA verification, since
-// Amvera's internal CNPG Postgres presents a private-CA/self-signed cert that
-// isn't in the default trust store. A previous version of this script only
-// special-cased the literal string "sslmode=require" and missed every other
-// case, causing "self-signed certificate in certificate chain" failures here
-// (see .agents/memory/amvera-internal-db-tls.md).
-const sslMode = new URL(DATABASE_URL).searchParams.get("sslmode");
+// Mirror lib/db/src/ssl.ts exactly: strip `sslmode` from the URL before
+// passing it to pg, then set ssl:{rejectUnauthorized:false} separately.
+// Recent versions of pg/pg-connection-string treat sslmode=require (and
+// prefer/verify-ca) as aliases for verify-full, so passing the raw URL
+// causes "self-signed certificate in certificate chain" even when
+// rejectUnauthorized:false is set in the ssl object — the sslmode in the
+// URL wins. Deleting it first ensures our ssl object is the sole SSL
+// configuration source (see .agents/memory/amvera-internal-db-tls.md).
+const parsedUrl = new URL(DATABASE_URL);
+const sslMode = parsedUrl.searchParams.get("sslmode");
 const useSSL = sslMode !== "disable";
+parsedUrl.searchParams.delete("sslmode");
 
 const client = new Client({
-  connectionString: DATABASE_URL,
+  connectionString: parsedUrl.toString(),
   ssl: useSSL ? { rejectUnauthorized: false } : undefined,
 });
 
