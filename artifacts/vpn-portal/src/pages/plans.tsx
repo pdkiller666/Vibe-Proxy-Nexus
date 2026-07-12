@@ -44,19 +44,18 @@ export default function Plans() {
 
   function scrollToCard(planId: number, behavior: ScrollBehavior = "smooth") {
     const el = cardRefs.current[planId];
-    const track = trackRef.current;
-    if (!el || !track) return;
-    const maxScroll = track.scrollWidth - track.clientWidth;
-    const target = el.offsetLeft - (track.clientWidth - el.clientWidth) / 2;
-    const clamped = Math.max(0, Math.min(target, maxScroll));
+    if (!el) return;
 
     programmaticScrollRef.current = true;
     if (programmaticScrollTimeoutRef.current) clearTimeout(programmaticScrollTimeoutRef.current);
     programmaticScrollTimeoutRef.current = setTimeout(() => {
       programmaticScrollRef.current = false;
-    }, 500);
+    }, 600);
 
-    track.scrollTo({ left: clamped, behavior });
+    // scrollIntoView with inline:'center' cooperates correctly with
+    // snap-x snap-mandatory — the browser respects the snap points
+    // instead of fighting a manually-clamped scrollTo offset.
+    el.scrollIntoView({ behavior, inline: "center", block: "nearest" });
   }
 
   function handleCardClick(planId: number) {
@@ -193,8 +192,8 @@ export default function Plans() {
                     "snap-center shrink-0 w-[78%] xs:w-[70%] sm:w-[300px] md:w-[320px] bg-card border p-6 flex flex-col cursor-pointer select-none",
                     "transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2",
                     isSelected
-                      ? "border-primary ring-2 ring-primary/40 scale-[1.02] shadow-lg"
-                      : "border-border hover:border-primary/40 scale-100",
+                      ? "border-primary ring-2 ring-primary/40 shadow-lg"
+                      : "border-border hover:border-primary/40",
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1">
