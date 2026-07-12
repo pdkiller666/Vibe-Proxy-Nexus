@@ -32,7 +32,19 @@ router.get("/admin/payments", requireAuth, requireAdmin, async (req, res): Promi
 
   const rows = await db
     .select({
-      payment: paymentsTable,
+      id: paymentsTable.id,
+      subscriptionId: paymentsTable.subscriptionId,
+      userId: paymentsTable.userId,
+      type: paymentsTable.type,
+      provider: paymentsTable.provider,
+      amountRub: paymentsTable.amountRub,
+      status: paymentsTable.status,
+      reference: paymentsTable.reference,
+      userNote: paymentsTable.userNote,
+      rejectionReason: paymentsTable.rejectionReason,
+      createdAt: paymentsTable.createdAt,
+      confirmedAt: paymentsTable.confirmedAt,
+      hasScreenshot: sql<boolean>`(${paymentsTable.screenshotData} IS NOT NULL)`,
       userEmail: usersTable.email,
       planName: plansTable.name,
     })
@@ -45,10 +57,7 @@ router.get("/admin/payments", requireAuth, requireAdmin, async (req, res): Promi
 
   res.json(
     ListAdminPaymentsResponse.parse(
-      rows.map(({ payment, userEmail, planName }) => {
-        const { screenshotData, screenshotMimeType: _screenshotMimeType, ...rest } = payment;
-        return { ...rest, userEmail, planName: planName ?? null, hasScreenshot: Boolean(screenshotData) };
-      }),
+      rows.map(({ planName, ...rest }) => ({ ...rest, planName: planName ?? null })),
     ),
   );
 });

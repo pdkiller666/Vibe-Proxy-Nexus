@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, paymentsTable } from "@workspace/db";
 import {
   ListMyPaymentsResponse,
@@ -23,12 +23,26 @@ router.get("/payments/me", requireAuth, async (req, res): Promise<void> => {
   const user = req.appUser!;
 
   const payments = await db
-    .select()
+    .select({
+      id: paymentsTable.id,
+      subscriptionId: paymentsTable.subscriptionId,
+      userId: paymentsTable.userId,
+      type: paymentsTable.type,
+      provider: paymentsTable.provider,
+      amountRub: paymentsTable.amountRub,
+      status: paymentsTable.status,
+      reference: paymentsTable.reference,
+      userNote: paymentsTable.userNote,
+      rejectionReason: paymentsTable.rejectionReason,
+      createdAt: paymentsTable.createdAt,
+      confirmedAt: paymentsTable.confirmedAt,
+      hasScreenshot: sql<boolean>`(${paymentsTable.screenshotData} IS NOT NULL)`,
+    })
     .from(paymentsTable)
     .where(eq(paymentsTable.userId, user.id))
     .orderBy(desc(paymentsTable.createdAt));
 
-  res.json(ListMyPaymentsResponse.parse(payments.map(withHasScreenshot)));
+  res.json(ListMyPaymentsResponse.parse(payments));
 });
 
 router.patch("/payments/:paymentId/note", requireAuth, async (req, res): Promise<void> => {
