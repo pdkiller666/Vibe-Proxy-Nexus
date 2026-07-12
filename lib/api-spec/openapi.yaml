@@ -1557,7 +1557,7 @@ components:
 
     BalanceTransactionType:
       type: string
-      enum: [topup, debit, refund]
+      enum: [topup, debit, refund, referral]
 
     BalanceTransaction:
       type: object

@@ -13,4 +13,5 @@ export const BalanceTransactionType = {
   topup: 'topup',
   debit: 'debit',
   refund: 'refund',
+  referral: 'referral',
 } as const;

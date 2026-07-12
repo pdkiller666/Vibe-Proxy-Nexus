@@ -153,6 +153,34 @@ function SummarySection() {
   );
 }
 
+const ADMIN_PAGE_SIZE = 20;
+
+function PaginationBar({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
+  const totalPages = Math.max(1, Math.ceil(total / ADMIN_PAGE_SIZE));
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between pt-3 border-t border-border">
+      <button
+        disabled={page <= 1}
+        onClick={() => onPage(page - 1)}
+        className="text-sm px-3 py-1.5 border border-border disabled:opacity-30 hover:bg-muted transition-colors"
+      >
+        ← Назад
+      </button>
+      <span className="text-xs text-muted-foreground font-mono">
+        Стр. {page} / {totalPages} · Всего: {total}
+      </span>
+      <button
+        disabled={page >= totalPages}
+        onClick={() => onPage(page + 1)}
+        className="text-sm px-3 py-1.5 border border-border disabled:opacity-30 hover:bg-muted transition-colors"
+      >
+        Вперёд →
+      </button>
+    </div>
+  );
+}
+
 function PaymentsQueue() {
   const [statusFilter, setStatusFilter] = useState<"pending" | "confirmed" | "rejected" | "all">("pending");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc");
@@ -165,6 +193,7 @@ function PaymentsQueue() {
   const { toast } = useToast();
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [reason, setReason] = useState("");
+  const [page, setPage] = useState(1);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: getListAdminPaymentsQueryKey() });
@@ -228,6 +257,10 @@ function PaymentsQueue() {
       }
     });
 
+  const totalPagesP = Math.max(1, Math.ceil(filteredPayments.length / ADMIN_PAGE_SIZE));
+  const effectivePageP = Math.min(page, totalPagesP);
+  const pagedPayments = filteredPayments.slice((effectivePageP - 1) * ADMIN_PAGE_SIZE, effectivePageP * ADMIN_PAGE_SIZE);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
@@ -261,7 +294,7 @@ function PaymentsQueue() {
       {filteredPayments.length === 0 && (
         <p className="text-muted-foreground">Платежей не найдено.</p>
       )}
-      {filteredPayments.map((payment) => (
+      {pagedPayments.map((payment) => (
         <div key={payment.id} className="bg-card border border-border p-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
@@ -331,6 +364,7 @@ function PaymentsQueue() {
           )}
         </div>
       ))}
+      <PaginationBar page={effectivePageP} total={filteredPayments.length} onPage={setPage} />
     </div>
   );
 }
@@ -1087,6 +1121,7 @@ function UsersManagement() {
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic" | "online">("date_desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
   function toggleRole(userId: number, currentRole: string) {
     const role = currentRole === "admin" ? "user" : "admin";
@@ -1176,6 +1211,10 @@ function UsersManagement() {
       }
     });
 
+  const totalPagesU = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
+  const effectivePageU = Math.min(page, totalPagesU);
+  const pagedUsers = filtered.slice((effectivePageU - 1) * ADMIN_PAGE_SIZE, effectivePageU * ADMIN_PAGE_SIZE);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
@@ -1206,7 +1245,7 @@ function UsersManagement() {
           <option value="online">Сначала онлайн</option>
         </select>
       </div>
-      {filtered.map((user) => {
+      {pagedUsers.map((user) => {
         const expanded = expandedId === user.id;
         return (
           <div key={user.id} className="bg-card border border-border p-4 space-y-3">
@@ -1360,6 +1399,7 @@ function UsersManagement() {
           </div>
         );
       })}
+      <PaginationBar page={effectivePageU} total={filtered.length} onPage={setPage} />
       {filtered.length === 0 && <p className="text-muted-foreground text-sm">Пользователи не найдены.</p>}
     </div>
   );
@@ -1601,6 +1641,7 @@ function VpnKeysManagement() {
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "revoked">("all");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic">("date_desc");
+  const [page, setPage] = useState(1);
   // Guards against a genuine double-click firing two overlapping issue
   // requests before React commits `issueMutation.isPending` and disables the
   // button — a slow issue request (Xray provisioning) made this window wide
@@ -1706,6 +1747,10 @@ function VpnKeysManagement() {
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
+  const totalPagesK = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
+  const effectivePageK = Math.min(page, totalPagesK);
+  const pagedKeys = filtered.slice((effectivePageK - 1) * ADMIN_PAGE_SIZE, effectivePageK * ADMIN_PAGE_SIZE);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -1740,7 +1785,7 @@ function VpnKeysManagement() {
       </div>
 
       <div className="space-y-2">
-        {filtered.map((key) => (
+        {pagedKeys.map((key) => (
           <div
             key={key.id}
             className={`bg-card border p-4 ${key.revokedAt ? "border-border opacity-50" : "border-border"}`}
@@ -1783,6 +1828,7 @@ function VpnKeysManagement() {
         {filtered.length === 0 && (
           <p className="text-muted-foreground text-sm">Ключей не найдено.</p>
         )}
+        <PaginationBar page={effectivePageK} total={filtered.length} onPage={setPage} />
       </div>
 
       <div className="border-t border-border pt-4">

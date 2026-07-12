@@ -479,7 +479,7 @@ export const GetPaymentScreenshotResponse = zod.unknown()
 export const ListMyBalanceTransactionsResponseItem = zod.object({
   "id": zod.number(),
   "amountKopecks": zod.number(),
-  "type": zod.enum(['topup', 'debit', 'refund']),
+  "type": zod.enum(['topup', 'debit', 'refund', 'referral']),
   "description": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
