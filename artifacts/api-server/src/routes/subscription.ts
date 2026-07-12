@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { BRAND_NAME, SUBSCRIPTION_UPDATE_INTERVAL_HOURS, verifySubscriptionToken } from "../lib/subscription";
-import { buildServingVlessLink } from "../lib/vless";
+import { buildServingVlessLink, VPN_WS_PATH } from "../lib/vless";
 import { resolvePublicAddress } from "../lib/domain";
 import { subscriptionRateLimit } from "../lib/rateLimit";
 
@@ -59,7 +59,19 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
     keyRows.map(({ key, node }) => buildServingVlessLink(node, key.uuid, key.label)),
   );
 
-  const body = Buffer.from(vlessLinks.join("\n"), "utf8").toString("base64");
+  // Prepend a clearly-labelled informational entry so users see the personal
+  // cabinet URL directly in the server list — no need to dig into ℹ️ info.
+  // UUID is all-zeros, so if anyone accidentally taps "Connect" it fails
+  // gracefully instead of hijacking an active session.
+  const dashboardLabel = encodeURIComponent(`🌐 Личный кабинет → ${webPageAddress.host}/dashboard`);
+  const dashboardInfoEntry =
+    `vless://00000000-0000-0000-0000-000000000000` +
+    `@${webPageAddress.host}:443` +
+    `?type=ws&security=tls&sni=${webPageAddress.host}&host=${webPageAddress.host}` +
+    `&path=${encodeURIComponent(VPN_WS_PATH)}&encryption=none` +
+    `#${dashboardLabel}`;
+
+  const body = Buffer.from([dashboardInfoEntry, ...vlessLinks].join("\n"), "utf8").toString("base64");
 
   // Show the user's actual plan name in the client's subscription group title
   // (falls back to the bare brand name if there's no active plan/subscription)
