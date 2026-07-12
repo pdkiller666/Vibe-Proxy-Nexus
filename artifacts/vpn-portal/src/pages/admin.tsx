@@ -815,7 +815,10 @@ function UserSubscriptionEditor({ user }: { user: AdminUser }) {
   const { data: plans } = useListPlans();
   const { mutate: updateSubscription, isPending } = useUpdateUserSubscription();
   const { toast } = useToast();
-  const [planId, setPlanId] = useState<string>(user.planId ? String(user.planId) : "");
+  // Default to the genuinely active plan (not a cancelled/pending one).
+  const [planId, setPlanId] = useState<string>(
+    user.activePlanId ? String(user.activePlanId) : user.planId ? String(user.planId) : "",
+  );
   const [durationDays, setDurationDays] = useState("");
 
   function handleAssign() {
@@ -844,13 +847,40 @@ function UserSubscriptionEditor({ user }: { user: AdminUser }) {
     rejected: "Отклонена",
   };
 
+  // Show the genuinely active plan prominently; if there's also a most-recent
+  // subscription with a different status (e.g. a cancelled request), show it
+  // as secondary info so admins aren't confused by the two differing.
+  const hasActiveplan = Boolean(user.activePlanName);
+  const hasDifferentCurrent = user.planName && user.planName !== user.activePlanName;
+
   return (
     <div className="space-y-2">
-      <div className="text-xs font-mono text-muted-foreground">
-        Текущий тариф: <span className="font-bold text-foreground">{user.planName ?? "—"}</span>
-        {user.subscriptionStatus && ` · ${statusLabel[user.subscriptionStatus] ?? user.subscriptionStatus}`}
-        {user.subscriptionEndsAt && ` · до ${formatDate(user.subscriptionEndsAt)}`}
-      </div>
+      {hasActiveplan ? (
+        <div className="text-xs font-mono text-muted-foreground">
+          Активный тариф:{" "}
+          <span className="font-bold text-foreground">{user.activePlanName}</span>
+          {user.subscriptionStatus === "active" && user.subscriptionEndsAt && ` · до ${formatDate(user.subscriptionEndsAt)}`}
+          {hasDifferentCurrent && (
+            <span className="ml-2 text-muted-foreground/70">
+              · последняя заявка: {user.planName}{" "}
+              {user.subscriptionStatus && `· ${statusLabel[user.subscriptionStatus] ?? user.subscriptionStatus}`}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="text-xs font-mono text-muted-foreground">
+          {user.planName ? (
+            <>
+              Последняя подписка:{" "}
+              <span className="font-bold text-foreground">{user.planName}</span>
+              {user.subscriptionStatus && ` · ${statusLabel[user.subscriptionStatus] ?? user.subscriptionStatus}`}
+              {user.subscriptionEndsAt && ` · до ${formatDate(user.subscriptionEndsAt)}`}
+            </>
+          ) : (
+            <span>Подписок нет</span>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-2 flex-wrap">
         <select
           value={planId}
@@ -1218,7 +1248,7 @@ function UsersManagement() {
                   {user.activityStatus === "offline" && !user.lastActiveAt && user.vpnLastActiveAt && ` · VPN: ${formatDate(user.vpnLastActiveAt)}`}
                 </div>
               </div>
-              <div className="flex gap-2 flex-wrap shrink-0">
+              <div className="flex gap-2 flex-wrap w-full sm:w-auto">
                 <button
                   onClick={() => setExpandedId(expanded ? null : user.id)}
                   className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"

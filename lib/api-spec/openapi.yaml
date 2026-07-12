@@ -1643,6 +1643,7 @@ components:
         # e.g. the traffic summary line — since it can never show a
         # cancelled/pending/rejected request as if it were in effect.
         activePlanName: { type: ["string", "null"] }
+        activePlanId: { type: ["integer", "null"] }
         # Current (most recently started) subscription, regardless of status,
         # so the admin panel can show what a user has even if it's expired,
         # cancelled, or awaiting payment. Null fields = no subscription at all.

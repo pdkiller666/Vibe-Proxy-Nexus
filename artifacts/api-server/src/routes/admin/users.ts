@@ -97,6 +97,7 @@ async function enrichUsersWithTraffic(users: User[]) {
     .selectDistinctOn([subscriptionsTable.userId], {
       userId: subscriptionsTable.userId,
       subscriptionId: subscriptionsTable.id,
+      planId: plansTable.id,
       trafficLimitGb: plansTable.trafficLimitGb,
       planName: plansTable.name,
       extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
@@ -118,6 +119,7 @@ async function enrichUsersWithTraffic(users: User[]) {
   // use this one, not currentByUser, or a cancelled downgrade request looks
   // like it actually took effect.
   const activePlanNameByUser = new Map(activeRows.map((r) => [r.userId, r.planName]));
+  const activePlanIdByUser = new Map(activeRows.map((r) => [r.userId, r.planId]));
   // Extra device slots live on the active subscription row (see schema
   // comment), so a user with no active subscription has 0 usable slots —
   // any slots purchased under a since-expired/switched subscription do not
@@ -182,6 +184,7 @@ async function enrichUsersWithTraffic(users: User[]) {
       trafficLimitGb,
       trafficLimitExceeded: trafficLimitGb != null && periodBytes >= trafficLimitGb * 1024 * 1024 * 1024,
       activePlanName: activePlanNameByUser.get(user.id) ?? null,
+      activePlanId: activePlanIdByUser.get(user.id) ?? null,
       extraDeviceSlots: extraDeviceSlotsByUser.get(user.id) ?? 0,
       activeSubscriptionId: activeSubscriptionIdByUser.get(user.id) ?? null,
       referredByEmail: user.referredByUserId != null ? (referrerEmailById.get(user.referredByUserId) ?? null) : null,

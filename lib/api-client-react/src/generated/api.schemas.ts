@@ -516,6 +516,8 @@ export interface AdminUser {
   /** @nullable */
   activePlanName?: string | null;
   /** @nullable */
+  activePlanId?: number | null;
+  /** @nullable */
   planId?: number | null;
   /** @nullable */
   planName?: string | null;
