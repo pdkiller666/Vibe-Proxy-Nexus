@@ -152,6 +152,7 @@ const balanceTxLabel: Record<string, string> = {
   topup: "Пополнение",
   debit: "Списание",
   refund: "Возврат",
+  referral: "Реферальная комиссия",
 };
 
 function BalanceHistorySection() {
@@ -167,8 +168,12 @@ function BalanceHistorySection() {
       </p>
       <div className="space-y-2 max-h-80 overflow-y-auto">
         {transactions.slice(0, 30).map((tx) => {
-          const isPositive = tx.type === "topup" || tx.type === "refund";
-          const Icon = tx.type === "topup" ? ArrowUpCircle : tx.type === "refund" ? RotateCcw : ArrowDownCircle;
+          const isPositive = tx.type === "topup" || tx.type === "refund" || tx.type === "referral";
+          const Icon =
+            tx.type === "topup" ? ArrowUpCircle :
+            tx.type === "refund" ? RotateCcw :
+            tx.type === "referral" ? Users :
+            ArrowDownCircle;
           return (
             <div key={tx.id} className="flex items-center justify-between gap-3 border-t border-border pt-2 first:border-0 first:pt-0">
               <div className="flex items-center gap-2 min-w-0">
