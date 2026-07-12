@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminUserActivityStatus } from './adminUserActivityStatus';
 import type { SubscriptionStatus } from './subscriptionStatus';
 import type { UserRole } from './userRole';
 
@@ -23,6 +24,9 @@ export interface AdminUser {
   /** @nullable */
   lastActiveAt?: Date | null;
   isOnline: boolean;
+  /** @nullable */
+  vpnLastActiveAt: Date | null;
+  activityStatus: AdminUserActivityStatus;
   activeSubscriptions?: number;
   extraDeviceSlots: number;
   /** @nullable */

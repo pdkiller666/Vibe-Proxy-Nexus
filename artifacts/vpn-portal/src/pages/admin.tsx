@@ -1184,20 +1184,38 @@ function UsersManagement() {
               <div className="min-w-0 break-words">
                 <div className="font-bold break-all flex items-center gap-2 flex-wrap">
                   <span
-                    className={`inline-block w-2 h-2 rounded-full shrink-0 ${user.isOnline ? "bg-green-500" : "bg-gray-300"}`}
-                    title={user.isOnline ? "Онлайн" : "Не в сети"}
+                    className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                      user.activityStatus === "site"
+                        ? "bg-green-500"
+                        : user.activityStatus === "vpn"
+                          ? "bg-blue-500"
+                          : "bg-gray-300"
+                    }`}
+                    title={
+                      user.activityStatus === "site"
+                        ? "На сайте"
+                        : user.activityStatus === "vpn"
+                          ? "Использует VPN"
+                          : "Не в сети"
+                    }
                   />
                   {user.name ? `${user.name} · ` : ""}
                   {user.email}
-                  {user.isOnline && (
+                  {user.activityStatus === "site" && (
                     <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
-                      Онлайн
+                      На сайте
+                    </span>
+                  )}
+                  {user.activityStatus === "vpn" && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">
+                      Использует VPN
                     </span>
                   )}
                 </div>
                 <div className="text-sm text-muted-foreground font-mono">
                   {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
-                  {!user.isOnline && user.lastActiveAt && ` · был(а) в сети ${formatDate(user.lastActiveAt)}`}
+                  {user.activityStatus === "offline" && user.lastActiveAt && ` · был(а) на сайте ${formatDate(user.lastActiveAt)}`}
+                  {user.activityStatus === "offline" && !user.lastActiveAt && user.vpnLastActiveAt && ` · VPN: ${formatDate(user.vpnLastActiveAt)}`}
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap shrink-0">

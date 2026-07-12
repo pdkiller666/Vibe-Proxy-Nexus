@@ -34,6 +34,10 @@ import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { logger } from "../../lib/logger";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
 
+// VPN "actively using" threshold — 10 min gives enough headroom for the
+// 60-second traffic poll interval plus short idle bursts between packets.
+const VPN_ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
+
 const router: IRouter = Router();
 
 /**
@@ -68,6 +72,9 @@ async function enrichUsersWithTraffic(users: User[]) {
       // All active keys are reset together, so max() gives the effective period
       // start. Null if the user has no active (non-revoked) keys at all.
       periodStartedAt: sql<Date | null>`max(${vpnKeysTable.periodStartedAt}) filter (where ${vpnKeysTable.revokedAt} is null)`,
+      // Latest non-zero traffic observation across ALL keys (revoked included —
+      // a revoked key that recently moved data still means the user was active).
+      vpnLastActiveAt: sql<Date | null>`max(${vpnKeysTable.lastTrafficAt})`,
     })
     .from(vpnKeysTable)
     .where(inArray(vpnKeysTable.userId, userIds))
@@ -79,6 +86,7 @@ async function enrichUsersWithTraffic(users: User[]) {
     periodUpBytes: Number(r.periodUpBytes),
     periodDownBytes: Number(r.periodDownBytes),
     periodStartedAt: r.periodStartedAt,
+    vpnLastActiveAt: r.vpnLastActiveAt,
   }));
   const trafficByUser = new Map(trafficRows.map((r) => [r.userId, r]));
 
@@ -157,9 +165,15 @@ async function enrichUsersWithTraffic(users: User[]) {
     const trafficLimitGb = limitByUser.get(user.id) ?? null;
     const current = currentByUser.get(user.id);
     const periodBytes = (traffic?.periodUpBytes ?? 0) + (traffic?.periodDownBytes ?? 0);
+    const vpnLastActiveAt = traffic?.vpnLastActiveAt ?? null;
+    const onSite = Boolean(user.lastActiveAt) && now - user.lastActiveAt!.getTime() <= ONLINE_THRESHOLD_MS;
+    const usingVpn = Boolean(vpnLastActiveAt) && now - vpnLastActiveAt!.getTime() <= VPN_ONLINE_THRESHOLD_MS;
+    const activityStatus: "site" | "vpn" | "offline" = onSite ? "site" : usingVpn ? "vpn" : "offline";
     return {
       ...user,
-      isOnline: Boolean(user.lastActiveAt) && now - user.lastActiveAt!.getTime() <= ONLINE_THRESHOLD_MS,
+      isOnline: onSite || usingVpn,
+      vpnLastActiveAt: vpnLastActiveAt ? vpnLastActiveAt.toISOString() : null,
+      activityStatus,
       trafficUpBytes: traffic?.trafficUpBytes ?? 0,
       trafficDownBytes: traffic?.trafficDownBytes ?? 0,
       periodUpBytes: traffic?.periodUpBytes ?? 0,

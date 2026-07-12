@@ -473,6 +473,15 @@ export interface BalanceTransaction {
   createdAt: string;
 }
 
+export type AdminUserActivityStatus = typeof AdminUserActivityStatus[keyof typeof AdminUserActivityStatus];
+
+
+export const AdminUserActivityStatus = {
+  site: 'site',
+  vpn: 'vpn',
+  offline: 'offline',
+} as const;
+
 export interface AdminUser {
   id: number;
   email: string;
@@ -488,6 +497,9 @@ export interface AdminUser {
   /** @nullable */
   lastActiveAt?: string | null;
   isOnline: boolean;
+  /** @nullable */
+  vpnLastActiveAt: string | null;
+  activityStatus: AdminUserActivityStatus;
   activeSubscriptions?: number;
   extraDeviceSlots: number;
   /** @nullable */

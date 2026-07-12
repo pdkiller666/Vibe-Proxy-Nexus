@@ -10,6 +10,7 @@ export * from './adminPasswordResetResult';
 export * from './adminPayment';
 export * from './adminSubscriptionUpdate';
 export * from './adminUser';
+export * from './adminUserActivityStatus';
 export * from './adminUserProfileUpdate';
 export * from './balanceTopupOrderBody';
 export * from './balanceTopupOrderResult';

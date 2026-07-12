@@ -1587,6 +1587,8 @@ components:
           trafficLimitGb,
           trafficLimitExceeded,
           isOnline,
+          vpnLastActiveAt,
+          activityStatus,
           balanceKopecks,
           referralCode,
           referredUserCount,
@@ -1608,6 +1610,16 @@ components:
         lastActiveAt: { type: ["string", "null"], format: date-time }
         # true if lastActiveAt is within the last 5 minutes.
         isOnline: { type: boolean }
+        # Timestamp of the most recent non-zero VPN traffic delta across all
+        # of this user's keys (null if no VPN traffic has ever been recorded).
+        vpnLastActiveAt: { type: ["string", "null"], format: date-time }
+        # Composite activity status:
+        #   "site"    — visited the site in the last 5 min (lastActiveAt fresh)
+        #   "vpn"     — VPN traffic in the last 10 min but not on site
+        #   "offline" — neither
+        activityStatus:
+          type: string
+          enum: [site, vpn, offline]
         activeSubscriptions: { type: integer }
         # extraDeviceSlots is sourced from the user's currently ACTIVE
         # subscription row (0 if none) — slots do not carry over across
