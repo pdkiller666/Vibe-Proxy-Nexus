@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap, Globe } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
 
@@ -409,6 +409,23 @@ export default function Keys() {
           </div>
         </div>
       )}
+
+      {/* Personal cabinet deep-link block — shown always so users know where to return */}
+      <div className="bg-card border border-border p-5 space-y-3">
+        <div className="flex items-center gap-2 font-bold">
+          <Globe className="w-4 h-4 text-primary" />
+          Личный кабинет
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Сохраните ссылку в закладки или на главный экран телефона — здесь управление ключами, продление и
+          статистика. В приложении <strong>Happ</strong> её же можно открыть нажав{" "}
+          <span className="font-bold text-foreground">ⓘ</span> рядом с подпиской <em>VPNexus</em>.
+        </p>
+        <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+          <span className="truncate flex-1">{window.location.origin + "/dashboard"}</span>
+          <CopyButton text={window.location.origin + "/dashboard"} />
+        </div>
+      </div>
 
       {isLoading ? (
         <div className="space-y-3">
