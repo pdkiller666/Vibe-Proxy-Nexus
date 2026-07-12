@@ -1350,7 +1350,7 @@ components:
 
     PaymentProvider:
       type: string
-      enum: [manual_sbp, yookassa]
+      enum: [manual_sbp, yookassa, freekassa]
 
     PaymentStatus:
       type: string

@@ -37,12 +37,13 @@ router.post("/subscriptions", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // #3 — Yookassa is not integrated. Block at API level to prevent orphaned
-  // pending subscriptions that will never be auto-confirmed.
+  // Yookassa is not integrated — block to prevent orphaned pending
+  // subscriptions that will never be auto-confirmed.
   if (parsed.data.provider === "yookassa") {
-    res.status(400).json({ error: "Оплата через Yookassa временно недоступна. Используйте СБП." });
+    res.status(400).json({ error: "Оплата через Yookassa временно недоступна. Используйте СБП или FreeKassa." });
     return;
   }
+  // freekassa is allowed: the IPN webhook auto-confirms it
 
   const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, parsed.data.planId));
 

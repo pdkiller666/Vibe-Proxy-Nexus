@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { subscriptionsTable } from "./subscriptions";
 
-export const paymentProviderValues = ["manual_sbp", "yookassa"] as const;
+export const paymentProviderValues = ["manual_sbp", "yookassa", "freekassa"] as const;
 export const paymentStatusValues = ["pending", "confirmed", "rejected"] as const;
 export const paymentTypeValues = ["subscription", "extra_device_slot", "balance_topup"] as const;
 

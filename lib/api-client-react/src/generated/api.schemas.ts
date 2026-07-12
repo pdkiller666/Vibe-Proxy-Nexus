@@ -265,6 +265,7 @@ export type PaymentProvider = typeof PaymentProvider[keyof typeof PaymentProvide
 export const PaymentProvider = {
   manual_sbp: 'manual_sbp',
   yookassa: 'yookassa',
+  freekassa: 'freekassa',
 } as const;
 
 export interface SubscriptionInput {
