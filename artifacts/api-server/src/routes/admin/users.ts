@@ -167,7 +167,10 @@ async function enrichUsersWithTraffic(users: User[]) {
     const trafficLimitGb = limitByUser.get(user.id) ?? null;
     const current = currentByUser.get(user.id);
     const periodBytes = (traffic?.periodUpBytes ?? 0) + (traffic?.periodDownBytes ?? 0);
-    const vpnLastActiveAt = traffic?.vpnLastActiveAt ?? null;
+    // Raw sql<> expressions come back from pg as strings, not Date objects —
+    // unlike Drizzle-mapped timestamp columns. Coerce explicitly before math.
+    const vpnLastActiveAtRaw = traffic?.vpnLastActiveAt ?? null;
+    const vpnLastActiveAt = vpnLastActiveAtRaw ? new Date(vpnLastActiveAtRaw) : null;
     const onSite = Boolean(user.lastActiveAt) && now - user.lastActiveAt!.getTime() <= ONLINE_THRESHOLD_MS;
     const usingVpn = Boolean(vpnLastActiveAt) && now - vpnLastActiveAt!.getTime() <= VPN_ONLINE_THRESHOLD_MS;
     const activityStatus: "site" | "vpn" | "offline" = onSite ? "site" : usingVpn ? "vpn" : "offline";

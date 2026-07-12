@@ -27,3 +27,11 @@ any `sslmode` other than `disable` as "encrypt, but don't verify"
 connection string itself so it doesn't fight with the explicit `ssl` option.
 Apply the same fix to both the runtime `pg.Pool` and any `drizzle-kit`
 config used for schema push — both hit the same cert wall independently.
+
+**Also applies to `heal-schema.mjs`:** it uses a bare `pg.Client` with
+`connectionString: DATABASE_URL`. Passing the raw URL with `sslmode=require`
+still present causes pg to override `rejectUnauthorized: false` — the
+sslmode in the URL wins over the `ssl:{}` object. Fix: parse the URL,
+delete `sslmode` from searchParams, pass `parsedUrl.toString()` as the
+connection string, and set `ssl: { rejectUnauthorized: false }` separately.
+This mirrors `lib/db/src/ssl.ts::resolvePgConnection()` exactly.
