@@ -85,6 +85,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <LogOut className="w-4 h-4" />
           Выход
         </button>
+        <div className="mt-3 px-4 flex flex-wrap gap-x-3 gap-y-1">
+          <a href="/terms" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Оферта</a>
+          <a href="/privacy" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Конфиденциальность</a>
+        </div>
       </div>
     </>
   );

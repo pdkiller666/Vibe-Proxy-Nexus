@@ -18,6 +18,8 @@ import SignInPage from "@/pages/sign-in";
 import SignUpPage from "@/pages/sign-up";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import TermsPage from "@/pages/terms";
+import PrivacyPage from "@/pages/privacy";
 import { Layout } from "@/components/layout";
 import { queryClient } from "@/lib/query-client";
 
@@ -106,6 +108,8 @@ function App() {
           <Route path="/support"><ProtectedRoute component={Support} /></Route>
           <Route path="/profile"><ProtectedRoute component={Profile} /></Route>
           <Route path="/admin" component={AdminRoute} />
+          <Route path="/terms" component={TermsPage} />
+          <Route path="/privacy" component={PrivacyPage} />
 
           <Route path="/:rest*">
             {() => (

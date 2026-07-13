@@ -27,6 +27,8 @@ type RegisterFormValues = {
 
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentError, setConsentError] = useState(false);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const search = useSearch();
@@ -55,6 +57,11 @@ export default function SignUpPage() {
         : null;
 
   function onSubmit(values: RegisterFormValues) {
+    if (!consentChecked) {
+      setConsentError(true);
+      return;
+    }
+    setConsentError(false);
     registerMutation.mutate({ data: { ...values, name: values.name || undefined, ref } });
   }
 
@@ -82,7 +89,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-[#F4F4F5] px-4 font-sans">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-[#F4F4F5] px-4 py-8 font-sans">
       <div className="w-[440px] max-w-full bg-white border border-black/10 p-8">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-8 h-8 bg-orange-600 flex items-center justify-center">
@@ -165,6 +172,48 @@ export default function SignUpPage() {
                 </FormItem>
               )}
             />
+
+            {/* Consent checkbox */}
+            <div className="space-y-1">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={consentChecked}
+                  onChange={(e) => {
+                    setConsentChecked(e.target.checked);
+                    if (e.target.checked) setConsentError(false);
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-orange-600 cursor-pointer"
+                />
+                <span className="text-sm text-gray-600 leading-relaxed">
+                  Я принимаю условия{" "}
+                  <a
+                    href={`${basePath}/terms`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-orange-600 hover:underline font-medium"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Публичной оферты
+                  </a>{" "}
+                  и даю согласие на обработку персональных данных согласно{" "}
+                  <a
+                    href={`${basePath}/privacy`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-orange-600 hover:underline font-medium"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Политике конфиденциальности
+                  </a>
+                </span>
+              </label>
+              {consentError && (
+                <p className="text-sm text-red-600 pl-7">
+                  Необходимо принять условия для регистрации
+                </p>
+              )}
+            </div>
 
             {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
 
