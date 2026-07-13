@@ -14,6 +14,27 @@ export function generateKeyUuid(): string {
   return randomUUID();
 }
 
+/**
+ * Maps a node's free-text `region` to a flag emoji Happ can render as the
+ * server-row icon. Happ only shows a custom icon when the server name's
+ * *first* character is a flag emoji (see .agents/memory — Happ client only
+ * supports flag emoji as a custom row icon, nothing else); anything
+ * unmapped here falls back to Happ's default generic globe icon, which is
+ * safe and matches prior behavior.
+ *
+ * Extend this map as nodes are added in new countries.
+ */
+const REGION_FLAG_RULES: Array<{ match: RegExp; flag: string }> = [
+  { match: /poland|польш|warsaw|варшав|warszawa|^pl$/i, flag: "🇵🇱" },
+];
+
+export function flagEmojiForRegion(region: string | null | undefined): string | undefined {
+  if (!region) return undefined;
+  const normalized = region.trim();
+  if (!normalized) return undefined;
+  return REGION_FLAG_RULES.find((rule) => rule.match.test(normalized))?.flag;
+}
+
 export function generatePaymentReference(subscriptionId: number): string {
   const suffix = randomUUID().split("-")[0]?.toUpperCase() ?? "0000";
   return `VPN-${subscriptionId}-${suffix}`;
@@ -50,7 +71,10 @@ export function buildVlessLink(node: VpnNode, uuid: string, label: string): stri
     encryption: "none",
   });
 
-  return `vless://${uuid}@${host}:${port}?${params.toString()}#${encodeURIComponent(label)}`;
+  const flag = flagEmojiForRegion(node.region);
+  const fragment = flag ? `${flag} ${label}` : label;
+
+  return `vless://${uuid}@${host}:${port}?${params.toString()}#${encodeURIComponent(fragment)}`;
 }
 
 /**
