@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import {
   useGetMe,
   useListMyVpnKeys,
-  useCreateBalanceTopupOrder,
   useListMyBalanceTransactions,
-  getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import {
   Shield,
@@ -16,8 +14,6 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
-  Wallet,
-  Plus,
   Zap,
   Gauge,
   ArrowUpCircle,
@@ -28,8 +24,6 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { useToast } from "@/hooks/use-toast";
@@ -194,81 +188,6 @@ function BalanceHistorySection() {
           );
         })}
       </div>
-    </div>
-  );
-}
-
-function BalanceWidget() {
-  const { data: me } = useGetMe();
-  const { mutate: createTopup, isPending } = useCreateBalanceTopupOrder();
-  const { toast } = useToast();
-  const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
-  const [amount, setAmount] = useState("");
-  const [showForm, setShowForm] = useState(false);
-
-  function handleTopup() {
-    const amountRub = Number(amount);
-    if (!amountRub || amountRub < 1) return;
-    createTopup(
-      { data: { amountRub } },
-      {
-        onSuccess: (data) => {
-          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-          setLocation(`/balance-topup/${data.paymentId}`);
-        },
-        onError: (err: unknown) => {
-          const msg = err instanceof Error ? err.message : undefined;
-          toast({ title: msg ?? "Не удалось создать заявку", variant: "destructive" });
-        },
-      },
-    );
-  }
-
-  return (
-    <div className="bg-card border border-border p-5">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-primary/10 flex items-center justify-center shrink-0">
-            <Wallet className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Баланс</p>
-            <div className="text-2xl font-black">{me ? formatKopecks(me.balanceKopecks) : "—"}</div>
-          </div>
-        </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-1.5 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" /> Пополнить
-        </button>
-      </div>
-      {showForm && (
-        <div className="mt-4 flex gap-2 flex-wrap">
-          <Input
-            type="number"
-            min={1}
-            placeholder="Сумма, ₽"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="rounded-none w-36"
-          />
-          <button
-            onClick={handleTopup}
-            disabled={isPending || !amount || Number(amount) < 1}
-            className="bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {isPending ? "Создаём..." : "Перейти к оплате"}
-          </button>
-          <button
-            onClick={() => { setShowForm(false); setAmount(""); }}
-            className="border border-border px-4 py-2 text-sm hover:bg-muted transition-colors"
-          >
-            Отмена
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -543,9 +462,6 @@ export default function Dashboard() {
           <CreditCard className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-all" />
         </Link>
       </div>
-
-      {/* ── Balance ───────────────────────────────────────────────── */}
-      <BalanceWidget />
 
       {/* ── Referral ──────────────────────────────────────────────── */}
       <ReferralSection />

@@ -1,7 +1,99 @@
-import { useListMyPayments } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useLocation } from "wouter";
+import {
+  useListMyPayments,
+  useGetMe,
+  useCreateBalanceTopupOrder,
+  getGetMeQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, CheckCircle2, XCircle, Info } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Clock, CheckCircle2, XCircle, Info, Wallet, Plus } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
+import { useToast } from "@/hooks/use-toast";
+
+function formatKopecks(kopecks: number): string {
+  const rubles = Math.floor(kopecks / 100);
+  const cents = kopecks % 100;
+  if (cents === 0) return `${rubles} ₽`;
+  return `${rubles},${String(cents).padStart(2, "0")} ₽`;
+}
+
+function BalanceWidget() {
+  const { data: me } = useGetMe();
+  const { mutate: createTopup, isPending } = useCreateBalanceTopupOrder();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const [amount, setAmount] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  function handleTopup() {
+    const amountRub = Number(amount);
+    if (!amountRub || amountRub < 1) return;
+    createTopup(
+      { data: { amountRub } },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+          setLocation(`/balance-topup/${data.paymentId}`);
+        },
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : undefined;
+          toast({ title: msg ?? "Не удалось создать заявку", variant: "destructive" });
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border p-5">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-primary/10 flex items-center justify-center shrink-0">
+            <Wallet className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Баланс</p>
+            <div className="text-2xl font-black">{me ? formatKopecks(me.balanceKopecks) : "—"}</div>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-1.5 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
+        >
+          <Plus className="w-4 h-4" /> Пополнить
+        </button>
+      </div>
+      {showForm && (
+        <div className="mt-4 flex gap-2 flex-wrap">
+          <Input
+            type="number"
+            min={1}
+            placeholder="Сумма, ₽"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="rounded-none w-36"
+          />
+          <button
+            onClick={handleTopup}
+            disabled={isPending || !amount || Number(amount) < 1}
+            className="bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isPending ? "Создаём..." : "Перейти к оплате"}
+          </button>
+          <button
+            onClick={() => { setShowForm(false); setAmount(""); }}
+            className="border border-border px-4 py-2 text-sm hover:bg-muted transition-colors"
+          >
+            Отмена
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const statusConfig = {
   pending: { label: "Ожидает", icon: Clock, className: "bg-primary/10 text-primary" },
@@ -25,11 +117,13 @@ export default function Payments() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">История платежей</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Платежи</h1>
         <p className="text-muted-foreground font-mono text-sm mt-1">
-          Статус ваших обращений по оплате.
+          Баланс, пополнение и история оплат.
         </p>
       </div>
+
+      <BalanceWidget />
 
       <OnboardingTip
         id="payments-info"

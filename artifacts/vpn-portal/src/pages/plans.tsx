@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useListPlans, useCreateSubscription, useGetMe, useGetPaymentSettings, getGetMeQueryKey } from "@workspace/api-client-react";
+import {
+  useListPlans,
+  useCreateSubscription,
+  useGetMe,
+  useGetPaymentSettings,
+  useCreateBalanceTopupOrder,
+  getGetMeQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Check, CreditCard, Zap } from "lucide-react";
+import { Check, CreditCard, Zap, Wallet } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { cn } from "@/lib/utils";
 
@@ -20,10 +27,12 @@ export default function Plans() {
   const { data: me } = useGetMe();
   const { data: paymentSettings } = useGetPaymentSettings();
   const { mutate: createSubscription, isPending } = useCreateSubscription();
+  const { mutate: createTopup, isPending: isToppingUp } = useCreateBalanceTopupOrder();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [loadingPlanId, setLoadingPlanId] = useState<number | null>(null);
+  const [topupPlanId, setTopupPlanId] = useState<number | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -96,6 +105,25 @@ export default function Plans() {
 
   const minHourlyTopupRub = paymentSettings?.minHourlyTopupRub ?? 0;
   const balanceRub = me ? Math.floor(me.balanceKopecks / 100) : 0;
+
+  function handleQuickTopup(planId: number) {
+    const amountRub = minHourlyTopupRub > 0 ? minHourlyTopupRub : 100;
+    setTopupPlanId(planId);
+    createTopup(
+      { data: { amountRub } },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+          setLocation(`/balance-topup/${data.paymentId}`);
+        },
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : undefined;
+          toast({ title: msg ?? "Не удалось создать заявку на пополнение", variant: "destructive" });
+          setTopupPlanId(null);
+        },
+      },
+    );
+  }
 
   function handleSelect(planId: number, billingType?: string) {
     if (billingType === "hourly" && minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub) {
@@ -226,35 +254,61 @@ export default function Plans() {
                   {plan.description && (
                     <p className="text-sm text-muted-foreground mb-6 flex-1">{plan.description}</p>
                   )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCardClick(plan.id);
-                      handleSelect(plan.id, plan.billingType);
-                    }}
-                    disabled={
-                      isPending ||
-                      (plan.billingType === "hourly" && !me?.balanceKopecks) ||
-                      (plan.billingType === "hourly" && minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub)
+                  {(() => {
+                    const insufficientBalance =
+                      plan.billingType === "hourly" &&
+                      (!me?.balanceKopecks || (minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub));
+
+                    if (insufficientBalance) {
+                      const topupAmount = minHourlyTopupRub > 0 ? minHourlyTopupRub : 100;
+                      return (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCardClick(plan.id);
+                              handleQuickTopup(plan.id);
+                            }}
+                            disabled={isToppingUp}
+                            className="w-full bg-primary text-primary-foreground font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {topupPlanId === plan.id && isToppingUp ? (
+                              "Переходим к оплате..."
+                            ) : (
+                              <>
+                                <Wallet className="w-4 h-4" /> Пополнить — {topupAmount} ₽
+                              </>
+                            )}
+                          </button>
+                          <p className="text-xs text-orange-600 mt-2">
+                            {minHourlyTopupRub > 0
+                              ? `Минимальный баланс для подключения — ${minHourlyTopupRub} ₽.`
+                              : "Пополните баланс, чтобы подключить тариф."}
+                          </p>
+                        </>
+                      );
                     }
-                    className="w-full bg-primary text-primary-foreground font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {loadingPlanId === plan.id ? (
-                      "Оформляем..."
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4" /> {plan.billingType === "hourly" ? "Подключить" : "Оформить"}
-                      </>
-                    )}
-                  </button>
-                  {plan.billingType === "hourly" && !me?.balanceKopecks && (
-                    <p className="text-xs text-orange-600 mt-2">Пополните баланс, чтобы подключить тариф.</p>
-                  )}
-                  {plan.billingType === "hourly" && minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub && (
-                    <p className="text-xs text-orange-600 mt-2">
-                      Минимальное пополнение для подключения — {minHourlyTopupRub} ₽.
-                    </p>
-                  )}
+
+                    return (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCardClick(plan.id);
+                          handleSelect(plan.id, plan.billingType);
+                        }}
+                        disabled={isPending}
+                        className="w-full bg-primary text-primary-foreground font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {loadingPlanId === plan.id ? (
+                          "Оформляем..."
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" /> {plan.billingType === "hourly" ? "Подключить" : "Оформить"}
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
                 </div>
               );
             })}
