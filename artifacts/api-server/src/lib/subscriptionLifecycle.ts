@@ -10,8 +10,22 @@
  * doesn't need second-precision cutoff, and periodic sweeps are simpler and
  * more resilient to restarts than per-subscription timers.
  */
-import { and, eq, gte, inArray, isNotNull, isNull, lt } from "drizzle-orm";
-import { db, paymentsTable, subscriptionsTable, vpnKeysTable } from "@workspace/db";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+} from "drizzle-orm";
+import {
+  db,
+  paymentsTable,
+  subscriptionsTable,
+  vpnKeysTable,
+} from "@workspace/db";
 import { logger } from "./logger";
 import { isLocalXrayEnabled, removeXrayClient } from "./xray";
 
@@ -21,10 +35,25 @@ const SUBSCRIPTION_EXPIRY_CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const PENDING_PAYMENT_EXPIRY_HOURS = 48;
 
 /**
- * Flips overdue "active" subscriptions to "expired" and revokes VPN keys for
- * any user left with no other currently-active subscription. Safe to call
- * concurrently/repeatedly — every step is scoped by status so re-running it
- * (e.g. two overlapping intervals) is a no-op on already-settled rows.
+ * How long a user keeps VPN access after their last subscription's `endsAt`
+ * passes, before their keys are actually revoked. Manual SBP payments aren't
+ * confirmed instantly — an admin has to see the transfer and click confirm —
+ * so revoking access the moment a subscription lapses turned a normal
+ * renewal into a race: if the admin hadn't confirmed yet when this sweep
+ * ran, the user's key was cut, and confirming the payment afterwards never
+ * restored it (see ensureActiveKeyForUser in keyIssuance.ts, which now
+ * covers that gap too). This grace period exists to make that race rare in
+ * the first place, not just recoverable after the fact.
+ */
+const KEY_REVOKE_GRACE_PERIOD_HOURS = 24;
+
+/**
+ * Flips overdue "active" subscriptions to "expired". Safe to call
+ * concurrently/repeatedly — scoped by status so re-running it (e.g. two
+ * overlapping intervals) is a no-op on already-settled rows.
+ *
+ * Deliberately does NOT touch VPN keys — see revokeKeysPastGracePeriod for
+ * that, which runs as a separate, later-triggering sweep.
  */
 export async function expireOverdueSubscriptions(): Promise<number> {
   const now = new Date();
@@ -41,27 +70,74 @@ export async function expireOverdueSubscriptions(): Promise<number> {
     )
     .returning({ userId: subscriptionsTable.userId });
 
-  if (expired.length === 0) return 0;
+  return expired.length;
+}
 
-  const affectedUserIds = [...new Set(expired.map((row) => row.userId))];
+/**
+ * Revokes VPN keys for users who have had no active subscription for longer
+ * than KEY_REVOKE_GRACE_PERIOD_HOURS. Runs independently of
+ * expireOverdueSubscriptions so it also catches users who lapsed on an
+ * earlier run and are only now past the grace period — not just ones that
+ * expired in this exact tick.
+ *
+ * Safe to call concurrently/repeatedly: every write is scoped by
+ * `revokedAt is null`, so re-running it is a no-op on already-revoked keys.
+ */
+export async function revokeKeysPastGracePeriod(): Promise<number> {
+  const now = new Date();
+  const cutoff = new Date(
+    now.getTime() - KEY_REVOKE_GRACE_PERIOD_HOURS * 60 * 60 * 1000,
+  );
 
-  for (const userId of affectedUserIds) {
+  const candidateUsers = await db
+    .selectDistinct({ userId: vpnKeysTable.userId })
+    .from(vpnKeysTable)
+    .where(isNull(vpnKeysTable.revokedAt));
+
+  let revokedCount = 0;
+
+  for (const { userId } of candidateUsers) {
     // A user can have more than one subscription row (e.g. an early renewal
-    // purchased before the previous period ended). Only revoke keys once
-    // none of their subscriptions are still active — otherwise we'd cut off
-    // access covered by a different, still-valid row.
+    // purchased before the previous period ended, or a payment the admin
+    // just confirmed). Skip anyone who currently has an active row — their
+    // access is still valid regardless of grace-period math below.
     const [stillActive] = await db
       .select({ id: subscriptionsTable.id })
       .from(subscriptionsTable)
-      .where(and(eq(subscriptionsTable.userId, userId), eq(subscriptionsTable.status, "active")))
+      .where(
+        and(
+          eq(subscriptionsTable.userId, userId),
+          eq(subscriptionsTable.status, "active"),
+        ),
+      )
       .limit(1);
 
     if (stillActive) continue;
 
+    // Grace period is measured from the most recent subscription that ever
+    // had a known end date. If the user has none (e.g. keys exist but they
+    // never had a dated subscription — shouldn't normally happen), we have
+    // no basis to start a clock, so leave their key alone rather than guess.
+    const [latest] = await db
+      .select({ endsAt: subscriptionsTable.endsAt })
+      .from(subscriptionsTable)
+      .where(
+        and(
+          eq(subscriptionsTable.userId, userId),
+          isNotNull(subscriptionsTable.endsAt),
+        ),
+      )
+      .orderBy(desc(subscriptionsTable.endsAt))
+      .limit(1);
+
+    if (!latest?.endsAt || latest.endsAt >= cutoff) continue;
+
     const keysToRevoke = await db
       .select()
       .from(vpnKeysTable)
-      .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
+      .where(
+        and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)),
+      );
 
     if (keysToRevoke.length === 0) continue;
 
@@ -72,7 +148,7 @@ export async function expireOverdueSubscriptions(): Promise<number> {
         } catch (err) {
           logger.error(
             { err, uuid: key.uuid, userId },
-            "Failed to remove client from local Xray during subscription expiry",
+            "Failed to remove client from local Xray during grace-period key revocation",
           );
         }
       }
@@ -80,11 +156,15 @@ export async function expireOverdueSubscriptions(): Promise<number> {
 
     await db
       .update(vpnKeysTable)
-      .set({ revokedAt: new Date() })
-      .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
+      .set({ revokedAt: now })
+      .where(
+        and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)),
+      );
+
+    revokedCount += keysToRevoke.length;
   }
 
-  return expired.length;
+  return revokedCount;
 }
 
 /**
@@ -96,7 +176,9 @@ export async function expireOverdueSubscriptions(): Promise<number> {
  * means already-cancelled rows are untouched.
  */
 export async function cancelStalePendingSubscriptions(): Promise<number> {
-  const cutoff = new Date(Date.now() - PENDING_PAYMENT_EXPIRY_HOURS * 60 * 60 * 1000);
+  const cutoff = new Date(
+    Date.now() - PENDING_PAYMENT_EXPIRY_HOURS * 60 * 60 * 1000,
+  );
 
   const stale = await db
     .select({ id: subscriptionsTable.id })
@@ -116,13 +198,19 @@ export async function cancelStalePendingSubscriptions(): Promise<number> {
     await tx
       .update(subscriptionsTable)
       .set({ status: "cancelled" })
-      .where(and(inArray(subscriptionsTable.id, staleIds), eq(subscriptionsTable.status, "pending_payment")));
+      .where(
+        and(
+          inArray(subscriptionsTable.id, staleIds),
+          eq(subscriptionsTable.status, "pending_payment"),
+        ),
+      );
 
     await tx
       .update(paymentsTable)
       .set({
         status: "rejected",
-        rejectionReason: "Автоматическая отмена: оплата не поступила в течение 48 часов",
+        rejectionReason:
+          "Автоматическая отмена: оплата не поступила в течение 48 часов",
       })
       .where(
         and(
@@ -145,13 +233,16 @@ export async function cancelStalePendingSubscriptions(): Promise<number> {
  * never buy a new slot.
  */
 export async function cancelStaleExtraSlotPayments(): Promise<number> {
-  const cutoff = new Date(Date.now() - PENDING_PAYMENT_EXPIRY_HOURS * 60 * 60 * 1000);
+  const cutoff = new Date(
+    Date.now() - PENDING_PAYMENT_EXPIRY_HOURS * 60 * 60 * 1000,
+  );
 
   const result = await db
     .update(paymentsTable)
     .set({
       status: "rejected",
-      rejectionReason: "Автоматическая отмена: оплата не поступила в течение 48 часов",
+      rejectionReason:
+        "Автоматическая отмена: оплата не поступила в течение 48 часов",
     })
     .where(
       and(
@@ -182,7 +273,12 @@ export async function reconcileRevokedXrayClients(): Promise<void> {
   const recentlyRevoked = await db
     .select({ uuid: vpnKeysTable.uuid, userId: vpnKeysTable.userId })
     .from(vpnKeysTable)
-    .where(and(isNotNull(vpnKeysTable.revokedAt), gte(vpnKeysTable.revokedAt, since)));
+    .where(
+      and(
+        isNotNull(vpnKeysTable.revokedAt),
+        gte(vpnKeysTable.revokedAt, since),
+      ),
+    );
 
   for (const key of recentlyRevoked) {
     try {
@@ -198,17 +294,33 @@ export function startSubscriptionExpiryJob(): NodeJS.Timeout {
     expireOverdueSubscriptions()
       .then((count) => {
         if (count > 0) {
-          logger.info({ count }, "Expired overdue subscriptions and revoked their VPN keys");
+          logger.info({ count }, "Expired overdue subscriptions");
         }
       })
       .catch((err) => {
         logger.error({ err }, "Failed to expire overdue subscriptions");
       });
 
+    revokeKeysPastGracePeriod()
+      .then((count) => {
+        if (count > 0) {
+          logger.info(
+            { count, graceHours: KEY_REVOKE_GRACE_PERIOD_HOURS },
+            "Revoked VPN keys past grace period",
+          );
+        }
+      })
+      .catch((err) => {
+        logger.error({ err }, "Failed to revoke keys past grace period");
+      });
+
     cancelStalePendingSubscriptions()
       .then((count) => {
         if (count > 0) {
-          logger.info({ count }, "Auto-cancelled stale pending subscriptions (48h timeout)");
+          logger.info(
+            { count },
+            "Auto-cancelled stale pending subscriptions (48h timeout)",
+          );
         }
       })
       .catch((err) => {
@@ -218,11 +330,17 @@ export function startSubscriptionExpiryJob(): NodeJS.Timeout {
     cancelStaleExtraSlotPayments()
       .then((count) => {
         if (count > 0) {
-          logger.info({ count }, "Auto-cancelled stale extra device slot payments (48h timeout)");
+          logger.info(
+            { count },
+            "Auto-cancelled stale extra device slot payments (48h timeout)",
+          );
         }
       })
       .catch((err) => {
-        logger.error({ err }, "Failed to cancel stale extra device slot payments");
+        logger.error(
+          { err },
+          "Failed to cancel stale extra device slot payments",
+        );
       });
 
     reconcileRevokedXrayClients().catch((err) => {
