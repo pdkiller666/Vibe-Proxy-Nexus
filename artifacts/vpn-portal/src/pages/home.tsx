@@ -577,6 +577,8 @@ export default function Home() {
           <div className="flex gap-5 text-xs text-gray-400">
             <Link href="/sign-in" className="hover:text-gray-700 transition-colors">Вход</Link>
             <Link href="/sign-up" className="hover:text-gray-700 transition-colors">Регистрация</Link>
+            <Link href="/terms" className="hover:text-gray-700 transition-colors">Условия использования</Link>
+            <Link href="/privacy" className="hover:text-gray-700 transition-colors">Конфиденциальность</Link>
           </div>
         </div>
       </footer>

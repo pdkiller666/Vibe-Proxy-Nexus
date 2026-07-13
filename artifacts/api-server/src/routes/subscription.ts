@@ -81,6 +81,15 @@ router.get("/sub/:token", subscriptionRateLimit, async (req, res): Promise<void>
   // when healthy, falling back to whatever host the request actually came
   // in on so it keeps working even if vpnexus.pro's DNS/cert breaks.
   res.setHeader("Profile-Web-Page-Url", `${req.protocol}://${webPageAddress.host}/dashboard`);
+  // Native Happ "announcement" card: shows our text with a "Узнать больше"
+  // button that opens Profile-Web-Page-Url above. This is the client's
+  // built-in mechanism for surfacing the personal cabinet link — unlike the
+  // fake vless entry this replaces, it can't be mistaken for a real
+  // server/device since it renders as a distinct info card, not a list item.
+  res.setHeader(
+    "Announce",
+    `base64:${Buffer.from(`Управляйте ключами и тарифом в личном кабинете ${BRAND_NAME}`, "utf8").toString("base64")}`,
+  );
   if (activeSubscription) {
     // Report real consumption for the current billing period (not lifetime —
     // period counters reset on renewal, matching what the admin/user panels
