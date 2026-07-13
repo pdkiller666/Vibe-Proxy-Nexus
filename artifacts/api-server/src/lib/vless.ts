@@ -15,24 +15,35 @@ export function generateKeyUuid(): string {
 }
 
 /**
- * Maps a node's free-text `region` to a flag emoji Happ can render as the
- * server-row icon. Happ only shows a custom icon when the server name's
- * *first* character is a flag emoji (see .agents/memory — Happ client only
- * supports flag emoji as a custom row icon, nothing else); anything
- * unmapped here falls back to Happ's default generic globe icon, which is
- * safe and matches prior behavior.
+ * Maps a node to a flag emoji Happ can render as the server-row icon. Happ
+ * only shows a custom icon when the server name's *first* character is a
+ * flag emoji (see .agents/memory — Happ client only supports flag emoji as
+ * a custom row icon, nothing else); anything unmapped here falls back to
+ * Happ's default generic globe icon, which is safe and matches prior
+ * behavior.
  *
- * Extend this map as nodes are added in new countries.
+ * The admin-entered `region` field is free text and often just a coarse
+ * label like "EU" (not the actual country), so this also checks the node's
+ * technical host/SNI: Amvera's own hostnames encode the datacenter with an
+ * IATA-style airport code (our current node is on `waw0.amvera.tech` —
+ * "WAW" = Warsaw), which is a more reliable per-node location signal than
+ * the region field alone.
+ *
+ * Extend this list as nodes are added in new countries.
  */
-const REGION_FLAG_RULES: Array<{ match: RegExp; flag: string }> = [
-  { match: /poland|польш|warsaw|варшав|warszawa|^pl$/i, flag: "🇵🇱" },
+const LOCATION_FLAG_RULES: Array<{ match: RegExp; flag: string }> = [
+  { match: /poland|польш|warsaw|варшав|warszawa|\bwaw\d*\b|^pl$/i, flag: "🇵🇱" },
 ];
 
-export function flagEmojiForRegion(region: string | null | undefined): string | undefined {
-  if (!region) return undefined;
-  const normalized = region.trim();
-  if (!normalized) return undefined;
-  return REGION_FLAG_RULES.find((rule) => rule.match.test(normalized))?.flag;
+export function flagEmojiForNode(
+  node: Pick<VpnNode, "region" | "host" | "sni">,
+): string | undefined {
+  const haystack = [node.region, node.host, node.sni]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  if (!haystack) return undefined;
+  return LOCATION_FLAG_RULES.find((rule) => rule.match.test(haystack))?.flag;
 }
 
 export function generatePaymentReference(subscriptionId: number): string {
@@ -58,7 +69,11 @@ export function generatePaymentReference(subscriptionId: number): string {
  * sni=<web domain> + type=ws + path=<VPN_WS_PATH> and speak VLESS over that
  * standard HTTPS/WebSocket tunnel.
  */
-export function buildVlessLink(node: VpnNode, uuid: string, label: string): string {
+export function buildVlessLink(
+  node: VpnNode,
+  uuid: string,
+  label: string,
+): string {
   const host = node.host || node.sni;
   const port = node.port ?? 443;
   const params = new URLSearchParams({
@@ -71,7 +86,7 @@ export function buildVlessLink(node: VpnNode, uuid: string, label: string): stri
     encryption: "none",
   });
 
-  const flag = flagEmojiForRegion(node.region);
+  const flag = flagEmojiForNode(node);
   const fragment = flag ? `${flag} ${label}` : label;
 
   return `vless://${uuid}@${host}:${port}?${params.toString()}#${encodeURIComponent(fragment)}`;
@@ -85,9 +100,26 @@ export function buildVlessLink(node: VpnNode, uuid: string, label: string): stri
  * address (see buildVlessLink call sites in keyIssuance.ts / admin/vpnKeys.ts)
  * so this never needs to "unwind" a baked-in domain choice.
  */
-export async function buildServingVlessLink(node: VpnNode, uuid: string, label: string): Promise<string> {
-  const address = await resolvePublicAddress({ host: node.host || node.sni, sni: node.sni });
-  return buildVlessLink({ ...node, host: address.host, sni: address.sni }, uuid, label);
+export async function buildServingVlessLink(
+  node: VpnNode,
+  uuid: string,
+  label: string,
+): Promise<string> {
+  const address = await resolvePublicAddress({
+    host: node.host || node.sni,
+    sni: node.sni,
+  });
+  // Detect the location flag from the node's real technical host/SNI
+  // (e.g. "waw0.amvera.tech") BEFORE swapping in the branded public domain
+  // below — otherwise the flag lookup would only ever see "vpnexus.pro",
+  // which carries no location signal at all.
+  const flag = flagEmojiForNode(node);
+  const flaggedLabel = flag ? `${flag} ${label}` : label;
+  return buildVlessLink(
+    { ...node, host: address.host, sni: address.sni },
+    uuid,
+    flaggedLabel,
+  );
 }
 
 export function buildDeepLink(vlessLink: string): string {
