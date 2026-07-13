@@ -5,18 +5,89 @@ import {
   useListVpnNodes,
   useCreateVpnKey,
   useRevokeVpnKey,
+  useUpdateVpnKey,
   useGetSubscriptionUrl,
   useGetPaymentSettings,
   useCreateExtraSlotOrder,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap, Pencil } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
+
+function EditKeyForm({
+  keyId,
+  initialLabel,
+  initialDescription,
+  onClose,
+}: {
+  keyId: number;
+  initialLabel: string;
+  initialDescription: string;
+  onClose: () => void;
+}) {
+  const [label, setLabel] = useState(initialLabel);
+  const [description, setDescription] = useState(initialDescription);
+  const { mutate: updateKey, isPending } = useUpdateVpnKey();
+  const { toast } = useToast();
+
+  function handleSave() {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    updateKey(
+      { keyId, data: { label: trimmed, description: description.trim() } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+          toast({ title: "Название обновлено" });
+          onClose();
+        },
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : undefined;
+          toast({ title: msg ?? "Не удалось обновить название", variant: "destructive" });
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <Input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="Название устройства"
+        className="rounded-none"
+        autoFocus
+      />
+      <Input
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Описание (необязательно)"
+        className="rounded-none"
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={isPending || !label.trim()}
+          className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {isPending ? "Сохраняем..." : "Сохранить"}
+        </button>
+        <button
+          onClick={onClose}
+          className="border border-border px-4 py-1.5 text-sm hover:bg-muted transition-colors"
+        >
+          Отмена
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -230,6 +301,7 @@ export default function Keys() {
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+  const [editingKeyId, setEditingKeyId] = useState<number | null>(null);
 
   const isAdmin = me?.role === "admin";
   const activeKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => !k.revokedAt);
@@ -432,8 +504,17 @@ export default function Keys() {
                   <div className="flex items-center gap-2 font-bold min-w-0 break-words">
                     <KeyRound className="w-4 h-4 text-primary shrink-0" />
                     {key.label} <span className="text-muted-foreground font-normal font-mono text-sm">· {key.nodeName}</span>
+                    {!key.revokedAt && editingKeyId !== key.id && (
+                      <button
+                        onClick={() => setEditingKeyId(key.id)}
+                        className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+                        title="Переименовать"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
-                  {key.description && (
+                  {key.description && editingKeyId !== key.id && (
                     <p className="text-xs text-muted-foreground mt-1 ml-6 break-words">{key.description}</p>
                   )}
                 </div>
@@ -448,6 +529,14 @@ export default function Keys() {
                   </button>
                 )}
               </div>
+              {editingKeyId === key.id && (
+                <EditKeyForm
+                  keyId={key.id}
+                  initialLabel={key.label}
+                  initialDescription={key.description ?? ""}
+                  onClose={() => setEditingKeyId(null)}
+                />
+              )}
               {key.revokedAt ? (
                 <span className="text-xs font-mono text-muted-foreground">Отозван</span>
               ) : isAdmin ? (

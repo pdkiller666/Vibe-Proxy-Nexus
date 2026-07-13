@@ -7,6 +7,9 @@ import {
   GetSubscriptionUrlResponse,
   ListMyVpnKeysResponse,
   RevokeVpnKeyParams,
+  UpdateVpnKeyBody,
+  UpdateVpnKeyParams,
+  UpdateVpnKeyResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { removeXrayClient, isLocalXrayEnabled } from "../lib/xray";
@@ -87,6 +90,61 @@ router.get("/vpn-keys/subscription-url", requireAuth, async (req, res): Promise<
   const user = req.appUser!;
   const url = await buildSubscriptionUrl(req, user.id);
   res.json(GetSubscriptionUrlResponse.parse({ url }));
+});
+
+router.patch("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> => {
+  const user = req.appUser!;
+  const params = UpdateVpnKeyParams.safeParse(req.params);
+  const body = UpdateVpnKeyBody.safeParse(req.body);
+
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: (params.error ?? body.error)!.message });
+    return;
+  }
+
+  // Trim and reject an empty label — a key must always have a display name.
+  const label = body.data.label?.trim();
+  if (label !== undefined && label.length === 0) {
+    res.status(400).json({ error: "Label cannot be empty" });
+    return;
+  }
+
+  const [existing] = await db
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(and(eq(vpnKeysTable.id, params.data.keyId), eq(vpnKeysTable.userId, user.id)));
+
+  if (!existing) {
+    res.status(404).json({ error: "VPN key not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(vpnKeysTable)
+    .set({
+      ...(label !== undefined ? { label } : {}),
+      ...(body.data.description !== undefined ? { description: body.data.description.trim() || null } : {}),
+    })
+    .where(and(eq(vpnKeysTable.id, existing.key.id), eq(vpnKeysTable.userId, user.id)))
+    .returning();
+
+  if (!updated) {
+    res.status(500).json({ error: "Failed to update VPN key" });
+    return;
+  }
+
+  // The vless link embeds the label as its display remark — regenerate it so
+  // the response reflects the new name immediately (same as the list route).
+  res.json(
+    UpdateVpnKeyResponse.parse({
+      ...updated,
+      nodeName: existing.node.name,
+      vlessLink: updated.revokedAt
+        ? updated.vlessLink
+        : await buildServingVlessLink(existing.node, updated.uuid, updated.label),
+    }),
+  );
 });
 
 router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> => {

@@ -542,6 +542,42 @@ export const CreateVpnKeyResponse = zod.object({
 
 
 /**
+ * @summary Rename a VPN key (label/description)
+ */
+export const UpdateVpnKeyParams = zod.object({
+  "keyId": zod.coerce.number()
+})
+
+
+
+
+export const UpdateVpnKeyBody = zod.object({
+  "label": zod.string().min(1).optional(),
+  "description": zod.string().optional()
+})
+
+export const UpdateVpnKeyResponse = zod.object({
+  "id": zod.number(),
+  "nodeId": zod.number(),
+  "nodeName": zod.string(),
+  "label": zod.string(),
+  "description": zod.string().nullish(),
+  "vlessLink": zod.string(),
+  "deepLink": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "userId": zod.number(),
+  "userEmail": zod.string().optional(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "periodStartedAt": zod.coerce.date(),
+  "lastTrafficAt": zod.coerce.date().nullish()
+})
+
+
+/**
  * @summary Revoke a VPN key
  */
 export const RevokeVpnKeyParams = zod.object({

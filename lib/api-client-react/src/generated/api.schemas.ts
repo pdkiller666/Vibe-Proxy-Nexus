@@ -452,6 +452,12 @@ export interface VpnKeyInput {
   description?: string;
 }
 
+export interface VpnKeyRenameInput {
+  /** @minLength 1 */
+  label?: string;
+  description?: string;
+}
+
 export interface SubscriptionUrl {
   url: string;
 }

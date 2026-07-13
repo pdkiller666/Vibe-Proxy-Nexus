@@ -71,6 +71,7 @@ import type {
   UserRoleUpdate,
   VpnKey,
   VpnKeyInput,
+  VpnKeyRenameInput,
   VpnNode,
   VpnNodeInput,
   VpnNodeUpdate
@@ -1719,6 +1720,77 @@ export const useCreateVpnKey = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateVpnKeyMutationOptions(options));
+    }
+
+export const getUpdateVpnKeyUrl = (keyId: number,) => {
+
+
+
+
+  return `/api/vpn-keys/${keyId}`
+}
+
+/**
+ * @summary Rename a VPN key (label/description)
+ */
+export const updateVpnKey = async (keyId: number,
+    vpnKeyRenameInput: VpnKeyRenameInput, options?: RequestInit): Promise<VpnKey> => {
+
+  return customFetch<VpnKey>(getUpdateVpnKeyUrl(keyId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vpnKeyRenameInput)
+  }
+);}
+
+
+
+
+export const getUpdateVpnKeyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVpnKey>>, TError,{keyId: number;data: BodyType<VpnKeyRenameInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVpnKey>>, TError,{keyId: number;data: BodyType<VpnKeyRenameInput>}, TContext> => {
+
+const mutationKey = ['updateVpnKey'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVpnKey>>, {keyId: number;data: BodyType<VpnKeyRenameInput>}> = (props) => {
+          const {keyId,data} = props ?? {};
+
+          return  updateVpnKey(keyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVpnKeyMutationResult = NonNullable<Awaited<ReturnType<typeof updateVpnKey>>>
+    export type UpdateVpnKeyMutationBody = BodyType<VpnKeyRenameInput>
+    export type UpdateVpnKeyMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Rename a VPN key (label/description)
+ */
+export const useUpdateVpnKey = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVpnKey>>, TError,{keyId: number;data: BodyType<VpnKeyRenameInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVpnKey>>,
+        TError,
+        {keyId: number;data: BodyType<VpnKeyRenameInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateVpnKeyMutationOptions(options));
     }
 
 export const getRevokeVpnKeyUrl = (keyId: number,) => {

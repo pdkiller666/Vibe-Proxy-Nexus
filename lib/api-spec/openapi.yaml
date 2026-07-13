@@ -427,6 +427,29 @@ paths:
                 $ref: "#/components/schemas/VpnKey"
 
   /vpn-keys/{keyId}:
+    patch:
+      operationId: updateVpnKey
+      tags: [vpn-keys]
+      summary: Rename a VPN key (label/description)
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VpnKeyRenameInput"
+      responses:
+        "200":
+          description: Updated VPN key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnKey"
     delete:
       operationId: revokeVpnKey
       tags: [vpn-keys]
@@ -1547,6 +1570,12 @@ components:
       properties:
         nodeId: { type: integer }
         label: { type: string }
+        description: { type: string }
+
+    VpnKeyRenameInput:
+      type: object
+      properties:
+        label: { type: string, minLength: 1 }
         description: { type: string }
 
     SubscriptionUrl:
