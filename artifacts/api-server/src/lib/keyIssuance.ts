@@ -230,6 +230,27 @@ export async function resolveTotalSlots(
 }
 
 /**
+ * True when the user's active subscription has been flagged by
+ * enforceTrafficLimits() as having exceeded its traffic cap for the current
+ * period (see subscriptions.trafficLimitExceededAt schema comment).
+ *
+ * Callers must check this before issuing a brand new key: without it, a user
+ * whose keys were just revoked for exceeding the limit could free up a
+ * device slot and issue a fresh key (which starts at 0 period bytes),
+ * silently bypassing the cap until the new key alone re-exceeds it.
+ */
+export async function isTrafficLimitBlocked(userId: number): Promise<boolean> {
+  const [activeSub] = await db
+    .select({ trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt })
+    .from(subscriptionsTable)
+    .where(and(eq(subscriptionsTable.userId, userId), eq(subscriptionsTable.status, "active")))
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+    .limit(1);
+
+  return Boolean(activeSub?.trafficLimitExceededAt);
+}
+
+/**
  * Guarantees a just-activated subscriber has at least one usable VPN key —
  * the same guarantee registration gives trial users via the auto-issue in
  * auth.ts. Without this, a user whose trial key was revoked (e.g. by the

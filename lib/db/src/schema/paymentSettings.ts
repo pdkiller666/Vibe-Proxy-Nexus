@@ -14,6 +14,14 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   // disabled by default rather than silently offering a free slot. An admin
   // must explicitly opt in here to allow issuing extra slots for free.
   allowFreeExtraDeviceSlot: boolean("allow_free_extra_device_slot").notNull().default(false),
+  // Self-service traffic top-up: price (rubles) for one package of
+  // extraTrafficPackageGb gigabytes, added to the active subscription's
+  // extraTrafficGb for the rest of the current period. Mirrors the
+  // extraDeviceSlot pricing pattern above.
+  extraTrafficPriceRub: integer("extra_traffic_price_rub").notNull().default(0),
+  extraTrafficPackageGb: integer("extra_traffic_package_gb").notNull().default(10),
+  // Same free-grant escape hatch as allowFreeExtraDeviceSlot, for symmetry.
+  allowFreeExtraTraffic: boolean("allow_free_extra_traffic").notNull().default(false),
   trialEnabled: boolean("trial_enabled").notNull().default(false),
   trialDays: integer("trial_days").notNull().default(5),
   // Minimum wallet balance (in rubles) a user must hold/top up before an

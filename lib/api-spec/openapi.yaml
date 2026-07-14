@@ -550,6 +550,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/CancelExtraSlotOrderResult"
 
+  /extra-traffic-order:
+    post:
+      operationId: createExtraTrafficOrder
+      tags: [payments]
+      summary: Start a checkout for an extra traffic package (requires an active subscription with a traffic cap)
+      responses:
+        "201":
+          description: Created checkout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtraTrafficOrderResult"
+
+  /extra-traffic-order/{paymentId}:
+    delete:
+      operationId: deleteExtraTrafficOrder
+      tags: [payments]
+      summary: Cancel a pending extra traffic order
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelExtraTrafficOrderResult"
+
   /support-tickets:
     get:
       operationId: listMyTickets
@@ -1203,6 +1235,8 @@ components:
           referralEarningsKopecks,
           referredUserCount,
           referralLinkHost,
+          extraTrafficGb,
+          trafficLimitExceeded,
         ]
       properties:
         id: { type: integer }
@@ -1222,9 +1256,18 @@ components:
         deviceSlots: { type: integer }
         activeKeyCount: { type: integer }
         balanceKopecks: { type: integer }
-        # Traffic cap for the current plan's period, in gigabytes. Null when
-        # there is no active subscription or the plan has no cap.
+        # Effective traffic cap for the current plan's period, in gigabytes —
+        # already includes any self-service top-up (extraTrafficGb). Null
+        # when there is no active subscription or the plan has no cap.
         trafficLimitGb: { type: ["integer", "null"] }
+        # Extra traffic (GB) purchased on top of the plan's base allowance
+        # for the current subscription period. 0 if none bought.
+        extraTrafficGb: { type: integer }
+        # true once the current subscription's period usage has exceeded its
+        # effective traffic cap — new VPN key issuance is blocked while this
+        # is true (see keyIssuance.ts isTrafficLimitBlocked). Cleared by
+        # buying extra traffic or by the subscription renewing.
+        trafficLimitExceeded: { type: boolean }
         # Sum of periodUpBytes + periodDownBytes across all of the user's
         # non-revoked VPN keys, for showing usage vs trafficLimitGb.
         periodUsageBytes: { type: integer }
@@ -1303,7 +1346,7 @@ components:
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, trialEnabled, trialDays]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -1312,6 +1355,11 @@ components:
         yookassaEnabled: { type: boolean }
         extraDeviceSlotPriceRub: { type: integer }
         allowFreeExtraDeviceSlot: { type: boolean }
+        # Self-service traffic top-up pricing — see paymentSettings schema
+        # comment. Price for one package of extraTrafficPackageGb gigabytes.
+        extraTrafficPriceRub: { type: integer }
+        extraTrafficPackageGb: { type: integer }
+        allowFreeExtraTraffic: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer }
         # Minimum wallet balance (in rubles) a user must top up before an
@@ -1336,6 +1384,9 @@ components:
         yookassaEnabled: { type: boolean }
         extraDeviceSlotPriceRub: { type: integer, minimum: 0 }
         allowFreeExtraDeviceSlot: { type: boolean }
+        extraTrafficPriceRub: { type: integer, minimum: 0 }
+        extraTrafficPackageGb: { type: integer, minimum: 1 }
+        allowFreeExtraTraffic: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer, minimum: 1, maximum: 365 }
         minHourlyTopupRub: { type: integer, minimum: 0 }
@@ -1381,7 +1432,7 @@ components:
 
     PaymentType:
       type: string
-      enum: [subscription, extra_device_slot, balance_topup]
+      enum: [subscription, extra_device_slot, balance_topup, extra_traffic]
 
     Payment:
       type: object
@@ -1394,6 +1445,8 @@ components:
         provider:
           $ref: "#/components/schemas/PaymentProvider"
         amountRub: { type: integer }
+        # For type === extra_traffic only: how many GB this order grants.
+        extraTrafficGb: { type: ["integer", "null"] }
         status:
           $ref: "#/components/schemas/PaymentStatus"
         reference: { type: string }
@@ -1420,6 +1473,7 @@ components:
         provider:
           $ref: "#/components/schemas/PaymentProvider"
         amountRub: { type: integer }
+        extraTrafficGb: { type: ["integer", "null"] }
         status:
           $ref: "#/components/schemas/PaymentStatus"
         reference: { type: string }
@@ -1522,6 +1576,10 @@ components:
         isActive: { type: boolean }
         maxUsers: { type: ["integer", "null"], minimum: 1 }
 
+    RevokedReason:
+      type: string
+      enum: [user, admin, expired, billing, traffic_limit]
+
     VpnKey:
       type: object
       required:
@@ -1550,6 +1608,12 @@ components:
         deepLink: { type: string }
         createdAt: { type: string, format: date-time }
         revokedAt: { type: ["string", "null"], format: date-time }
+        # Why this key was revoked, null while active. See RevokedReason enum
+        # for what each value means to the end user.
+        revokedReason:
+          oneOf:
+            - $ref: "#/components/schemas/RevokedReason"
+            - type: "null"
         userId: { type: integer }
         userEmail: { type: string }
         # Lifetime traffic counters, in bytes, accumulated from Xray's Stats
@@ -1615,6 +1679,7 @@ components:
           periodStartedAt,
           trafficLimitGb,
           trafficLimitExceeded,
+          extraTrafficGb,
           isOnline,
           vpnLastActiveAt,
           activityStatus,
@@ -1667,6 +1732,12 @@ components:
         # subscription or an unlimited plan.
         trafficLimitGb: { type: ["integer", "null"] }
         trafficLimitExceeded: { type: boolean }
+        # Extra traffic (GB) purchased for the currently active subscription.
+        extraTrafficGb: { type: integer }
+        # When the current subscription was flagged as exceeded (see
+        # trafficLimitExceeded); null while under the cap or with no active
+        # subscription.
+        trafficLimitExceededAt: { type: ["string", "null"], format: date-time }
         # The user's genuinely active plan right now (status=active, not
         # expired). Use this for any "what plan is this user on" display —
         # e.g. the traffic summary line — since it can never show a
@@ -1787,6 +1858,25 @@ components:
         freeGranted: { type: boolean }
 
     CancelExtraSlotOrderResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
+    ExtraTrafficOrderResult:
+      type: object
+      required: [amountRub, freeGranted, extraTrafficGb]
+      properties:
+        paymentId: { type: integer }
+        amountRub: { type: integer }
+        # true when the top-up was granted immediately (admin enabled the
+        # free override at price 0) — no checkout/payment flow follows.
+        freeGranted: { type: boolean }
+        # How many GB this order grants (locked in from paymentSettings at
+        # order-creation time — see payments.extraTrafficGb schema comment).
+        extraTrafficGb: { type: integer }
+
+    CancelExtraTrafficOrderResult:
       type: object
       required: [ok]
       properties:

@@ -205,6 +205,84 @@ router.post(
       return;
     }
 
+    // Extra traffic top-up: increment extraTrafficGb on the subscription the
+    // order was placed against and clear the "blocked" flag, mirroring the
+    // extra_device_slot branch above (see confirmPayment.ts for the shared
+    // rationale — this admin route intentionally duplicates that logic, see
+    // the file-level note there).
+    if (payment.type === "extra_traffic") {
+      if (!payment.subscriptionId) {
+        res
+          .status(409)
+          .json({
+            error: "У платежа не указана подписка — невозможно начислить трафик.",
+          });
+        return;
+      }
+
+      const grantedGb = payment.extraTrafficGb ?? 0;
+      let updatedPayment;
+      let affectedUserId: number;
+      try {
+        const result = await db.transaction(async (tx) => {
+          const [sub] = await tx
+            .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, userId: subscriptionsTable.userId })
+            .from(subscriptionsTable)
+            .where(eq(subscriptionsTable.id, payment.subscriptionId!));
+
+          if (!sub || sub.status !== "active") {
+            throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+          }
+
+          await tx
+            .update(subscriptionsTable)
+            .set({
+              extraTrafficGb: sql`${subscriptionsTable.extraTrafficGb} + ${grantedGb}`,
+              trafficLimitExceededAt: null,
+            })
+            .where(eq(subscriptionsTable.id, sub.id));
+
+          const [updatedPay] = await tx
+            .update(paymentsTable)
+            .set({ status: "confirmed", confirmedAt: new Date() })
+            .where(
+              and(
+                eq(paymentsTable.id, payment.id),
+                eq(paymentsTable.status, "pending"),
+              ),
+            )
+            .returning();
+
+          if (!updatedPay) {
+            throw new Error("Payment state changed concurrently");
+          }
+
+          return { updatedPay, userId: sub.userId };
+        });
+        updatedPayment = result.updatedPay;
+        affectedUserId = result.userId;
+      } catch (err) {
+        if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
+          res
+            .status(409)
+            .json({
+              error:
+                "Подписка, к которой относится платёж, больше не активна — трафик не начислен.",
+            });
+          return;
+        }
+        res
+          .status(409)
+          .json({ error: "Payment state changed concurrently, please retry" });
+        return;
+      }
+
+      await ensureActiveKeyForUser(affectedUserId);
+
+      res.json(ConfirmPaymentResponse.parse(withHasScreenshot(updatedPayment)));
+      return;
+    }
+
     // Balance top-up: credit balance_kopecks and log the transaction
     if (payment.type === "balance_topup") {
       const amountKopecks = payment.amountRub * 100;

@@ -78,7 +78,7 @@ router.delete("/admin/vpn-keys/:keyId", requireAuth, requireAdmin, async (req, r
     }
   }
 
-  await db.update(vpnKeysTable).set({ revokedAt: new Date() }).where(eq(vpnKeysTable.id, keyId));
+  await db.update(vpnKeysTable).set({ revokedAt: new Date(), revokedReason: "admin" }).where(eq(vpnKeysTable.id, keyId));
   res.sendStatus(204);
 });
 

@@ -209,6 +209,14 @@ function QRModal({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
+const revokedReasonLabel: Record<string, string> = {
+  user: "отозван пользователем",
+  admin: "отозван администратором",
+  expired: "истёк срок подписки",
+  billing: "закончился баланс",
+  traffic_limit: "исчерпан лимит трафика",
+};
+
 const CLIENTS = [
   { name: "Android: v2rayNG", url: "https://play.google.com/store/apps/details?id=com.v2ray.ang" },
   { name: "Android/iOS: Happ", url: "https://apps.apple.com/app/happ-proxy-utility/id6504287215" },
@@ -538,7 +546,9 @@ export default function Keys() {
                 />
               )}
               {key.revokedAt ? (
-                <span className="text-xs font-mono text-muted-foreground">Отозван</span>
+                <span className="text-xs font-mono text-muted-foreground">
+                  Отозван{key.revokedReason ? ` · ${revokedReasonLabel[key.revokedReason] ?? key.revokedReason}` : ""}
+                </span>
               ) : isAdmin ? (
                 <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
                   <span className="truncate flex-1">{key.vlessLink}</span>

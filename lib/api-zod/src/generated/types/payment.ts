@@ -16,6 +16,8 @@ export interface Payment {
   type: PaymentType;
   provider: PaymentProvider;
   amountRub: number;
+  /** @nullable */
+  extraTrafficGb?: number | null;
   status: PaymentStatus;
   reference: string;
   /** @nullable */

@@ -215,7 +215,7 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
 
       await jobsDb
         .update(vpnKeysTable)
-        .set({ revokedAt: now })
+        .set({ revokedAt: now, revokedReason: "billing" })
         .where(and(inArray(vpnKeysTable.userId, usersToRevoke), isNull(vpnKeysTable.revokedAt)));
     }
 

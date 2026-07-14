@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { RevokedReason } from './revokedReason';
 
 export interface VpnKey {
   id: number;
@@ -18,6 +19,7 @@ export interface VpnKey {
   createdAt: Date;
   /** @nullable */
   revokedAt?: Date | null;
+  revokedReason?: RevokedReason | null;
   userId: number;
   userEmail?: string;
   trafficUpBytes: number;

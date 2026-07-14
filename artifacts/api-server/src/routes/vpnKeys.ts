@@ -15,7 +15,7 @@ import { requireAuth } from "../lib/auth";
 import { removeXrayClient, isLocalXrayEnabled } from "../lib/xray";
 import { buildSubscriptionUrl } from "../lib/subscription";
 import { buildServingVlessLink } from "../lib/vless";
-import { issueKeyForUser, resolveTotalSlots } from "../lib/keyIssuance";
+import { isTrafficLimitBlocked, issueKeyForUser, resolveTotalSlots } from "../lib/keyIssuance";
 
 const router: IRouter = Router();
 
@@ -63,6 +63,17 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
 
   if (totalSlots === null) {
     res.status(403).json({ error: "An active subscription is required to issue a VPN key" });
+    return;
+  }
+
+  // Block issuing a fresh key while the subscription is flagged for
+  // exceeding its traffic cap — otherwise a revoked user could just free a
+  // device slot and issue a brand new key (0 period bytes) to bypass the
+  // limit. Buying extra traffic (or renewing) clears this flag.
+  if (await isTrafficLimitBlocked(user.id)) {
+    res.status(403).json({
+      error: "Лимит трафика по тарифу исчерпан. Докупите трафик или подождите продления подписки, чтобы выпустить новый ключ.",
+    });
     return;
   }
 
@@ -181,7 +192,7 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
   try {
     await db
       .update(vpnKeysTable)
-      .set({ revokedAt: new Date() })
+      .set({ revokedAt: new Date(), revokedReason: "user" })
       .where(and(eq(vpnKeysTable.id, existing.id), eq(vpnKeysTable.userId, user.id)));
   } catch (err) {
     // The client is already gone from Xray but the DB still shows it active.

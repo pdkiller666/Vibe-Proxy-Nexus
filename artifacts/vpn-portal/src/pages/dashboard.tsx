@@ -4,7 +4,12 @@ import {
   useGetMe,
   useListMyVpnKeys,
   useListMyBalanceTransactions,
+  useCreateExtraTrafficOrder,
+  useGetPaymentSettings,
 } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
+import { queryClient } from "@/lib/query-client";
+import { getGetMeQueryKey } from "@workspace/api-client-react";
 import {
   Shield,
   Key,
@@ -82,14 +87,69 @@ function formatDateTime(iso?: string | null) {
 function TrafficSection() {
   const { data: me } = useGetMe();
   const { data: keys, isLoading } = useListMyVpnKeys();
+  const { data: paymentSettings } = useGetPaymentSettings();
+  const { mutate: createTrafficOrder, isPending: orderingTraffic } = useCreateExtraTrafficOrder();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const activeKeys = (keys ?? []).filter((k) => !k.revokedAt);
+  const allKeys = keys ?? [];
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
-  if (activeKeys.length === 0) return null;
+  // Previously this bailed out entirely once every key was revoked (e.g. by
+  // the traffic-limit sweep), which hid the exact information — and the
+  // top-up CTA — a user needs to understand why their VPN stopped working.
+  // Only skip the section if there's truly nothing to show (no keys ever).
+  if (allKeys.length === 0) return null;
 
   const limitBytes = me?.trafficLimitGb ? me.trafficLimitGb * 1024 * 1024 * 1024 : null;
   const usedBytes = me?.periodUsageBytes ?? 0;
   const usagePct = limitBytes ? Math.min(100, (usedBytes / limitBytes) * 100) : null;
+  const exceeded = me?.trafficLimitExceeded ?? false;
+  const nearLimit = !exceeded && usagePct !== null && usagePct >= 80;
+
+  const trafficPrice = paymentSettings?.extraTrafficPriceRub ?? 0;
+  const trafficPackageGb = paymentSettings?.extraTrafficPackageGb ?? 0;
+  const allowFreeTraffic = paymentSettings?.allowFreeExtraTraffic ?? false;
+  const topupDisabled = trafficPrice <= 0 && !allowFreeTraffic;
+
+  function handleBuyTraffic() {
+    createTrafficOrder(undefined, {
+      onSuccess: (data) => {
+        if (data.freeGranted) {
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+          toast({ title: `Начислено ${data.extraTrafficGb} ГБ бесплатно` });
+          return;
+        }
+        setLocation(`/checkout/traffic/${data.paymentId}`);
+      },
+      onError: (err: unknown) => {
+        const body = err as { paymentId?: number; message?: string };
+        if (body?.paymentId) {
+          setLocation(`/checkout/traffic/${body.paymentId}`);
+          return;
+        }
+        toast({
+          title: err instanceof Error ? err.message : "Не удалось создать заявку",
+          variant: "destructive",
+        });
+      },
+    });
+  }
+
+  const buyTrafficButton = limitBytes !== null && (
+    <button
+      onClick={handleBuyTraffic}
+      disabled={orderingTraffic || topupDisabled}
+      title={topupDisabled ? "Покупка дополнительного трафика временно недоступна" : undefined}
+      className="shrink-0 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
+    >
+      {orderingTraffic
+        ? "Создаём заявку..."
+        : trafficPrice > 0
+          ? `+${trafficPackageGb} ГБ — ${trafficPrice} ₽`
+          : `+${trafficPackageGb} ГБ`}
+    </button>
+  );
 
   return (
     <div className="bg-card border border-border p-5 space-y-4">
@@ -100,17 +160,46 @@ function TrafficSection() {
         </p>
       </div>
 
+      {exceeded && (
+        <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/30 p-4 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <span>
+              Лимит трафика на текущий период исчерпан — ваши ключи VPN отозваны. Докупите трафик, чтобы сразу
+              восстановить доступ, либо дождитесь начала следующего периода.
+            </span>
+            {limitBytes !== null && <div>{buyTrafficButton}</div>}
+          </div>
+        </div>
+      )}
+
+      {nearLimit && (
+        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 text-sm text-orange-700">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <span>
+              Использовано {usagePct!.toFixed(0)}% лимита трафика на этот период. Докупите трафик заранее, чтобы
+              избежать отключения ключей.
+            </span>
+            {limitBytes !== null && <div>{buyTrafficButton}</div>}
+          </div>
+        </div>
+      )}
+
       {limitBytes !== null && (
         <div>
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
             <span>
               {formatBytes(usedBytes)} из {formatBytes(limitBytes)}
+              {(me?.extraTrafficGb ?? 0) > 0 && ` (включая +${me!.extraTrafficGb} ГБ докупленных)`}
             </span>
             <span>{usagePct!.toFixed(0)}%</span>
           </div>
           <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${usagePct! >= 90 ? "bg-orange-500" : "bg-primary"}`}
+              className={`h-full rounded-full transition-all ${
+                exceeded ? "bg-destructive" : usagePct! >= 80 ? "bg-orange-500" : "bg-primary"
+              }`}
               style={{ width: `${Math.max(2, usagePct!)}%` }}
             />
           </div>
@@ -122,22 +211,28 @@ function TrafficSection() {
         </p>
       )}
 
-      <div className="space-y-2">
-        {activeKeys.map((key) => (
-          <div key={key.id} className="flex items-center justify-between gap-3 border-t border-border pt-2 first:border-0 first:pt-0">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate">{key.label}</p>
-              <p className="text-xs text-muted-foreground font-mono">
-                Активность: {key.lastTrafficAt ? formatDateTime(key.lastTrafficAt) : "нет данных"}
-              </p>
+      {!exceeded && !nearLimit && limitBytes !== null && (
+        <div className="flex justify-end">{buyTrafficButton}</div>
+      )}
+
+      {activeKeys.length > 0 && (
+        <div className="space-y-2">
+          {activeKeys.map((key) => (
+            <div key={key.id} className="flex items-center justify-between gap-3 border-t border-border pt-2 first:border-0 first:pt-0">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{key.label}</p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Активность: {key.lastTrafficAt ? formatDateTime(key.lastTrafficAt) : "нет данных"}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-sm font-bold">{formatBytes(key.periodUpBytes + key.periodDownBytes)}</p>
+                <p className="text-xs text-muted-foreground">за период</p>
+              </div>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-sm font-bold">{formatBytes(key.periodUpBytes + key.periodDownBytes)}</p>
-              <p className="text-xs text-muted-foreground">за период</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

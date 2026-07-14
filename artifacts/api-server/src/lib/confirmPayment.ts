@@ -91,6 +91,70 @@ export async function confirmPaymentById(
     }
   }
 
+  if (payment.type === "extra_traffic") {
+    if (!payment.subscriptionId) {
+      return {
+        ok: false,
+        status: 409,
+        error: "У платежа не указана подписка — невозможно начислить трафик.",
+      };
+    }
+    const grantedGb = payment.extraTrafficGb ?? 0;
+    try {
+      const updatedPayment = await db.transaction(async (tx) => {
+        const [sub] = await tx
+          .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, userId: subscriptionsTable.userId })
+          .from(subscriptionsTable)
+          .where(eq(subscriptionsTable.id, payment.subscriptionId!));
+        if (!sub || sub.status !== "active")
+          throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+        // Atomic increment (same pattern as extra_device_slot above) plus
+        // clearing the exceeded flag so a blocked user regains the ability
+        // to issue a key immediately, without waiting for the next
+        // enforcement poll or a full renewal.
+        await tx
+          .update(subscriptionsTable)
+          .set({
+            extraTrafficGb: sql`${subscriptionsTable.extraTrafficGb} + ${grantedGb}`,
+            trafficLimitExceededAt: null,
+          })
+          .where(eq(subscriptionsTable.id, sub.id));
+        const [updatedPay] = await tx
+          .update(paymentsTable)
+          .set({ status: "confirmed", confirmedAt: new Date() })
+          .where(
+            and(
+              eq(paymentsTable.id, payment.id),
+              eq(paymentsTable.status, "pending"),
+            ),
+          )
+          .returning();
+        if (!updatedPay) throw new Error("Payment state changed concurrently");
+        return { updatedPay, userId: sub.userId };
+      });
+      // Outside the transaction, same rationale as the subscription branch
+      // below: if the user's keys were revoked for exceeding the old limit,
+      // make sure they end up with at least one usable key again now that
+      // the cap has been raised.
+      await ensureActiveKeyForUser(updatedPayment.userId);
+      return { ok: true, payment: updatedPayment.updatedPay };
+    } catch (err) {
+      if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
+        return {
+          ok: false,
+          status: 409,
+          error:
+            "Подписка, к которой относится платёж, больше не активна — трафик не начислен.",
+        };
+      }
+      return {
+        ok: false,
+        status: 409,
+        error: "Payment state changed concurrently, please retry",
+      };
+    }
+  }
+
   if (payment.type === "balance_topup") {
     const amountKopecks = payment.amountRub * 100;
     const providerLabel =

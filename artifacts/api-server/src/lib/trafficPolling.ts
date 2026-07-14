@@ -98,7 +98,9 @@ export async function enforceTrafficLimits(): Promise<number> {
     jobsDb
       .selectDistinctOn([subscriptionsTable.userId], {
         userId: subscriptionsTable.userId,
+        subscriptionId: subscriptionsTable.id,
         trafficLimitGb: plansTable.trafficLimitGb,
+        extraTrafficGb: subscriptionsTable.extraTrafficGb,
       })
       .from(subscriptionsTable)
       .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
@@ -118,7 +120,9 @@ export async function enforceTrafficLimits(): Promise<number> {
     .with(currentPlanLimitByUser)
     .select({
       userId: vpnKeysTable.userId,
+      subscriptionId: currentPlanLimitByUser.subscriptionId,
       trafficLimitGb: currentPlanLimitByUser.trafficLimitGb,
+      extraTrafficGb: currentPlanLimitByUser.extraTrafficGb,
       periodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`.as(
         "period_bytes",
       ),
@@ -126,14 +130,23 @@ export async function enforceTrafficLimits(): Promise<number> {
     .from(vpnKeysTable)
     .innerJoin(currentPlanLimitByUser, eq(currentPlanLimitByUser.userId, vpnKeysTable.userId))
     .where(isNull(vpnKeysTable.revokedAt))
-    .groupBy(vpnKeysTable.userId, currentPlanLimitByUser.trafficLimitGb);
+    .groupBy(
+      vpnKeysTable.userId,
+      currentPlanLimitByUser.subscriptionId,
+      currentPlanLimitByUser.trafficLimitGb,
+      currentPlanLimitByUser.extraTrafficGb,
+    );
   const usage = rawUsage.map((r) => ({ ...r, periodBytes: Number(r.periodBytes) }));
 
   let revokedUsers = 0;
 
   for (const row of usage) {
     if (row.trafficLimitGb == null) continue;
-    const limitBytes = row.trafficLimitGb * 1024 * 1024 * 1024;
+    // Effective cap = the plan's base allowance plus any traffic the user
+    // has self-service topped-up for THIS subscription period (see
+    // extraTrafficGb schema comment) — buying more GB must actually raise
+    // the ceiling enforcement checks against, not just be cosmetic.
+    const limitBytes = (row.trafficLimitGb + row.extraTrafficGb) * 1024 * 1024 * 1024;
     if (row.periodBytes < limitBytes) continue;
 
     const keysToRevoke = await jobsDb
@@ -155,8 +168,20 @@ export async function enforceTrafficLimits(): Promise<number> {
 
     await jobsDb
       .update(vpnKeysTable)
-      .set({ revokedAt: now })
+      .set({ revokedAt: now, revokedReason: "traffic_limit" })
       .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
+
+    // Persist the "blocked" flag on the subscription itself — this is what
+    // closes the reissue loophole: keyIssuance.ts refuses to issue a brand
+    // new key (which would start at 0 period bytes) while this is set, so
+    // simply revoking-and-reissuing a device no longer bypasses the cap.
+    // Only set it if not already set, so a top-up that clears it (see
+    // extraTrafficOrder.ts / confirmPayment.ts) isn't immediately
+    // re-stamped with a fresh timestamp by this same loop iteration.
+    await jobsDb
+      .update(subscriptionsTable)
+      .set({ trafficLimitExceededAt: now })
+      .where(and(eq(subscriptionsTable.id, row.subscriptionId), isNull(subscriptionsTable.trafficLimitExceededAt)));
 
     revokedUsers += 1;
     logger.info(

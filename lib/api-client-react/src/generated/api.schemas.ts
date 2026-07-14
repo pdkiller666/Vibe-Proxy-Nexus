@@ -120,6 +120,8 @@ export interface Me {
   balanceKopecks: number;
   /** @nullable */
   trafficLimitGb?: number | null;
+  extraTrafficGb: number;
+  trafficLimitExceeded: boolean;
   periodUsageBytes?: number;
   referralCode: string;
   referralCommissionPercent: number;
@@ -202,6 +204,9 @@ export interface PaymentSettings {
   yookassaEnabled?: boolean;
   extraDeviceSlotPriceRub: number;
   allowFreeExtraDeviceSlot: boolean;
+  extraTrafficPriceRub: number;
+  extraTrafficPackageGb: number;
+  allowFreeExtraTraffic: boolean;
   trialEnabled: boolean;
   trialDays: number;
   minHourlyTopupRub?: number;
@@ -218,6 +223,11 @@ export interface PaymentSettingsUpdate {
   /** @minimum 0 */
   extraDeviceSlotPriceRub?: number;
   allowFreeExtraDeviceSlot?: boolean;
+  /** @minimum 0 */
+  extraTrafficPriceRub?: number;
+  /** @minimum 1 */
+  extraTrafficPackageGb?: number;
+  allowFreeExtraTraffic?: boolean;
   trialEnabled?: boolean;
   /**
      * @minimum 1
@@ -289,6 +299,7 @@ export const PaymentType = {
   subscription: 'subscription',
   extra_device_slot: 'extra_device_slot',
   balance_topup: 'balance_topup',
+  extra_traffic: 'extra_traffic',
 } as const;
 
 export interface Payment {
@@ -298,6 +309,8 @@ export interface Payment {
   type: PaymentType;
   provider: PaymentProvider;
   amountRub: number;
+  /** @nullable */
+  extraTrafficGb?: number | null;
   status: PaymentStatus;
   reference: string;
   /** @nullable */
@@ -321,6 +334,8 @@ export interface AdminPayment {
   type: PaymentType;
   provider: PaymentProvider;
   amountRub: number;
+  /** @nullable */
+  extraTrafficGb?: number | null;
   status: PaymentStatus;
   reference: string;
   /** @nullable */
@@ -423,6 +438,17 @@ export interface VpnNodeUpdate {
   maxUsers?: number | null;
 }
 
+export type RevokedReason = typeof RevokedReason[keyof typeof RevokedReason];
+
+
+export const RevokedReason = {
+  user: 'user',
+  admin: 'admin',
+  expired: 'expired',
+  billing: 'billing',
+  traffic_limit: 'traffic_limit',
+} as const;
+
 export interface VpnKey {
   id: number;
   nodeId: number;
@@ -435,6 +461,7 @@ export interface VpnKey {
   createdAt: string;
   /** @nullable */
   revokedAt?: string | null;
+  revokedReason?: RevokedReason | null;
   userId: number;
   userEmail?: string;
   trafficUpBytes: number;
@@ -521,6 +548,9 @@ export interface AdminUser {
   /** @nullable */
   trafficLimitGb: number | null;
   trafficLimitExceeded: boolean;
+  extraTrafficGb: number;
+  /** @nullable */
+  trafficLimitExceededAt?: string | null;
   /** @nullable */
   activePlanName?: string | null;
   /** @nullable */
@@ -600,6 +630,17 @@ export interface ExtraSlotOrderResult {
 }
 
 export interface CancelExtraSlotOrderResult {
+  ok: boolean;
+}
+
+export interface ExtraTrafficOrderResult {
+  paymentId?: number;
+  amountRub: number;
+  freeGranted: boolean;
+  extraTrafficGb: number;
+}
+
+export interface CancelExtraTrafficOrderResult {
   ok: boolean;
 }
 

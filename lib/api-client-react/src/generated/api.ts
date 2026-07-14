@@ -30,6 +30,7 @@ import type {
   BalanceTransaction,
   CancelBalanceTopupOrderResult,
   CancelExtraSlotOrderResult,
+  CancelExtraTrafficOrderResult,
   ChangeEmailInput,
   ChangePasswordInput,
   ChangePasswordResult,
@@ -38,6 +39,7 @@ import type {
   DeviceSlotsUpdate,
   ErrorEnvelope,
   ExtraSlotOrderResult,
+  ExtraTrafficOrderResult,
   ForgotPasswordInput,
   ForgotPasswordResult,
   HealthStatus,
@@ -2218,6 +2220,146 @@ export const useDeleteExtraSlotOrder = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteExtraSlotOrderMutationOptions(options));
+    }
+
+export const getCreateExtraTrafficOrderUrl = () => {
+
+
+
+
+  return `/api/extra-traffic-order`
+}
+
+/**
+ * @summary Start a checkout for an extra traffic package (requires an active subscription with a traffic cap)
+ */
+export const createExtraTrafficOrder = async ( options?: RequestInit): Promise<ExtraTrafficOrderResult> => {
+
+  return customFetch<ExtraTrafficOrderResult>(getCreateExtraTrafficOrderUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCreateExtraTrafficOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExtraTrafficOrder>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createExtraTrafficOrder>>, TError,void, TContext> => {
+
+const mutationKey = ['createExtraTrafficOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createExtraTrafficOrder>>, void> = () => {
+
+
+          return  createExtraTrafficOrder(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateExtraTrafficOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createExtraTrafficOrder>>>
+
+    export type CreateExtraTrafficOrderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start a checkout for an extra traffic package (requires an active subscription with a traffic cap)
+ */
+export const useCreateExtraTrafficOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExtraTrafficOrder>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createExtraTrafficOrder>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateExtraTrafficOrderMutationOptions(options));
+    }
+
+export const getDeleteExtraTrafficOrderUrl = (paymentId: number,) => {
+
+
+
+
+  return `/api/extra-traffic-order/${paymentId}`
+}
+
+/**
+ * @summary Cancel a pending extra traffic order
+ */
+export const deleteExtraTrafficOrder = async (paymentId: number, options?: RequestInit): Promise<CancelExtraTrafficOrderResult> => {
+
+  return customFetch<CancelExtraTrafficOrderResult>(getDeleteExtraTrafficOrderUrl(paymentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteExtraTrafficOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExtraTrafficOrder>>, TError,{paymentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteExtraTrafficOrder>>, TError,{paymentId: number}, TContext> => {
+
+const mutationKey = ['deleteExtraTrafficOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteExtraTrafficOrder>>, {paymentId: number}> = (props) => {
+          const {paymentId} = props ?? {};
+
+          return  deleteExtraTrafficOrder(paymentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteExtraTrafficOrderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteExtraTrafficOrder>>>
+
+    export type DeleteExtraTrafficOrderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Cancel a pending extra traffic order
+ */
+export const useDeleteExtraTrafficOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExtraTrafficOrder>>, TError,{paymentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteExtraTrafficOrder>>,
+        TError,
+        {paymentId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteExtraTrafficOrderMutationOptions(options));
     }
 
 export const getListMyTicketsUrl = () => {

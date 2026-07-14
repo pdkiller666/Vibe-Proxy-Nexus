@@ -101,6 +101,8 @@ async function enrichUsersWithTraffic(users: User[]) {
       trafficLimitGb: plansTable.trafficLimitGb,
       planName: plansTable.name,
       extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
+      extraTrafficGb: subscriptionsTable.extraTrafficGb,
+      trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
@@ -126,6 +128,8 @@ async function enrichUsersWithTraffic(users: User[]) {
   // carry over.
   const activeSubscriptionIdByUser = new Map(activeRows.map((r) => [r.userId, r.subscriptionId]));
   const extraDeviceSlotsByUser = new Map(activeRows.map((r) => [r.userId, r.extraDeviceSlots]));
+  const extraTrafficGbByUser = new Map(activeRows.map((r) => [r.userId, r.extraTrafficGb]));
+  const trafficLimitExceededAtByUser = new Map(activeRows.map((r) => [r.userId, r.trafficLimitExceededAt]));
 
   // Referral info: who referred each user in (by email, for display), and
   // how many accounts each user has referred in themselves.
@@ -165,6 +169,7 @@ async function enrichUsersWithTraffic(users: User[]) {
   return users.map((user) => {
     const traffic = trafficByUser.get(user.id);
     const trafficLimitGb = limitByUser.get(user.id) ?? null;
+    const extraTrafficGb = extraTrafficGbByUser.get(user.id) ?? 0;
     const current = currentByUser.get(user.id);
     const periodBytes = (traffic?.periodUpBytes ?? 0) + (traffic?.periodDownBytes ?? 0);
     // Raw sql<> expressions come back from pg as strings, not Date objects —
@@ -196,7 +201,14 @@ async function enrichUsersWithTraffic(users: User[]) {
       periodDownBytes: traffic?.periodDownBytes ?? 0,
       periodStartedAt: traffic?.periodStartedAt ?? null,
       trafficLimitGb,
-      trafficLimitExceeded: trafficLimitGb != null && periodBytes >= trafficLimitGb * 1024 * 1024 * 1024,
+      // Include extraTrafficGb (self-service top-ups, see schema comment) in
+      // the ceiling here too — otherwise a user who topped up would still
+      // show as "exceeded" in the admin panel even though enforcement (which
+      // does account for it) no longer considers them over the limit.
+      trafficLimitExceeded:
+        trafficLimitGb != null && periodBytes >= (trafficLimitGb + extraTrafficGb) * 1024 * 1024 * 1024,
+      extraTrafficGb,
+      trafficLimitExceededAt: trafficLimitExceededAtByUser.get(user.id) ?? null,
       activePlanName: activePlanNameByUser.get(user.id) ?? null,
       activePlanId: activePlanIdByUser.get(user.id) ?? null,
       extraDeviceSlots: extraDeviceSlotsByUser.get(user.id) ?? 0,

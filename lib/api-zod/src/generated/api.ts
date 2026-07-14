@@ -48,6 +48,8 @@ export const RegisterResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceeded": zod.boolean(),
   "periodUsageBytes": zod.number().optional(),
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
@@ -84,6 +86,8 @@ export const LoginResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceeded": zod.boolean(),
   "periodUsageBytes": zod.number().optional(),
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
@@ -148,6 +152,8 @@ export const GetMeResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceeded": zod.boolean(),
   "periodUsageBytes": zod.number().optional(),
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
@@ -179,6 +185,8 @@ export const UpdateMeResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceeded": zod.boolean(),
   "periodUsageBytes": zod.number().optional(),
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
@@ -215,6 +223,8 @@ export const ChangeMyEmailResponse = zod.object({
   "activeKeyCount": zod.number(),
   "balanceKopecks": zod.number(),
   "trafficLimitGb": zod.number().nullish(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceeded": zod.boolean(),
   "periodUsageBytes": zod.number().optional(),
   "referralCode": zod.string(),
   "referralCommissionPercent": zod.number(),
@@ -274,6 +284,9 @@ export const GetPaymentSettingsResponse = zod.object({
   "yookassaEnabled": zod.boolean().optional(),
   "extraDeviceSlotPriceRub": zod.number(),
   "allowFreeExtraDeviceSlot": zod.boolean(),
+  "extraTrafficPriceRub": zod.number(),
+  "extraTrafficPackageGb": zod.number(),
+  "allowFreeExtraTraffic": zod.boolean(),
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number(),
   "minHourlyTopupRub": zod.number().optional(),
@@ -362,9 +375,10 @@ export const CreateSubscriptionResponse = zod.object({
   "payment": zod.union([zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
   "provider": zod.enum(['manual_sbp', 'yookassa', 'freekassa']),
   "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
@@ -382,9 +396,10 @@ export const CreateSubscriptionResponse = zod.object({
 export const ListMyPaymentsResponseItem = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
   "provider": zod.enum(['manual_sbp', 'yookassa', 'freekassa']),
   "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
@@ -413,9 +428,10 @@ export const UpdatePaymentNoteBody = zod.object({
 export const UpdatePaymentNoteResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
   "provider": zod.enum(['manual_sbp', 'yookassa', 'freekassa']),
   "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
@@ -448,9 +464,10 @@ export const UpdatePaymentScreenshotBody = zod.object({
 export const UpdatePaymentScreenshotResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
   "provider": zod.enum(['manual_sbp', 'yookassa', 'freekassa']),
   "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
@@ -499,6 +516,7 @@ export const ListMyVpnKeysResponseItem = zod.object({
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullish(),
+  "revokedReason": zod.union([zod.enum(['user', 'admin', 'expired', 'billing', 'traffic_limit']),zod.null()]).optional(),
   "userId": zod.number(),
   "userEmail": zod.string().optional(),
   "trafficUpBytes": zod.number(),
@@ -530,6 +548,7 @@ export const CreateVpnKeyResponse = zod.object({
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullish(),
+  "revokedReason": zod.union([zod.enum(['user', 'admin', 'expired', 'billing', 'traffic_limit']),zod.null()]).optional(),
   "userId": zod.number(),
   "userEmail": zod.string().optional(),
   "trafficUpBytes": zod.number(),
@@ -566,6 +585,7 @@ export const UpdateVpnKeyResponse = zod.object({
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullish(),
+  "revokedReason": zod.union([zod.enum(['user', 'admin', 'expired', 'billing', 'traffic_limit']),zod.null()]).optional(),
   "userId": zod.number(),
   "userEmail": zod.string().optional(),
   "trafficUpBytes": zod.number(),
@@ -641,6 +661,29 @@ export const DeleteExtraSlotOrderParams = zod.object({
 })
 
 export const DeleteExtraSlotOrderResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Start a checkout for an extra traffic package (requires an active subscription with a traffic cap)
+ */
+export const CreateExtraTrafficOrderResponse = zod.object({
+  "paymentId": zod.number().optional(),
+  "amountRub": zod.number(),
+  "freeGranted": zod.boolean(),
+  "extraTrafficGb": zod.number()
+})
+
+
+/**
+ * @summary Cancel a pending extra traffic order
+ */
+export const DeleteExtraTrafficOrderParams = zod.object({
+  "paymentId": zod.coerce.number()
+})
+
+export const DeleteExtraTrafficOrderResponse = zod.object({
   "ok": zod.boolean()
 })
 
@@ -863,6 +906,9 @@ export const DeletePlanResponse = zod.void()
  */
 export const updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin = 0;
 
+export const updatePaymentSettingsBodyExtraTrafficPriceRubMin = 0;
+
+
 export const updatePaymentSettingsBodyTrialDaysMax = 365;
 
 export const updatePaymentSettingsBodyMinHourlyTopupRubMin = 0;
@@ -880,6 +926,9 @@ export const UpdatePaymentSettingsBody = zod.object({
   "yookassaEnabled": zod.boolean().optional(),
   "extraDeviceSlotPriceRub": zod.number().min(updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin).optional(),
   "allowFreeExtraDeviceSlot": zod.boolean().optional(),
+  "extraTrafficPriceRub": zod.number().min(updatePaymentSettingsBodyExtraTrafficPriceRubMin).optional(),
+  "extraTrafficPackageGb": zod.number().min(1).optional(),
+  "allowFreeExtraTraffic": zod.boolean().optional(),
   "trialEnabled": zod.boolean().optional(),
   "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional(),
   "minHourlyTopupRub": zod.number().min(updatePaymentSettingsBodyMinHourlyTopupRubMin).optional(),
@@ -895,6 +944,9 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "yookassaEnabled": zod.boolean().optional(),
   "extraDeviceSlotPriceRub": zod.number(),
   "allowFreeExtraDeviceSlot": zod.boolean(),
+  "extraTrafficPriceRub": zod.number(),
+  "extraTrafficPackageGb": zod.number(),
+  "allowFreeExtraTraffic": zod.boolean(),
   "trialEnabled": zod.boolean(),
   "trialDays": zod.number(),
   "minHourlyTopupRub": zod.number().optional(),
@@ -916,9 +968,10 @@ export const ListAdminPaymentsResponseItem = zod.object({
   "userId": zod.number(),
   "userEmail": zod.string(),
   "planName": zod.string().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
   "provider": zod.enum(['manual_sbp', 'yookassa', 'freekassa']),
   "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
@@ -940,9 +993,10 @@ export const ConfirmPaymentParams = zod.object({
 export const ConfirmPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
   "provider": zod.enum(['manual_sbp', 'yookassa', 'freekassa']),
   "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
@@ -967,9 +1021,10 @@ export const RejectPaymentBody = zod.object({
 export const RejectPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
-  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup']),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
   "provider": zod.enum(['manual_sbp', 'yookassa', 'freekassa']),
   "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
@@ -1097,6 +1152,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "periodStartedAt": zod.coerce.date().nullable(),
   "trafficLimitGb": zod.number().nullable(),
   "trafficLimitExceeded": zod.boolean(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceededAt": zod.coerce.date().nullish(),
   "activePlanName": zod.string().nullish(),
   "activePlanId": zod.number().nullish(),
   "planId": zod.number().nullish(),
@@ -1120,6 +1177,7 @@ export const ListAdminVpnKeysResponseItem = zod.object({
   "deepLink": zod.string(),
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullish(),
+  "revokedReason": zod.union([zod.enum(['user', 'admin', 'expired', 'billing', 'traffic_limit']),zod.null()]).optional(),
   "userId": zod.number(),
   "userEmail": zod.string().optional(),
   "trafficUpBytes": zod.number(),
@@ -1190,6 +1248,8 @@ export const UpdateUserProfileResponse = zod.object({
   "periodStartedAt": zod.coerce.date().nullable(),
   "trafficLimitGb": zod.number().nullable(),
   "trafficLimitExceeded": zod.boolean(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceededAt": zod.coerce.date().nullish(),
   "activePlanName": zod.string().nullish(),
   "activePlanId": zod.number().nullish(),
   "planId": zod.number().nullish(),
@@ -1244,6 +1304,8 @@ export const UpdateUserRoleResponse = zod.object({
   "periodStartedAt": zod.coerce.date().nullable(),
   "trafficLimitGb": zod.number().nullable(),
   "trafficLimitExceeded": zod.boolean(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceededAt": zod.coerce.date().nullish(),
   "activePlanName": zod.string().nullish(),
   "activePlanId": zod.number().nullish(),
   "planId": zod.number().nullish(),
@@ -1292,6 +1354,8 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "periodStartedAt": zod.coerce.date().nullable(),
   "trafficLimitGb": zod.number().nullable(),
   "trafficLimitExceeded": zod.boolean(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceededAt": zod.coerce.date().nullish(),
   "activePlanName": zod.string().nullish(),
   "activePlanId": zod.number().nullish(),
   "planId": zod.number().nullish(),
@@ -1340,6 +1404,8 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "periodStartedAt": zod.coerce.date().nullable(),
   "trafficLimitGb": zod.number().nullable(),
   "trafficLimitExceeded": zod.boolean(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceededAt": zod.coerce.date().nullish(),
   "activePlanName": zod.string().nullish(),
   "activePlanId": zod.number().nullish(),
   "planId": zod.number().nullish(),

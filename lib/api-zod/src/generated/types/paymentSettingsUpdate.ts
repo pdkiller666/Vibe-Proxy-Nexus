@@ -15,6 +15,11 @@ export interface PaymentSettingsUpdate {
   /** @minimum 0 */
   extraDeviceSlotPriceRub?: number;
   allowFreeExtraDeviceSlot?: boolean;
+  /** @minimum 0 */
+  extraTrafficPriceRub?: number;
+  /** @minimum 1 */
+  extraTrafficPackageGb?: number;
+  allowFreeExtraTraffic?: boolean;
   trialEnabled?: boolean;
   /**
      * @minimum 1

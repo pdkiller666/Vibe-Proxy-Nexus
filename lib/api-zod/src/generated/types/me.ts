@@ -29,6 +29,8 @@ export interface Me {
   balanceKopecks: number;
   /** @nullable */
   trafficLimitGb?: number | null;
+  extraTrafficGb: number;
+  trafficLimitExceeded: boolean;
   periodUsageBytes?: number;
   referralCode: string;
   referralCommissionPercent: number;

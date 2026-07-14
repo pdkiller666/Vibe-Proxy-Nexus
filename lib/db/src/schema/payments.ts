@@ -6,7 +6,7 @@ import { subscriptionsTable } from "./subscriptions";
 
 export const paymentProviderValues = ["manual_sbp", "yookassa", "freekassa"] as const;
 export const paymentStatusValues = ["pending", "confirmed", "rejected"] as const;
-export const paymentTypeValues = ["subscription", "extra_device_slot", "balance_topup"] as const;
+export const paymentTypeValues = ["subscription", "extra_device_slot", "balance_topup", "extra_traffic"] as const;
 
 export const paymentsTable = pgTable(
   "payments",
@@ -20,6 +20,12 @@ export const paymentsTable = pgTable(
     type: text("type", { enum: paymentTypeValues }).notNull().default("subscription"),
     provider: text("provider", { enum: paymentProviderValues }).notNull(),
     amountRub: integer("amount_rub").notNull(),
+    // For type === "extra_traffic" only: how many GB this specific order
+    // grants, captured at order-creation time from the then-current
+    // paymentSettings.extraTrafficPackageGb. Locking it in per-payment means
+    // a later admin price/package-size change never retroactively changes
+    // what an already-placed (or already-confirmed) order is worth.
+    extraTrafficGb: integer("extra_traffic_gb"),
     status: text("status", { enum: paymentStatusValues }).notNull().default("pending"),
     reference: text("reference").notNull(),
     userNote: text("user_note"),

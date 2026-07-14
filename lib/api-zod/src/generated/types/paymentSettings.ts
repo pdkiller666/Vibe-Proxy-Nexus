@@ -15,6 +15,9 @@ export interface PaymentSettings {
   yookassaEnabled?: boolean;
   extraDeviceSlotPriceRub: number;
   allowFreeExtraDeviceSlot: boolean;
+  extraTrafficPriceRub: number;
+  extraTrafficPackageGb: number;
+  allowFreeExtraTraffic: boolean;
   trialEnabled: boolean;
   trialDays: number;
   minHourlyTopupRub?: number;

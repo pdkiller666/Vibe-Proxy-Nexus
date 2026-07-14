@@ -13,4 +13,5 @@ export const PaymentType = {
   subscription: 'subscription',
   extra_device_slot: 'extra_device_slot',
   balance_topup: 'balance_topup',
+  extra_traffic: 'extra_traffic',
 } as const;

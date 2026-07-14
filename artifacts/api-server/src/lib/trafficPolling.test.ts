@@ -537,4 +537,71 @@ describe("enforceTrafficLimits", () => {
     const key = await getKey(keyId);
     expect(key.revokedAt).toBeNull();
   });
+
+  // -------------------------------------------------------------------------
+  // Reissue-loophole closure: revokedReason + trafficLimitExceededAt flag
+  // -------------------------------------------------------------------------
+
+  it("stamps revokedReason='traffic_limit' and sets trafficLimitExceededAt on the subscription", async () => {
+    const planId = await seedPlan(5); // 5 GB cap
+    const subscriptionId = await seedActiveSubscription(planId);
+
+    const OVER_LIMIT_BYTES = 6 * 1024 * 1024 * 1024;
+    const keyId = await seedKey({
+      periodUpBytes: Math.floor(OVER_LIMIT_BYTES / 2),
+      periodDownBytes: Math.ceil(OVER_LIMIT_BYTES / 2),
+    });
+
+    await enforceTrafficLimits();
+
+    const key = await getKey(keyId);
+    expect(key.revokedAt).not.toBeNull();
+    expect(key.revokedReason).toBe("traffic_limit");
+
+    const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
+    expect(sub!.trafficLimitExceededAt).not.toBeNull();
+  });
+
+  it("raises the effective cap by extraTrafficGb, so a topped-up user is not revoked", async () => {
+    const planId = await seedPlan(5); // 5 GB base cap
+    const subscriptionId = await seedActiveSubscription(planId);
+    // Top up +5 GB — total effective cap is now 10 GB.
+    await db
+      .update(subscriptionsTable)
+      .set({ extraTrafficGb: 5 })
+      .where(eq(subscriptionsTable.id, subscriptionId));
+
+    // 6 GB used: over the base 5 GB cap, but under the effective 10 GB cap.
+    const USED_BYTES = 6 * 1024 * 1024 * 1024;
+    const keyId = await seedKey({
+      periodUpBytes: Math.floor(USED_BYTES / 2),
+      periodDownBytes: Math.ceil(USED_BYTES / 2),
+    });
+
+    await enforceTrafficLimits();
+
+    const key = await getKey(keyId);
+    expect(key.revokedAt).toBeNull();
+  });
+
+  it("does not re-stamp trafficLimitExceededAt once already set (top-up clears it independently)", async () => {
+    const planId = await seedPlan(5);
+    const subscriptionId = await seedActiveSubscription(planId);
+    const alreadyFlaggedAt = new Date(Date.now() - 60_000);
+    await db
+      .update(subscriptionsTable)
+      .set({ trafficLimitExceededAt: alreadyFlaggedAt })
+      .where(eq(subscriptionsTable.id, subscriptionId));
+
+    const OVER_LIMIT_BYTES = 6 * 1024 * 1024 * 1024;
+    await seedKey({
+      periodUpBytes: Math.floor(OVER_LIMIT_BYTES / 2),
+      periodDownBytes: Math.ceil(OVER_LIMIT_BYTES / 2),
+    });
+
+    await enforceTrafficLimits();
+
+    const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
+    expect(sub!.trafficLimitExceededAt?.getTime()).toBe(alreadyFlaggedAt.getTime());
+  });
 });

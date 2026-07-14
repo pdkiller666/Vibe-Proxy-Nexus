@@ -4,6 +4,15 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { vpnNodesTable } from "./vpnNodes";
 
+export const revokedReasonValues = [
+  "user", // user removed the device themselves
+  "admin", // admin manually revoked it
+  "expired", // subscription lapsed past the grace period
+  "billing", // hourly-plan balance ran out
+  "traffic_limit", // period traffic cap exceeded
+] as const;
+export type RevokedReason = (typeof revokedReasonValues)[number];
+
 export const vpnKeysTable = pgTable(
   "vpn_keys",
   {
@@ -24,6 +33,11 @@ export const vpnKeysTable = pgTable(
     deepLink: text("deep_link").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    // Why this key was revoked, set alongside revokedAt at every call site
+    // that revokes a key. Null while the key is active. Lets the UI explain
+    // *why* access was cut (e.g. "traffic limit reached" vs "you removed
+    // this device") instead of just showing a bare "revoked" label.
+    revokedReason: text("revoked_reason", { enum: revokedReasonValues }),
     // Traffic counters, populated by the background poll of Xray's Stats API
     // (see src/lib/trafficPolling.ts). No-ops (stay 0) when Xray isn't running
     // locally (e.g. Replit dev). "Lifetime" accumulates forever; "period"

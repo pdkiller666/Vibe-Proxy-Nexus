@@ -212,7 +212,9 @@ function PaymentsQueue() {
               ? "Устройство добавлено пользователю."
               : data?.type === "balance_topup"
                 ? "Баланс пользователя пополнен."
-                : "Подписка активирована.";
+                : data?.type === "extra_traffic"
+                  ? "Трафик начислен пользователю."
+                  : "Подписка активирована.";
           toast({ title: "Платёж подтверждён", description: desc });
         },
         onError: () => toast({ title: "Ошибка подтверждения", variant: "destructive" }),
@@ -304,7 +306,9 @@ function PaymentsQueue() {
                   ? "Доп. устройство"
                   : payment.type === "balance_topup"
                     ? "Пополнение баланса"
-                    : (payment.planName ?? "—")}
+                    : payment.type === "extra_traffic"
+                      ? `Доп. трафик${payment.extraTrafficGb ? ` (+${payment.extraTrafficGb} ГБ)` : ""}`
+                      : (payment.planName ?? "—")}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
                 {payment.amountRub} ₽ · {payment.reference} · {formatDate(payment.createdAt)}
@@ -1083,7 +1087,15 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
           userPayments.map((p) => (
             <div key={p.id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
               <div className="min-w-0">
-                <div className="font-medium">{p.planName ?? (p.type === "extra_device_slot" ? "Доп. устройство" : "Подписка")}</div>
+                <div className="font-medium">
+                  {p.type === "extra_device_slot"
+                    ? "Доп. устройство"
+                    : p.type === "extra_traffic"
+                      ? `Доп. трафик${p.extraTrafficGb ? ` (+${p.extraTrafficGb} ГБ)` : ""}`
+                      : p.type === "balance_topup"
+                        ? "Пополнение баланса"
+                        : (p.planName ?? "Подписка")}
+                </div>
                 <div className="text-muted-foreground font-mono">{formatDate(p.createdAt)}</div>
               </div>
               <div className="text-right shrink-0">
@@ -1324,6 +1336,7 @@ function UsersManagement() {
               <span className={user.trafficLimitExceeded ? "text-destructive font-bold" : "text-muted-foreground"}>
                 За период: {formatBytes(user.periodUpBytes + user.periodDownBytes)}
                 {user.trafficLimitGb != null && ` / ${user.trafficLimitGb} ГБ`}
+                {user.extraTrafficGb > 0 && ` (+${user.extraTrafficGb} ГБ докуплено)`}
                 {user.trafficLimitExceeded && " · лимит превышен"}
               </span>
               {user.periodStartedAt && (
@@ -1415,6 +1428,9 @@ function PaymentSettingsForm() {
   const [instructions, setInstructions] = useState("");
   const [extraDeviceSlotPriceRub, setExtraDeviceSlotPriceRub] = useState("");
   const [allowFreeExtraDeviceSlot, setAllowFreeExtraDeviceSlot] = useState(false);
+  const [extraTrafficPriceRub, setExtraTrafficPriceRub] = useState("");
+  const [extraTrafficPackageGb, setExtraTrafficPackageGb] = useState("10");
+  const [allowFreeExtraTraffic, setAllowFreeExtraTraffic] = useState(false);
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialDays, setTrialDays] = useState("5");
   const [minHourlyTopupRub, setMinHourlyTopupRub] = useState("0");
@@ -1429,6 +1445,9 @@ function PaymentSettingsForm() {
     setInstructions(settings.instructions ?? "");
     setExtraDeviceSlotPriceRub(String(settings.extraDeviceSlotPriceRub ?? 0));
     setAllowFreeExtraDeviceSlot(settings.allowFreeExtraDeviceSlot ?? false);
+    setExtraTrafficPriceRub(String(settings.extraTrafficPriceRub ?? 0));
+    setExtraTrafficPackageGb(String(settings.extraTrafficPackageGb ?? 10));
+    setAllowFreeExtraTraffic(settings.allowFreeExtraTraffic ?? false);
     setTrialEnabled(settings.trialEnabled ?? false);
     setTrialDays(String(settings.trialDays ?? 5));
     setMinHourlyTopupRub(String(settings.minHourlyTopupRub ?? 0));
@@ -1447,6 +1466,9 @@ function PaymentSettingsForm() {
           instructions,
           extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0,
           allowFreeExtraDeviceSlot,
+          extraTrafficPriceRub: Number(extraTrafficPriceRub) || 0,
+          extraTrafficPackageGb: Number(extraTrafficPackageGb) || 10,
+          allowFreeExtraTraffic,
           trialEnabled,
           trialDays: Number(trialDays) || 5,
           minHourlyTopupRub: Number(minHourlyTopupRub) || 0,
@@ -1508,6 +1530,48 @@ function PaymentSettingsForm() {
               className="sr-only peer"
               checked={allowFreeExtraDeviceSlot}
               onChange={(e) => setAllowFreeExtraDeviceSlot(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+        </div>
+      </div>
+
+      <div className="border border-border p-4 space-y-3">
+        <p className="text-sm font-semibold">Доп. трафик</p>
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Размер пакета (ГБ)</label>
+            <Input
+              type="number"
+              min="1"
+              placeholder="10"
+              value={extraTrafficPackageGb}
+              onChange={(e) => setExtraTrafficPackageGb(e.target.value.replace(/[^0-9]/g, ""))}
+              className="rounded-none"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Цена пакета (₽)</label>
+            <Input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={extraTrafficPriceRub}
+              onChange={(e) => setExtraTrafficPriceRub(e.target.value)}
+              className="rounded-none"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">
+            Если цена не задана (0 ₽), выдавать пакет без оплаты вместо блокировки кнопки
+          </p>
+          <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={allowFreeExtraTraffic}
+              onChange={(e) => setAllowFreeExtraTraffic(e.target.checked)}
             />
             <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
           </label>

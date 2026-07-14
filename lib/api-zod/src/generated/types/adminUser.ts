@@ -40,6 +40,9 @@ export interface AdminUser {
   /** @nullable */
   trafficLimitGb: number | null;
   trafficLimitExceeded: boolean;
+  extraTrafficGb: number;
+  /** @nullable */
+  trafficLimitExceededAt?: Date | null;
   /** @nullable */
   activePlanName?: string | null;
   /** @nullable */

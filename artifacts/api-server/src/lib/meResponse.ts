@@ -25,6 +25,8 @@ export async function buildMeData(user: User, requestHost?: string) {
       lastBilledAt: subscriptionsTable.lastBilledAt,
       extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
       trafficLimitGb: plansTable.trafficLimitGb,
+      extraTrafficGb: subscriptionsTable.extraTrafficGb,
+      trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
@@ -53,6 +55,14 @@ export async function buildMeData(user: User, requestHost?: string) {
   // without an active subscription there is no slot to report at all (slots
   // bought under a since-expired/switched subscription do not carry over).
   const deviceSlots = activeSubscription ? activeSubscription.devicesIncluded + activeSubscription.extraDeviceSlots : 0;
+  // Effective traffic cap = plan's base allowance + any self-service top-up
+  // for this subscription period (see subscriptions.extraTrafficGb comment).
+  // Null when the plan itself has no cap (nothing to add extra GB to).
+  const effectiveTrafficLimitGb =
+    activeSubscription?.trafficLimitGb != null
+      ? activeSubscription.trafficLimitGb + activeSubscription.extraTrafficGb
+      : null;
+  const trafficLimitExceeded = Boolean(activeSubscription?.trafficLimitExceededAt);
 
   const [settings] = await db.select({ referralCommissionPercent: paymentSettingsTable.referralCommissionPercent }).from(paymentSettingsTable).limit(1);
 
@@ -83,7 +93,9 @@ export async function buildMeData(user: User, requestHost?: string) {
     deviceSlots,
     activeKeyCount,
     balanceKopecks: user.balanceKopecks,
-    trafficLimitGb: activeSubscription?.trafficLimitGb ?? null,
+    trafficLimitGb: effectiveTrafficLimitGb,
+    extraTrafficGb: activeSubscription?.extraTrafficGb ?? 0,
+    trafficLimitExceeded,
     periodUsageBytes,
     referralCode: user.referralCode,
     referralCommissionPercent: settings?.referralCommissionPercent ?? 0,
