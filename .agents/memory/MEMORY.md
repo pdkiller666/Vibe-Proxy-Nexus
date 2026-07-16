@@ -36,4 +36,5 @@
 - [Schema gaps: FK indexes/ON DELETE/uniqueness/numeric types](schema-missing-fk-indexes-and-constraints.md) — indexes added 2026-07-16 (payments.subscriptionId, vpnKeys.nodeId, subscriptions.planId, users.referredByUserId); unique indexes on vpnKeys.uuid + vpnNodes.name + pending-payments partial; onDelete + bigint still unfixed.
 - [admin/payments.ts duplicates confirmPayment.ts](admin-payments-duplicates-confirmpayment-lib.md) — FIXED 2026-07-16: admin confirm route now delegates to confirmPaymentById(); keep it that way.
 - [Remaining auth hardening gaps](security-hardening-gaps.md) — scrypt reverted to N=16384 (N=65536 crashes Amvera with OOM on every login + invalidates existing hashes); in-memory rate limit + no CSRF still unfixed.
+- [FreeKassa integration quirks](freekassa-integration.md) — "API"-badged FK method IDs (36/44) silently become FKWallet; use СБП i=42 via API, card via pay.fk.money form; Amvera swallows any 5xx.
 - [Remaining infra hardening gaps](infra-hardening-gaps.md) — HEALTHCHECK + USER node added 2026-07-16 (vpn-node uses port 443 → root required there); resource limits, log rotation, Postgres backup still unfixed.
