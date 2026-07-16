@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
-import { db, paymentsTable } from "@workspace/db";
+import { db, paymentsTable, paymentSettingsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { generatePaymentReference } from "../lib/vless";
 const router: IRouter = Router();
@@ -11,6 +11,19 @@ router.post("/balance-topup-order", requireAuth, async (req, res): Promise<void>
   const amountRub = Number(req.body?.amountRub);
   if (!Number.isInteger(amountRub) || amountRub < 1) {
     res.status(400).json({ error: "amountRub must be a positive integer" });
+    return;
+  }
+
+  // Enforce the admin-configured minimum top-up amount (same threshold used
+  // for hourly plan activation). Prevents users from creating micro top-ups
+  // that bypass the minimum via a direct API call.
+  const [settings] = await db.select({ minHourlyTopupRub: paymentSettingsTable.minHourlyTopupRub }).from(paymentSettingsTable).limit(1);
+  const minTopupRub = settings?.minHourlyTopupRub ?? 0;
+  if (minTopupRub > 0 && amountRub < minTopupRub) {
+    res.status(400).json({
+      error: `Минимальная сумма пополнения — ${minTopupRub} ₽.`,
+      minTopupRub,
+    });
     return;
   }
 
