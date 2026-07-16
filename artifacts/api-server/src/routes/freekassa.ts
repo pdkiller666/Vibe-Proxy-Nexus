@@ -89,15 +89,30 @@ async function createFkOrder(opts: {
 
   const payload = { ...body, signature };
 
-  // api.fk.life is the current FK API host per official documentation.
-  // api.freekassa.net is a legacy alias that ignores `i` and defaults to FK Wallet.
-  const resp = await fetch("https://api.fk.life/v1/orders/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  // Try api.fk.life first (canonical per FK docs), fall back to api.freekassa.net
+  // if the primary host is unreachable (e.g. blocked on some hosting providers).
+  const FK_HOSTS = ["https://api.fk.life/v1", "https://api.freekassa.net/v1"];
+  let data: { type?: string; orderId?: number; location?: string; message?: string } | null = null;
+  let lastErr: unknown;
 
-  const data = (await resp.json()) as { type?: string; orderId?: number; location?: string; message?: string };
+  for (const host of FK_HOSTS) {
+    try {
+      const resp = await fetch(`${host}/orders/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+      });
+      data = (await resp.json()) as typeof data;
+      logger.debug({ host }, "FK API host used");
+      break;
+    } catch (err) {
+      lastErr = err;
+      logger.warn({ host, err }, "FK API host unreachable, trying next");
+    }
+  }
+
+  if (!data) throw lastErr;
 
   if (data.type !== "success" || !data.location) {
     throw new Error(`FreeKassa API error: ${data.message ?? JSON.stringify(data)}`);
