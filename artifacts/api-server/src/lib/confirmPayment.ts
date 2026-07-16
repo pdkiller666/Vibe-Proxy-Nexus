@@ -220,29 +220,41 @@ export async function confirmPaymentById(
     .where(eq(plansTable.id, subscription.planId));
   if (!plan) return { ok: false, status: 404, error: "Plan not found" };
 
-  const [currentActive] = await db
-    .select()
-    .from(subscriptionsTable)
-    .where(
-      and(
-        eq(subscriptionsTable.userId, subscription.userId),
-        eq(subscriptionsTable.status, "active"),
-      ),
-    )
-    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
-    .limit(1);
-
-  const now = new Date();
-  const startsAt =
-    currentActive?.endsAt && currentActive.endsAt > now
-      ? currentActive.endsAt
-      : now;
-  const endsAt = new Date(
-    startsAt.getTime() + plan.durationDays * 24 * 60 * 60 * 1000,
-  );
-
   try {
     const updatedPayment = await db.transaction(async (tx) => {
+      // Lock the subscription row being activated so two concurrent
+      // confirmations (e.g. admin + FreeKassa webhook arriving simultaneously)
+      // cannot both read the same currentActive and compute the same startsAt,
+      // which would make both subscriptions start at the same time instead of
+      // in sequence. The FOR UPDATE lock serialises this critical section.
+      await tx.execute(
+        sql`SELECT id FROM subscriptions WHERE id = ${subscription.id} FOR UPDATE`,
+      );
+
+      // Re-read currentActive *inside* the transaction (after the lock) so
+      // startsAt/endsAt reflect the true DB state at this moment, not a
+      // snapshot taken before the transaction started.
+      const now = new Date();
+      const [currentActive] = await tx
+        .select()
+        .from(subscriptionsTable)
+        .where(
+          and(
+            eq(subscriptionsTable.userId, subscription.userId),
+            eq(subscriptionsTable.status, "active"),
+          ),
+        )
+        .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+        .limit(1);
+
+      const startsAt =
+        currentActive?.endsAt && currentActive.endsAt > now
+          ? currentActive.endsAt
+          : now;
+      const endsAt = new Date(
+        startsAt.getTime() + plan.durationDays * 24 * 60 * 60 * 1000,
+      );
+
       const [updatedSubscription] = await tx
         .update(subscriptionsTable)
         .set({ status: "active", startsAt, endsAt })

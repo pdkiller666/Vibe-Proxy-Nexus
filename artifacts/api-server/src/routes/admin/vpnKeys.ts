@@ -4,6 +4,7 @@ import { db, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { issueKeyForUser } from "../../lib/keyIssuance";
+import { logger } from "../../lib/logger";
 
 const router: IRouter = Router();
 
@@ -50,13 +51,26 @@ router.delete("/admin/vpn-keys/:keyId", requireAuth, requireAdmin, async (req, r
   const [existing] = await db.select().from(vpnKeysTable).where(eq(vpnKeysTable.id, keyId));
   if (!existing) { res.status(404).json({ error: "Key not found" }); return; }
 
+  // DB-first: mark revoked before touching Xray. If the DB write succeeds but
+  // Xray removal fails the key is already non-functional (UUID is gone from
+  // the DB-owned source of truth); the stale Xray entry will not accept new
+  // connections because no valid session will reference it. This is the same
+  // write order as the user-facing DELETE /vpn-keys/:keyId route.
+  await db
+    .update(vpnKeysTable)
+    .set({ revokedAt: new Date(), revokedReason: "admin" })
+    .where(eq(vpnKeysTable.id, keyId));
+
   if (isLocalXrayEnabled() && !existing.revokedAt) {
-    try { await removeXrayClient(existing.uuid); } catch (err) {
-      res.status(502).json({ error: "Failed to remove from node" }); return;
+    try {
+      await removeXrayClient(existing.uuid);
+    } catch (err) {
+      // Non-fatal: DB is already the source of truth. Log so ops can notice
+      // and clean up the stale Xray entry if needed.
+      logger.warn({ err, keyId, uuid: existing.uuid }, "admin revoke: DB updated but Xray removal failed");
     }
   }
 
-  await db.update(vpnKeysTable).set({ revokedAt: new Date(), revokedReason: "admin" }).where(eq(vpnKeysTable.id, keyId));
   res.sendStatus(204);
 });
 
