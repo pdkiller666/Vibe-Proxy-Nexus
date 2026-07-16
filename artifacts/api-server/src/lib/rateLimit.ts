@@ -25,6 +25,28 @@ export const forgotPasswordRateLimit = rateLimit({
   },
 });
 
+// Per-referral-code limiter for account creation. Complements the IP-based
+// registerRateLimit: an attacker who rotates IPs but reuses one leaked referral
+// code is still blocked. Keyed by normalised code so case/whitespace variants
+// don't bypass the limit. Limit is intentionally tight (5/hour) because a
+// legitimate inviter rarely hands the same code to more than a handful of
+// people in a short window; the IP-based limit is the primary gate for
+// normal traffic.
+export const registerPerCodeRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 5,
+  keyGenerator: (req) => {
+    const ref =
+      typeof req.body?.ref === "string" ? req.body.ref.trim().toLowerCase() : "unknown";
+    return `reg-code:${ref}`;
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "Слишком много регистраций по этой реферальной ссылке. Попробуйте позже.",
+  },
+});
+
 // IP-based limiter for the public, token-authenticated subscription endpoint
 // (/api/sub/:token). This endpoint has no session/auth cookie by design (VPN
 // client apps like Happ/v2rayNG fetch it directly), so its only line of

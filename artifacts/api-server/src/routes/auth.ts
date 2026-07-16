@@ -15,7 +15,7 @@ import { requireAuth } from "../lib/auth";
 import { hashPassword, verifyPassword } from "../lib/password";
 import { buildMeData } from "../lib/meResponse";
 import { isRateLimited, recordFailedAttempt, resetAttempts } from "../lib/loginRateLimit";
-import { forgotPasswordRateLimit, registerRateLimit } from "../lib/rateLimit";
+import { forgotPasswordRateLimit, registerRateLimit, registerPerCodeRateLimit } from "../lib/rateLimit";
 import {
   clearSessionCookie,
   createSession,
@@ -38,7 +38,7 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-router.post("/auth/register", registerRateLimit, async (req, res): Promise<void> => {
+router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
 
   if (!parsed.success) {

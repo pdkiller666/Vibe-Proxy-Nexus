@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { and, eq, gt, lt } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { db, sessionsTable, usersTable, type User } from "@workspace/db";
@@ -7,6 +7,16 @@ import { deleteExpiredPasswordResetTokens } from "./passwordReset";
 
 export const SESSION_COOKIE_NAME = "vpn_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Store a SHA-256 hash of the raw token in the DB, never the token itself.
+// If the sessions table is ever leaked, the attacker cannot use the stored
+// hashes to authenticate — they'd need to find the preimage of each hash,
+// which is computationally infeasible for a 32-byte random token.
+// NOTE: this means all sessions created before this change are automatically
+// invalidated (the stored raw value won't match the hash of any new lookup).
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 export function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -22,13 +32,14 @@ export async function createSession(userId: number): Promise<{ token: string; ex
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
-  await db.insert(sessionsTable).values({ token, userId, expiresAt });
+  // Store hash, not the raw token — see hashToken() above.
+  await db.insert(sessionsTable).values({ token: hashToken(token), userId, expiresAt });
 
   return { token, expiresAt };
 }
 
 export async function destroySession(token: string): Promise<void> {
-  await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
+  await db.delete(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
 }
 
 export async function invalidateUserSessions(userId: number): Promise<void> {
@@ -48,7 +59,7 @@ export async function getUserBySessionToken(token: string): Promise<User | null>
     .select({ user: usersTable })
     .from(sessionsTable)
     .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
-    .where(and(eq(sessionsTable.token, token), gt(sessionsTable.expiresAt, new Date())));
+    .where(and(eq(sessionsTable.token, hashToken(token)), gt(sessionsTable.expiresAt, new Date())));
 
   const user = row?.user ?? null;
   if (user) {
