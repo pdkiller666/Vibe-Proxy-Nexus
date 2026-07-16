@@ -62,51 +62,50 @@ async function createFkOrder(opts: {
 }): Promise<string> {
   const nonce = Date.now();
 
-  // FK requires all numeric fields to be actual numbers (not strings).
-  // paymentId must be a positive integer — string references like "VPN-123-XXXX"
-  // are rejected by the API with a signature/validation error.
-  // When `i` is present it MUST be included in the alphabetically sorted signature.
+  // Per FK docs (api.fk.life/v1/orders/create):
+  //   - paymentId: string (our numeric DB id serialises fine as JSON number → string)
+  //   - i: integer, REQUIRED — without it FK defaults to FK Wallet regardless of method
+  //   - All fields sorted alphabetically by key, values joined with "|", HMAC-SHA256
+  // Default to card (36) when no method specified so `i` is always present.
+  const methodId = opts.method ? FK_METHOD_IDS[opts.method] : FK_METHOD_IDS.card;
+
   const body: Record<string, string | number> = {
-    shopId: Number(opts.shopId),
-    nonce,
-    paymentId: Number(opts.paymentId),   // DB integer id, not the string reference
     amount: opts.amount,
     currency: "RUB",
     email: opts.email,
-    ip: opts.ip,
-    success_url: opts.successUrl,
     failure_url: opts.failureUrl,
-    ...(opts.method ? { i: FK_METHOD_IDS[opts.method] } : {}),
+    i: methodId,
+    ip: opts.ip,
+    nonce,
+    paymentId: String(opts.paymentId),   // FK docs: paymentId is type "string"
+    shopId: Number(opts.shopId),
+    success_url: opts.successUrl,
   };
 
-  // Build the HMAC-SHA256 signature over alphabetically sorted values.
+  // Keys are already in alphabetical order above, but sort() is defensive.
   const sortedKeys = Object.keys(body).sort();
   const signStr = sortedKeys.map((k) => String(body[k])).join("|");
   const signature = createHmac("sha256", opts.apiKey).update(signStr).digest("hex");
 
   const payload = { ...body, signature };
 
-  // api.fk.life is the current FK API host (confirmed by official SDKs).
-  // api.freekassa.net is the old alias — it accepts requests but ignores the `i`
-  // (payment method) parameter and falls back to FK Wallet for every order.
+  // api.fk.life is the current FK API host per official documentation.
+  // api.freekassa.net is a legacy alias that ignores `i` and defaults to FK Wallet.
   const resp = await fetch("https://api.fk.life/v1/orders/create", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 
-  const data = (await resp.json()) as { type?: string; location?: string; message?: string };
+  const data = (await resp.json()) as { type?: string; orderId?: number; location?: string; message?: string };
 
   if (data.type !== "success" || !data.location) {
     throw new Error(`FreeKassa API error: ${data.message ?? JSON.stringify(data)}`);
   }
 
-  // Log the returned location so we can verify `i=` is present in the URL.
-  // If `i=` is empty in the log, FK is ignoring the payment method — the method
-  // must be activated in the FK merchant cabinet first.
-  const locationUrl = new URL(data.location);
-  const returnedI = locationUrl.searchParams.get("i");
-  console.log(`[FK] order created — i=${returnedI ?? "(none)"} method=${opts.method ?? "default"} location=${data.location}`);
+  // Response location format: https://pay.freekassa.net/form/{orderId}/{orderHash}
+  // (no query params — method selection is embedded in the order at creation time via `i`)
+  logger.info({ fkOrderId: data.orderId, methodId, method: opts.method ?? "card(default)", paymentId: opts.paymentId }, "FreeKassa order created");
 
   return data.location;
 }
