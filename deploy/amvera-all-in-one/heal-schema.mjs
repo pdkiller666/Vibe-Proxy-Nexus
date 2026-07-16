@@ -135,37 +135,37 @@ try {
   // Unique constraint on vpn_keys.uuid — VLESS auth depends on UUID uniqueness.
   // Guards against app-level UUID collisions (astronomically rare but now DB-enforced).
   await client.query(`
-    DO $
+    DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'vpn_keys_uuid_unique') THEN
         CREATE UNIQUE INDEX vpn_keys_uuid_unique ON vpn_keys(uuid);
       END IF;
-    END $;
+    END $$;
   `);
   console.log("heal-schema: applied vpn_keys_uuid_unique");
 
   // Unique constraint on vpn_nodes.name — prevents duplicate node configs.
   await client.query(`
-    DO $
+    DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'vpn_nodes_name_unique') THEN
         CREATE UNIQUE INDEX vpn_nodes_name_unique ON vpn_nodes(name);
       END IF;
-    END $;
+    END $$;
   `);
   console.log("heal-schema: applied vpn_nodes_name_unique");
 
   // Unique partial index: at most one pending payment per user per type.
   // Prevents duplicate-submission races that slip past the pre-check SELECT.
   await client.query(`
-    DO $
+    DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'payments_one_pending_per_user_type_idx') THEN
         CREATE UNIQUE INDEX payments_one_pending_per_user_type_idx
           ON payments(user_id, type)
           WHERE status = 'pending';
       END IF;
-    END $;
+    END $$;
   `);
   console.log("heal-schema: applied payments_one_pending_per_user_type_idx");
 
