@@ -168,6 +168,18 @@ async function createFkOrder(opts: {
     throw new Error(`FreeKassa API error: ${data.message ?? JSON.stringify(data)}`);
   }
 
+  // FK silently creates a FK Wallet order (fkwallet.io) when the requested
+  // method isn't activated for this merchant — `i` is ignored and method 1
+  // (FK Wallet) is used as default.  Detect this so the caller can fall back
+  // to the form-redirect which shows the standard FK payment page.
+  if (data.location.includes("fkwallet.io") || data.location.includes("fkwallet.ru")) {
+    logger.warn(
+      { fkOrderId: data.orderId, location: data.location, methodId, method: opts.method },
+      "FK API ignored `i` and created a FK Wallet order — method not activated for merchant; will fall back to form-redirect",
+    );
+    throw new Error("FK_WALLET_FALLBACK");
+  }
+
   return data.location;
 }
 
@@ -259,22 +271,34 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
         ip: userIp,
         method,
       });
-      logger.info({ paymentId, method, amountRub: payment.amountRub, type: payment.type }, "FreeKassa order created — redirecting");
+      logger.info({ paymentId, method, amountRub: payment.amountRub, type: payment.type }, "FreeKassa API order created — redirecting");
       res.redirect(302, location);
+      return;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error({ err: msg, paymentId, method }, "FreeKassa order creation failed");
-      // Surface method-unavailable errors to the user with a clear message
-      if (msg.includes("недоступен")) {
-        res.status(503).json({ error: msg });
+      if (msg === "FK_WALLET_FALLBACK") {
+        // FK API ignored `i` — methods not activated for merchant.
+        // Fall through to form-redirect which shows the standard FK payment page.
+        logger.info({ paymentId, method }, "Falling back to FK form-redirect");
       } else {
+        logger.error({ err: msg, paymentId, method }, "FreeKassa API order creation failed");
         res.status(502).json({ error: "Ошибка при создании заказа в FreeKassa. Попробуйте позже." });
+        return;
       }
     }
-    return;
   }
 
-  // ── Legacy form-redirect path (card only; СБП unavailable without API key) ──
+  // ── Form-redirect path ────────────────────────────────────────────────────
+  // Used when: FK_API_KEY not set, OR the API returned FK Wallet (method not
+  // activated for this merchant).  Redirects to pay.freekassa.net which shows
+  // the FK payment page; the user can choose / confirm the method there.
+  // `i` is optional (suggestive) in form mode — pass it as a hint.
+  const rawMethodForForm = (req.query.method as string | undefined)?.toLowerCase();
+  const formMethodId =
+    rawMethodForForm === "sbp"  ? FK_METHOD_IDS.sbp  :
+    rawMethodForForm === "qiwi" ? FK_METHOD_IDS.qiwi :
+    FK_METHOD_IDS.card;  // default to card
+
   const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
   const url = new URL("https://pay.freekassa.net/");
   url.searchParams.set("m", FK_SHOP_ID);
@@ -282,11 +306,12 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
   url.searchParams.set("currency", "RUB");
   url.searchParams.set("o", payment.reference);
   url.searchParams.set("s", sign);
+  url.searchParams.set("i", String(formMethodId));  // hint only — user can change
   url.searchParams.set("lang", "ru");
   url.searchParams.set("us", successUrl);
   url.searchParams.set("uf", failureUrl);
 
-  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "Redirecting to FreeKassa checkout (form-redirect, СБП unavailable)");
+  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, formMethodId }, "Redirecting to FK form-redirect");
   res.redirect(302, url.toString());
 });
 
