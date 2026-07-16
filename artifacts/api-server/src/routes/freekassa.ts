@@ -69,17 +69,19 @@ async function createFkOrder(opts: {
   // Default to card (36) when no method specified so `i` is always present.
   const methodId = opts.method ? FK_METHOD_IDS[opts.method] : FK_METHOD_IDS.card;
 
+  // NOTE: success_url / failure_url are NOT included here.
+  // Per FK docs they require support activation; if not enabled, FK computes
+  // the signature without those fields, causing a mismatch with our signature.
+  // After payment FK will redirect to the cabinet-configured success/failure URLs.
   const body: Record<string, string | number> = {
     amount: opts.amount,
     currency: "RUB",
     email: opts.email,
-    failure_url: opts.failureUrl,
     i: methodId,
     ip: opts.ip,
     nonce,
-    paymentId: String(opts.paymentId),   // FK docs: paymentId is type "string"
+    paymentId: String(opts.paymentId),
     shopId: Number(opts.shopId),
-    success_url: opts.successUrl,
   };
 
   // Keys are already in alphabetical order above, but sort() is defensive.
