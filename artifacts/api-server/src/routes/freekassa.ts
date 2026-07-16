@@ -42,9 +42,9 @@ const FK_METHOD_IDS = {
 
 type FkMethod = keyof typeof FK_METHOD_IDS;
 
-// Canonical FK API base URL per official docs (api.fk.life/v1/).
-// api.freekassa.net is a legacy alias kept as fallback for Amvera network issues.
-const FK_API_HOSTS = ["https://api.fk.life/v1", "https://api.freekassa.net/v1"];
+// Official FK API host per merchant cabinet (merchant.freekassa.net).
+// api.fk.life is FK's newer domain but may behave differently for method selection.
+const FK_API_HOSTS = ["https://api.freekassa.net/v1", "https://api.fk.life/v1"];
 
 /**
  * Send a signed POST request to the FK REST API.
@@ -152,7 +152,7 @@ async function createFkOrder(opts: {
   });
 
   logger.info(
-    { fkOrderId: data.orderId, location: data.location, methodId, method: opts.method, paymentId: opts.paymentId },
+    { fkResponse: data, methodId, method: opts.method, paymentId: opts.paymentId },
     "FK /orders/create response",
   );
 
