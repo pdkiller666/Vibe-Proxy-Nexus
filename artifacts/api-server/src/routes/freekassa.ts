@@ -120,8 +120,10 @@ async function checkFkMethodAvailable(
  *   - `success_url` / `failure_url` need explicit FK support activation;
  *     including them without activation causes signature mismatch → omitted here
  *   - `paymentId` is optional (string); used as MERCHANT_ORDER_ID in webhook
- *   - "В некоторых случаях необходимо передавать дополнительные поля" — the
- *     pre-flight status check will surface unavailable methods before we attempt
+ *   - `/currencies` check (2026-07-16): methods 36 (Card RUB) and 44 (СБП НСПК)
+ *     are enabled (is_enabled:1) and require only `email` — already sent.
+ *     Pre-flight /currencies/{id}/status check removed: it caused two rapid FK API
+ *     calls in succession which can produce nonce conflicts on FK's side.
  */
 async function createFkOrder(opts: {
   shopId: string;
@@ -133,16 +135,6 @@ async function createFkOrder(opts: {
   method: FkMethod;   // always required — caller provides default
 }): Promise<string> {
   const methodId = FK_METHOD_IDS[opts.method];
-
-  // Pre-flight: verify the method is active for this shop.
-  // FK silently falls back to FK Wallet when `i` refers to a method that isn't
-  // activated, making it impossible to detect from the success response alone.
-  const status = await checkFkMethodAvailable(opts.shopId, opts.apiKey, methodId);
-  if (!status.available) {
-    throw new Error(
-      `Метод оплаты ${opts.method} (id=${methodId}) недоступен для магазина: ${status.reason ?? "не активирован в кабинете FK"}`,
-    );
-  }
 
   const data = await fkApiRequest<{
     type?: string;
