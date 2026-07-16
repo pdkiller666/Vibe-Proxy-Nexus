@@ -62,6 +62,16 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
     return;
   }
 
+  // Mark the payment as freekassa at the moment the user chooses card payment.
+  // balance_topup / extra_slot / extra_traffic orders are created with
+  // provider="manual_sbp" as a default; override here so that the balance
+  // transaction description and admin view show the correct provider.
+  // The UPDATE is idempotent — harmless if already "freekassa".
+  await db
+    .update(paymentsTable)
+    .set({ provider: "freekassa" })
+    .where(eq(paymentsTable.id, payment.id));
+
   const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
   const url = new URL("https://pay.freekassa.net/");
   url.searchParams.set("m", FK_SHOP_ID);
@@ -72,18 +82,21 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
   url.searchParams.set("lang", "ru");
 
   // Return URLs — FreeKassa redirects the user back after payment.
-  // We point to the same checkout page so the user sees "Confirmed" status.
+  // us = success redirect, uf = failure redirect.
   const origin = `${req.protocol}://${req.get("host")}`;
   let returnPath: string;
   if (payment.type === "balance_topup") {
     returnPath = `/balance-topup/${payment.id}`;
   } else if (payment.type === "extra_device_slot") {
-    returnPath = `/slot-checkout/${payment.id}`;
+    returnPath = `/checkout/slot/${payment.id}`;
+  } else if (payment.type === "extra_traffic") {
+    returnPath = `/checkout/traffic/${payment.id}`;
   } else {
+    // subscription payment
     returnPath = `/checkout/${payment.subscriptionId ?? payment.id}`;
   }
   url.searchParams.set("us", `${origin}${returnPath}`);
-  url.searchParams.set("uf", `${origin}${returnPath}`);
+  url.searchParams.set("uf", `${origin}${returnPath}?failed=1`);
 
   logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "Redirecting to FreeKassa checkout");
   res.redirect(302, url.toString());
@@ -93,14 +106,18 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
 // FreeKassa can be configured for GET or POST; we handle both.
 async function handleWebhook(req: Request, res: Response): Promise<void> {
   const params: Record<string, string> = { ...req.query as Record<string, string>, ...req.body };
-  const { MERCHANT_ID, AMOUNT, merchant_order_id, SIGN, intid } = params;
 
-  logger.info({ MERCHANT_ID, AMOUNT, merchant_order_id, intid }, "FreeKassa IPN received");
+  // FreeKassa documentation shows MERCHANT_ORDER_ID in uppercase, but some
+  // configurations send it in lowercase. Accept both for resilience.
+  const orderId = params.MERCHANT_ORDER_ID ?? params.merchant_order_id;
+  const { MERCHANT_ID, AMOUNT, SIGN, intid } = params;
+
+  logger.info({ MERCHANT_ID, AMOUNT, orderId, intid }, "FreeKassa IPN received");
 
   const FK_SHOP_ID = process.env.FK_SHOP_ID ?? "";
   const FK_SECRET2 = process.env.FK_SECRET2 ?? "";
 
-  if (!MERCHANT_ID || !AMOUNT || !merchant_order_id || !SIGN) {
+  if (!MERCHANT_ID || !AMOUNT || !orderId || !SIGN) {
     logger.warn({ params }, "FreeKassa IPN: missing required params");
     res.status(400).send("Missing params");
     return;
@@ -118,7 +135,7 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  if (!verifyWebhookSign(FK_SHOP_ID, String(AMOUNT), FK_SECRET2, String(merchant_order_id), String(SIGN))) {
+  if (!verifyWebhookSign(FK_SHOP_ID, String(AMOUNT), FK_SECRET2, String(orderId), String(SIGN))) {
     logger.warn({ SIGN }, "FreeKassa IPN: signature mismatch");
     res.status(400).send("Invalid signature");
     return;
@@ -127,10 +144,10 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
   const [payment] = await db
     .select({ id: paymentsTable.id, status: paymentsTable.status })
     .from(paymentsTable)
-    .where(eq(paymentsTable.reference, String(merchant_order_id)));
+    .where(eq(paymentsTable.reference, String(orderId)));
 
   if (!payment) {
-    logger.error({ merchant_order_id }, "FreeKassa IPN: no payment found for reference");
+    logger.error({ orderId }, "FreeKassa IPN: no payment found for reference");
     // Return YES to stop FreeKassa retrying a genuinely unknown order
     res.send("YES");
     return;
