@@ -129,7 +129,7 @@ async function createFkOrder(opts: {
   shopId: string;
   apiKey: string;
   amount: number;
-  paymentId: number;
+  paymentId: string;   // payment.reference (VPN-XXXXX-XXXXXX) — shows in FK cabinet; webhook resolves by reference
   email: string;
   ip: string;
   method: FkMethod;   // always required — caller provides default
@@ -148,7 +148,7 @@ async function createFkOrder(opts: {
     email: opts.email,
     i: methodId,
     ip: opts.ip,
-    paymentId: String(opts.paymentId),
+    paymentId: opts.paymentId,
   });
 
   logger.info(
@@ -258,7 +258,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
         shopId: FK_SHOP_ID,
         apiKey: FK_API_KEY,
         amount: payment.amountRub,
-        paymentId: payment.id,
+        paymentId: payment.reference,   // reference (VPN-XXXXX-XXXXXX) shows in FK cabinet; webhook looks up by reference
         email: user.email,
         ip: userIp,
         method,
