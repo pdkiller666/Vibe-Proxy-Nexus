@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { createHash } from "crypto";
+import { createHash, createHmac } from "crypto";
 import { eq } from "drizzle-orm";
 import { db, paymentsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
@@ -13,7 +13,7 @@ function md5(str: string): string {
 }
 
 /**
- * Build the payment-link signature for FreeKassa (freekassa.net new API).
+ * Build the payment-link signature for FreeKassa form-redirect (legacy).
  * Format: MD5(shopId:amount:secret1:currency:orderId)
  */
 function buildCheckoutSign(shopId: string, amount: number, secret1: string, orderId: string): string {
@@ -27,6 +27,63 @@ function buildCheckoutSign(shopId: string, amount: number, secret1: string, orde
 function verifyWebhookSign(shopId: string, amount: string, secret2: string, orderId: string, received: string): boolean {
   const expected = md5(`${shopId}:${amount}:${secret2}:${orderId}`);
   return expected === received;
+}
+
+/**
+ * Create a FreeKassa order via their REST API v1.
+ *
+ * All payment methods — including СБП (НСПК) — are available only via the
+ * API. The form-redirect approach blocks СБП with "method works via API only".
+ *
+ * Signature: sort body params alphabetically by key, join values with "|",
+ * HMAC-SHA256 with the API key.
+ *
+ * @returns the `location` URL to which the user should be redirected.
+ */
+async function createFkOrder(opts: {
+  shopId: string;
+  apiKey: string;
+  amount: number;
+  paymentId: string;   // our internal order reference
+  email: string;
+  ip: string;
+  successUrl: string;
+  failureUrl: string;
+}): Promise<string> {
+  const nonce = Date.now();
+
+  const body: Record<string, string | number> = {
+    shopId: Number(opts.shopId),
+    nonce,
+    paymentId: opts.paymentId,
+    amount: opts.amount,
+    currency: "RUB",
+    email: opts.email,
+    ip: opts.ip,
+    success_url: opts.successUrl,
+    failure_url: opts.failureUrl,
+  };
+
+  // Build the HMAC-SHA256 signature over alphabetically sorted values.
+  const sortedKeys = Object.keys(body).sort();
+  const signStr = sortedKeys.map((k) => String(body[k])).join("|");
+  const signature = createHmac("sha256", opts.apiKey).update(signStr).digest("hex");
+
+  const payload = { ...body, signature };
+
+  const resp = await fetch("https://api.freekassa.net/v1/orders/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await resp.json()) as { type?: string; location?: string; message?: string };
+
+  if (data.type !== "success" || !data.location) {
+    throw new Error(`FreeKassa API error: ${data.message ?? JSON.stringify(data)}`);
+  }
+
+  return data.location;
 }
 
 // Redirect authenticated user to FreeKassa payment page for a pending payment
@@ -62,7 +119,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
     return;
   }
 
-  // Mark the payment as freekassa at the moment the user chooses card payment.
+  // Mark the payment as freekassa at the moment the user initiates card/СБП payment.
   // balance_topup / extra_slot / extra_traffic orders are created with
   // provider="manual_sbp" as a default; override here so that the balance
   // transaction description and admin view show the correct provider.
@@ -72,17 +129,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
     .set({ provider: "freekassa" })
     .where(eq(paymentsTable.id, payment.id));
 
-  const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
-  const url = new URL("https://pay.freekassa.net/");
-  url.searchParams.set("m", FK_SHOP_ID);
-  url.searchParams.set("oa", String(payment.amountRub));
-  url.searchParams.set("currency", "RUB");
-  url.searchParams.set("o", payment.reference);
-  url.searchParams.set("s", sign);
-  url.searchParams.set("lang", "ru");
-
-  // Return URLs — FreeKassa redirects the user back after payment.
-  // us = success redirect, uf = failure redirect.
+  // Build return URLs — FreeKassa redirects the user back after payment.
   const origin = `${req.protocol}://${req.get("host")}`;
   let returnPath: string;
   if (payment.type === "balance_topup") {
@@ -95,10 +142,52 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
     // subscription payment
     returnPath = `/checkout/${payment.subscriptionId ?? payment.id}`;
   }
-  url.searchParams.set("us", `${origin}${returnPath}`);
-  url.searchParams.set("uf", `${origin}${returnPath}?failed=1`);
+  const successUrl = `${origin}${returnPath}`;
+  const failureUrl = `${origin}${returnPath}?failed=1`;
 
-  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "Redirecting to FreeKassa checkout");
+  const FK_API_KEY = process.env.FK_API_KEY ?? "";
+
+  if (FK_API_KEY) {
+    // ── REST API path (required for СБП / НСПК and all modern FK methods) ──
+    // Creates the order server-side; FreeKassa returns a ready payment URL.
+    const userIp =
+      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      "127.0.0.1";
+
+    try {
+      const location = await createFkOrder({
+        shopId: FK_SHOP_ID,
+        apiKey: FK_API_KEY,
+        amount: payment.amountRub,
+        paymentId: payment.reference,
+        email: user.email,
+        ip: userIp,
+        successUrl,
+        failureUrl,
+      });
+      logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "FreeKassa API order created — redirecting");
+      res.redirect(302, location);
+    } catch (err) {
+      logger.error({ err, paymentId }, "FreeKassa API order creation failed");
+      res.status(502).json({ error: "Ошибка при создании заказа в FreeKassa. Попробуйте позже." });
+    }
+    return;
+  }
+
+  // ── Legacy form-redirect path (card only; СБП unavailable without API key) ──
+  const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
+  const url = new URL("https://pay.freekassa.net/");
+  url.searchParams.set("m", FK_SHOP_ID);
+  url.searchParams.set("oa", String(payment.amountRub));
+  url.searchParams.set("currency", "RUB");
+  url.searchParams.set("o", payment.reference);
+  url.searchParams.set("s", sign);
+  url.searchParams.set("lang", "ru");
+  url.searchParams.set("us", successUrl);
+  url.searchParams.set("uf", failureUrl);
+
+  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "Redirecting to FreeKassa checkout (form-redirect, СБП unavailable)");
   res.redirect(302, url.toString());
 });
 
