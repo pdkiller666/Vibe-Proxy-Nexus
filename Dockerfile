@@ -71,12 +71,12 @@ ENV STATIC_DIR=/app/public
 ENV XRAY_CONFIG_PATH=/etc/xray/config.json
 ENV PORT=8080
 
-# Run as the built-in non-root node user (uid 1000) that the node:24-bookworm-slim
-# base image ships. Neither the API server (port 8080) nor Xray (loopback 10000)
-# requires a privileged port, so no CAP_NET_BIND_SERVICE is needed.
-# Supervisor (PID 1) also runs as node; its socket/pidfile are owned by this user.
-RUN chown -R node:node /app
-USER node
+# NOTE: supervisord runs as PID 1 and must stay root to manage child processes
+# and drop to per-program users (via supervisord.conf `user=` directives).
+# Adding USER node here breaks supervisord with "Can't drop privilege as nonroot
+# user". To run the API and Node processes as non-root without changing the init
+# model, configure `user=node` on each [program:*] section in supervisord.conf
+# instead — that is the correct per-process approach when the init is root.
 
 # 8080 = web interface + API + VPN WebSocket proxy. Xray listens only on the
 # container-internal loopback (127.0.0.1:10000), reached via the Node WS proxy.
