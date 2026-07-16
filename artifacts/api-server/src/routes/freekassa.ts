@@ -305,6 +305,13 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
   const FK_SHOP_ID = process.env.FK_SHOP_ID ?? "";
   const FK_SECRET2 = process.env.FK_SECRET2 ?? "";
 
+  // FK "Проверить статус" button hits the URL with no params — just a connectivity
+  // ping. Return 200/YES so the cabinet shows the URL as reachable.
+  if (!MERCHANT_ID && !AMOUNT && !orderId && !SIGN) {
+    res.status(200).send("YES");
+    return;
+  }
+
   if (!MERCHANT_ID || !AMOUNT || !orderId || !SIGN) {
     logger.warn({ params }, "FreeKassa IPN: missing required params");
     res.status(400).send("Missing params");
