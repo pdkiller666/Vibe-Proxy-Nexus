@@ -268,27 +268,24 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
       return;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg === "FK_WALLET_FALLBACK") {
-        // FK API ignored `i` — the method is not activated for API usage on this merchant account.
-        // Methods 36 (card) and 44 (СБП) are API-only — form-redirect returns "только по API".
-        // Return a clear error so the user knows to contact FK support.
-        logger.error({ paymentId, method }, "FK API returned FK Wallet URL — method not activated for API on this merchant account");
-        res.status(502).json({
-          error: "Метод оплаты временно недоступен. Пожалуйста, попробуйте позже или свяжитесь с поддержкой.",
-        });
+      if (msg !== "FK_WALLET_FALLBACK") {
+        // Hard API error (network, signature, etc.).
+        // Never return 5xx: Amvera intercepts it and shows its own error page.
+        logger.error({ err: msg, paymentId, method }, "FreeKassa API order creation failed — redirecting to failure URL");
+        res.redirect(302, failureUrl);
         return;
       }
-      logger.error({ err: msg, paymentId, method }, "FreeKassa API order creation failed");
-      res.status(502).json({ error: "Ошибка при создании заказа в FreeKassa. Попробуйте позже." });
-      return;
+      // FK_WALLET_FALLBACK: FK API ignored `i` (API methods 36/44 not activated for this merchant).
+      // Fall through to form-redirect WITHOUT `i` — FK shows whatever methods the merchant has
+      // enabled for form payments. Merchant must contact FK support to activate API card/SBP.
+      logger.warn({ paymentId, method }, "FK API returned FK Wallet — falling back to generic form-redirect (no i)");
     }
   }
 
-  // ── Form-redirect path (FK_API_KEY not configured) ───────────────────────
-  // Only reached when FK_API_KEY is missing entirely.
-  // Methods 36 (card) and 44 (СБП) are API-only and will be rejected by
-  // pay.freekassa.net with "Данный метод работает только по API!" —
-  // so we redirect without `i` and let the user pick from available methods.
+  // ── Form-redirect path ────────────────────────────────────────────────────
+  // Reached when: (a) FK_API_KEY not set, OR (b) API returned FK Wallet fallback.
+  // Do NOT pass `i` — methods 36/44 are API-only; pay.freekassa.net rejects them
+  // with "только по API". Without `i` FK shows all merchant-enabled form methods.
   const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
   const url = new URL("https://pay.freekassa.net/");
   url.searchParams.set("m", FK_SHOP_ID);
@@ -300,7 +297,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
   url.searchParams.set("us", successUrl);
   url.searchParams.set("uf", failureUrl);
 
-  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub }, "Redirecting to FK form-redirect (no API key)");
+  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub }, "Redirecting to FK form-redirect (no i)");
   res.redirect(302, url.toString());
 });
 
