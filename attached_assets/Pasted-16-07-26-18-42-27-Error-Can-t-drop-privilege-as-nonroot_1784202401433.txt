@@ -1,0 +1,452 @@
+16/07/26 18:42:27
+Error: Can't drop privilege as nonroot user
+
+16/07/26 18:42:27
+For help, use /usr/bin/supervisord -h
+
+16/07/26 18:42:27
+heal-schema: applied: CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions(plan_id)
+
+16/07/26 18:42:27
+heal-schema: applied: CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx ON users(referred_by_user_id)
+
+16/07/26 18:42:27
+heal-schema: applied extra_device_slots backfill + users column drop
+
+16/07/26 18:42:27
+heal-schema: applied referral_code backfill
+
+16/07/26 18:42:27
+heal-schema: applied users_referral_code_unique constraint
+
+16/07/26 18:42:27
+heal-schema: applied vpn_keys_uuid_unique
+
+16/07/26 18:42:27
+heal-schema: applied vpn_nodes_name_unique
+
+16/07/26 18:42:27
+heal-schema: applied payments_one_pending_per_user_type_idx
+
+16/07/26 18:42:27
+heal-schema: applied vpn_nodes host NULL backfill
+
+16/07/26 18:42:27
+heal-schema: FAILED error: syntax error at or near "$"
+
+16/07/26 18:42:27
+    at /app/db-migrate/node_modules/.pnpm/pg@8.22.0/node_modules/pg/lib/client.js:652:17
+
+16/07/26 18:42:27
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+16/07/26 18:42:27
+    at async file:///app/db-migrate/heal-schema.mjs:184:3 {
+
+16/07/26 18:42:27
+  length: 89,
+
+16/07/26 18:42:27
+  severity: 'ERROR',
+
+16/07/26 18:42:27
+  code: '42601',
+
+16/07/26 18:42:27
+  detail: undefined,
+
+16/07/26 18:42:27
+  hint: undefined,
+
+16/07/26 18:42:27
+  position: '9',
+
+16/07/26 18:42:27
+  internalPosition: undefined,
+
+16/07/26 18:42:27
+  internalQuery: undefined,
+
+16/07/26 18:42:27
+  where: undefined,
+
+16/07/26 18:42:27
+  schema: undefined,
+
+16/07/26 18:42:27
+  table: undefined,
+
+16/07/26 18:42:27
+  column: undefined,
+
+16/07/26 18:42:27
+  dataType: undefined,
+
+16/07/26 18:42:27
+  constraint: undefined,
+
+16/07/26 18:42:27
+  file: 'scan.l',
+
+16/07/26 18:42:27
+  line: '1244',
+
+16/07/26 18:42:27
+  routine: 'scanner_yyerror'
+
+16/07/26 18:42:27
+}
+
+16/07/26 18:42:28
+WARNING: heal-schema.mjs failed — see above.
+
+16/07/26 18:42:28
+Pushing database schema in the background...
+
+16/07/26 18:42:55
+Applying non-interactive schema patches...
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_data text
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_mime_type text
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_device_slots integer NOT NULL DEFAULT 0
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS min_hourly_topup_rub integer NOT NULL DEFAULT 0
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT ''
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id)
+
+16/07/26 18:42:57
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS referral_commission_percent integer NOT NULL DEFAULT 0
+
+16/07/26 18:42:57
+heal-schema: applied: CREATE INDEX IF NOT EXISTS payments_subscription_id_idx ON payments(subscription_id)
+
+16/07/26 18:42:57
+Error: Can't drop privilege as nonroot user
+
+16/07/26 18:42:57
+For help, use /usr/bin/supervisord -h
+
+16/07/26 18:42:57
+heal-schema: applied: CREATE INDEX IF NOT EXISTS vpn_keys_node_id_idx ON vpn_keys(node_id)
+
+16/07/26 18:42:57
+heal-schema: applied: CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions(plan_id)
+
+16/07/26 18:42:57
+heal-schema: applied: CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx ON users(referred_by_user_id)
+
+16/07/26 18:42:57
+heal-schema: applied extra_device_slots backfill + users column drop
+
+16/07/26 18:42:57
+heal-schema: applied referral_code backfill
+
+16/07/26 18:42:57
+heal-schema: applied users_referral_code_unique constraint
+
+16/07/26 18:42:57
+heal-schema: applied vpn_keys_uuid_unique
+
+16/07/26 18:42:57
+heal-schema: applied vpn_nodes_name_unique
+
+16/07/26 18:42:57
+heal-schema: applied payments_one_pending_per_user_type_idx
+
+16/07/26 18:43:49
+Applying non-interactive schema patches...
+
+16/07/26 18:43:50
+heal-schema: applied: ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_data text
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_mime_type text
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_device_slots integer NOT NULL DEFAULT 0
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS min_hourly_topup_rub integer NOT NULL DEFAULT 0
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT ''
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id)
+
+16/07/26 18:43:51
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS referral_commission_percent integer NOT NULL DEFAULT 0
+
+16/07/26 18:43:51
+heal-schema: applied: CREATE INDEX IF NOT EXISTS payments_subscription_id_idx ON payments(subscription_id)
+
+16/07/26 18:43:51
+heal-schema: applied: CREATE INDEX IF NOT EXISTS vpn_keys_node_id_idx ON vpn_keys(node_id)
+
+16/07/26 18:43:51
+heal-schema: applied: CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions(plan_id)
+
+16/07/26 18:43:51
+heal-schema: applied: CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx ON users(referred_by_user_id)
+
+16/07/26 18:43:51
+heal-schema: applied extra_device_slots backfill + users column drop
+
+16/07/26 18:43:51
+heal-schema: applied referral_code backfill
+
+16/07/26 18:43:51
+heal-schema: applied users_referral_code_unique constraint
+
+16/07/26 18:43:51
+heal-schema: applied vpn_keys_uuid_unique
+
+16/07/26 18:43:51
+heal-schema: applied vpn_nodes_name_unique
+
+16/07/26 18:43:51
+heal-schema: applied payments_one_pending_per_user_type_idx
+
+16/07/26 18:43:51
+heal-schema: applied vpn_nodes host NULL backfill
+
+16/07/26 18:43:51
+heal-schema: FAILED error: syntax error at or near "$"
+
+16/07/26 18:43:51
+    at /app/db-migrate/node_modules/.pnpm/pg@8.22.0/node_modules/pg/lib/client.js:652:17
+
+16/07/26 18:43:51
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+16/07/26 18:43:51
+    at async file:///app/db-migrate/heal-schema.mjs:184:3 {
+
+16/07/26 18:43:51
+  length: 89,
+
+16/07/26 18:43:51
+  severity: 'ERROR',
+
+16/07/26 18:43:51
+  code: '42601',
+
+16/07/26 18:43:51
+  detail: undefined,
+
+16/07/26 18:43:51
+  hint: undefined,
+
+16/07/26 18:43:51
+  position: '9',
+
+16/07/26 18:43:51
+  internalPosition: undefined,
+
+16/07/26 18:43:51
+  internalQuery: undefined,
+
+16/07/26 18:43:51
+  where: undefined,
+
+16/07/26 18:43:51
+  schema: undefined,
+
+16/07/26 18:43:51
+  table: undefined,
+
+16/07/26 18:43:51
+  column: undefined,
+
+16/07/26 18:43:51
+  dataType: undefined,
+
+16/07/26 18:43:51
+  constraint: undefined,
+
+16/07/26 18:43:51
+  file: 'scan.l',
+
+16/07/26 18:43:51
+  line: '1244',
+
+16/07/26 18:43:51
+  routine: 'scanner_yyerror'
+
+16/07/26 18:43:51
+}
+
+16/07/26 18:43:51
+Error: Can't drop privilege as nonroot user
+
+16/07/26 18:43:51
+For help, use /usr/bin/supervisord -h
+
+16/07/26 18:43:51
+WARNING: heal-schema.mjs failed — see above.
+
+16/07/26 18:43:51
+Pushing database schema in the background...
+
+16/07/26 18:45:14
+Applying non-interactive schema patches...
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_data text
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_mime_type text
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_device_slots integer NOT NULL DEFAULT 0
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS min_hourly_topup_rub integer NOT NULL DEFAULT 0
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT ''
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id)
+
+16/07/26 18:45:16
+heal-schema: applied: ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS referral_commission_percent integer NOT NULL DEFAULT 0
+
+16/07/26 18:45:16
+heal-schema: applied: CREATE INDEX IF NOT EXISTS payments_subscription_id_idx ON payments(subscription_id)
+
+16/07/26 18:45:16
+heal-schema: applied: CREATE INDEX IF NOT EXISTS vpn_keys_node_id_idx ON vpn_keys(node_id)
+
+16/07/26 18:45:16
+heal-schema: applied: CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions(plan_id)
+
+16/07/26 18:45:16
+heal-schema: applied: CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx ON users(referred_by_user_id)
+
+16/07/26 18:45:16
+heal-schema: applied extra_device_slots backfill + users column drop
+
+16/07/26 18:45:16
+heal-schema: applied referral_code backfill
+
+16/07/26 18:45:16
+heal-schema: applied users_referral_code_unique constraint
+
+16/07/26 18:45:16
+heal-schema: applied vpn_keys_uuid_unique
+
+16/07/26 18:45:16
+heal-schema: applied vpn_nodes_name_unique
+
+16/07/26 18:45:16
+heal-schema: applied payments_one_pending_per_user_type_idx
+
+16/07/26 18:45:16
+heal-schema: applied vpn_nodes host NULL backfill
+
+16/07/26 18:45:16
+heal-schema: FAILED error: syntax error at or near "$"
+
+16/07/26 18:45:16
+    at /app/db-migrate/node_modules/.pnpm/pg@8.22.0/node_modules/pg/lib/client.js:652:17
+
+16/07/26 18:45:16
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+16/07/26 18:45:16
+    at async file:///app/db-migrate/heal-schema.mjs:184:3 {
+
+16/07/26 18:45:16
+  length: 89,
+
+16/07/26 18:45:16
+  severity: 'ERROR',
+
+16/07/26 18:45:16
+  code: '42601',
+
+16/07/26 18:45:16
+  detail: undefined,
+
+16/07/26 18:45:16
+  hint: undefined,
+
+16/07/26 18:45:16
+  position: '9',
+
+16/07/26 18:45:16
+  internalPosition: undefined,
+
+16/07/26 18:45:16
+  internalQuery: undefined,
+
+16/07/26 18:45:16
+  where: undefined,
+
+16/07/26 18:45:16
+  schema: undefined,
+
+16/07/26 18:45:16
+  table: undefined,
+
+16/07/26 18:45:16
+  column: undefined,
+
+16/07/26 18:45:16
+  dataType: undefined,
+
+16/07/26 18:45:16
+  constraint: undefined,
+
+16/07/26 18:45:16
+  file: 'scan.l',
+
+16/07/26 18:45:16
+  line: '1244',
+
+16/07/26 18:45:16
+  routine: 'scanner_yyerror'
+
+16/07/26 18:45:16
+}
+
+16/07/26 18:45:16
+Error: Can't drop privilege as nonroot user
+
+16/07/26 18:45:16
+For help, use /usr/bin/supervisord -h
+
+16/07/26 18:45:16
+WARNING: heal-schema.mjs failed — see above.
+
+16/07/26 18:45:16
+Pushing database schema in the background...

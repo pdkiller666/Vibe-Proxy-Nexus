@@ -182,12 +182,12 @@ try {
   // with `WHERE revoked_at IS NULL`; a partial index is smaller and faster
   // than a full index on revoked_at because only a fraction of rows are active.
   await client.query(`
-    DO $
+    DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'vpn_keys_active_idx') THEN
         CREATE INDEX vpn_keys_active_idx ON vpn_keys(revoked_at) WHERE revoked_at IS NULL;
       END IF;
-    END $;
+    END $$;
   `);
   console.log("heal-schema: applied vpn_keys_active_idx");
 
@@ -203,12 +203,12 @@ try {
   // M-7: plans.name unique — plan names are user-visible; duplicates cause
   // confusion in admin and user-facing plan selection.
   await client.query(`
-    DO $
+    DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'plans_name_unique') THEN
         CREATE UNIQUE INDEX plans_name_unique ON plans(name);
       END IF;
-    END $;
+    END $$;
   `);
   console.log("heal-schema: applied plans_name_unique");
 
