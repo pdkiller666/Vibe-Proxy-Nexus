@@ -29,100 +29,144 @@ function verifyWebhookSign(shopId: string, amount: string, secret2: string, orde
   return expected === received;
 }
 
-/**
- * Create a FreeKassa order via their REST API v1.
- *
- * All payment methods — including СБП (НСПК) — are available only via the
- * API. The form-redirect approach blocks СБП with "method works via API only".
- *
- * Signature: sort body params alphabetically by key, join values with "|",
- * HMAC-SHA256 with the API key.
- *
- * @returns the `location` URL to which the user should be redirected.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// FK API helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
 // FK payment method IDs (per FK notification 2026-07-16)
 const FK_METHOD_IDS = {
-  card: 36,   // Visa / MasterCard / МИР
-  qiwi: 35,   // QIWI
-  sbp:  44,   // СБП (НСПК)
+  card: 36,   // Visa / MasterCard / МИР (Card RUB API)
+  sbp:  44,   // СБП API (НСПК)
+  qiwi: 35,   // QIWI API
 } as const;
 
 type FkMethod = keyof typeof FK_METHOD_IDS;
 
-async function createFkOrder(opts: {
-  shopId: string;
-  apiKey: string;
-  amount: number;
-  paymentId: number;   // our internal DB integer id (FK requires numeric paymentId)
-  email: string;
-  ip: string;
-  successUrl: string;
-  failureUrl: string;
-  method?: FkMethod;   // pre-select payment method; omit to show all
-}): Promise<string> {
+// Canonical FK API base URL per official docs (api.fk.life/v1/).
+// api.freekassa.net is a legacy alias kept as fallback for Amvera network issues.
+const FK_API_HOSTS = ["https://api.fk.life/v1", "https://api.freekassa.net/v1"];
+
+/**
+ * Send a signed POST request to the FK REST API.
+ * Signature: ksort all body fields (excl. signature), join values with "|", HMAC-SHA256.
+ * Tries FK_API_HOSTS in order; falls back on network error.
+ */
+async function fkApiRequest<T = Record<string, unknown>>(
+  path: string,
+  shopId: string,
+  apiKey: string,
+  extraFields: Record<string, string | number> = {},
+): Promise<T> {
   const nonce = Date.now();
-
-  // Per FK docs (api.fk.life/v1/orders/create):
-  //   - paymentId: string (our numeric DB id serialises fine as JSON number → string)
-  //   - i: integer, REQUIRED — without it FK defaults to FK Wallet regardless of method
-  //   - All fields sorted alphabetically by key, values joined with "|", HMAC-SHA256
-  // Default to card (36) when no method specified so `i` is always present.
-  const methodId = opts.method ? FK_METHOD_IDS[opts.method] : FK_METHOD_IDS.card;
-
-  // NOTE: success_url / failure_url are NOT included here.
-  // Per FK docs they require support activation; if not enabled, FK computes
-  // the signature without those fields, causing a mismatch with our signature.
-  // After payment FK will redirect to the cabinet-configured success/failure URLs.
   const body: Record<string, string | number> = {
-    amount: opts.amount,
-    currency: "RUB",
-    email: opts.email,
-    i: methodId,
-    ip: opts.ip,
+    ...extraFields,
     nonce,
-    paymentId: String(opts.paymentId),
-    shopId: Number(opts.shopId),
+    shopId: Number(shopId),
   };
 
-  // Keys are already in alphabetical order above, but sort() is defensive.
-  const sortedKeys = Object.keys(body).sort();
-  const signStr = sortedKeys.map((k) => String(body[k])).join("|");
-  const signature = createHmac("sha256", opts.apiKey).update(signStr).digest("hex");
-
+  // Sort alphabetically by key, join VALUES with "|", then HMAC-SHA256
+  const signStr = Object.keys(body).sort().map((k) => String(body[k])).join("|");
+  const signature = createHmac("sha256", apiKey).update(signStr).digest("hex");
   const payload = { ...body, signature };
 
-  // Try api.fk.life first (canonical per FK docs), fall back to api.freekassa.net
-  // if the primary host is unreachable (e.g. blocked on some hosting providers).
-  const FK_HOSTS = ["https://api.fk.life/v1", "https://api.freekassa.net/v1"];
-  let data: { type?: string; orderId?: number; location?: string; message?: string } | null = null;
   let lastErr: unknown;
-
-  for (const host of FK_HOSTS) {
+  for (const host of FK_API_HOSTS) {
     try {
-      const resp = await fetch(`${host}/orders/create`, {
+      const resp = await fetch(`${host}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10_000),
       });
-      data = (await resp.json()) as typeof data;
-      logger.debug({ host }, "FK API host used");
-      break;
+      const data = await resp.json() as T;
+      logger.debug({ host, path }, "FK API call succeeded");
+      return data;
     } catch (err) {
       lastErr = err;
-      logger.warn({ host, err }, "FK API host unreachable, trying next");
+      logger.warn({ host, path, err }, "FK API host unreachable, trying next");
     }
   }
+  throw lastErr;
+}
 
-  if (!data) throw lastErr;
+/**
+ * Check whether a FK payment method is available for this shop.
+ * Uses POST /currencies/{id}/status per FK docs section 2.5.
+ * Returns { available: true } or { available: false, reason: string }.
+ */
+async function checkFkMethodAvailable(
+  shopId: string,
+  apiKey: string,
+  methodId: number,
+): Promise<{ available: boolean; reason?: string }> {
+  try {
+    const data = await fkApiRequest<{ type?: string; message?: string }>(
+      `/currencies/${methodId}/status`,
+      shopId,
+      apiKey,
+    );
+    if (data.type === "success") return { available: true };
+    return { available: false, reason: data.message ?? JSON.stringify(data) };
+  } catch (err) {
+    return { available: false, reason: String(err) };
+  }
+}
+
+/**
+ * Create a FK order via POST /orders/create and return the redirect URL.
+ *
+ * Per FK docs:
+ *   - `i` is REQUIRED (method ID); without it FK defaults to FK Wallet
+ *   - `success_url` / `failure_url` need explicit FK support activation;
+ *     including them without activation causes signature mismatch → omitted here
+ *   - `paymentId` is optional (string); used as MERCHANT_ORDER_ID in webhook
+ *   - "В некоторых случаях необходимо передавать дополнительные поля" — the
+ *     pre-flight status check will surface unavailable methods before we attempt
+ */
+async function createFkOrder(opts: {
+  shopId: string;
+  apiKey: string;
+  amount: number;
+  paymentId: number;
+  email: string;
+  ip: string;
+  method: FkMethod;   // always required — caller provides default
+}): Promise<string> {
+  const methodId = FK_METHOD_IDS[opts.method];
+
+  // Pre-flight: verify the method is active for this shop.
+  // FK silently falls back to FK Wallet when `i` refers to a method that isn't
+  // activated, making it impossible to detect from the success response alone.
+  const status = await checkFkMethodAvailable(opts.shopId, opts.apiKey, methodId);
+  if (!status.available) {
+    throw new Error(
+      `Метод оплаты ${opts.method} (id=${methodId}) недоступен для магазина: ${status.reason ?? "не активирован в кабинете FK"}`,
+    );
+  }
+
+  const data = await fkApiRequest<{
+    type?: string;
+    orderId?: number;
+    orderHash?: string;
+    location?: string;
+    message?: string;
+  }>("/orders/create", opts.shopId, opts.apiKey, {
+    amount: opts.amount,
+    currency: "RUB",
+    email: opts.email,
+    i: methodId,
+    ip: opts.ip,
+    paymentId: String(opts.paymentId),
+  });
+
+  logger.info(
+    { fkOrderId: data.orderId, location: data.location, methodId, method: opts.method, paymentId: opts.paymentId },
+    "FK /orders/create response",
+  );
 
   if (data.type !== "success" || !data.location) {
     throw new Error(`FreeKassa API error: ${data.message ?? JSON.stringify(data)}`);
   }
-
-  // Response location format: https://pay.freekassa.net/form/{orderId}/{orderHash}
-  // (no query params — method selection is embedded in the order at creation time via `i`)
-  logger.info({ fkOrderId: data.orderId, methodId, method: opts.method ?? "card(default)", paymentId: opts.paymentId }, "FreeKassa order created");
 
   return data.location;
 }
@@ -197,28 +241,35 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
       "127.0.0.1";
 
     // Accept ?method=card|sbp|qiwi to pre-select FK payment method (i param).
+    // Default to "card" — `i` is required by the FK API; omitting it causes FK
+    // to silently fall back to FK Wallet regardless of what methods are enabled.
     const rawMethod = (req.query.method as string | undefined)?.toLowerCase();
-    const method = (rawMethod === "card" || rawMethod === "sbp" || rawMethod === "qiwi")
-      ? (rawMethod as FkMethod)
-      : undefined;
+    const method: FkMethod =
+      rawMethod === "card" || rawMethod === "sbp" || rawMethod === "qiwi"
+        ? rawMethod
+        : "card";
 
     try {
       const location = await createFkOrder({
         shopId: FK_SHOP_ID,
         apiKey: FK_API_KEY,
         amount: payment.amountRub,
-        paymentId: payment.id,   // FK API requires a numeric paymentId
+        paymentId: payment.id,
         email: user.email,
         ip: userIp,
-        successUrl,
-        failureUrl,
         method,
       });
-      logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "FreeKassa API order created — redirecting");
+      logger.info({ paymentId, method, amountRub: payment.amountRub, type: payment.type }, "FreeKassa order created — redirecting");
       res.redirect(302, location);
     } catch (err) {
-      logger.error({ err, paymentId }, "FreeKassa API order creation failed");
-      res.status(502).json({ error: "Ошибка при создании заказа в FreeKassa. Попробуйте позже." });
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err: msg, paymentId, method }, "FreeKassa order creation failed");
+      // Surface method-unavailable errors to the user with a clear message
+      if (msg.includes("недоступен")) {
+        res.status(503).json({ error: msg });
+      } else {
+        res.status(502).json({ error: "Ошибка при создании заказа в FreeKassa. Попробуйте позже." });
+      }
     }
     return;
   }
