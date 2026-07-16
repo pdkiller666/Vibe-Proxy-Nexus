@@ -1,10 +1,9 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../../lib/auth";
-import { addXrayClient, isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
-import { buildVlessLink, buildDeepLink, generateKeyUuid } from "../../lib/vless";
-import { BRAND_NAME } from "../../lib/subscription";
+import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
+import { issueKeyForUser } from "../../lib/keyIssuance";
 
 const router: IRouter = Router();
 
@@ -24,45 +23,24 @@ router.get("/admin/vpn-keys", requireAuth, requireAdmin, async (_req, res): Prom
 });
 
 router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const { userId } = req.body as { userId?: number };
+  const { userId, nodeId } = req.body as { userId?: number; nodeId?: number };
   if (!userId) { res.status(400).json({ error: "userId required" }); return; }
 
-  const [node] = await db
-    .select()
-    .from(vpnNodesTable)
-    .where(eq(vpnNodesTable.isActive, true))
-    .limit(1);
+  // Routed through the same issueKeyForUser as the self-service route
+  // (previously this reimplemented node selection and picked *any* active
+  // node with no capacity check at all — risking oversubscribing a node
+  // past its configured maxUsers). Admin-issued keys intentionally still
+  // bypass the *user's own* device-slot count and traffic-limit block (this
+  // is a manual override for support cases, e.g. granting a bonus/temporary
+  // device), but must always respect the target node's hardware capacity.
+  const result = await issueKeyForUser(userId, Number.MAX_SAFE_INTEGER, nodeId);
 
-  if (!node) { res.status(404).json({ error: "No active VPN node" }); return; }
-
-  const uuid = generateKeyUuid();
-  const label = `${BRAND_NAME} — ${node.name}`;
-  const vlessLink = buildVlessLink(node, uuid, label);
-  const deepLink = buildDeepLink(vlessLink);
-
-  if (isLocalXrayEnabled()) {
-    try {
-      // See keyIssuance.ts: the Xray "email" identifier must be the unique
-      // UUID, not the (possibly colliding) display label.
-      await addXrayClient(uuid, uuid);
-    } catch (err) {
-      res.status(502).json({ error: "Failed to provision key on node" });
-      return;
-    }
-  }
-
-  const [key] = await db
-    .insert(vpnKeysTable)
-    .values({ userId, nodeId: node.id, uuid, label, vlessLink, deepLink })
-    .returning();
-
-  if (!key) {
-    if (isLocalXrayEnabled()) { try { await removeXrayClient(uuid); } catch {} }
-    res.status(500).json({ error: "Failed to persist key" });
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
     return;
   }
 
-  res.status(201).json({ ...key, nodeName: node.name });
+  res.status(201).json({ ...result.key, nodeName: result.nodeName });
 });
 
 router.delete("/admin/vpn-keys/:keyId", requireAuth, requireAdmin, async (req, res): Promise<void> => {

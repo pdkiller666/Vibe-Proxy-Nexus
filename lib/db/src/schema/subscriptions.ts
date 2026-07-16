@@ -60,7 +60,14 @@ export const subscriptionsTable = pgTable(
     trafficLimitExceededAt: timestamp("traffic_limit_exceeded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("subscriptions_user_id_idx").on(table.userId)],
+  (table) => [
+    index("subscriptions_user_id_idx").on(table.userId),
+    // Enforcement/billing jobs (hourlyBilling.ts, subscriptionLifecycle.ts,
+    // keyIssuance.ts) all filter "active" subscriptions on every tick.
+    index("subscriptions_status_idx").on(table.status),
+    // Plan-based filtering (reporting, plan deactivation cascade checks).
+    index("subscriptions_plan_id_idx").on(table.planId),
+  ],
 );
 
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable).omit({

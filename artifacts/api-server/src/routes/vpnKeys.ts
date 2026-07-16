@@ -177,32 +177,42 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
     return;
   }
 
-  // Remove the client from Xray first so the key stops working before we mark
-  // it revoked; if that fails, keep the DB state consistent and surface it.
-  if (isLocalXrayEnabled() && !existing.revokedAt) {
-    try {
-      await removeXrayClient(existing.uuid);
-    } catch (err) {
-      req.log.error({ err, uuid: existing.uuid }, "Failed to remove client from local Xray");
-      res.status(502).json({ error: "Failed to revoke VPN key on the node" });
-      return;
-    }
+  if (existing.revokedAt) {
+    // Already revoked — idempotent, return success.
+    res.sendStatus(204);
+    return;
   }
 
+  // Update the DB first so the key is marked revoked even if Xray removal
+  // subsequently fails. The safe failure mode: DB says revoked, Xray still
+  // has the client → device stops connecting on next Xray restart or key
+  // reconcile, no user data integrity issue. The previous (unsafe) order was
+  // Xray-first: DB still said active while the device couldn't connect, which
+  // presented the user with a "working" key that did nothing.
   try {
     await db
       .update(vpnKeysTable)
       .set({ revokedAt: new Date(), revokedReason: "user" })
       .where(and(eq(vpnKeysTable.id, existing.id), eq(vpnKeysTable.userId, user.id)));
   } catch (err) {
-    // The client is already gone from Xray but the DB still shows it active.
-    // Surface this so it can be reconciled (retry revoke).
-    req.log.error(
-      { err, uuid: existing.uuid },
-      "Client removed from Xray but DB revoke failed — reconciliation needed",
-    );
+    req.log.error({ err, keyId: existing.id }, "Failed to revoke VPN key in DB");
     res.status(500).json({ error: "Failed to revoke VPN key" });
     return;
+  }
+
+  // Remove from Xray after the DB is committed. Non-fatal: the key is already
+  // DB-revoked (source of truth). If Xray removal fails the orphaned client
+  // stops being able to authenticate once the user renews/changes plans or
+  // Xray restarts — no ongoing access is granted.
+  if (isLocalXrayEnabled()) {
+    try {
+      await removeXrayClient(existing.uuid);
+    } catch (err) {
+      req.log.warn(
+        { err, uuid: existing.uuid },
+        "Key revoked in DB but Xray removal failed — client will stop connecting on next Xray restart",
+      );
+    }
   }
 
   res.sendStatus(204);

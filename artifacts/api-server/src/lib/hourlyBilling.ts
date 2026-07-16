@@ -84,8 +84,19 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
 
   if (rows.length === 0) return { billed: 0, expired: 0 };
 
-  const charges: { subscriptionId: number; userId: number; amountKopecks: number; newLastBilledAt: Date }[] = [];
-  const expirations: { subscriptionId: number; userId: number; newLastBilledAt: Date }[] = [];
+  const charges: {
+    subscriptionId: number;
+    userId: number;
+    amountKopecks: number;
+    oldLastBilledAt: Date | null;
+    newLastBilledAt: Date;
+  }[] = [];
+  const expirations: {
+    subscriptionId: number;
+    userId: number;
+    oldLastBilledAt: Date | null;
+    newLastBilledAt: Date;
+  }[] = [];
 
   for (const row of rows as HourlySubscriptionRow[]) {
     const rateKopecks = row.hourlyRateKopecks;
@@ -119,6 +130,7 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
       expirations.push({
         subscriptionId: row.subscriptionId,
         userId: row.userId,
+        oldLastBilledAt: lastBilledAt,
         newLastBilledAt: billFrom,
       });
       continue;
@@ -127,19 +139,67 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
     const amountKopecks = Math.round(affordableTicks * perTickKopecks);
     const newLastBilledAt = new Date(billFrom.getTime() + affordableTicks * BILLING_TICK_MS);
 
-    charges.push({ subscriptionId: row.subscriptionId, userId: row.userId, amountKopecks, newLastBilledAt });
+    charges.push({
+      subscriptionId: row.subscriptionId,
+      userId: row.userId,
+      amountKopecks,
+      oldLastBilledAt: lastBilledAt,
+      newLastBilledAt,
+    });
 
     if (affordableTicks < ticksElapsed) {
       // Charged everything the balance could cover, but that didn't reach
       // the full elapsed/active window — balance hit zero mid-tick.
-      expirations.push({ subscriptionId: row.subscriptionId, userId: row.userId, newLastBilledAt });
+      expirations.push({
+        subscriptionId: row.subscriptionId,
+        userId: row.userId,
+        oldLastBilledAt: lastBilledAt,
+        newLastBilledAt,
+      });
     }
   }
 
+  // Set of subscription ids actually charged this tick, after the optimistic
+  // lock below — only these get a balance debit / ledger entry. Declared
+  // here so the expirations block (which may reference subscriptions charged
+  // above) can see it.
+  let chargedSubscriptionIds = new Set<number>();
+
   if (charges.length > 0) {
     await jobsDb.transaction(async (tx) => {
+      // Optimistic concurrency guard: the subscriptions update only matches
+      // rows whose last_billed_at is still exactly what we read at the top
+      // of this tick. Without this, two overlapping ticks (concurrent
+      // instances, or a tick that overruns its own 5-minute interval) could
+      // both compute a charge from the same stale snapshot and both debit
+      // the user's balance for the same elapsed window. We update
+      // subscriptions FIRST and use its RETURNING to learn which charges
+      // actually "won" the lock, then only debit balances / write ledger
+      // entries for those — so a lost race costs nothing, instead of
+      // double-charging.
+      const subValues = sql.join(
+        charges.map(
+          (c) =>
+            sql`(${c.subscriptionId}::int, ${c.newLastBilledAt.toISOString()}::timestamptz, ${
+              c.oldLastBilledAt ? sql`${c.oldLastBilledAt.toISOString()}::timestamptz` : sql`null::timestamptz`
+            })`,
+        ),
+        sql`, `,
+      );
+      const updatedRows = await tx.execute<{ id: number }>(sql`
+        update subscriptions as s
+        set last_billed_at = c.last_billed_at
+        from (values ${subValues}) as c(id, last_billed_at, old_last_billed_at)
+        where s.id = c.id and s.last_billed_at is not distinct from c.old_last_billed_at
+        returning s.id
+      `);
+      chargedSubscriptionIds = new Set(updatedRows.rows.map((r) => r.id));
+
+      const wonCharges = charges.filter((c) => chargedSubscriptionIds.has(c.subscriptionId));
+      if (wonCharges.length === 0) return;
+
       const balanceValues = sql.join(
-        charges.map((c) => sql`(${c.userId}::int, ${c.amountKopecks}::int)`),
+        wonCharges.map((c) => sql`(${c.userId}::int, ${c.amountKopecks}::int)`),
         sql`, `,
       );
       await tx.execute(sql`
@@ -149,19 +209,8 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
         where u.id = c.user_id
       `);
 
-      const subValues = sql.join(
-        charges.map((c) => sql`(${c.subscriptionId}::int, ${c.newLastBilledAt.toISOString()}::timestamptz)`),
-        sql`, `,
-      );
-      await tx.execute(sql`
-        update subscriptions as s
-        set last_billed_at = c.last_billed_at
-        from (values ${subValues}) as c(id, last_billed_at)
-        where s.id = c.id
-      `);
-
       await tx.insert(balanceTransactionsTable).values(
-        charges.map((c) => ({
+        wonCharges.map((c) => ({
           userId: c.userId,
           amountKopecks: -c.amountKopecks,
           type: "debit" as const,
@@ -169,22 +218,43 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
         })),
       );
     });
+
+    if (chargedSubscriptionIds.size < charges.length) {
+      logger.warn(
+        {
+          attempted: charges.length,
+          won: chargedSubscriptionIds.size,
+        },
+        "Hourly billing: some charges lost the optimistic lock (concurrent tick) and were skipped, not double-charged",
+      );
+    }
   }
 
   if (expirations.length > 0) {
+    // Same optimistic-lock rationale as the charges block above. A row that
+    // was just charged in this same tick (chargedSubscriptionIds) has a
+    // fresh last_billed_at we know we just set, so guard against that value
+    // instead of the pre-charge snapshot; a row that lost the charge race
+    // above keeps its original guard and simply won't match if another tick
+    // already moved it.
     const subIds = expirations.map((e) => e.subscriptionId);
     const affectedUserIds = [...new Set(expirations.map((e) => e.userId))];
 
     await jobsDb.transaction(async (tx) => {
       const subValues = sql.join(
-        expirations.map((e) => sql`(${e.subscriptionId}::int, ${e.newLastBilledAt.toISOString()}::timestamptz)`),
+        expirations.map((e) => {
+          const guardValue = chargedSubscriptionIds.has(e.subscriptionId) ? e.newLastBilledAt : e.oldLastBilledAt;
+          return sql`(${e.subscriptionId}::int, ${e.newLastBilledAt.toISOString()}::timestamptz, ${
+            guardValue ? sql`${guardValue.toISOString()}::timestamptz` : sql`null::timestamptz`
+          })`;
+        }),
         sql`, `,
       );
       await tx.execute(sql`
         update subscriptions as s
         set status = 'expired', last_billed_at = c.last_billed_at
-        from (values ${subValues}) as c(id, last_billed_at)
-        where s.id = c.id
+        from (values ${subValues}) as c(id, last_billed_at, guard_last_billed_at)
+        where s.id = c.id and s.last_billed_at is not distinct from c.guard_last_billed_at
       `);
     });
 

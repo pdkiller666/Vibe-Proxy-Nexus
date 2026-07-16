@@ -32,4 +32,9 @@ EXPOSE 443 8443
 
 ENV XRAY_CONFIG_PATH=/etc/xray/config.json
 
+# Check that Xray is responding. supervisord (PID 1) stays alive even if xray
+# crashes, so without this the orchestrator never sees the container as unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD xray -version || exit 1
+
 ENTRYPOINT ["/app/render-config.sh"]

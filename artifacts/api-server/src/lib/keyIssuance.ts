@@ -139,57 +139,107 @@ export async function issueKeyForUser(
   const vlessLink = buildVlessLink(node, uuid, label);
   const deepLink = buildDeepLink(vlessLink);
 
-  if (isLocalXrayEnabled()) {
-    try {
-      // Use the key's UUID (not the display label) as the Xray client
-      // "email" — labels are user-chosen/branded text and can collide across
-      // keys or users, which would both corrupt Xray's per-user config
-      // dedup-by-email logic and misattribute traffic stats. The UUID is
-      // guaranteed unique per key.
-      await addXrayClient(uuid, uuid);
-    } catch (err) {
-      logger.error(
-        { err },
-        "issueKeyForUser: failed to register client with local Xray",
+  // Atomic slot-check + DB insert, serialized by pessimistic row locks.
+  //
+  // Both the user's subscription (per-user slot limit) and the target node
+  // (capacity) are locked FOR UPDATE so that concurrent calls for the same
+  // user or node block here until we commit — eliminating the TOCTOU between
+  // the outer checks above and the INSERT below.
+  //
+  // Xray provisioning runs after the commit so the DB lock is held as briefly
+  // as possible. If Xray fails we immediately mark the committed key revoked;
+  // that leaves the DB as the authoritative source of truth (key non-existent
+  // from the user's perspective) rather than an orphaned Xray client.
+  // eslint-disable-next-line prefer-const
+  let key!: typeof vpnKeysTable.$inferSelect;
+  try {
+    key = await db.transaction(async (tx) => {
+      // Lock the user's active subscription to serialize concurrent issuance
+      // for this user. Any concurrent issueKeyForUser for the same user will
+      // block at this point until we commit, so its subsequent count query
+      // reflects our already-inserted key.
+      await tx.execute(
+        sql`SELECT id FROM subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1 FOR UPDATE`,
       );
+
+      // Re-count inside the lock — the safe, authoritative slot count.
+      const [{ slotCount }] = await tx
+        .select({ slotCount: count() })
+        .from(vpnKeysTable)
+        .where(
+          and(
+            eq(vpnKeysTable.userId, userId),
+            eq(vpnKeysTable.nodeId, node.id),
+            isNull(vpnKeysTable.revokedAt),
+          ),
+        );
+      if (slotCount >= totalSlots) {
+        throw Object.assign(new Error("SLOTS_EXCEEDED"), { slotCount, totalSlots });
+      }
+
+      // Lock the node row to serialize capacity checks across concurrent callers.
+      await tx.execute(sql`SELECT id FROM vpn_nodes WHERE id = ${node.id} FOR UPDATE`);
+
+      // Re-count node capacity inside the lock (only when there is a limit).
+      if (node.maxUsers !== null) {
+        const [{ nodeCount }] = await tx
+          .select({ nodeCount: count() })
+          .from(vpnKeysTable)
+          .where(and(eq(vpnKeysTable.nodeId, node.id), isNull(vpnKeysTable.revokedAt)));
+        if (nodeCount >= node.maxUsers) throw new Error("NODE_FULL");
+      }
+
+      const [row] = await tx
+        .insert(vpnKeysTable)
+        .values({
+          userId,
+          nodeId: node.id,
+          uuid,
+          label,
+          description: description?.trim() || null,
+          vlessLink,
+          deepLink,
+        })
+        .returning();
+      if (!row) throw new Error("INSERT_FAILED");
+      return row;
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "SLOTS_EXCEEDED") {
+      const e = err as Error & { slotCount: number; totalSlots: number };
       return {
         ok: false,
-        status: 502,
-        error: "Failed to provision VPN key on the node",
+        status: 409,
+        error: `Все слоты устройств заняты (${e.slotCount} из ${e.totalSlots}). Обратитесь к администратору для расширения.`,
       };
     }
-  }
-
-  let key: typeof vpnKeysTable.$inferSelect | undefined;
-  try {
-    [key] = await db
-      .insert(vpnKeysTable)
-      .values({
-        userId,
-        nodeId: node.id,
-        uuid,
-        label,
-        description: description?.trim() || null,
-        vlessLink,
-        deepLink,
-      })
-      .returning();
-  } catch (err) {
-    logger.error({ err }, "issueKeyForUser: failed to persist VPN key");
-  }
-
-  if (!key) {
-    if (isLocalXrayEnabled()) {
-      try {
-        await removeXrayClient(uuid);
-      } catch (err) {
-        logger.error(
-          { err, uuid },
-          "issueKeyForUser: failed to roll back orphaned Xray client",
-        );
-      }
+    if (err instanceof Error && err.message === "NODE_FULL") {
+      return { ok: false, status: 409, error: "Selected VPN node has reached its user capacity" };
     }
+    logger.error({ err }, "issueKeyForUser: failed to persist VPN key");
     return { ok: false, status: 500, error: "Failed to issue VPN key" };
+  }
+
+  // Provision the Xray client after committing — lock released before the
+  // network call. Failure: immediately revoke the DB row (compensating write)
+  // so the user never sees a "working" key that can't actually connect.
+  if (isLocalXrayEnabled()) {
+    try {
+      // Use UUID (not label) as the Xray "email" tag — labels can collide
+      // across users and corrupt Xray's per-user dedup and traffic attribution.
+      await addXrayClient(uuid, uuid);
+    } catch (err) {
+      logger.error({ err }, "issueKeyForUser: Xray provisioning failed; revoking committed DB key");
+      try {
+        await db
+          .update(vpnKeysTable)
+          .set({ revokedAt: new Date(), revokedReason: "admin" })
+          .where(eq(vpnKeysTable.id, key.id));
+      } catch (dbErr) {
+        logger.error({ dbErr, uuid }, "issueKeyForUser: DB revoke also failed — orphaned key in DB");
+      }
+      return { ok: false, status: 502, error: "Failed to provision VPN key on the node" };
+    }
   }
 
   return { ok: true, key, nodeName: node.name };

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, paymentSettingsTable, subscriptionsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { generatePaymentReference } from "../lib/vless";
@@ -53,9 +53,11 @@ router.post("/extra-slot-order", requireAuth, async (req, res): Promise<void> =>
       return;
     }
 
+    // Atomic SQL increment (not read-then-write in JS) to prevent a lost
+    // update when two concurrent requests both read the same starting value.
     await db
       .update(subscriptionsTable)
-      .set({ extraDeviceSlots: activeSub.extraDeviceSlots + 1 })
+      .set({ extraDeviceSlots: sql`${subscriptionsTable.extraDeviceSlots} + 1` })
       .where(eq(subscriptionsTable.id, activeSub.id));
 
     res.status(200).json({ freeGranted: true, amountRub: 0 });

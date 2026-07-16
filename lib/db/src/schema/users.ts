@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -26,7 +26,12 @@ export const usersTable = pgTable("users", {
   // see requireAuth/getUserBySessionToken in the api-server. Used by the
   // admin panel to show who is "online" (active within the last 5 minutes).
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
-});
+},
+(table) => [
+  // Referral-tree traversal and commission attribution walk this FK on every
+  // subscription payment confirmation.
+  index("users_referred_by_user_id_idx").on(table.referredByUserId),
+]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({
   id: true,

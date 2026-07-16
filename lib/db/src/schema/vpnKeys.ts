@@ -1,4 +1,4 @@
-import { bigint, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -65,7 +65,13 @@ export const vpnKeysTable = pgTable(
     // considered idle once this falls outside the billing grace window.
     lastTrafficAt: timestamp("last_traffic_at", { withTimezone: true }),
   },
-  (table) => [index("vpn_keys_user_id_idx").on(table.userId)],
+  (table) => [
+    index("vpn_keys_user_id_idx").on(table.userId),
+    // Capacity checks and subscription-to-node joins filter on nodeId.
+    index("vpn_keys_node_id_idx").on(table.nodeId),
+    // VLESS auth depends on UUID uniqueness; index pre-created via heal-schema.mjs.
+    uniqueIndex("vpn_keys_uuid_unique").on(table.uuid),
+  ],
 );
 
 export const insertVpnKeySchema = createInsertSchema(vpnKeysTable).omit({

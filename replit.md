@@ -51,7 +51,7 @@
 - No transactional email provider is configured: password-reset links are returned directly in the API/UI response. See `.agents/memory/no-email-provider.md`.
 - `deploy/amvera-vpn-node/` is kept for a FUTURE multi-region setup. Not used by the all-in-one deployment.
 - **Primary domain hotswap**: `payment_settings.primaryDomain` — if non-empty, used in generated vless/subscription links instead of the request's own hostname. Admin can change it instantly if the main domain gets blocked, without redeploying.
-- **Trial period**: `payment_settings.trialEnabled` / `trialDays` — if enabled, shown on the plans page; trial activation flow (if any) to be wired up.
+- **Trial period**: `payment_settings.trialEnabled` / `trialDays` — if enabled, `POST /auth/register` automatically creates an `active` subscription (cheapest active plan, `endsAt` = now + `trialDays`) and auto-issues the user's first VPN key right after signup, so a new user can connect without paying first. Trial creation failures are caught and logged, never block registration. Silently skipped if no active plans exist.
 
 ## Product
 

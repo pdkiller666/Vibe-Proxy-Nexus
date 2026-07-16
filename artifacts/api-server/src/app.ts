@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
@@ -67,6 +67,15 @@ app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 app.use(cookieParser(getSessionSecret()));
 
 app.use("/api", router);
+
+// Global error handler: catches any unhandled exception thrown by route
+// handlers and returns a sanitized 500 instead of letting Express default to
+// leaking a stack trace in the response body.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  logger.error({ err }, "Unhandled route error");
+  res.status(500).json({ error: "Internal server error" });
+});
 
 // In the all-in-one deployment, also serve the built frontend from this process.
 // No-op when STATIC_DIR is unset (e.g. Replit dev).

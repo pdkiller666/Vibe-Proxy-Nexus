@@ -51,6 +51,11 @@ const statements = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT ''`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id)`,
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS referral_commission_percent integer NOT NULL DEFAULT 0`,
+  // FK / lookup indexes added 2026-07-16
+  `CREATE INDEX IF NOT EXISTS payments_subscription_id_idx ON payments(subscription_id)`,
+  `CREATE INDEX IF NOT EXISTS vpn_keys_node_id_idx ON vpn_keys(node_id)`,
+  `CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions(plan_id)`,
+  `CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx ON users(referred_by_user_id)`,
 ];
 
 // Referral codes must be unique and non-empty before the `users_referral_code_unique`
@@ -126,6 +131,44 @@ try {
   console.log("heal-schema: applied referral_code backfill");
   await client.query(referralUniqueConstraintSql);
   console.log("heal-schema: applied users_referral_code_unique constraint");
+
+  // Unique constraint on vpn_keys.uuid — VLESS auth depends on UUID uniqueness.
+  // Guards against app-level UUID collisions (astronomically rare but now DB-enforced).
+  await client.query(`
+    DO $
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'vpn_keys_uuid_unique') THEN
+        CREATE UNIQUE INDEX vpn_keys_uuid_unique ON vpn_keys(uuid);
+      END IF;
+    END $;
+  `);
+  console.log("heal-schema: applied vpn_keys_uuid_unique");
+
+  // Unique constraint on vpn_nodes.name — prevents duplicate node configs.
+  await client.query(`
+    DO $
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'vpn_nodes_name_unique') THEN
+        CREATE UNIQUE INDEX vpn_nodes_name_unique ON vpn_nodes(name);
+      END IF;
+    END $;
+  `);
+  console.log("heal-schema: applied vpn_nodes_name_unique");
+
+  // Unique partial index: at most one pending payment per user per type.
+  // Prevents duplicate-submission races that slip past the pre-check SELECT.
+  await client.query(`
+    DO $
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'payments_one_pending_per_user_type_idx') THEN
+        CREATE UNIQUE INDEX payments_one_pending_per_user_type_idx
+          ON payments(user_id, type)
+          WHERE status = 'pending';
+      END IF;
+    END $;
+  `);
+  console.log("heal-schema: applied payments_one_pending_per_user_type_idx");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

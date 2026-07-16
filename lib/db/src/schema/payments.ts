@@ -1,4 +1,5 @@
-import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -39,7 +40,20 @@ export const paymentsTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   },
-  (table) => [index("payments_user_id_idx").on(table.userId)],
+  (table) => [
+    index("payments_user_id_idx").on(table.userId),
+    // Admin dashboard's pending-payments queue and the FreeKassa webhook
+    // both filter by status on every request/callback.
+    index("payments_status_idx").on(table.status),
+    // Subscription-specific payment lookups (e.g. joining payments to a subscription).
+    index("payments_subscription_id_idx").on(table.subscriptionId),
+    // Prevents duplicate pending orders for the same user+type via a race
+    // condition (two concurrent requests both passing the pre-check SELECT).
+    // Backed by the DB so it works even across multiple app instances.
+    uniqueIndex("payments_one_pending_per_user_type_idx")
+      .on(table.userId, table.type)
+      .where(sql`status = 'pending'`),
+  ],
 );
 
 export const insertPaymentSchema = createInsertSchema(paymentsTable).omit({

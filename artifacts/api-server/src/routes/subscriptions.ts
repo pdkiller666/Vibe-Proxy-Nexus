@@ -97,17 +97,43 @@ router.post("/subscriptions", requireAuth, async (req, res): Promise<void> => {
       return;
     }
 
-    const [subscription] = await db
-      .insert(subscriptionsTable)
-      .values({
-        userId: user.id,
-        planId: plan.id,
-        status: "active",
-        startsAt: new Date(),
-      })
-      .returning();
+    // Every place that assigns a new "active" subscription must retire any
+    // prior active one in the same transaction (see .agents/memory —
+    // multi-active-rows-null-first-desc.md). Without this, a user could end
+    // up with two simultaneously "active" subscriptions (e.g. a
+    // traffic-limit-blocked metered plan plus a freshly activated hourly
+    // one); isTrafficLimitBlocked()/resolveTotalSlots() only look at "the
+    // most recent active" row, so the stale blocked row would still exist
+    // but be invisible to those checks — an unintended free bypass of the
+    // traffic-limit block, distinct from the *intended* one (a genuine paid
+    // renewal/switch, which is allowed to clear the flag by design).
+    let subscription;
+    try {
+      subscription = await db.transaction(async (tx) => {
+        await tx
+          .update(subscriptionsTable)
+          .set({ status: "expired", endsAt: new Date() })
+          .where(
+            and(
+              eq(subscriptionsTable.userId, user.id),
+              eq(subscriptionsTable.status, "active"),
+            ),
+          );
 
-    if (!subscription) {
+        const [inserted] = await tx
+          .insert(subscriptionsTable)
+          .values({
+            userId: user.id,
+            planId: plan.id,
+            status: "active",
+            startsAt: new Date(),
+          })
+          .returning();
+
+        if (!inserted) throw new Error("Failed to activate hourly plan");
+        return inserted;
+      });
+    } catch {
       res.status(500).json({ error: "Failed to activate hourly plan" });
       return;
     }

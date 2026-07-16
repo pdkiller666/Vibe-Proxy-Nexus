@@ -1,29 +1,38 @@
-import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const vpnNodesTable = pgTable("vpn_nodes", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  region: text("region").notNull(),
-  host: text("host"),
-  // Port VPN clients connect to. Defaults to 443, but Amvera-hosted nodes
-  // without a Dedicated IPv4 must use the platform's raw-TCP SNI ports
-  // (5432/27017/6379) instead, since 443 is always TLS-terminated by Amvera's
-  // own edge (see .agents/memory/amvera-raw-tcp-port.md).
-  port: integer("port").notNull().default(443),
-  panelUrl: text("panel_url"),
-  panelLogin: text("panel_login"),
-  panelPassword: text("panel_password"),
-  publicKey: text("public_key"),
-  shortId: text("short_id"),
-  sni: text("sni").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  // Optional cap on concurrently-active VPN keys this node will serve. Null
-  // means unlimited. Enforced at key-issuance time in vpnKeys.ts.
-  maxUsers: integer("max_users"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const vpnNodesTable = pgTable(
+  "vpn_nodes",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    region: text("region").notNull(),
+    host: text("host"),
+    // Port VPN clients connect to. Defaults to 443, but Amvera-hosted nodes
+    // without a Dedicated IPv4 must use the platform's raw-TCP SNI ports
+    // (5432/27017/6379) instead, since 443 is always TLS-terminated by Amvera's
+    // own edge (see .agents/memory/amvera-raw-tcp-port.md).
+    port: integer("port").notNull().default(443),
+    panelUrl: text("panel_url"),
+    panelLogin: text("panel_login"),
+    panelPassword: text("panel_password"),
+    publicKey: text("public_key"),
+    shortId: text("short_id"),
+    sni: text("sni").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    // Optional cap on concurrently-active VPN keys this node will serve. Null
+    // means unlimited. Enforced at key-issuance time in vpnKeys.ts.
+    maxUsers: integer("max_users"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // keyIssuance.ts filters to active nodes with capacity on every key issuance.
+  (table) => [
+    index("vpn_nodes_is_active_idx").on(table.isActive),
+    // Prevents duplicate node configs; index pre-created via heal-schema.mjs.
+    uniqueIndex("vpn_nodes_name_unique").on(table.name),
+  ],
+);
 
 export const insertVpnNodeSchema = createInsertSchema(vpnNodesTable).omit({
   id: true,
