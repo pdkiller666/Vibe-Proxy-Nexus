@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, plansTable, subscriptionsTable, paymentsTable, paymentSettingsTable } from "@workspace/db";
 import { CreateSubscriptionBody, CreateSubscriptionResponse, ListMySubscriptionsResponse } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
+import { createSubscriptionRateLimit } from "../lib/rateLimit";
 import { generatePaymentReference } from "../lib/vless";
 import { logger } from "../lib/logger";
 
@@ -28,7 +29,7 @@ router.get("/subscriptions/me", requireAuth, async (req, res): Promise<void> => 
   );
 });
 
-router.post("/subscriptions", requireAuth, async (req, res): Promise<void> => {
+router.post("/subscriptions", requireAuth, createSubscriptionRateLimit, async (req, res): Promise<void> => {
   const user = req.appUser!;
   const parsed = CreateSubscriptionBody.safeParse(req.body);
 

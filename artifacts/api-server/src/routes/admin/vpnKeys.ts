@@ -34,6 +34,13 @@ router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res)
   // bypass the *user's own* device-slot count and traffic-limit block (this
   // is a manual override for support cases, e.g. granting a bonus/temporary
   // device), but must always respect the target node's hardware capacity.
+  //
+  // ⚠ Known edge case (L-1): if the user's subscription has already exceeded
+  // its traffic limit (trafficLimitExceededAt is set), the next background
+  // trafficPolling tick will immediately revoke this admin-issued key with
+  // reason "traffic_limit". The admin panel shows this as a "briefly active"
+  // key. To grant a persistent extra key in this state, either clear
+  // trafficLimitExceededAt or sell the user a traffic top-up first.
   const result = await issueKeyForUser(userId, Number.MAX_SAFE_INTEGER, nodeId);
 
   if (!result.ok) {

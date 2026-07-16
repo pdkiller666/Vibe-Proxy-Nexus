@@ -47,6 +47,36 @@ export const registerPerCodeRateLimit = rateLimit({
   },
 });
 
+// IP-based limiter for support ticket creation. Prevents flooding the support
+// queue with automated tickets. Authenticated users are still subject to this
+// because requireAuth runs before the rate limit in the route chain.
+export const createTicketRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много обращений в поддержку. Попробуйте позже." },
+});
+
+// IP-based limiter for adding messages to a support ticket.
+export const addMessageRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много сообщений. Попробуйте позже." },
+});
+
+// IP-based limiter for subscription creation (creates a pending payment row).
+// Without this, a scripted loop can fill the payments table with orphaned rows.
+export const createSubscriptionRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много запросов. Попробуйте позже." },
+});
+
 // IP-based limiter for the public, token-authenticated subscription endpoint
 // (/api/sub/:token). This endpoint has no session/auth cookie by design (VPN
 // client apps like Happ/v2rayNG fetch it directly), so its only line of

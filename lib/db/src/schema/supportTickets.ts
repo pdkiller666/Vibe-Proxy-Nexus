@@ -31,7 +31,13 @@ export const supportMessagesTable = pgTable(
     body: text("body").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("support_messages_ticket_id_idx").on(table.ticketId)],
+  (table) => [
+    index("support_messages_ticket_id_idx").on(table.ticketId),
+    // Admin support panel resolves user details per message; without this
+    // index a ticket with many messages causes a seq-scan on the whole table.
+    // Index pre-created via heal-schema.mjs.
+    index("support_messages_author_id_idx").on(table.authorId),
+  ],
 );
 
 export type SupportTicket = typeof supportTicketsTable.$inferSelect;

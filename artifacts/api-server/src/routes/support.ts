@@ -12,6 +12,7 @@ import {
   AddTicketMessageResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
+import { createTicketRateLimit, addMessageRateLimit } from "../lib/rateLimit";
 
 const router: IRouter = Router();
 
@@ -44,7 +45,7 @@ router.get("/support-tickets", requireAuth, async (req, res): Promise<void> => {
 });
 
 // Create ticket (with first message)
-router.post("/support-tickets", requireAuth, async (req, res): Promise<void> => {
+router.post("/support-tickets", requireAuth, createTicketRateLimit, async (req, res): Promise<void> => {
   const user = req.appUser!;
   const parsed = CreateSupportTicketBody.safeParse(req.body);
   if (!parsed.success) {
@@ -121,7 +122,7 @@ router.get("/support-tickets/:ticketId", requireAuth, async (req, res): Promise<
 });
 
 // Add message to ticket
-router.post("/support-tickets/:ticketId/messages", requireAuth, async (req, res): Promise<void> => {
+router.post("/support-tickets/:ticketId/messages", requireAuth, addMessageRateLimit, async (req, res): Promise<void> => {
   const user = req.appUser!;
   const params = AddTicketMessageParams.safeParse(req.params);
   if (!params.success) {

@@ -47,7 +47,32 @@ app.use(
   }),
 );
 
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// CSP note: unsafe-inline is included for scripts and styles because:
+//   • Vite's production build may inject a tiny inline module-preload shim
+//   • React components use the `style` prop which renders as inline style= attrs
+// The most impactful CSP benefits are still active: blocking external origins,
+// frame-ancestors (clickjacking), base-uri (base-tag injection), and
+// object-src (plugin execution). Remove unsafe-inline after confirming the
+// frontend works without it in a staging environment.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 app.use(cors({ credentials: true, origin: corsOriginCheck }));
 // Payment screenshots are uploaded as base64 JSON (see payments.ts), which
 // inflates a photo to ~1.37x its size as JSON text. Express's default 100kb
