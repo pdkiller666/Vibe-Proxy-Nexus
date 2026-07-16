@@ -33,11 +33,15 @@ function verifyWebhookSign(shopId: string, amount: string, secret2: string, orde
 // FK API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-// FK payment method IDs confirmed active for this merchant (2026-07-16 cabinet check)
+// FK payment method IDs confirmed working for this merchant (2026-07-16 live API test):
+//   - "API"-badged variants (36 Card RUB API, 44 СБП API) are SILENTLY replaced by FK
+//     with an FKWallet order (fkwallet.com) — confirmed via direct /orders/create tests
+//   - regular variants work correctly via API and return a real payment form (fmt.me):
+//     4 VISA RUB, 8 MasterCard RUB, 12 МИР, 42 СБП
 // QIWI (35) removed — QIWI Bank licence revoked 2024, method absent from FK cabinet
 const FK_METHOD_IDS = {
-  card: 36,   // Card RUB API — Visa / MasterCard / МИР
-  sbp:  44,   // СБП API (НСПК)
+  card: 36,   // broken via API (→ FKWallet); card goes through form-redirect instead
+  sbp:  42,   // СБП (form variant) — works via API, returns real fmt.me payment form
 } as const;
 
 type FkMethod = keyof typeof FK_METHOD_IDS;
@@ -236,22 +240,19 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
 
   const FK_API_KEY = process.env.FK_API_KEY ?? "";
 
-  if (FK_API_KEY) {
-    // ── REST API path (required for СБП / НСПК and all modern FK methods) ──
-    // Creates the order server-side; FreeKassa returns a ready payment URL.
+  const rawMethod = (req.query.method as string | undefined)?.toLowerCase();
+  const method: FkMethod = rawMethod === "sbp" ? "sbp" : "card";
+
+  // Card goes straight to form-redirect: the universal "Card RUB API" (36) is
+  // silently replaced by FK with an FKWallet order (confirmed by live tests),
+  // and per-network IDs (4/8/12) would lock the user to one card network.
+  // The FK form lets the user pick VISA / MasterCard / МИР.
+  if (FK_API_KEY && method === "sbp") {
+    // ── REST API path — СБП via i=42 (form variant works via API; 44 "API" doesn't) ──
     const userIp =
       (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
       req.socket.remoteAddress ||
       "127.0.0.1";
-
-    // Accept ?method=card|sbp|qiwi to pre-select FK payment method (i param).
-    // Default to "card" — `i` is required by the FK API; omitting it causes FK
-    // to silently fall back to FK Wallet regardless of what methods are enabled.
-    const rawMethod = (req.query.method as string | undefined)?.toLowerCase();
-    const method: FkMethod =
-      rawMethod === "card" || rawMethod === "sbp" || rawMethod === "qiwi"
-        ? rawMethod
-        : "card";
 
     try {
       const location = await createFkOrder({
@@ -275,24 +276,26 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
         res.redirect(302, failureUrl);
         return;
       }
-      // FK_WALLET_FALLBACK: FK API ignored `i` (API methods 36/44 not activated for this merchant).
-      // Fall through to form-redirect WITHOUT `i` — FK shows whatever methods the merchant has
-      // enabled for form payments. Merchant must contact FK support to activate API card/SBP.
-      logger.warn({ paymentId, method }, "FK API returned FK Wallet — falling back to generic form-redirect (no i)");
+      // FK_WALLET_FALLBACK: FK silently replaced the method with FKWallet.
+      // Fall through to form-redirect WITHOUT `i`.
+      logger.warn({ paymentId, method }, "FK API returned FK Wallet — falling back to form-redirect (no i)");
     }
   }
 
-  // ── Form-redirect path ────────────────────────────────────────────────────
-  // Reached when: (a) FK_API_KEY not set, OR (b) API returned FK Wallet fallback.
-  // Do NOT pass `i` — methods 36/44 are API-only; pay.freekassa.net rejects them
-  // with "только по API". Without `i` FK shows all merchant-enabled form methods.
+  // ── Form-redirect path (pay.fk.money per docs.freekassa.net §1.3) ─────────
+  // Reached when: (a) method=card (universal card via API is broken → FKWallet),
+  // (b) FK_API_KEY not set, or (c) API returned FK Wallet fallback.
+  // Do NOT pass `i` — the "API"-badged IDs (36/44) are rejected by the form with
+  // "только по API"; without `i` FK shows all merchant-enabled form methods
+  // (VISA RUB, MasterCard RUB, МИР, СБП, Онлайн банк).
   const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
-  const url = new URL("https://pay.freekassa.net/");
+  const url = new URL("https://pay.fk.money/");
   url.searchParams.set("m", FK_SHOP_ID);
   url.searchParams.set("oa", String(payment.amountRub));
   url.searchParams.set("currency", "RUB");
   url.searchParams.set("o", payment.reference);
   url.searchParams.set("s", sign);
+  url.searchParams.set("em", user.email);   // pre-fill payer email (docs §1.3)
   url.searchParams.set("lang", "ru");
   url.searchParams.set("us", successUrl);
   url.searchParams.set("uf", failureUrl);
