@@ -1,0 +1,68 @@
+/*
+  VPNexus – FreeKassa payment page skin v5
+  Вложенные селекторы для победы над FK-специфичностью.
+*/
+
+/* Основной фон */
+.payment-page-global__wrap {
+  background-color: #f2f2f2 !important;
+}
+
+/* Карточка формы */
+.payment-page-global__wrap .payment-page__form {
+  background-color: #ffffff !important;
+}
+
+/* Верхний блок (магазин + URL) */
+.payment-page-global__wrap .payment-page__top-info {
+  background-color: #ffffff !important;
+}
+
+/* Заголовок списка методов */
+.payment-page-global__wrap .payment-page__list-header {
+  color: #444444 !important;
+}
+
+/* Активный метод оплаты */
+.payment-page-global__wrap .payment-page__list-item.active,
+.payment-page-global__wrap .payment-page__list-item .active {
+  border: 2px solid #DC5A02 !important;
+  box-shadow: 0 0 0 1px #DC5A02 !important;
+  border-radius: 0 !important;
+}
+
+/* Стрелка выпадающего списка валют */
+.payment-page-global__wrap .payment-page__list-sub-wrap::before {
+  border-right-color: #DC5A02 !important;
+}
+
+/* Вкладка RUB/USD — активная */
+.payment-page-global__wrap .payment-page__btn-group .active,
+.payment-page-global__wrap .payment-page__btn-group .btn.active {
+  background-color: #DC5A02 !important;
+  border-color: #c04e02 !important;
+  color: #ffffff !important;
+  border-radius: 0 !important;
+}
+
+/* ======= КНОПКА «ОПЛАТИТЬ» ======= */
+.payment-page-global__wrap .payment-page__form-fields .payment-page__active__button,
+.payment-page-global__wrap .payment-page__active__button,
+.payment-page__form-fields .payment-page__active__button,
+.payment-page__active__button {
+  background-color: #DC5A02 !important;
+  background-image: none !important;
+  border: 2px solid #c04e02 !important;
+  color: #ffffff !important;
+  border-radius: 0 !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em !important;
+  box-shadow: none !important;
+}
+
+.payment-page__active__button:hover,
+.payment-page-global__wrap .payment-page__active__button:hover {
+  background-color: #c04e02 !important;
+  border-color: #a84402 !important;
+  color: #ffffff !important;
+}

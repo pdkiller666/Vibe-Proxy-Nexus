@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="80" viewBox="0 0 280 80">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&amp;display=swap');
+    </style>
+  </defs>
+
+  <!-- Shield icon -->
+  <g transform="translate(0, 10)">
+    <path d="M30 5 L52 13 L52 33 C52 46 41 56 30 60 C19 56 8 46 8 33 L8 13 Z"
+          fill="#DC5A02"/>
+    <path d="M30 14 L44 20 L44 33 C44 41 37 48 30 51 C23 48 16 41 16 33 L16 20 Z"
+          fill="rgba(0,0,0,0.18)"/>
+    <!-- Lock body -->
+    <rect x="23" y="33" width="14" height="11" rx="1.5" fill="#ffffff"/>
+    <!-- Lock shackle -->
+    <path d="M26 33 L26 30 C26 26.7 34 26.7 34 30 L34 33" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Keyhole -->
+    <circle cx="30" cy="37.5" r="1.8" fill="#DC5A02"/>
+    <rect x="29.2" y="37.5" width="1.6" height="3" rx="0.5" fill="#DC5A02"/>
+  </g>
+
+  <!-- "VPNexus" text -->
+  <text x="68" y="47"
+        font-family="'Space Grotesk', 'Inter', 'Helvetica Neue', Arial, sans-serif"
+        font-size="32"
+        font-weight="700"
+        letter-spacing="-0.5"
+        fill="#111111">VPN<tspan fill="#DC5A02">exus</tspan></text>
+
+  <!-- Tagline -->
+  <text x="69" y="66"
+        font-family="'Space Grotesk', 'Inter', 'Helvetica Neue', Arial, sans-serif"
+        font-size="11.5"
+        font-weight="400"
+        letter-spacing="2.5"
+        fill="#888888">Vibe Proxy Nexus</text>
+</svg>

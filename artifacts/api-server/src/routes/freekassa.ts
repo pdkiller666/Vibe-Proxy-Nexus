@@ -44,7 +44,7 @@ async function createFkOrder(opts: {
   shopId: string;
   apiKey: string;
   amount: number;
-  paymentId: string;   // our internal order reference
+  paymentId: number;   // our internal DB integer id (FK requires numeric paymentId)
   email: string;
   ip: string;
   successUrl: string;
@@ -52,10 +52,13 @@ async function createFkOrder(opts: {
 }): Promise<string> {
   const nonce = Date.now();
 
+  // FK requires all numeric fields to be actual numbers (not strings).
+  // paymentId must be a positive integer — string references like "VPN-123-XXXX"
+  // are rejected by the API with a signature/validation error.
   const body: Record<string, string | number> = {
     shopId: Number(opts.shopId),
     nonce,
-    paymentId: opts.paymentId,
+    paymentId: Number(opts.paymentId),   // DB integer id, not the string reference
     amount: opts.amount,
     currency: "RUB",
     email: opts.email,
@@ -160,7 +163,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
         shopId: FK_SHOP_ID,
         apiKey: FK_API_KEY,
         amount: payment.amountRub,
-        paymentId: payment.reference,
+        paymentId: payment.id,   // FK API requires a numeric paymentId
         email: user.email,
         ip: userIp,
         successUrl,
@@ -230,13 +233,23 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const [payment] = await db
-    .select({ id: paymentsTable.id, status: paymentsTable.status })
-    .from(paymentsTable)
-    .where(eq(paymentsTable.reference, String(orderId)));
+  // API-path orders send our numeric payment.id as paymentId; legacy form-redirect
+  // orders send the string reference (e.g. "VPN-123-XXXX"). Try numeric id first.
+  const numericId = Number(orderId);
+  let [payment] = numericId > 0 && Number.isInteger(numericId)
+    ? await db.select({ id: paymentsTable.id, status: paymentsTable.status }).from(paymentsTable).where(eq(paymentsTable.id, numericId))
+    : [];
 
   if (!payment) {
-    logger.error({ orderId }, "FreeKassa IPN: no payment found for reference");
+    // Fallback: legacy form-redirect orders use the string reference
+    [payment] = await db
+      .select({ id: paymentsTable.id, status: paymentsTable.status })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.reference, String(orderId)));
+  }
+
+  if (!payment) {
+    logger.error({ orderId }, "FreeKassa IPN: no payment found for id or reference");
     // Return YES to stop FreeKassa retrying a genuinely unknown order
     res.send("YES");
     return;

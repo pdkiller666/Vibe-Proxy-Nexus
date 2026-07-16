@@ -1,0 +1,46 @@
+﻿/*
+  Основной фон
+*/
+.payment-page-global__wrap {
+  background-color: #eee !important;
+}
+
+/*
+  Заголовок списка валют
+*/
+.payment-page__list-header {
+  color: #000;
+}
+
+.payment-page__form {
+  background-color: red;
+}
+
+/*
+  Элемент списка валют
+*/
+.payment-page__list-item .active {
+  border-radius: 10px;
+}
+
+/*
+  Фон списка валют и мобильный список валют
+*/
+.payment-page__currency-list-desktop,
+.payment-page__currency-list-mobile {
+  background-color: red;
+}
+
+/* 
+  Cтрелочка списка валют
+*/
+.payment-page__list-sub-wrap:before {
+  border-right-color: red !important;
+}
+
+/*
+  Изменение дополнительных текстовых полей (border-radius)
+*/
+.payment-page__form-fields .text-field-wrap {
+  border-radius: 10px;
+}
