@@ -1,0 +1,74 @@
+16/07/26 19:23:43
+panic: runtime error: slice bounds out of range [:2230] with capacity 2048
+
+16/07/26 19:23:43
+goroutine 136 [running]:
+
+16/07/26 19:23:43
+github.com/xtls/xray-core/common/protocol/quic.SniffQUIC({0xc000256000, 0x9c4, 0x2000})
+
+16/07/26 19:23:43
+	github.com/xtls/xray-core/common/protocol/quic/sniff.go:220 +0x1c6b
+
+16/07/26 19:23:43
+github.com/xtls/xray-core/app/dispatcher.NewSniffer.func4({0xc000431640?, 0x10?}, {0xc000256000?, 0xe?, 0x13af8c0?})
+
+16/07/26 19:23:43
+	github.com/xtls/xray-core/app/dispatcher/sniffer.go:41 +0x25
+
+16/07/26 19:23:43
+github.com/xtls/xray-core/app/dispatcher.(*Sniffer).Sniff(0xc0001a28e8, {0x15e6020, 0xc00026a9c0}, {0xc000256000, 0x9c4, 0x2000}, 0x3)
+
+16/07/26 19:23:43
+	github.com/xtls/xray-core/app/dispatcher/sniffer.go:65 +0xcc
+
+16/07/26 19:23:43
+github.com/xtls/xray-core/app/dispatcher.sniffer.func1({0x15e6020, 0xc00026a9c0}, 0xc000121140, 0xc000121170, 0xc0001a28e8, 0x3)
+
+16/07/26 19:23:43
+	github.com/xtls/xray-core/app/dispatcher/default.go:367 +0x125
+
+16/07/26 19:23:43
+github.com/xtls/xray-core/app/dispatcher.sniffer({0x15e6020, 0xc00026a9c0}, 0xc000121140, 0x0, 0x3)
+
+16/07/26 19:23:43
+	github.com/xtls/xray-core/app/dispatcher/default.go:377 +0x116
+
+16/07/26 19:23:43
+github.com/xtls/xray-core/app/dispatcher.(*DefaultDispatcher).Dispatch.func1()
+
+16/07/26 19:23:43
+	github.com/xtls/xray-core/app/dispatcher/default.go:259 +0x10f
+
+16/07/26 19:23:43
+created by github.com/xtls/xray-core/app/dispatcher.(*DefaultDispatcher).Dispatch in goroutine 130
+
+16/07/26 19:23:43
+	github.com/xtls/xray-core/app/dispatcher/default.go:254 +0x47f
+
+16/07/26 19:23:43
+2026-07-16 12:23:43,993 WARN exited: xray (exit status 2; not expected)
+
+16/07/26 19:23:43
+2026-07-16 12:23:43,993 WARN exited: xray (exit status 2; not expected)
+
+16/07/26 19:23:44
+2026-07-16 12:23:44,994 INFO gave up: xray entered FATAL state, too many start retries too quickly
+
+16/07/26 19:23:44
+2026-07-16 12:23:44,994 INFO gave up: xray entered FATAL state, too many start retries too quickly
+
+16/07/26 19:24:26
+pollUserTrafficCounters: failed to query Xray StatsService
+
+16/07/26 19:25:26
+pollUserTrafficCounters: failed to query Xray StatsService
+
+16/07/26 19:26:26
+pollUserTrafficCounters: failed to query Xray StatsService
+
+16/07/26 19:27:26
+pollUserTrafficCounters: failed to query Xray StatsService
+
+16/07/26 19:27:28
+Hourly billing tick completed

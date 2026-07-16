@@ -32,7 +32,7 @@ RUN pnpm --filter @workspace/db deploy --legacy /tmp/db-deploy
 ########## Runtime ##########
 FROM node:24-bookworm-slim AS runtime
 
-ARG XRAY_VERSION=1.8.24
+ARG XRAY_VERSION=26.3.27
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

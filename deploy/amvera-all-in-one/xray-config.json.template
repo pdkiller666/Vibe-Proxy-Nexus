@@ -37,8 +37,7 @@
         }
       },
       "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls"]
+        "enabled": false
       }
     },
     {

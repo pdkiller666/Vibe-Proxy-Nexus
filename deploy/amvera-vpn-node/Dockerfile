@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-ARG XRAY_VERSION=1.8.24
+ARG XRAY_VERSION=26.3.27
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
