@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle, Wallet } from "lucide-react";
+import { FkPaymentButtons } from "@/components/fk-payment-buttons";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
@@ -148,21 +149,9 @@ export default function BalanceTopup() {
 
       {payment.status === "pending" && (
         <>
-          {/* Primary: FreeKassa card payment */}
-          <div className="bg-card border border-primary/40 p-6 space-y-4">
-            <div>
-              <div className="font-bold text-lg">Оплата картой</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Мгновенное зачисление на баланс после оплаты.
-              </div>
-            </div>
-            <div className="text-2xl font-bold">{payment.amountRub} ₽</div>
-            <a
-              href={`/api/payments/freekassa/checkout/${payment.id}`}
-              className="block w-full bg-primary text-primary-foreground font-bold py-3 text-center hover:opacity-90 transition-opacity"
-            >
-              Оплатить картой →
-            </a>
+          {/* Primary: FreeKassa online payment */}
+          <div className="bg-card border border-primary/40 p-6">
+            <FkPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} />
           </div>
 
           {/* Fallback: manual SBP transfer */}

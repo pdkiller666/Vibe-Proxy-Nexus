@@ -40,6 +40,15 @@ function verifyWebhookSign(shopId: string, amount: string, secret2: string, orde
  *
  * @returns the `location` URL to which the user should be redirected.
  */
+// FK payment method IDs (per FK notification 2026-07-16)
+const FK_METHOD_IDS = {
+  card: 36,   // Visa / MasterCard / МИР
+  qiwi: 35,   // QIWI
+  sbp:  44,   // СБП (НСПК)
+} as const;
+
+type FkMethod = keyof typeof FK_METHOD_IDS;
+
 async function createFkOrder(opts: {
   shopId: string;
   apiKey: string;
@@ -49,12 +58,14 @@ async function createFkOrder(opts: {
   ip: string;
   successUrl: string;
   failureUrl: string;
+  method?: FkMethod;   // pre-select payment method; omit to show all
 }): Promise<string> {
   const nonce = Date.now();
 
   // FK requires all numeric fields to be actual numbers (not strings).
   // paymentId must be a positive integer — string references like "VPN-123-XXXX"
   // are rejected by the API with a signature/validation error.
+  // When `i` is present it MUST be included in the alphabetically sorted signature.
   const body: Record<string, string | number> = {
     shopId: Number(opts.shopId),
     nonce,
@@ -65,6 +76,7 @@ async function createFkOrder(opts: {
     ip: opts.ip,
     success_url: opts.successUrl,
     failure_url: opts.failureUrl,
+    ...(opts.method ? { i: FK_METHOD_IDS[opts.method] } : {}),
   };
 
   // Build the HMAC-SHA256 signature over alphabetically sorted values.
@@ -158,6 +170,12 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
       req.socket.remoteAddress ||
       "127.0.0.1";
 
+    // Accept ?method=card|sbp|qiwi to pre-select FK payment method (i param).
+    const rawMethod = (req.query.method as string | undefined)?.toLowerCase();
+    const method = (rawMethod === "card" || rawMethod === "sbp" || rawMethod === "qiwi")
+      ? (rawMethod as FkMethod)
+      : undefined;
+
     try {
       const location = await createFkOrder({
         shopId: FK_SHOP_ID,
@@ -168,6 +186,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
         ip: userIp,
         successUrl,
         failureUrl,
+        method,
       });
       logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, type: payment.type }, "FreeKassa API order created — redirecting");
       res.redirect(302, location);
