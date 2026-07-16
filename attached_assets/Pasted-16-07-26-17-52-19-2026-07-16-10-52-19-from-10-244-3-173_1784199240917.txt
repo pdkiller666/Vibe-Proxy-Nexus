@@ -1,0 +1,1361 @@
+16/07/26 17:52:19
+2026/07/16 10:52:19 from 10.244.3.173:0 accepted udp:142.251.151.4:443 [vless-in >> direct] email: b3bfc58f-b9f6-4a7a-a8e3-458713a9eed9
+
+16/07/26 17:52:22
+2026/07/16 10:52:22 from 10.244.11.216:0 accepted udp:8.8.8.8:53 [vless-in >> direct] email: b3bfc58f-b9f6-4a7a-a8e3-458713a9eed9
+
+16/07/26 17:52:37
+2026/07/16 10:52:37 from 10.244.10.55:0 accepted udp:142.251.151.4:443 [vless-in >> direct] email: b3bfc58f-b9f6-4a7a-a8e3-458713a9eed9
+
+16/07/26 17:52:37
+2026/07/16 10:52:37 from 10.244.6.48:0 accepted udp:8.8.8.8:53 [vless-in >> direct] email: b3bfc58f-b9f6-4a7a-a8e3-458713a9eed9
+
+16/07/26 17:52:38
+2026/07/16 10:52:38 from 10.244.9.15:0 accepted tcp:mtalk.google.com:5228 [vless-in >> direct] email: b3bfc58f-b9f6-4a7a-a8e3-458713a9eed9
+
+16/07/26 17:52:59
+2026/07/16 10:52:59 from 10.244.0.139:0 accepted udp:142.251.151.4:443 [vless-in >> direct] email: b3bfc58f-b9f6-4a7a-a8e3-458713a9eed9
+
+16/07/26 17:53:03
+            onwritnode:events:487
+
+16/07/26 17:53:03
+      throw er; // Unhandled 'error' event
+
+16/07/26 17:53:03
+      ^
+
+16/07/26 17:53:03
+Error: 40CD5B21B87F0000:error:030000AC:digital envelope routines:scrypt_alg:memory limit exceeded:../deps/openssl/openssl/providers/implementations/kdfs/scrypt.c:516:
+
+16/07/26 17:53:03
+Emitted 'error' event on BoundPool instance at:
+
+16/07/26 17:53:03
+    at Client2.idleListener (/node_modules/.pnpm/pg-pool@3.14.0_pg@8.22.0/node_modules/pg-pool/index.js:62:10)
+
+16/07/26 17:53:03
+    at Client2.emit (node:events:509:28)
+
+16/07/26 17:53:03
+    at Client2._handleErrorEvent (/node_modules/.pnpm/pg@8.22.0/node_modules/pg/lib/client.js:417:10)
+
+16/07/26 17:53:03
+    at Connection2.emit (node:events:509:28)
+
+16/07/26 17:53:03
+    at TLSSocket.reportStreamError (/node_modules/.pnpm/pg@8.22.0/node_modules/pg/lib/connection.js:58:12)
+
+16/07/26 17:53:03
+    at TLSSocket.emit (node:events:509:28)
+
+16/07/26 17:53:03
+    at TLSSocket._emitTLSError (node:internal/tls/wrap:1141:10)
+
+16/07/26 17:53:03
+    at TLSWrap.onerror (node:internal/tls/wrap:574:11) {
+
+16/07/26 17:53:03
+  library: 'digital envelope routines',
+
+16/07/26 17:53:03
+  reason: 'memory limit exceeded',
+
+16/07/26 17:53:03
+  code: 'ERR_SSL_MEMORY_LIMIT_EXCEEDED',
+
+16/07/26 17:53:03
+  client: Client2 {
+
+16/07/26 17:53:03
+    _events: [Object: null prototype] { error: [Function (anonymous)] },
+
+16/07/26 17:53:03
+    _eventsCount: 1,
+
+16/07/26 17:53:03
+    _maxListeners: undefined,
+
+16/07/26 17:53:03
+    connectionParameters: ConnectionParameters {
+
+16/07/26 17:53:03
+      user: 'admin',
+
+16/07/26 17:53:03
+      database: 'vibeproxynexus',
+
+16/07/26 17:53:03
+      port: 5432,
+
+16/07/26 17:53:03
+      host: 'cnpg-vpnexus-db-rw',
+
+16/07/26 17:53:03
+      binary: false,
+
+16/07/26 17:53:03
+      options: undefined,
+
+16/07/26 17:53:03
+      ssl: { rejectUnauthorized: false },
+
+16/07/26 17:53:03
+      sslnegotiation: undefined,
+
+16/07/26 17:53:03
+      client_encoding: '',
+
+16/07/26 17:53:03
+      replication: undefined,
+
+16/07/26 17:53:03
+      isDomainSocket: false,
+
+16/07/26 17:53:03
+      application_name: undefined,
+
+16/07/26 17:53:03
+      fallback_application_name: undefined,
+
+16/07/26 17:53:03
+      statement_timeout: false,
+
+16/07/26 17:53:03
+      lock_timeout: false,
+
+16/07/26 17:53:03
+      idle_in_transaction_session_timeout: false,
+
+16/07/26 17:53:03
+      query_timeout: false,
+
+16/07/26 17:53:03
+      connect_timeout: 0
+
+16/07/26 17:53:03
+    },
+
+16/07/26 17:53:03
+    user: 'admin',
+
+16/07/26 17:53:03
+    database: 'vibeproxynexus',
+
+16/07/26 17:53:03
+    port: 5432,
+
+16/07/26 17:53:03
+    host: 'cnpg-vpnexus-db-rw',
+
+16/07/26 17:53:03
+    replication: undefined,
+
+16/07/26 17:53:03
+    _Promise: [Function: Promise],
+
+16/07/26 17:53:03
+    _types: TypeOverrides2 {
+
+16/07/26 17:53:03
+      _types: {
+
+16/07/26 17:53:03
+        getTypeParser: [Function: getTypeParser],
+
+16/07/26 17:53:03
+        setTypeParser: [Function: setTypeParser],
+
+16/07/26 17:53:03
+        arrayParser: { create: [Function: create] },
+
+16/07/26 17:53:03
+        builtins: {
+
+16/07/26 17:53:03
+          BOOL: 16,
+
+16/07/26 17:53:03
+          BYTEA: 17,
+
+16/07/26 17:53:03
+          CHAR: 18,
+
+16/07/26 17:53:03
+          INT8: 20,
+
+16/07/26 17:53:03
+          INT2: 21,
+
+16/07/26 17:53:03
+          INT4: 23,
+
+16/07/26 17:53:03
+          REGPROC: 24,
+
+16/07/26 17:53:03
+          TEXT: 25,
+
+16/07/26 17:53:03
+          OID: 26,
+
+16/07/26 17:53:03
+          TID: 27,
+
+16/07/26 17:53:03
+          XID: 28,
+
+16/07/26 17:53:03
+          CID: 29,
+
+16/07/26 17:53:03
+          JSON: 114,
+
+16/07/26 17:53:03
+          XML: 142,
+
+16/07/26 17:53:03
+          PG_NODE_TREE: 194,
+
+16/07/26 17:53:03
+          SMGR: 210,
+
+16/07/26 17:53:03
+          PATH: 602,
+
+16/07/26 17:53:03
+          POLYGON: 604,
+
+16/07/26 17:53:03
+          CIDR: 650,
+
+16/07/26 17:53:03
+          FLOAT4: 700,
+
+16/07/26 17:53:03
+          FLOAT8: 701,
+
+16/07/26 17:53:03
+          ABSTIME: 702,
+
+16/07/26 17:53:03
+          RELTIME: 703,
+
+16/07/26 17:53:03
+          TINTERVAL: 704,
+
+16/07/26 17:53:03
+          CIRCLE: 718,
+
+16/07/26 17:53:03
+          MACADDR8: 774,
+
+16/07/26 17:53:03
+          MONEY: 790,
+
+16/07/26 17:53:03
+          MACADDR: 829,
+
+16/07/26 17:53:03
+          INET: 869,
+
+16/07/26 17:53:03
+          ACLITEM: 1033,
+
+16/07/26 17:53:03
+          BPCHAR: 1042,
+
+16/07/26 17:53:03
+          VARCHAR: 1043,
+
+16/07/26 17:53:03
+          DATE: 1082,
+
+16/07/26 17:53:03
+          TIME: 1083,
+
+16/07/26 17:53:03
+          TIMESTAMP: 1114,
+
+16/07/26 17:53:03
+          TIMESTAMPTZ: 1184,
+
+16/07/26 17:53:03
+          INTERVAL: 1186,
+
+16/07/26 17:53:03
+          TIMETZ: 1266,
+
+16/07/26 17:53:03
+          BIT: 1560,
+
+16/07/26 17:53:03
+          VARBIT: 1562,
+
+16/07/26 17:53:03
+          NUMERIC: 1700,
+
+16/07/26 17:53:03
+          REFCURSOR: 1790,
+
+16/07/26 17:53:03
+          REGPROCEDURE: 2202,
+
+16/07/26 17:53:03
+          REGOPER: 2203,
+
+16/07/26 17:53:03
+          REGOPERATOR: 2204,
+
+16/07/26 17:53:03
+          REGCLASS: 2205,
+
+16/07/26 17:53:03
+          REGTYPE: 2206,
+
+16/07/26 17:53:03
+          UUID: 2950,
+
+16/07/26 17:53:03
+          TXID_SNAPSHOT: 2970,
+
+16/07/26 17:53:03
+          PG_LSN: 3220,
+
+16/07/26 17:53:03
+          PG_NDISTINCT: 3361,
+
+16/07/26 17:53:03
+          PG_DEPENDENCIES: 3402,
+
+16/07/26 17:53:03
+          TSVECTOR: 3614,
+
+16/07/26 17:53:03
+          TSQUERY: 3615,
+
+16/07/26 17:53:03
+          GTSVECTOR: 3642,
+
+16/07/26 17:53:03
+          REGCONFIG: 3734,
+
+16/07/26 17:53:03
+          REGDICTIONARY: 3769,
+
+16/07/26 17:53:03
+          JSONB: 3802,
+
+16/07/26 17:53:03
+          REGNAMESPACE: 4089,
+
+16/07/26 17:53:03
+          REGROLE: 4096
+
+16/07/26 17:53:03
+        }
+
+16/07/26 17:53:03
+      },
+
+16/07/26 17:53:03
+      text: {},
+
+16/07/26 17:53:03
+      binary: {}
+
+16/07/26 17:53:03
+    },
+
+16/07/26 17:53:03
+    _ending: true,
+
+16/07/26 17:53:03
+    _ended: false,
+
+16/07/26 17:53:03
+    _connecting: false,
+
+16/07/26 17:53:03
+    _connected: true,
+
+16/07/26 17:53:03
+    _connectionError: false,
+
+16/07/26 17:53:03
+    _queryable: false,
+
+16/07/26 17:53:03
+    _activeQuery: null,
+
+16/07/26 17:53:03
+    _txStatus: 'I',
+
+16/07/26 17:53:03
+    enableChannelBinding: false,
+
+16/07/26 17:53:03
+    scramMaxIterations: 100000,
+
+16/07/26 17:53:03
+    connection: Connection2 {
+
+16/07/26 17:53:03
+      _events: [Object: null prototype] {
+
+16/07/26 17:53:03
+        newListener: [Function (anonymous)],
+
+16/07/26 17:53:03
+        connect: [Function (anonymous)],
+
+16/07/26 17:53:03
+        sslconnect: [Function (anonymous)],
+
+16/07/26 17:53:03
+        authenticationCleartextPassword: [Function: bound _handleAuthCleartextPassword],
+
+16/07/26 17:53:03
+        authenticationMD5Password: [Function: bound _handleAuthMD5Password],
+
+16/07/26 17:53:03
+        authenticationSASL: [Function: bound _handleAuthSASL],
+
+16/07/26 17:53:03
+        authenticationSASLContinue: [Function: bound _handleAuthSASLContinue] AsyncFunction,
+
+16/07/26 17:53:03
+        authenticationSASLFinal: [Function: bound _handleAuthSASLFinal],
+
+16/07/26 17:53:03
+        backendKeyData: [Function: bound _handleBackendKeyData],
+
+16/07/26 17:53:03
+        error: [Function: bound _handleErrorEvent],
+
+16/07/26 17:53:03
+        errorMessage: [Function: bound _handleErrorMessage],
+
+16/07/26 17:53:03
+        readyForQuery: [Function: bound _handleReadyForQuery],
+
+16/07/26 17:53:03
+        notice: [Function: bound _handleNotice],
+
+16/07/26 17:53:03
+        rowDescription: [Function: bound _handleRowDescription],
+
+16/07/26 17:53:03
+        dataRow: [Function: bound _handleDataRow],
+
+16/07/26 17:53:03
+        portalSuspended: [Function: bound _handlePortalSuspended],
+
+16/07/26 17:53:03
+        emptyQuery: [Function: bound _handleEmptyQuery],
+
+16/07/26 17:53:03
+        commandComplete: [Function: bound _handleCommandComplete],
+
+16/07/26 17:53:03
+        parseComplete: [Function: bound _handleParseComplete],
+
+16/07/26 17:53:03
+        copyInResponse: [Function: bound _handleCopyInResponse],
+
+16/07/26 17:53:03
+        copyData: [Function: bound _handleCopyData],
+
+16/07/26 17:53:03
+        notification: [Function: bound _handleNotification],
+
+16/07/26 17:53:03
+        end: [
+
+16/07/26 17:53:03
+          [Function: bound onceWrapper] {
+
+16/07/26 17:53:03
+            listener: [Function (anonymous)]
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          [Function: bound onceWrapper] {
+
+16/07/26 17:53:03
+            listener: [Function (anonymous)]
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          Symbol(events.emitting): 0
+
+16/07/26 17:53:03
+        ]
+
+16/07/26 17:53:03
+      },
+
+16/07/26 17:53:03
+      _eventsCount: 23,
+
+16/07/26 17:53:03
+      _maxListeners: undefined,
+
+16/07/26 17:53:03
+      stream: <ref *1> TLSSocket {
+
+16/07/26 17:53:03
+        _tlsOptions: {
+
+16/07/26 17:53:03
+          allowHalfOpen: undefined,
+
+16/07/26 17:53:03
+          pipe: false,
+
+16/07/26 17:53:03
+          secureContext: SecureContext { context: SecureContext {} },
+
+16/07/26 17:53:03
+          isServer: false,
+
+16/07/26 17:53:03
+          requestCert: true,
+
+16/07/26 17:53:03
+          rejectUnauthorized: false,
+
+16/07/26 17:53:03
+          session: undefined,
+
+16/07/26 17:53:03
+          ALPNProtocols: undefined,
+
+16/07/26 17:53:03
+          requestOCSP: undefined,
+
+16/07/26 17:53:03
+          enableTrace: undefined,
+
+16/07/26 17:53:03
+          pskCallback: undefined,
+
+16/07/26 17:53:03
+          highWaterMark: undefined,
+
+16/07/26 17:53:03
+          onread: undefined,
+
+16/07/26 17:53:03
+          signal: undefined,
+
+16/07/26 17:53:03
+          noDelay: undefined,
+
+16/07/26 17:53:03
+          keepAlive: undefined,
+
+16/07/26 17:53:03
+          keepAliveInitialDelay: undefined
+
+16/07/26 17:53:03
+        },
+
+16/07/26 17:53:03
+        _secureEstablished: true,
+
+16/07/26 17:53:03
+        _securePending: false,
+
+16/07/26 17:53:03
+        _newSessionPending: false,
+
+16/07/26 17:53:03
+        _controlReleased: true,
+
+16/07/26 17:53:03
+        secureConnecting: false,
+
+16/07/26 17:53:03
+        _SNICallback: null,
+
+16/07/26 17:53:03
+        servername: 'cnpg-vpnexus-db-rw',
+
+16/07/26 17:53:03
+        alpnProtocol: false,
+
+16/07/26 17:53:03
+        authorized: false,
+
+16/07/26 17:53:03
+        authorizationError: 'SELF_SIGNED_CERT_IN_CHAIN',
+
+16/07/26 17:53:03
+        encrypted: true,
+
+16/07/26 17:53:03
+        _events: [Object: null prototype] {
+
+16/07/26 17:53:03
+          close: [Function: onSocketCloseDestroySSL],
+
+16/07/26 17:53:03
+          end: [
+
+16/07/26 17:53:03
+            [Function: onReadableStreamEnd],
+
+16/07/26 17:53:03
+            [Function (anonymous)],
+
+16/07/26 17:53:03
+            Symbol(events.emitting): 0
+
+16/07/26 17:53:03
+          ],
+
+16/07/26 17:53:03
+          error: [Function: reportStreamError],
+
+16/07/26 17:53:03
+          newListener: [
+
+16/07/26 17:53:03
+            [Function: keylogNewListener],
+
+16/07/26 17:53:03
+            [Function: newListener],
+
+16/07/26 17:53:03
+            Symbol(events.emitting): 0
+
+16/07/26 17:53:03
+          ],
+
+16/07/26 17:53:03
+          secure: [Function: onConnectSecure],
+
+16/07/26 17:53:03
+          data: [Function (anonymous)]
+
+16/07/26 17:53:03
+        },
+
+16/07/26 17:53:03
+        _eventsCount: 6,
+
+16/07/26 17:53:03
+        connecting: false,
+
+16/07/26 17:53:03
+        _hadError: true,
+
+16/07/26 17:53:03
+        _parent: Socket {
+
+16/07/26 17:53:03
+          connecting: false,
+
+16/07/26 17:53:03
+          _hadError: false,
+
+16/07/26 17:53:03
+          _parent: null,
+
+16/07/26 17:53:03
+          _host: 'cnpg-vpnexus-db-rw',
+
+16/07/26 17:53:03
+          _closeAfterHandlingError: false,
+
+16/07/26 17:53:03
+          _events: {
+
+16/07/26 17:53:03
+            close: [Array],
+
+16/07/26 17:53:03
+            error: [Array],
+
+16/07/26 17:53:03
+            prefinish: undefined,
+
+16/07/26 17:53:03
+            finish: undefined,
+
+16/07/26 17:53:03
+            drain: undefined,
+
+16/07/26 17:53:03
+            data: undefined,
+
+16/07/26 17:53:03
+            end: [Function: onReadableStreamEnd],
+
+16/07/26 17:53:03
+            readable: undefined,
+
+16/07/26 17:53:03
+            connect: [Function]
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          _readableState: ReadableState {
+
+16/07/26 17:53:03
+            highWaterMark: 65536,
+
+16/07/26 17:53:03
+            buffer: [],
+
+16/07/26 17:53:03
+            bufferIndex: 0,
+
+16/07/26 17:53:03
+            length: 0,
+
+16/07/26 17:53:03
+            pipes: [],
+
+16/07/26 17:53:03
+            awaitDrainWriters: null,
+
+16/07/26 17:53:03
+            Symbol(kState): 60303668
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          _writableState: WritableState {
+
+16/07/26 17:53:03
+            highWaterMark: 65536,
+
+16/07/26 17:53:03
+            length: 0,
+
+16/07/26 17:53:03
+            corked: 0,
+
+16/07/26 17:53:03
+            onwrite: [Function (anonymous)],
+
+16/07/26 17:53:03
+            writelen: 0,
+
+16/07/26 17:53:03
+            bufferedIndex: 0,
+
+16/07/26 17:53:03
+            pendingcb: 0,
+
+16/07/26 17:53:03
+            Symbol(kState): 17563956,
+
+16/07/26 17:53:03
+            Symbol(kBufferedValue): null,
+
+16/07/26 17:53:03
+            Symbol(kWriteCbValue): null
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          allowHalfOpen: false,
+
+16/07/26 17:53:03
+          _maxListeners: undefined,
+
+16/07/26 17:53:03
+          _eventsCount: 4,
+
+16/07/26 17:53:03
+          _sockname: null,
+
+16/07/26 17:53:03
+          _pendingData: null,
+
+16/07/26 17:53:03
+          _pendingEncoding: '',
+
+16/07/26 17:53:03
+          server: null,
+
+16/07/26 17:53:03
+          _server: null,
+
+16/07/26 17:53:03
+          Symbol(async_id_symbol): 1947,
+
+16/07/26 17:53:03
+          Symbol(kHandle): null,
+
+16/07/26 17:53:03
+          Symbol(lastWriteQueueSize): 0,
+
+16/07/26 17:53:03
+          Symbol(timeout): null,
+
+16/07/26 17:53:03
+          Symbol(kBuffer): null,
+
+16/07/26 17:53:03
+          Symbol(kBufferCb): null,
+
+16/07/26 17:53:03
+          Symbol(kBufferGen): null,
+
+16/07/26 17:53:03
+          Symbol(shapeMode): true,
+
+16/07/26 17:53:03
+          Symbol(kCapture): false,
+
+16/07/26 17:53:03
+          Symbol(kSetNoDelay): true,
+
+16/07/26 17:53:03
+          Symbol(kSetKeepAlive): false,
+
+16/07/26 17:53:03
+          Symbol(kSetKeepAliveInitialDelay): 0,
+
+16/07/26 17:53:03
+          Symbol(kSetTOS): undefined,
+
+16/07/26 17:53:03
+          Symbol(kBytesRead): 3032,
+
+16/07/26 17:53:03
+          Symbol(kBytesWritten): 2689
+
+16/07/26 17:53:03
+        },
+
+16/07/26 17:53:03
+        _host: null,
+
+16/07/26 17:53:03
+        _closeAfterHandlingError: false,
+
+16/07/26 17:53:03
+        _readableState: ReadableState {
+
+16/07/26 17:53:03
+          highWaterMark: 65536,
+
+16/07/26 17:53:03
+          buffer: [],
+
+16/07/26 17:53:03
+          bufferIndex: 0,
+
+16/07/26 17:53:03
+          length: 0,
+
+16/07/26 17:53:03
+          pipes: [],
+
+16/07/26 17:53:03
+          awaitDrainWriters: null,
+
+16/07/26 17:53:03
+          Symbol(kState): 194521396
+
+16/07/26 17:53:03
+        },
+
+16/07/26 17:53:03
+        _writableState: WritableState {
+
+16/07/26 17:53:03
+          highWaterMark: 65536,
+
+16/07/26 17:53:03
+          length: 0,
+
+16/07/26 17:53:03
+          corked: 0,
+
+16/07/26 17:53:03
+          onwrite: [Function (anonymous)],
+
+16/07/26 17:53:03
+          writelen: 0,
+
+16/07/26 17:53:03
+          bufferedIndex: 0,
+
+16/07/26 17:53:03
+          pendingcb: 0,
+
+16/07/26 17:53:03
+          Symbol(kState): 17563956,
+
+16/07/26 17:53:03
+          Symbol(kBufferedValue): null,
+
+16/07/26 17:53:03
+          Symbol(kWriteCbValue): null
+
+16/07/26 17:53:03
+        },
+
+16/07/26 17:53:03
+        allowHalfOpen: false,
+
+16/07/26 17:53:03
+        _maxListeners: undefined,
+
+16/07/26 17:53:03
+        _sockname: null,
+
+16/07/26 17:53:03
+        _pendingData: null,
+
+16/07/26 17:53:03
+        _pendingEncoding: '',
+
+16/07/26 17:53:03
+        server: undefined,
+
+16/07/26 17:53:03
+        _server: null,
+
+16/07/26 17:53:03
+        ssl: null,
+
+16/07/26 17:53:03
+        _requestCert: true,
+
+16/07/26 17:53:03
+        _rejectUnauthorized: false,
+
+16/07/26 17:53:03
+        Symbol(alpncallback): null,
+
+16/07/26 17:53:03
+        Symbol(res): TLSWrap {
+
+16/07/26 17:53:03
+          _parent: TCP {
+
+16/07/26 17:53:03
+            reading: [Getter/Setter],
+
+16/07/26 17:53:03
+            onconnection: null,
+
+16/07/26 17:53:03
+            Symbol(owner_symbol): [Socket],
+
+16/07/26 17:53:03
+            Symbol(handle_onclose): [Function (anonymous)]
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          _parentWrap: Socket {
+
+16/07/26 17:53:03
+            connecting: false,
+
+16/07/26 17:53:03
+            _hadError: false,
+
+16/07/26 17:53:03
+            _parent: null,
+
+16/07/26 17:53:03
+            _host: 'cnpg-vpnexus-db-rw',
+
+16/07/26 17:53:03
+            _closeAfterHandlingError: false,
+
+16/07/26 17:53:03
+            _events: [Object],
+
+16/07/26 17:53:03
+            _readableState: [ReadableState],
+
+16/07/26 17:53:03
+            _writableState: [WritableState],
+
+16/07/26 17:53:03
+            allowHalfOpen: false,
+
+16/07/26 17:53:03
+            _maxListeners: undefined,
+
+16/07/26 17:53:03
+            _eventsCount: 4,
+
+16/07/26 17:53:03
+            _sockname: null,
+
+16/07/26 17:53:03
+            _pendingData: null,
+
+16/07/26 17:53:03
+            _pendingEncoding: '',
+
+16/07/26 17:53:03
+            server: null,
+
+16/07/26 17:53:03
+            _server: null,
+
+16/07/26 17:53:03
+            Symbol(async_id_symbol): 1947,
+
+16/07/26 17:53:03
+            Symbol(kHandle): null,
+
+16/07/26 17:53:03
+            Symbol(lastWriteQueueSize): 0,
+
+16/07/26 17:53:03
+            Symbol(timeout): null,
+
+16/07/26 17:53:03
+            Symbol(kBuffer): null,
+
+16/07/26 17:53:03
+            Symbol(kBufferCb): null,
+
+16/07/26 17:53:03
+            Symbol(kBufferGen): null,
+
+16/07/26 17:53:03
+            Symbol(shapeMode): true,
+
+16/07/26 17:53:03
+            Symbol(kCapture): false,
+
+16/07/26 17:53:03
+            Symbol(kSetNoDelay): true,
+
+16/07/26 17:53:03
+            Symbol(kSetKeepAlive): false,
+
+16/07/26 17:53:03
+            Symbol(kSetKeepAliveInitialDelay): 0,
+
+16/07/26 17:53:03
+            Symbol(kSetTOS): undefined,
+
+16/07/26 17:53:03
+            Symbol(kBytesRead): 3032,
+
+16/07/26 17:53:03
+            Symbol(kBytesWritten): 2689
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          _secureContext: SecureContext { context: SecureContext {} },
+
+16/07/26 17:53:03
+          reading: true,
+
+16/07/26 17:53:03
+          onkeylog: [Function: onkeylog],
+
+16/07/26 17:53:03
+          onhandshakestart: [Function: noop],
+
+16/07/26 17:53:03
+          onhandshakedone: [Function (anonymous)],
+
+16/07/26 17:53:03
+          onocspresponse: [Function: onocspresponse],
+
+16/07/26 17:53:03
+          onnewsession: [Function: onnewsessionclient],
+
+16/07/26 17:53:03
+          onerror: [Function: onerror],
+
+16/07/26 17:53:03
+          Symbol(owner_symbol): [Circular *1]
+
+16/07/26 17:53:03
+        },
+
+16/07/26 17:53:03
+        Symbol(verified): true,
+
+16/07/26 17:53:03
+        Symbol(pendingSession): null,
+
+16/07/26 17:53:03
+        Symbol(async_id_symbol): 1951,
+
+16/07/26 17:53:03
+        Symbol(kHandle): null,
+
+16/07/26 17:53:03
+        Symbol(lastWriteQueueSize): 0,
+
+16/07/26 17:53:03
+        Symbol(timeout): null,
+
+16/07/26 17:53:03
+        Symbol(kBuffer): null,
+
+16/07/26 17:53:03
+        Symbol(kBufferCb): null,
+
+16/07/26 17:53:03
+        Symbol(kBufferGen): null,
+
+16/07/26 17:53:03
+        Symbol(shapeMode): true,
+
+16/07/26 17:53:03
+        Symbol(kCapture): false,
+
+16/07/26 17:53:03
+        Symbol(kSetNoDelay): false,
+
+16/07/26 17:53:03
+        Symbol(kSetKeepAlive): false,
+
+16/07/26 17:53:03
+        Symbol(kSetKeepAliveInitialDelay): 0,
+
+16/07/26 17:53:03
+        Symbol(kSetTOS): undefined,
+
+16/07/26 17:53:03
+        Symbol(kBytesRead): 1248,
+
+16/07/26 17:53:03
+        Symbol(kBytesWritten): 480,
+
+16/07/26 17:53:03
+        Symbol(connect-options): {
+
+16/07/26 17:53:03
+          rejectUnauthorized: false,
+
+16/07/26 17:53:03
+          ciphers: 'TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:DHE-RSA-AES256-SHA384:ECDHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA256:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
+
+16/07/26 17:53:03
+          checkServerIdentity: [Function: checkServerIdentity],
+
+16/07/26 17:53:03
+          minDHSize: 1024,
+
+16/07/26 17:53:03
+          socket: Socket {
+
+16/07/26 17:53:03
+            connecting: false,
+
+16/07/26 17:53:03
+            _hadError: false,
+
+16/07/26 17:53:03
+            _parent: null,
+
+16/07/26 17:53:03
+            _host: 'cnpg-vpnexus-db-rw',
+
+16/07/26 17:53:03
+            _closeAfterHandlingError: false,
+
+16/07/26 17:53:03
+            _events: [Object],
+
+16/07/26 17:53:03
+            _readableState: [ReadableState],
+
+16/07/26 17:53:03
+            _writableState: [WritableState],
+
+16/07/26 17:53:03
+            allowHalfOpen: false,
+
+16/07/26 17:53:03
+            _maxListeners: undefined,
+
+16/07/26 17:53:03
+            _eventsCount: 4,
+
+16/07/26 17:53:03
+            _sockname: null,
+
+16/07/26 17:53:03
+            _pendingData: null,
+
+16/07/26 17:53:03
+            _pendingEncoding: '',
+
+16/07/26 17:53:03
+            server: null,
+
+16/07/26 17:53:03
+            _server: null,
+
+16/07/26 17:53:03
+            Symbol(async_id_symbol): 1947,
+
+16/07/26 17:53:03
+            Symbol(kHandle): null,
+
+16/07/26 17:53:03
+            Symbol(lastWriteQueueSize): 0,
+
+16/07/26 17:53:03
+            Symbol(timeout): null,
+
+16/07/26 17:53:03
+            Symbol(kBuffer): null,
+
+16/07/26 17:53:03
+            Symbol(kBufferCb): null,
+
+16/07/26 17:53:03
+            Symbol(kBufferGen): null,
+
+16/07/26 17:53:03
+            Symbol(shapeMode): true,
+
+16/07/26 17:53:03
+            Symbol(kCapture): false,
+
+16/07/26 17:53:03
+            Symbol(kSetNoDelay): true,
+
+16/07/26 17:53:03
+            Symbol(kSetKeepAlive): false,
+
+16/07/26 17:53:03
+            Symbol(kSetKeepAliveInitialDelay): 0,
+
+16/07/26 17:53:03
+            Symbol(kSetTOS): undefined,
+
+16/07/26 17:53:03
+            Symbol(kBytesRead): 3032,
+
+16/07/26 17:53:03
+            Symbol(kBytesWritten): 2689
+
+16/07/26 17:53:03
+          },
+
+16/07/26 17:53:03
+          servername: 'cnpg-vpnexus-db-rw',
+
+16/07/26 17:53:03
+          singleUse: true,
+
+16/07/26 17:53:03
+          session: undefined
+
+16/07/26 17:53:03
+        }
+
+16/07/26 17:53:03
+      },
+
+16/07/26 17:53:03
+      _keepAlive: false,
+
+16/07/26 17:53:03
+      _keepAliveInitialDelayMillis: 0,
+
+16/07/26 17:53:03
+      parsedStatements: {},
+
+16/07/26 17:53:03
+      ssl: { rejectUnauthorized: false },
+
+16/07/26 17:53:03
+      sslNegotiation: 'postgres',
+
+16/07/26 17:53:03
+      _ending: true,
+
+16/07/26 17:53:03
+      _emitMessage: false,
+
+16/07/26 17:53:03
+      _connecting: true,
+
+16/07/26 17:53:03
+      Symbol(shapeMode): false,
+
+16/07/26 17:53:03
+      Symbol(kCapture): false
+
+16/07/26 17:53:03
+    },
+
+16/07/26 17:53:03
+    _queryQueue: [],
+
+16/07/26 17:53:03
+    binary: false,
+
+16/07/26 17:53:03
+    processID: 228881,
+
+16/07/26 17:53:03
+    secretKey: 10555046,
+
+16/07/26 17:53:03
+    ssl: { rejectUnauthorized: false },
+
+16/07/26 17:53:03
+    sslNegotiation: 'postgres',
+
+16/07/26 17:53:03
+    _connectionTimeoutMillis: 0,
+
+16/07/26 17:53:03
+    _connectionCallback: null,
+
+16/07/26 17:53:03
+    saslSession: null,
+
+16/07/26 17:53:03
+    release: [Function (anonymous)],
+
+16/07/26 17:53:03
+    readyForQuery: true,
+
+16/07/26 17:53:03
+    hasExecuted: true,
+
+16/07/26 17:53:03
+    _poolUseCount: 1,
+
+16/07/26 17:53:03
+    Symbol(shapeMode): false,
+
+16/07/26 17:53:03
+    Symbol(kCapture): false
+
+16/07/26 17:53:03
+  }
+
+16/07/26 17:53:03
+}
+
+16/07/26 17:53:03
+Node.js v24.18.0

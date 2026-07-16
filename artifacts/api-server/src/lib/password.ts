@@ -1,14 +1,11 @@
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 
 const KEY_LENGTH = 64;
-// N=65536 (4× the Node default of 16384) increases GPU crack resistance without
-// noticeably impacting login latency on modern hardware (~250ms). Tests override
-// this to N=1024 via SCRYPT_N_OVERRIDE to avoid hitting sandbox memory limits.
-// Must stay in sync between hashPassword and verifyPassword.
-const SCRYPT_N = process.env.SCRYPT_N_OVERRIDE
-  ? parseInt(process.env.SCRYPT_N_OVERRIDE, 10)
-  : 65536;
-const SCRYPT_PARAMS = { N: SCRYPT_N, r: 8, p: 1 };
+// N=16384 is Node's default and safe for the current container memory budget.
+// Bumping N requires: (1) enough container memory for 128*N*r bytes per login,
+// (2) re-hashing all existing passwords — can't just change N and expect old
+// hashes to verify. Both conditions must be met before raising this value.
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
 
 // Promisified manually to preserve the options parameter (the util.promisify
 // overload for scrypt doesn't expose the 4-argument form in its TypeScript types).
