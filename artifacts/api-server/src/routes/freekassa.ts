@@ -129,7 +129,7 @@ async function createFkOrder(opts: {
   shopId: string;
   apiKey: string;
   amount: number;
-  paymentId: string;   // payment.reference (VPN-XXXXX-XXXXXX) — shows in FK cabinet; webhook resolves by reference
+  paymentId: number;   // payment.id (integer) — FK requires numeric merchant order ID; webhook resolves by numeric id first
   email: string;
   ip: string;
   method: FkMethod;   // always required — caller provides default
@@ -258,7 +258,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
         shopId: FK_SHOP_ID,
         apiKey: FK_API_KEY,
         amount: payment.amountRub,
-        paymentId: payment.reference,   // reference (VPN-XXXXX-XXXXXX) shows in FK cabinet; webhook looks up by reference
+        paymentId: payment.id,   // integer required by FK API — webhook resolves by numeric id first
         email: user.email,
         ip: userIp,
         method,
@@ -269,26 +269,26 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg === "FK_WALLET_FALLBACK") {
-        // FK API ignored `i` — methods not activated for merchant.
-        // Fall through to form-redirect which shows the standard FK payment page.
-        logger.info({ paymentId, method }, "Falling back to FK form-redirect");
-      } else {
-        logger.error({ err: msg, paymentId, method }, "FreeKassa API order creation failed");
-        res.status(502).json({ error: "Ошибка при создании заказа в FreeKassa. Попробуйте позже." });
+        // FK API ignored `i` — the method is not activated for API usage on this merchant account.
+        // Methods 36 (card) and 44 (СБП) are API-only — form-redirect returns "только по API".
+        // Return a clear error so the user knows to contact FK support.
+        logger.error({ paymentId, method }, "FK API returned FK Wallet URL — method not activated for API on this merchant account");
+        res.status(502).json({
+          error: "Метод оплаты временно недоступен. Пожалуйста, попробуйте позже или свяжитесь с поддержкой.",
+        });
         return;
       }
+      logger.error({ err: msg, paymentId, method }, "FreeKassa API order creation failed");
+      res.status(502).json({ error: "Ошибка при создании заказа в FreeKassa. Попробуйте позже." });
+      return;
     }
   }
 
-  // ── Form-redirect path ────────────────────────────────────────────────────
-  // Used when: FK_API_KEY not set, OR the API returned FK Wallet (method not
-  // activated for this merchant).  Redirects to pay.freekassa.net which shows
-  // the FK payment page; the user can choose / confirm the method there.
-  // `i` is optional (suggestive) in form mode — pass it as a hint.
-  const rawMethodForForm = (req.query.method as string | undefined)?.toLowerCase();
-  const formMethodId =
-    rawMethodForForm === "sbp" ? FK_METHOD_IDS.sbp : FK_METHOD_IDS.card;
-
+  // ── Form-redirect path (FK_API_KEY not configured) ───────────────────────
+  // Only reached when FK_API_KEY is missing entirely.
+  // Methods 36 (card) and 44 (СБП) are API-only and will be rejected by
+  // pay.freekassa.net with "Данный метод работает только по API!" —
+  // so we redirect without `i` and let the user pick from available methods.
   const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
   const url = new URL("https://pay.freekassa.net/");
   url.searchParams.set("m", FK_SHOP_ID);
@@ -296,12 +296,11 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
   url.searchParams.set("currency", "RUB");
   url.searchParams.set("o", payment.reference);
   url.searchParams.set("s", sign);
-  url.searchParams.set("i", String(formMethodId));  // hint only — user can change
   url.searchParams.set("lang", "ru");
   url.searchParams.set("us", successUrl);
   url.searchParams.set("uf", failureUrl);
 
-  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, formMethodId }, "Redirecting to FK form-redirect");
+  logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub }, "Redirecting to FK form-redirect (no API key)");
   res.redirect(302, url.toString());
 });
 
