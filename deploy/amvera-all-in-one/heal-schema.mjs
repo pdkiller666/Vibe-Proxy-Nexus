@@ -169,6 +169,58 @@ try {
   `);
   console.log("heal-schema: applied payments_one_pending_per_user_type_idx");
 
+  // M-5: vpn_nodes.host is declared NOT NULL in the schema. Fill any legacy
+  // NULL rows with the sni value (they're always the same host in practice)
+  // so drizzle-kit push can safely SET NOT NULL without failing on live data.
+  await client.query(`
+    UPDATE vpn_nodes SET host = sni WHERE host IS NULL AND sni IS NOT NULL
+  `);
+  console.log("heal-schema: applied vpn_nodes host NULL backfill");
+
+  // M-3: Partial index — active VPN keys. All background jobs (hourlyBilling,
+  // trafficPolling, subscriptionLifecycle, confirmPayment) filter active keys
+  // with `WHERE revoked_at IS NULL`; a partial index is smaller and faster
+  // than a full index on revoked_at because only a fraction of rows are active.
+  await client.query(`
+    DO $
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'vpn_keys_active_idx') THEN
+        CREATE INDEX vpn_keys_active_idx ON vpn_keys(revoked_at) WHERE revoked_at IS NULL;
+      END IF;
+    END $;
+  `);
+  console.log("heal-schema: applied vpn_keys_active_idx");
+
+  // M-6: balance_transactions.payment_id — confirmPayment joins here to
+  // issue referral commissions; without an index every confirmation scans
+  // the full table.
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS balance_transactions_payment_id_idx
+      ON balance_transactions(payment_id)
+  `);
+  console.log("heal-schema: applied balance_transactions_payment_id_idx");
+
+  // M-7: plans.name unique — plan names are user-visible; duplicates cause
+  // confusion in admin and user-facing plan selection.
+  await client.query(`
+    DO $
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'plans_name_unique') THEN
+        CREATE UNIQUE INDEX plans_name_unique ON plans(name);
+      END IF;
+    END $;
+  `);
+  console.log("heal-schema: applied plans_name_unique");
+
+  // M-8: support_messages.author_id — admin support panel joins on author_id
+  // to resolve user details per message; without an index this is a seq-scan
+  // on a potentially large table.
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS support_messages_author_id_idx
+      ON support_messages(author_id)
+  `);
+  console.log("heal-schema: applied support_messages_author_id_idx");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

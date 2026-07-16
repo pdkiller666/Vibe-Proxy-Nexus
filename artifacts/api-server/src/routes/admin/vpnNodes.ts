@@ -21,7 +21,12 @@ router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Pro
     return;
   }
 
-  const [node] = await db.insert(vpnNodesTable).values(parsed.data).returning();
+  // `host` is optional in the API schema (some callers rely on SNI == host)
+  // but NOT NULL in the DB — fall back to sni when omitted.
+  const [node] = await db
+    .insert(vpnNodesTable)
+    .values({ ...parsed.data, host: parsed.data.host ?? parsed.data.sni })
+    .returning();
   res.status(201).json(CreateVpnNodeResponse.parse({ ...node, activeUserCount: 0 }));
 });
 

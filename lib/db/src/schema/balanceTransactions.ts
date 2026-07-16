@@ -19,7 +19,13 @@ export const balanceTransactionsTable = pgTable(
     description: text("description"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("balance_transactions_user_id_idx").on(table.userId)],
+  (table) => [
+    index("balance_transactions_user_id_idx").on(table.userId),
+    // Referral commission queries join on paymentId to check if a commission
+    // was already issued for a given payment; without this index every
+    // confirmPayment call does a sequential scan of the whole table.
+    index("balance_transactions_payment_id_idx").on(table.paymentId),
+  ],
 );
 
 export const insertBalanceTransactionSchema = createInsertSchema(balanceTransactionsTable).omit({

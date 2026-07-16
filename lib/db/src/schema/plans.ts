@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -29,7 +29,14 @@ export const plansTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   // The plan-selection page filters to active plans on every load.
-  (table) => [index("plans_is_active_idx").on(table.isActive)],
+  (table) => [
+    index("plans_is_active_idx").on(table.isActive),
+    // Plan names are user-visible labels; duplicates cause confusion in both
+    // the admin panel and user-facing plan selection. Pre-created via
+    // heal-schema.mjs (DO $ IF NOT EXISTS $) to avoid drizzle-kit's
+    // non-TTY prompt for tables with existing data.
+    uniqueIndex("plans_name_unique").on(table.name),
+  ],
 );
 
 export const insertPlanSchema = createInsertSchema(plansTable).omit({

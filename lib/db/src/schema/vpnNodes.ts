@@ -8,7 +8,9 @@ export const vpnNodesTable = pgTable(
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
     region: text("region").notNull(),
-    host: text("host"),
+    // heal-schema.mjs runs `UPDATE vpn_nodes SET host = sni WHERE host IS NULL`
+    // before drizzle-kit push, so this NOT NULL is safe on existing data.
+    host: text("host").notNull(),
     // Port VPN clients connect to. Defaults to 443, but Amvera-hosted nodes
     // without a Dedicated IPv4 must use the platform's raw-TCP SNI ports
     // (5432/27017/6379) instead, since 443 is always TLS-terminated by Amvera's

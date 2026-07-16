@@ -96,6 +96,7 @@ describe("admin vpn node capacity fields", () => {
       .values({
         name: `Node ${randomBytes(4).toString("hex")}`,
         region: "test",
+        host: "test.example.com",
         sni: "test.example.com",
         isActive: true,
         maxUsers: 3,
@@ -146,6 +147,7 @@ describe("admin vpn node capacity fields", () => {
       .values({
         name: `Node ${randomBytes(4).toString("hex")}`,
         region: "test",
+        host: "test.example.com",
         sni: "test.example.com",
         isActive: true,
         maxUsers: 2,

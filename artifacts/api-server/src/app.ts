@@ -8,6 +8,7 @@ import { logger } from "./lib/logger";
 import { mountStaticFrontend } from "./lib/staticServer";
 import { getSessionSecret, startSessionCleanupJob } from "./lib/session";
 import { corsOriginCheck } from "./lib/corsOrigins";
+import { csrfCheck } from "./lib/csrf";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionLifecycle";
 import { startTrafficPollingJob } from "./lib/trafficPolling";
 import { startHourlyBillingJob } from "./lib/hourlyBilling";
@@ -66,6 +67,7 @@ app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 app.use(cookieParser(getSessionSecret()));
 
+app.use("/api", csrfCheck);
 app.use("/api", router);
 
 // Global error handler: catches any unhandled exception thrown by route
