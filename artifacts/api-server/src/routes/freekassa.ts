@@ -317,7 +317,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
 // GET /api/admin/fk/currencies  (admin auth required)
 // Calls FK POST /currencies and returns raw response so we can see which
 // methods are available and what extra fields (e.g. `tel`) they require.
-router.get("/admin/fk/currencies", requireAdmin, async (req, res): Promise<void> => {
+router.get("/admin/fk/currencies", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const FK_SHOP_ID = process.env.FK_SHOP_ID ?? "";
   const FK_API_KEY = process.env.FK_API_KEY ?? "";
   if (!FK_SHOP_ID || !FK_API_KEY) {
