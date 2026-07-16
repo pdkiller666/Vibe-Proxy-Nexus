@@ -1424,7 +1424,9 @@ components:
 
     PaymentProvider:
       type: string
-      enum: [manual_sbp, yookassa, freekassa]
+      # freekassa is legacy-read-only: integration removed 2026-07-17, kept so
+      # historical payment rows still serialize/validate.
+      enum: [manual_sbp, yookassa, yoomoney, freekassa]
 
     PaymentStatus:
       type: string

@@ -40,11 +40,13 @@ router.post("/subscriptions", requireAuth, createSubscriptionRateLimit, async (r
 
   // Yookassa is not integrated — block to prevent orphaned pending
   // subscriptions that will never be auto-confirmed.
-  if (parsed.data.provider === "yookassa") {
-    res.status(400).json({ error: "Оплата через Yookassa временно недоступна. Используйте СБП или FreeKassa." });
+  if (parsed.data.provider === "yookassa" || parsed.data.provider === "freekassa") {
+    // yookassa was never integrated; freekassa is a legacy read-only value
+    // (integration removed 2026-07-17) — neither may create new payments.
+    res.status(400).json({ error: "Этот способ оплаты недоступен. Используйте СБП или ЮMoney." });
     return;
   }
-  // freekassa is allowed: the IPN webhook auto-confirms it
+  // yoomoney is allowed: the HTTP-notification webhook auto-confirms it
 
   const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, parsed.data.planId));
 

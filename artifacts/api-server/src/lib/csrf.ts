@@ -6,7 +6,7 @@ import type { RequestHandler } from "express";
 // still blocks cross-site state mutations.
 //
 // Requests with no Origin header are always allowed: same-origin navigation,
-// curl, VPN client apps fetching /sub/:token, FreeKassa server-side webhooks,
+// curl, VPN client apps fetching /sub/:token, YooMoney server-side webhooks,
 // and other non-browser callers never send Origin.
 //
 // GET / HEAD / OPTIONS are safe methods and are always allowed.

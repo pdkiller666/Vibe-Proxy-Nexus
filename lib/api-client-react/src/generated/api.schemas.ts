@@ -275,6 +275,7 @@ export type PaymentProvider = typeof PaymentProvider[keyof typeof PaymentProvide
 export const PaymentProvider = {
   manual_sbp: 'manual_sbp',
   yookassa: 'yookassa',
+  yoomoney: 'yoomoney',
   freekassa: 'freekassa',
 } as const;
 

@@ -15,7 +15,7 @@ import extraTrafficOrderRouter from "./extraTrafficOrder";
 import balanceTopupOrderRouter from "./balanceTopupOrder";
 import supportRouter from "./support";
 import adminRouter from "./admin";
-import freeKassaRouter from "./freekassa";
+import yooMoneyRouter from "./yoomoney";
 
 const router: IRouter = Router();
 
@@ -35,6 +35,6 @@ router.use(extraTrafficOrderRouter);
 router.use(balanceTopupOrderRouter);
 router.use(supportRouter);
 router.use(adminRouter);
-router.use(freeKassaRouter);
+router.use(yooMoneyRouter);
 
 export default router;

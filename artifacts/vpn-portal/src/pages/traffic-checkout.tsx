@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle, Gauge } from "lucide-react";
-import { FkPaymentButtons } from "@/components/fk-payment-buttons";
+import { YooMoneyPaymentButtons } from "@/components/yoomoney-payment-buttons";
 import { useQueryClient } from "@tanstack/react-query";
 import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
 
@@ -158,9 +158,9 @@ export default function TrafficCheckout() {
 
       {payment.status === "pending" && (
         <>
-          {/* Primary: FreeKassa online payment */}
+          {/* Primary: YooMoney online payment */}
           <div className="bg-card border border-primary/40 p-6">
-            <FkPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} />
+            <YooMoneyPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} />
           </div>
 
           {/* Fallback: manual SBP transfer */}

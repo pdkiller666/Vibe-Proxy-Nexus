@@ -5,7 +5,10 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { subscriptionsTable } from "./subscriptions";
 
-export const paymentProviderValues = ["manual_sbp", "yookassa", "freekassa"] as const;
+// "freekassa" is a LEGACY value: the integration was removed 2026-07-17, no
+// code path creates it anymore, but historical rows still contain it and all
+// read/serialization paths must keep accepting it.
+export const paymentProviderValues = ["manual_sbp", "yookassa", "yoomoney", "freekassa"] as const;
 export const paymentStatusValues = ["pending", "confirmed", "rejected"] as const;
 export const paymentTypeValues = ["subscription", "extra_device_slot", "balance_topup", "extra_traffic"] as const;
 

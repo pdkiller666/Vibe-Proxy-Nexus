@@ -18,7 +18,7 @@ export type ConfirmResult =
 
 /**
  * Shared payment confirmation logic used by both the admin manual-confirm
- * endpoint and the FreeKassa auto-webhook. Any change to the fulfillment
+ * endpoint and the YooMoney auto-webhook. Any change to the fulfillment
  * logic (subscription activation, balance credit, referral commission, etc.)
  * must be made here — not duplicated across callers.
  */
@@ -158,7 +158,7 @@ export async function confirmPaymentById(
   if (payment.type === "balance_topup") {
     const amountKopecks = payment.amountRub * 100;
     const providerLabel =
-      payment.provider === "freekassa" ? "FreeKassa" : "СБП";
+      payment.provider === "yoomoney" ? "ЮMoney" : "СБП";
     try {
       const updatedPayment = await db.transaction(async (tx) => {
         await tx
@@ -223,7 +223,7 @@ export async function confirmPaymentById(
   try {
     const updatedPayment = await db.transaction(async (tx) => {
       // Lock the subscription row being activated so two concurrent
-      // confirmations (e.g. admin + FreeKassa webhook arriving simultaneously)
+      // confirmations (e.g. admin + YooMoney webhook arriving simultaneously)
       // cannot both read the same currentActive and compute the same startsAt,
       // which would make both subscriptions start at the same time instead of
       // in sequence. The FOR UPDATE lock serialises this critical section.
