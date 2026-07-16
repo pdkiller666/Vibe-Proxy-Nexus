@@ -32,7 +32,7 @@ describe("VPN key revoke flow", () => {
 
     const [user] = await db
       .insert(usersTable)
-      .values({ email, passwordHash, role: "user" })
+      .values({ email, passwordHash, role: "user", referralCode: randomBytes(8).toString("hex") })
       .returning({ id: usersTable.id });
 
     const res = await request.post("/api/auth/login").send({ email, password });
@@ -184,7 +184,7 @@ describe("VPN node capacity limit", () => {
 
     const [user] = await db
       .insert(usersTable)
-      .values({ email, passwordHash, role: "user" })
+      .values({ email, passwordHash, role: "user", referralCode: randomBytes(8).toString("hex") })
       .returning({ id: usersTable.id });
     userIds.push(user.id);
 

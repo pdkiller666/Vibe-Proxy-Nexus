@@ -8,7 +8,9 @@ import {
   plansTable,
   subscriptionsTable,
   usersTable,
+  vpnKeysTable,
 } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 import app from "../../app";
 import { hashPassword } from "../../lib/password";
 
@@ -25,7 +27,7 @@ async function createUser(role: "user" | "admin"): Promise<{
 
   const [user] = await db
     .insert(usersTable)
-    .values({ email, passwordHash, role })
+    .values({ email, passwordHash, role, referralCode: randomBytes(8).toString("hex") })
     .returning({ id: usersTable.id });
 
   return { id: user.id, email, password };
@@ -77,6 +79,10 @@ describe("admin payments confirm/reject flow", () => {
     for (const id of subscriptionIds) {
       await db.delete(subscriptionsTable).where(eq(subscriptionsTable.id, id));
     }
+    // confirmPayment auto-issues a VPN key via ensureActiveKeyForUser — delete
+    // those keys before deleting the user rows they reference (FK constraint).
+    const allUserIds = [userId, adminId, ...extraUserIds];
+    await db.delete(vpnKeysTable).where(inArray(vpnKeysTable.userId, allUserIds));
     await db.delete(plansTable).where(eq(plansTable.id, planId));
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     await db.delete(usersTable).where(eq(usersTable.id, adminId));
@@ -86,9 +92,16 @@ describe("admin payments confirm/reject flow", () => {
   });
 
   async function seedPendingPayment(): Promise<{ subscriptionId: number; paymentId: number }> {
+    // Use a fresh user per call — the payments table has a partial unique index
+    // (one pending subscription payment per user at a time). Reusing the shared
+    // userId across tests that each leave a payment in "pending" state would
+    // violate that index on the second seedPendingPayment call.
+    const freshUser = await createUser("user");
+    extraUserIds.push(freshUser.id);
+
     const [subscription] = await db
       .insert(subscriptionsTable)
-      .values({ userId, planId, status: "pending_payment" })
+      .values({ userId: freshUser.id, planId, status: "pending_payment" })
       .returning({ id: subscriptionsTable.id });
     subscriptionIds.push(subscription.id);
 
@@ -96,7 +109,7 @@ describe("admin payments confirm/reject flow", () => {
       .insert(paymentsTable)
       .values({
         subscriptionId: subscription.id,
-        userId,
+        userId: freshUser.id,
         provider: "manual_sbp",
         amountRub: 10000,
         status: "pending",

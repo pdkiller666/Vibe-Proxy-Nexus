@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db, sessionsTable, usersTable } from "@workspace/db";
@@ -13,6 +13,11 @@ function makeToken(): string {
   return randomBytes(16).toString("hex");
 }
 
+// Mirror of hashToken() in session.ts — tokens are stored hashed in the DB.
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
 describe("getUserBySessionToken", () => {
   let userId: number;
   const createdTokens: string[] = [];
@@ -23,6 +28,7 @@ describe("getUserBySessionToken", () => {
       .values({
         email: `session-token-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(8).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;
@@ -30,7 +36,8 @@ describe("getUserBySessionToken", () => {
 
   afterEach(async () => {
     for (const token of createdTokens.splice(0)) {
-      await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
+      // Tokens are stored as SHA-256 hashes — delete by hash, not the raw value.
+      await db.delete(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
     }
   });
 
@@ -40,7 +47,8 @@ describe("getUserBySessionToken", () => {
 
   async function seedSession(expiresAt: Date): Promise<string> {
     const token = makeToken();
-    await db.insert(sessionsTable).values({ token, userId, expiresAt });
+    // Store hash in DB (mirrors createSession() in session.ts).
+    await db.insert(sessionsTable).values({ token: hashToken(token), userId, expiresAt });
     createdTokens.push(token);
     return token;
   }
@@ -79,6 +87,7 @@ describe("deleteExpiredSessions", () => {
       .values({
         email: `session-cleanup-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(8).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;
@@ -86,7 +95,7 @@ describe("deleteExpiredSessions", () => {
 
   afterEach(async () => {
     for (const token of createdTokens.splice(0)) {
-      await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
+      await db.delete(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
     }
   });
 
@@ -96,13 +105,13 @@ describe("deleteExpiredSessions", () => {
 
   async function seedSession(expiresAt: Date): Promise<string> {
     const token = makeToken();
-    await db.insert(sessionsTable).values({ token, userId, expiresAt });
+    await db.insert(sessionsTable).values({ token: hashToken(token), userId, expiresAt });
     createdTokens.push(token);
     return token;
   }
 
   async function sessionExists(token: string): Promise<boolean> {
-    const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+    const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
     return rows.length > 0;
   }
 
@@ -156,6 +165,7 @@ describe("destroySession", () => {
       .values({
         email: `session-destroy-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(8).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;
@@ -163,7 +173,7 @@ describe("destroySession", () => {
 
   afterEach(async () => {
     for (const token of createdTokens.splice(0)) {
-      await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
+      await db.delete(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
     }
   });
 
@@ -173,13 +183,13 @@ describe("destroySession", () => {
 
   async function seedSession(expiresAt: Date): Promise<string> {
     const token = randomBytes(16).toString("hex");
-    await db.insert(sessionsTable).values({ token, userId, expiresAt });
+    await db.insert(sessionsTable).values({ token: hashToken(token), userId, expiresAt });
     createdTokens.push(token);
     return token;
   }
 
   async function sessionExists(token: string): Promise<boolean> {
-    const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+    const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
     return rows.length > 0;
   }
 
@@ -213,6 +223,7 @@ describe("invalidateUserSessions", () => {
       .values({
         email: `session-invalidate-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(8).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;
@@ -222,6 +233,7 @@ describe("invalidateUserSessions", () => {
       .values({
         email: `session-invalidate-other-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(8).toString("hex"),
       })
       .returning({ id: usersTable.id });
     otherUserId = otherUser.id;
@@ -229,7 +241,7 @@ describe("invalidateUserSessions", () => {
 
   afterEach(async () => {
     for (const token of createdTokens.splice(0)) {
-      await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
+      await db.delete(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
     }
   });
 
@@ -240,13 +252,13 @@ describe("invalidateUserSessions", () => {
 
   async function seedSessionFor(ownerId: number, expiresAt: Date): Promise<string> {
     const token = randomBytes(16).toString("hex");
-    await db.insert(sessionsTable).values({ token, userId: ownerId, expiresAt });
+    await db.insert(sessionsTable).values({ token: hashToken(token), userId: ownerId, expiresAt });
     createdTokens.push(token);
     return token;
   }
 
   async function sessionExists(token: string): Promise<boolean> {
-    const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.token, token));
+    const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.token, hashToken(token)));
     return rows.length > 0;
   }
 
