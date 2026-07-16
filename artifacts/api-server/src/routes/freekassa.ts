@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { createHash, createHmac } from "crypto";
 import { eq } from "drizzle-orm";
 import { db, paymentsTable } from "@workspace/db";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireAdmin } from "../lib/auth";
 import { confirmPaymentById } from "../lib/confirmPayment";
 import { logger } from "../lib/logger";
 
@@ -33,11 +33,11 @@ function verifyWebhookSign(shopId: string, amount: string, secret2: string, orde
 // FK API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-// FK payment method IDs (per FK notification 2026-07-16)
+// FK payment method IDs confirmed active for this merchant (2026-07-16 cabinet check)
+// QIWI (35) removed — QIWI Bank licence revoked 2024, method absent from FK cabinet
 const FK_METHOD_IDS = {
-  card: 36,   // Visa / MasterCard / МИР (Card RUB API)
+  card: 36,   // Card RUB API — Visa / MasterCard / МИР
   sbp:  44,   // СБП API (НСПК)
-  qiwi: 35,   // QIWI API
 } as const;
 
 type FkMethod = keyof typeof FK_METHOD_IDS;
@@ -295,9 +295,7 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
   // `i` is optional (suggestive) in form mode — pass it as a hint.
   const rawMethodForForm = (req.query.method as string | undefined)?.toLowerCase();
   const formMethodId =
-    rawMethodForForm === "sbp"  ? FK_METHOD_IDS.sbp  :
-    rawMethodForForm === "qiwi" ? FK_METHOD_IDS.qiwi :
-    FK_METHOD_IDS.card;  // default to card
+    rawMethodForForm === "sbp" ? FK_METHOD_IDS.sbp : FK_METHOD_IDS.card;
 
   const sign = buildCheckoutSign(FK_SHOP_ID, payment.amountRub, FK_SECRET1, payment.reference);
   const url = new URL("https://pay.freekassa.net/");
@@ -313,6 +311,25 @@ router.get("/payments/freekassa/checkout/:paymentId", requireAuth, async (req, r
 
   logger.info({ paymentId, reference: payment.reference, amountRub: payment.amountRub, formMethodId }, "Redirecting to FK form-redirect");
   res.redirect(302, url.toString());
+});
+
+// ── Admin: debug endpoint to inspect FK available currencies and required fields ──
+// GET /api/admin/fk/currencies  (admin auth required)
+// Calls FK POST /currencies and returns raw response so we can see which
+// methods are available and what extra fields (e.g. `tel`) they require.
+router.get("/admin/fk/currencies", requireAdmin, async (req, res): Promise<void> => {
+  const FK_SHOP_ID = process.env.FK_SHOP_ID ?? "";
+  const FK_API_KEY = process.env.FK_API_KEY ?? "";
+  if (!FK_SHOP_ID || !FK_API_KEY) {
+    res.status(503).json({ error: "FK_SHOP_ID / FK_API_KEY not set" });
+    return;
+  }
+  try {
+    const data = await fkApiRequest("/currencies", FK_SHOP_ID, FK_API_KEY);
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: String(err) });
+  }
 });
 
 // FreeKassa IPN — no session auth, verified via secret2 signature only.

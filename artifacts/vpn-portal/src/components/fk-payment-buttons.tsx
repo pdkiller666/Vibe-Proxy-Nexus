@@ -1,10 +1,10 @@
 /**
  * FreeKassa payment method buttons.
  *
- * FK notification (2026-07-16) specifies the recommended method IDs:
- *   36 — Visa / MasterCard / МИР
- *   44 — СБП (НСПК)
- *   35 — QIWI
+ * Active FK methods for this merchant (confirmed 2026-07-16):
+ *   36 — Card RUB API (Visa / MasterCard / МИР) — API badge
+ *   44 — СБП (НСПК) API — API badge
+ *   QIWI (35) — not available (QIWI Bank licence revoked 2024)
  *
  * Each button links to /api/payments/freekassa/checkout/{paymentId}?method=<key>
  * so the server can pass the `i` field in the FK API call.
@@ -27,12 +27,6 @@ const methods = [
     label: "СБП",
     sub: "Система быстрых платежей",
     emoji: "⚡",
-  },
-  {
-    key: "qiwi",
-    label: "QIWI",
-    sub: "QIWI кошелёк",
-    emoji: "🥝",
   },
 ] as const;
 
