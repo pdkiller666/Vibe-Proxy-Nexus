@@ -86,7 +86,10 @@ async function createFkOrder(opts: {
 
   const payload = { ...body, signature };
 
-  const resp = await fetch("https://api.freekassa.net/v1/orders/create", {
+  // api.fk.life is the current FK API host (confirmed by official SDKs).
+  // api.freekassa.net is the old alias — it accepts requests but ignores the `i`
+  // (payment method) parameter and falls back to FK Wallet for every order.
+  const resp = await fetch("https://api.fk.life/v1/orders/create", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -97,6 +100,13 @@ async function createFkOrder(opts: {
   if (data.type !== "success" || !data.location) {
     throw new Error(`FreeKassa API error: ${data.message ?? JSON.stringify(data)}`);
   }
+
+  // Log the returned location so we can verify `i=` is present in the URL.
+  // If `i=` is empty in the log, FK is ignoring the payment method — the method
+  // must be activated in the FK merchant cabinet first.
+  const locationUrl = new URL(data.location);
+  const returnedI = locationUrl.searchParams.get("i");
+  console.log(`[FK] order created — i=${returnedI ?? "(none)"} method=${opts.method ?? "default"} location=${data.location}`);
 
   return data.location;
 }
