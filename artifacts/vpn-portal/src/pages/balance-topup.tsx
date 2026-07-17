@@ -151,14 +151,14 @@ export default function BalanceTopup() {
         <>
           {/* Primary: YooMoney online payment */}
           <div className="bg-card border border-primary/40 p-6">
-            <YooMoneyPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} />
+            <YooMoneyPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} reference={payment.reference} />
           </div>
 
           {/* Fallback: manual SBP transfer */}
           <details className="group">
             <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors select-none list-none flex items-center gap-2">
               <span className="border border-border px-3 py-1.5 hover:bg-muted transition-colors inline-block">
-                Альтернатива: перевод по СБП вручную
+                Подтверждение оплаты по СБП — скриншот
               </span>
             </summary>
             <div className="mt-4 space-y-4">
