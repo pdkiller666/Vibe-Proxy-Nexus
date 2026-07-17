@@ -55,7 +55,7 @@ export default function BalanceTopup() {
   const payment = payments?.find((p) => p.id === paymentId);
 
   function handleSubmitNote() {
-    if (!payment || !note.trim()) return;
+    if (!payment) return;
     updateNote(
       { paymentId: payment.id, data: { userNote: note.trim() } },
       {
