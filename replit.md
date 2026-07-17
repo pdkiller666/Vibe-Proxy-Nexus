@@ -1,6 +1,6 @@
 # Vibe Proxy Nexus
 
-Приватный VPN-сервис по приглашениям (VLESS поверх WebSocket/TLS, на Xray-core) — веб-панель для управления подписками, оплатой через СБП и выдачей ключей доступа.
+Приватный VPN-сервис по приглашениям (VLESS поверх WebSocket/TLS, на Xray-core) — веб-панель для управления подписками, оплатой через СБП/ЮMoney и выдачей ключей доступа.
 
 ## Run & Operate
 
@@ -26,8 +26,8 @@
 
 ## Where things live
 
-- `artifacts/api-server` — Express backend: routes under `src/routes/` (and `src/routes/admin/`), auth in `src/lib/auth.ts` + `src/lib/session.ts`, VLESS link generation in `src/lib/vless.ts`, subscription-URL tokens in `src/lib/subscription.ts`, local Xray config management in `src/lib/xray.ts`, traffic polling + key revocation from `src/lib/trafficPolling.ts`, hourly balance billing from `src/lib/hourlyBilling.ts`, subscription auto-expiry/key-revocation in `src/lib/subscriptionLifecycle.ts`.
-- `artifacts/vpn-portal` — React/Vite frontend. Pages in `src/pages/` (home, sign-in/up, forgot/reset-password, dashboard, plans, checkout, slot-checkout, keys, payments, support, profile, admin, not-found). Shared query client in `src/lib/query-client.ts`.
+- `artifacts/api-server` — Express backend: routes under `src/routes/` (and `src/routes/admin/`), auth in `src/lib/auth.ts` + `src/lib/session.ts`, VLESS link generation in `src/lib/vless.ts`, subscription-URL tokens in `src/lib/subscription.ts`, local Xray config management in `src/lib/xray.ts`, traffic polling + key revocation from `src/lib/trafficPolling.ts`, hourly balance billing from `src/lib/hourlyBilling.ts`, subscription auto-expiry/key-revocation in `src/lib/subscriptionLifecycle.ts`, YooMoney webhook in `src/routes/yoomoney.ts`.
+- `artifacts/vpn-portal` — React/Vite frontend. Pages in `src/pages/` (home, sign-in/up, forgot/reset-password, dashboard, plans, checkout, balance-topup, slot-checkout, traffic-checkout, keys, payments, support, profile, admin, not-found). Shared query client in `src/lib/query-client.ts`.
 - `deploy/amvera-all-in-one/` — the Docker deployment package actually used in production (Xray-core + Node server + Postgres schema push, all in one container). See its README for details.
 - `deploy/amvera-vpn-node/` — self-contained package for a FUTURE multi-region setup (separate VPN nodes + secured management API). Not used today.
 
@@ -38,7 +38,7 @@
 - **Self-updating subscription URL**: instead of making users paste/manage individual `vless://` links, `GET /api/vpn-keys/subscription-url` returns one stable URL (`/api/sub/<token>`, stateless HMAC-signed, no DB row) that VPN client apps (Happ, v2rayNG, etc.) re-fetch periodically. Returns base64 of all active links plus branded headers (`Profile-Title`, `Profile-Update-Interval`, `Subscription-Userinfo`). See `.agents/memory/vpn-subscription-links.md`.
 - **Invite-only registration**: `/sign-up` requires a valid `?ref=CODE` referral code in the URL; without it registration is blocked. Every user has a unique `referral_code`; the seed admin's code is the root. Registration via open `/sign-up` without code returns 400.
 - **Referral commission**: when admin confirms a `subscription` payment, the payer's referrer (if any) gets `referralCommissionPercent`% of the payment credited to their `balance_kopecks` automatically. Rate is 0 by default (disabled); admin sets it in payment settings.
-- **Balance and top-up**: users hold an internal `balance_kopecks` wallet. Balance is topped up via `POST /api/balance-topup-order` → admin confirms → `balance_kopecks` += amount. Balance is spent by: hourly plan billing (deducted every 5 min while traffic flows) and extra device slot purchases (when price > 0). All balance changes are logged to `balance_transactions` (types: `topup`, `debit`, `referral`, `refund`).
+- **Balance and top-up**: users hold an internal `balance_kopecks` wallet. Balance is topped up via `POST /api/balance-topup-order` → admin confirms → `balance_kopecks` += amount. Balance is spent by: hourly plan billing (deducted every 5 min while traffic flows) and extra device slot purchases (when price > 0). All balance changes are logged to `balance_transactions` (types: `topup`, `debit`, `referral`, `refund`). Balance history is shown on the Payments page.
 - **Extra device slots**: each plan has `devicesIncluded` (base slots). Active `subscriptions` row tracks `extraDeviceSlots` (starts 0; increments when admin confirms an `extra_device_slot` payment). Total slots = `plan.devicesIncluded + subscription.extraDeviceSlots`. Slots are tied to the subscription period — reset to 0 on renewal of monthly plans (new row created). Hourly plans reuse the same subscription row for their full continuous lifetime, so their slots persist.
 - **Hourly billing**: `billingType: "hourly"` plans charge `hourlyRateKopecks` from balance every 5 minutes, but only if there was VPN traffic in the last 15 minutes (`IDLE_GRACE_MS`). Implemented in `src/lib/hourlyBilling.ts`, started from `app.ts`. No payment record is created — balance debit is logged to `balance_transactions`. If balance runs out, the subscription is expired and keys revoked.
 - **Traffic tracking**: `startTrafficPollingJob()` (in `src/lib/trafficPolling.ts`) polls Xray's gRPC Stats API every 60 seconds using `QueryStats(reset: false)` + per-key `lastSeen*` to derive deltas without race conditions. Deltas are added to `trafficUpBytes`/`trafficDownBytes` (lifetime) and `periodUpBytes`/`periodDownBytes` (current period, reset on subscription renewal). `lastTrafficAt` is set on each key whenever a nonzero delta is observed — used by hourly billing as the "is this device connected right now?" signal, and by the admin panel for the VPN activity status.
@@ -47,7 +47,8 @@
 - `app.set("trust proxy", 1)` (single hop) is required so `req.protocol` correctly reports `https` behind Amvera's edge. Deliberately not `trust proxy: true` — that would let clients spoof `X-Forwarded-For` and weaken IP-based login rate limiting.
 - **Billing lifecycle**: `startSubscriptionExpiryJob()` (in `src/lib/subscriptionLifecycle.ts`) periodically expires overdue subscriptions and revokes a user's VPN keys — but only if they have no other still-active subscription (a user can hold multiple overlapping subscription rows via early renewal). Admin payment confirm is wrapped in `db.transaction()`, idempotent, and chains renewal from the end of the current active subscription. Lazy-expiry (`endsAt > now`) is also checked defense-in-depth in `meResponse.ts`, `vpnKeys.ts`, and `subscription.ts`.
 - **VPN node capacity limits**: `vpn_nodes.maxUsers` (nullable = unlimited) caps how many non-revoked VPN keys a node will serve. Enforced in `POST /api/vpn-keys`. Every node response includes computed `activeUserCount`.
-- Payment MVP is manual SBP (Russian bank transfer): users attach a screenshot and note; admin confirms/rejects. Schema has `yookassa` provider for a future gateway, not implemented.
+- **Payment methods**: (1) **ЮMoney (YooMoney)** — card/SberPay via QuickPay redirect + HMAC webhook at `POST /api/yoomoney/notification`; automatic confirmation on valid webhook. (2) **СБП (ручной перевод)** — пользователь отправляет деньги вручную, загружает скриншот перевода (обязательно), добавляет комментарий (необязательно), нажимает «Я оплатил(а)». Администратор вручную подтверждает или отклоняет. Enum `provider` включает `freekassa` как legacy-значение (интеграция удалена в июле 2026).
+- **SBP settings (admin-configurable)**: `sbpPaymentUrl` — прямая ссылка на платёж в СБП-приложении банка (если не задана, используется fallback); `showManualSbpDetails` — toggle: показывать ли блок с номером телефона/банком/получателем (по умолчанию скрыт); `sbpQrCodeData`/`sbpQrCodeMimeType` — QR-код (хранится в Postgres как base64, клиентам отдаётся через `GET /api/payment-settings/sbp-qr-image`, наличие сигнализируется полем `hasSbpQr: boolean`).
 - No transactional email provider is configured: password-reset links are returned directly in the API/UI response. See `.agents/memory/no-email-provider.md`.
 - `deploy/amvera-vpn-node/` is kept for a FUTURE multi-region setup. Not used by the all-in-one deployment.
 - **Primary domain hotswap**: `payment_settings.primaryDomain` — if non-empty, used in generated vless/subscription links instead of the request's own hostname. Admin can change it instantly if the main domain gets blocked, without redeploying.
@@ -55,11 +56,16 @@
 
 ## Product
 
-- Invite-only VPN reselling: users sign up via referral link (`/sign-up?ref=CODE`), pick a plan, pay via SBP (screenshot upload), get a subscription activated by an admin, then issue/revoke VLESS keys (or use the one-click subscription link) from a dashboard. Subscriptions auto-expire and revoke keys when they lapse; renewing before expiry chains the new period.
+- Invite-only VPN reselling: users sign up via referral link (`/sign-up?ref=CODE`), pick a plan, pay via YooMoney (card/SberPay, auto-confirmed) or SBP manual transfer (screenshot required, admin-confirmed), get a subscription activated, then issue/revoke VLESS keys (or use the one-click subscription link) from a dashboard. Subscriptions auto-expire and revoke keys when they lapse; renewing before expiry chains the new period.
 - Profile page (`/profile`): user can change their own name, email (requires current password, checks uniqueness), and password (requires current password, invalidates other sessions).
 - Support (`/support`): user creates a ticket with a subject; threaded messaging between user and admin; statuses: open / answered / closed.
-- Plans page (`/plans`): snap-carousel on mobile; selected plan highlighted with ring+shadow (no scale shift); dot indicators navigate correctly to any card including the leftmost.
-- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject, transactional + idempotent), plans CRUD (monthly and hourly), VPN nodes CRUD (with optional `maxUsers` and live `activeUserCount`), user management (activity status, reset password, extra device slots, subscription override), payment settings (SBP details, extra slot price, referral commission %, min hourly top-up, primary domain), support ticket queue, and analytics summary (online now with three-state status, new users 7/30 days, plan distribution, 14-day revenue chart, 30-day rolling revenue).
+- Plans page (`/plans`): snap-carousel on mobile; selected plan highlighted with ring+shadow; active subscription plan highlighted in green with «Активный» badge and disabled button «Текущий тариф» — prevents accidental re-subscription.
+- Payments page (`/payments`): shows balance widget (with top-up), **balance transaction history** (moved from dashboard), and payment history list.
+- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject with screenshot preview), plans CRUD, VPN nodes CRUD, user management (activity status, reset password, extra device slots, subscription override), payment settings (SBP URL, phone/bank/recipient toggle, QR code upload, extra slot price, referral commission %, min hourly top-up, primary domain), support ticket queue, analytics.
+
+## Codegen rule
+
+Never hand-edit `lib/api-zod/src/generated/` or `lib/api-client-react/src/generated/`. Exception: when orval codegen is unavailable (no generate script in api-zod), edit the zod file directly AND update openapi.yaml in sync. Never name a component schema `<operationId>Body/Params/Response/QueryParams` — orval generates those identifiers automatically and they will collide. See `.agents/memory/openapi-spec-drift.md`.
 
 ## User preferences
 
@@ -74,3 +80,4 @@
 - Product overview for humans (features, stack, screenshots) — `README.md`
 - Full repo map and API/schema reference — `PROJECT_MAP.md`
 - Production deployment details — `deploy/amvera-all-in-one/README.md`
+- Comprehensive security/logic audit (July 2026) — `AUDIT.md`
