@@ -425,7 +425,7 @@ export const UpdatePaymentNoteParams = zod.object({
 
 
 export const UpdatePaymentNoteBody = zod.object({
-  "userNote": zod.string().min(1)
+  "userNote": zod.string().min(0)
 })
 
 export const UpdatePaymentNoteResponse = zod.object({
