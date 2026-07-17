@@ -23,4 +23,7 @@ export interface PaymentSettings {
   minHourlyTopupRub?: number;
   primaryDomain?: string;
   referralCommissionPercent?: number;
+  sbpPaymentUrl: string;
+  showManualSbpDetails: boolean;
+  hasSbpQr: boolean;
 }

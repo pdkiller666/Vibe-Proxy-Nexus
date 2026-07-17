@@ -34,4 +34,6 @@ export interface PaymentSettingsUpdate {
      * @maximum 100
      */
   referralCommissionPercent?: number;
+  sbpPaymentUrl?: string;
+  showManualSbpDetails?: boolean;
 }

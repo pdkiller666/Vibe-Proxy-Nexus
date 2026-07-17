@@ -54,6 +54,7 @@ export * from './resetPasswordInput';
 export * from './resetPasswordResult';
 export * from './revenueByDayEntry';
 export * from './revokedReason';
+export * from './sbpQrUpload';
 export * from './subscription';
 export * from './subscriptionInput';
 export * from './subscriptionStatus';

@@ -36,6 +36,16 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   // to the referrer's wallet balance — see admin/payments.ts confirm route.
   // Only applies to payment.type === "subscription"; 0 disables payouts.
   referralCommissionPercent: integer("referral_commission_percent").notNull().default(0),
+  // SBP payment settings: editable via admin panel without redeploy.
+  // sbpPaymentUrl: link for the "Перейти к оплате по СБП" button; falls back
+  //   to the hardcoded Ozon Bank URL when empty.
+  // showManualSbpDetails: toggles the phone/bank/recipient CopyField block on
+  //   checkout pages (hidden by default, admin enables when needed).
+  // sbpQrCodeData/MimeType: base64 QR image served via /payment-settings/sbp-qr-image.
+  sbpPaymentUrl: text("sbp_payment_url").notNull().default(""),
+  showManualSbpDetails: boolean("show_manual_sbp_details").notNull().default(false),
+  sbpQrCodeData: text("sbp_qr_code_data"),
+  sbpQrCodeMimeType: text("sbp_qr_code_mime_type"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

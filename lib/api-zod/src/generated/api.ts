@@ -291,7 +291,10 @@ export const GetPaymentSettingsResponse = zod.object({
   "trialDays": zod.number(),
   "minHourlyTopupRub": zod.number().optional(),
   "primaryDomain": zod.string().optional(),
-  "referralCommissionPercent": zod.number().optional()
+  "referralCommissionPercent": zod.number().optional(),
+  "sbpPaymentUrl": zod.string(),
+  "showManualSbpDetails": zod.boolean(),
+  "hasSbpQr": zod.boolean()
 })
 
 
@@ -902,6 +905,23 @@ export const DeletePlanResponse = zod.void()
 
 
 /**
+ * @summary Upload SBP QR code image (base64)
+ */
+export const UploadSbpQrBody = zod.object({
+  "data": zod.string(),
+  "mimeType": zod.string()
+})
+
+export const UploadSbpQrResponse = zod.unknown()
+
+
+/**
+ * @summary Delete SBP QR code image
+ */
+export const DeleteSbpQrResponse = zod.unknown()
+
+
+/**
  * @summary Update SBP payment instructions
  */
 export const updatePaymentSettingsBodyExtraDeviceSlotPriceRubMin = 0;
@@ -933,7 +953,9 @@ export const UpdatePaymentSettingsBody = zod.object({
   "trialDays": zod.number().min(1).max(updatePaymentSettingsBodyTrialDaysMax).optional(),
   "minHourlyTopupRub": zod.number().min(updatePaymentSettingsBodyMinHourlyTopupRubMin).optional(),
   "primaryDomain": zod.string().optional(),
-  "referralCommissionPercent": zod.number().min(updatePaymentSettingsBodyReferralCommissionPercentMin).max(updatePaymentSettingsBodyReferralCommissionPercentMax).optional()
+  "referralCommissionPercent": zod.number().min(updatePaymentSettingsBodyReferralCommissionPercentMin).max(updatePaymentSettingsBodyReferralCommissionPercentMax).optional(),
+  "sbpPaymentUrl": zod.string().optional(),
+  "showManualSbpDetails": zod.boolean().optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -951,7 +973,10 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "trialDays": zod.number(),
   "minHourlyTopupRub": zod.number().optional(),
   "primaryDomain": zod.string().optional(),
-  "referralCommissionPercent": zod.number().optional()
+  "referralCommissionPercent": zod.number().optional(),
+  "sbpPaymentUrl": zod.string(),
+  "showManualSbpDetails": zod.boolean(),
+  "hasSbpQr": zod.boolean()
 })
 
 

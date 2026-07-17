@@ -195,6 +195,11 @@ export interface PlanUpdate {
   isActive?: boolean;
 }
 
+export interface SbpQrUpload {
+  data: string;
+  mimeType: string;
+}
+
 export interface PaymentSettings {
   sbpPhone: string;
   sbpBank: string;
@@ -212,6 +217,9 @@ export interface PaymentSettings {
   minHourlyTopupRub?: number;
   primaryDomain?: string;
   referralCommissionPercent?: number;
+  sbpPaymentUrl: string;
+  showManualSbpDetails: boolean;
+  hasSbpQr: boolean;
 }
 
 export interface PaymentSettingsUpdate {
@@ -242,6 +250,8 @@ export interface PaymentSettingsUpdate {
      * @maximum 100
      */
   referralCommissionPercent?: number;
+  sbpPaymentUrl?: string;
+  showManualSbpDetails?: boolean;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];

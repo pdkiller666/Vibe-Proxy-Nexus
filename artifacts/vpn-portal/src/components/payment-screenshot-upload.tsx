@@ -20,9 +20,12 @@ function fileToBase64(file: File): Promise<string> {
 export function PaymentScreenshotUpload({
   paymentId,
   hasScreenshot,
+  required = false,
 }: {
   paymentId: number;
   hasScreenshot?: boolean | null;
+  /** When true, label shows "обязательно" instead of "необязательно". */
+  required?: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -65,7 +68,12 @@ export function PaymentScreenshotUpload({
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-bold block">Скриншот перевода (необязательно)</label>
+      <label className="text-sm font-bold block">
+        Скриншот перевода{" "}
+        <span className={required && !hasScreenshot ? "text-destructive" : "text-muted-foreground"}>
+          ({required ? "обязательно" : "необязательно"})
+        </span>
+      </label>
       <input
         ref={inputRef}
         type="file"

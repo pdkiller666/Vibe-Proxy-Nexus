@@ -221,6 +221,13 @@ try {
   `);
   console.log("heal-schema: applied support_messages_author_id_idx");
 
+  // M-9: payment_settings SBP extended fields (2026-07-17)
+  await client.query(`ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS sbp_payment_url text NOT NULL DEFAULT ''`);
+  await client.query(`ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS show_manual_sbp_details boolean NOT NULL DEFAULT false`);
+  await client.query(`ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS sbp_qr_code_data text`);
+  await client.query(`ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS sbp_qr_code_mime_type text`);
+  console.log("heal-schema: applied payment_settings SBP extended fields");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
@@ -228,3 +235,4 @@ try {
 } finally {
   await client.end();
 }
+// Appended lines are not valid here — need to insert before final lines

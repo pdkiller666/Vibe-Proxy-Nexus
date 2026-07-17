@@ -117,6 +117,12 @@ export default function Plans() {
           setLocation(`/balance-topup/${data.paymentId}`);
         },
         onError: (err: unknown) => {
+          // 409 = duplicate pending topup — server returns existing paymentId
+          const body = err as { paymentId?: number };
+          if (body?.paymentId) {
+            setLocation(`/balance-topup/${body.paymentId}`);
+            return;
+          }
           const msg = err instanceof Error ? err.message : undefined;
           toast({ title: msg ?? "Не удалось создать заявку на пополнение", variant: "destructive" });
           setTopupPlanId(null);
@@ -151,6 +157,12 @@ export default function Plans() {
           setLocation(`/checkout/${result.subscription.id}`);
         },
         onError: (err: unknown) => {
+          // 409 = existing pending_payment subscription — redirect to it
+          const body = err as { existingSubscriptionId?: number };
+          if (body?.existingSubscriptionId) {
+            setLocation(`/checkout/${body.existingSubscriptionId}`);
+            return;
+          }
           const msg = err instanceof Error ? err.message : undefined;
           toast({
             title: msg ?? "Не удалось оформить подписку",

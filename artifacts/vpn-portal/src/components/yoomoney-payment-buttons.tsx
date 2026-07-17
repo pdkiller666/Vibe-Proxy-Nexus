@@ -2,19 +2,22 @@
  * Payment method tiles shown on all checkout pages.
  *
  * Tile 1 — Карта / SberPay (auto-confirm via YooMoney webhook)
- * Tile 2 — СБП через Озон Банк (manual confirm: user transfers the exact
- *           amount, then uploads a screenshot in the section below)
+ * Tile 2 — СБП through admin-configured link (manual confirm: user transfers
+ *           exact amount, then uploads screenshot in the section below).
+ *
+ * Renders a QR-code button when the admin has uploaded one.
+ * SBP URL is admin-configured (falls back to hardcoded Ozon Bank URL).
  */
 
 import { useState } from "react";
+import { useGetPaymentSettings } from "@workspace/api-client-react";
 
-const OZON_SBP_URL = "https://finance.ozon.ru/apps/sbp/ozonbankpay/0199bf34-b74d-7723-9d12-04de3561863f";
+const FALLBACK_SBP_URL =
+  "https://finance.ozon.ru/apps/sbp/ozonbankpay/0199bf34-b74d-7723-9d12-04de3561863f";
 
 interface YooMoneyPaymentButtonsProps {
   paymentId: number;
   amountRub: number;
-  /** Payment reference — shown as a copy field so the user can put it in the
-   *  transfer comment for easier admin matching. */
   reference?: string;
 }
 
@@ -36,8 +39,16 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
-export function YooMoneyPaymentButtons({ paymentId, amountRub, reference }: YooMoneyPaymentButtonsProps) {
+export function YooMoneyPaymentButtons({
+  paymentId,
+  amountRub,
+  reference,
+}: YooMoneyPaymentButtonsProps) {
+  const { data: settings } = useGetPaymentSettings();
   const [sbpOpen, setSbpOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+
+  const sbpUrl = settings?.sbpPaymentUrl || FALLBACK_SBP_URL;
 
   return (
     <div className="space-y-3">
@@ -81,7 +92,9 @@ export function YooMoneyPaymentButtons({ paymentId, amountRub, reference }: YooM
         <div className="border border-primary/40 bg-primary/5 p-4 space-y-4">
           {/* Step 1 — amount */}
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Шаг 1 — переведите ровно</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+              Шаг 1 — переведите ровно
+            </p>
             <div className="flex items-center gap-3">
               <span className="text-3xl font-bold">{amountRub} ₽</span>
               <CopyButton value={String(amountRub)} />
@@ -93,7 +106,9 @@ export function YooMoneyPaymentButtons({ paymentId, amountRub, reference }: YooM
 
           {reference && (
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">В комментарии к переводу укажите</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                В комментарии к переводу укажите
+              </p>
               <div className="flex items-center gap-2 font-mono text-sm break-all">
                 <span>{reference}</span>
                 <CopyButton value={reference} />
@@ -104,22 +119,51 @@ export function YooMoneyPaymentButtons({ paymentId, amountRub, reference }: YooM
             </div>
           )}
 
-          {/* Step 2 — open Ozon Bank */}
+          {/* Step 2 — QR or link */}
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Шаг 2 — откройте форму перевода</p>
-            <a
-              href={OZON_SBP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-3 hover:opacity-90 transition-opacity text-sm"
-            >
-              ⚡ Перейти к оплате по СБП
-            </a>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+              Шаг 2 — откройте форму перевода
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={sbpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-3 hover:opacity-90 transition-opacity text-sm"
+              >
+                ⚡ Перейти к оплате по СБП
+              </a>
+              {settings?.hasSbpQr && (
+                <button
+                  type="button"
+                  onClick={() => setQrOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 border border-border bg-card px-5 py-3 text-sm font-bold hover:bg-muted transition-colors"
+                >
+                  📷 {qrOpen ? "Скрыть QR" : "Показать QR"}
+                </button>
+              )}
+            </div>
+
+            {/* QR code overlay */}
+            {qrOpen && settings?.hasSbpQr && (
+              <div className="mt-3 flex flex-col items-start gap-2">
+                <img
+                  src="/api/payment-settings/sbp-qr-image"
+                  alt="QR-код для оплаты по СБП"
+                  className="w-48 h-48 object-contain border border-border bg-white"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Отсканируйте камерой банковского приложения
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Step 3 — screenshot */}
           <div className="border-t border-border pt-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Шаг 3 — подтвердите оплату</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+              Шаг 3 — подтвердите оплату
+            </p>
             <p className="text-sm">
               После перевода загрузите скриншот и нажмите «Я оплатил(а)» в форме ниже ↓
             </p>

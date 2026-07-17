@@ -163,50 +163,49 @@ export default function TrafficCheckout() {
             <YooMoneyPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} reference={payment.reference} />
           </div>
 
-          {/* Fallback: manual SBP transfer */}
-          <details className="group">
-            <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors select-none list-none flex items-center gap-2">
-              <span className="border border-border px-3 py-1.5 hover:bg-muted transition-colors inline-block">
-                Подтверждение оплаты по СБП — скриншот
-              </span>
-            </summary>
-            <div className="mt-4 space-y-4">
-              <div className="bg-card border border-border p-6">
+          {/* SBP manual confirmation */}
+          <div className="border border-border mt-2 p-4 space-y-4">
+            <p className="text-sm font-bold">Подтверждение оплаты по СБП</p>
+            {settings?.showManualSbpDetails && (
+              <div className="bg-card border border-border p-4">
                 <CopyField label="Сумма" value={`${payment.amountRub} ₽`} />
                 <CopyField label="Телефон СБП" value={settings?.sbpPhone ?? "—"} />
                 <CopyField label="Банк" value={settings?.sbpBank ?? "—"} />
                 <CopyField label="Получатель" value={settings?.sbpRecipientName ?? "—"} />
                 <CopyField label="Референс платежа" value={payment.reference} />
               </div>
-              {settings?.instructions && (
-                <p className="text-sm text-muted-foreground font-mono whitespace-pre-line">
-                  {settings.instructions}
-                </p>
+            )}
+            {settings?.instructions && (
+              <p className="text-sm text-muted-foreground font-mono whitespace-pre-line">
+                {settings.instructions}
+              </p>
+            )}
+            <PaymentScreenshotUpload paymentId={payment.id} hasScreenshot={payment.hasScreenshot} required />
+            <div className="space-y-3">
+              <label className="text-sm text-muted-foreground block">
+                Комментарий к переводу (необязательно)
+              </label>
+              <Textarea
+                value={note || payment.userNote || ""}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Оплатил(а) в 14:32, перевод прошёл"
+                className="rounded-none"
+              />
+              <button
+                onClick={handleSubmitNote}
+                disabled={notePending || !payment.hasScreenshot}
+                className="bg-primary text-primary-foreground font-bold px-6 py-3 hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {notePending ? "Сохраняем..." : "Я оплатил(а)"}
+              </button>
+              {!payment.hasScreenshot && (
+                <p className="text-xs text-amber-600">↑ Сначала загрузите скриншот перевода</p>
               )}
-              <div className="space-y-3">
-                <label className="text-sm font-bold block">
-                  Отметка об оплате (например, время перевода)
-                </label>
-                <Textarea
-                  value={note || payment.userNote || ""}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Оплатил(а) в 14:32, перевод прошёл"
-                  className="rounded-none"
-                />
-                <button
-                  onClick={handleSubmitNote}
-                  disabled={notePending || (!note.trim() && !payment.userNote)}
-                  className="bg-primary text-primary-foreground font-bold px-6 py-3 hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {notePending ? "Сохраняем..." : submitted || payment.userNote ? "Обновить отметку" : "Я оплатил(а)"}
-                </button>
-                <p className="text-xs text-muted-foreground">
-                  Администратор вручную сверит перевод и начислит трафик — обычно до нескольких часов.
-                </p>
-              </div>
-              <PaymentScreenshotUpload paymentId={payment.id} hasScreenshot={payment.hasScreenshot} />
+              <p className="text-xs text-muted-foreground">
+                Администратор вручную сверит перевод и начислит трафик — обычно до нескольких часов.
+              </p>
             </div>
-          </details>
+          </div>
 
           <div className="border-t border-border pt-6">
             {!confirmCancel ? (

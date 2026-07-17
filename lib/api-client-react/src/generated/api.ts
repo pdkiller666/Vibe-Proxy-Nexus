@@ -59,6 +59,7 @@ import type {
   RegisterInput,
   ResetPasswordInput,
   ResetPasswordResult,
+  SbpQrUpload,
   Subscription,
   SubscriptionInput,
   SubscriptionUrl,
@@ -2943,6 +2944,146 @@ export const useDeletePlan = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeletePlanMutationOptions(options));
+    }
+
+export const getUploadSbpQrUrl = () => {
+
+
+
+
+  return `/api/admin/payment-settings/sbp-qr`
+}
+
+/**
+ * @summary Upload SBP QR code image (base64)
+ */
+export const uploadSbpQr = async (sbpQrUpload: SbpQrUpload, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUploadSbpQrUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sbpQrUpload)
+  }
+);}
+
+
+
+
+export const getUploadSbpQrMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadSbpQr>>, TError,{data: BodyType<SbpQrUpload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadSbpQr>>, TError,{data: BodyType<SbpQrUpload>}, TContext> => {
+
+const mutationKey = ['uploadSbpQr'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadSbpQr>>, {data: BodyType<SbpQrUpload>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadSbpQr(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadSbpQrMutationResult = NonNullable<Awaited<ReturnType<typeof uploadSbpQr>>>
+    export type UploadSbpQrMutationBody = BodyType<SbpQrUpload>
+    export type UploadSbpQrMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Upload SBP QR code image (base64)
+ */
+export const useUploadSbpQr = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadSbpQr>>, TError,{data: BodyType<SbpQrUpload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadSbpQr>>,
+        TError,
+        {data: BodyType<SbpQrUpload>},
+        TContext
+      > => {
+      return useMutation(getUploadSbpQrMutationOptions(options));
+    }
+
+export const getDeleteSbpQrUrl = () => {
+
+
+
+
+  return `/api/admin/payment-settings/sbp-qr`
+}
+
+/**
+ * @summary Delete SBP QR code image
+ */
+export const deleteSbpQr = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteSbpQrUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteSbpQrMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSbpQr>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSbpQr>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteSbpQr'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSbpQr>>, void> = () => {
+
+
+          return  deleteSbpQr(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSbpQrMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSbpQr>>>
+
+    export type DeleteSbpQrMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete SBP QR code image
+ */
+export const useDeleteSbpQr = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSbpQr>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSbpQr>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteSbpQrMutationOptions(options));
     }
 
 export const getUpdatePaymentSettingsUrl = () => {

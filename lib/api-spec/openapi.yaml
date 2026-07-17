@@ -728,6 +728,28 @@ paths:
         "204":
           description: Deleted
 
+  /admin/payment-settings/sbp-qr:
+    put:
+      operationId: uploadSbpQr
+      tags: [admin]
+      summary: Upload SBP QR code image (base64)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SbpQrUpload"
+      responses:
+        "200":
+          description: OK
+    delete:
+      operationId: deleteSbpQr
+      tags: [admin]
+      summary: Delete SBP QR code image
+      responses:
+        "200":
+          description: OK
+
   /admin/payment-settings:
     patch:
       operationId: updatePaymentSettings
@@ -1344,9 +1366,16 @@ components:
         hourlyRateKopecks: { type: ["integer", "null"], minimum: 1 }
         isActive: { type: boolean }
 
+    SbpQrUpload:
+      type: object
+      required: [data, mimeType]
+      properties:
+        data: { type: string }
+        mimeType: { type: string }
+
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -1373,6 +1402,13 @@ components:
         # % of a referred user's confirmed subscription payment credited to
         # the referrer's wallet balance. 0 disables referral payouts.
         referralCommissionPercent: { type: integer }
+        # SBP settings: URL for the payment button (empty = use hardcoded default).
+        sbpPaymentUrl: { type: string }
+        # Whether to show the old phone/bank/recipient CopyField block on
+        # checkout pages. Hidden by default; admin enables when needed.
+        showManualSbpDetails: { type: boolean }
+        # Whether a QR code image is currently stored (true = /payment-settings/sbp-qr-image is available).
+        hasSbpQr: { type: boolean }
 
     PaymentSettingsUpdate:
       type: object
@@ -1392,6 +1428,8 @@ components:
         minHourlyTopupRub: { type: integer, minimum: 0 }
         primaryDomain: { type: string }
         referralCommissionPercent: { type: integer, minimum: 0, maximum: 100 }
+        sbpPaymentUrl: { type: string }
+        showManualSbpDetails: { type: boolean }
 
     SubscriptionStatus:
       type: string

@@ -21,6 +21,8 @@ import {
   useDeleteUser,
   useAdminResetUserPassword,
   useGetPaymentSettings,
+  useUploadSbpQr,
+  useDeleteSbpQr,
   useUpdatePaymentSettings,
   getGetAdminDashboardSummaryQueryKey,
   getListAdminPaymentsQueryKey,
@@ -1436,6 +1438,8 @@ function PaymentSettingsForm() {
   const [minHourlyTopupRub, setMinHourlyTopupRub] = useState("0");
   const [primaryDomain, setPrimaryDomain] = useState("");
   const [referralCommissionPercent, setReferralCommissionPercent] = useState("0");
+  const [sbpPaymentUrl, setSbpPaymentUrl] = useState("");
+  const [showManualSbpDetails, setShowManualSbpDetails] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -1453,6 +1457,8 @@ function PaymentSettingsForm() {
     setMinHourlyTopupRub(String(settings.minHourlyTopupRub ?? 0));
     setPrimaryDomain(settings.primaryDomain ?? "");
     setReferralCommissionPercent(String(settings.referralCommissionPercent ?? 0));
+    setSbpPaymentUrl(settings.sbpPaymentUrl ?? "");
+    setShowManualSbpDetails(settings.showManualSbpDetails ?? false);
     setInitialized(true);
   }
 
@@ -1474,6 +1480,8 @@ function PaymentSettingsForm() {
           minHourlyTopupRub: Number(minHourlyTopupRub) || 0,
           primaryDomain: primaryDomain.trim(),
           referralCommissionPercent: Number(referralCommissionPercent) || 0,
+          sbpPaymentUrl: sbpPaymentUrl.trim(),
+          showManualSbpDetails,
         },
       },
       {
@@ -1490,6 +1498,37 @@ function PaymentSettingsForm() {
 
   return (
     <div className="bg-card border border-border p-5 space-y-3 max-w-xl">
+      {/* SBP online payment settings */}
+      <div className="border border-border p-4 space-y-3">
+        <p className="text-sm font-semibold">СБП — ссылка и QR</p>
+        <div>
+          <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Ссылка для кнопки «Перейти к оплате по СБП»</label>
+          <Input
+            placeholder="https://finance.ozon.ru/apps/sbp/... (пусто = Озон Банк по умолчанию)"
+            value={sbpPaymentUrl}
+            onChange={(e) => setSbpPaymentUrl(e.target.value)}
+            className="rounded-none"
+          />
+          <p className="text-xs text-muted-foreground mt-1">Оставьте пустым чтобы использовать встроенную ссылку Озон Банк.</p>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Показывать реквизиты (телефон/банк/получатель)</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Отображать старую форму с реквизитами на страницах оплаты СБП</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={showManualSbpDetails}
+              onChange={(e) => setShowManualSbpDetails(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+        </div>
+      </div>
+
+      {/* Manual SBP requisites (shown only when showManualSbpDetails is on) */}
       <Input placeholder="Телефон СБП" value={sbpPhone} onChange={(e) => setSbpPhone(e.target.value)} className="rounded-none" />
       <Input placeholder="Банк" value={sbpBank} onChange={(e) => setSbpBank(e.target.value)} className="rounded-none" />
       <Input
@@ -1675,6 +1714,98 @@ function PaymentSettingsForm() {
       >
         Сохранить реквизиты
       </button>
+
+      {/* QR code section — separate mutation, not part of the main form */}
+      <SbpQrSection />
+    </div>
+  );
+}
+
+function SbpQrSection() {
+  const { data: settings } = useGetPaymentSettings();
+  const { mutate: uploadQr, isPending: uploading } = useUploadSbpQr();
+  const { mutate: deleteQr, isPending: deleting } = useDeleteSbpQr();
+  const { toast } = useToast();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const MAX_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      toast({ title: "Файл слишком большой (макс. 8 МБ)", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1] ?? "";
+      uploadQr(
+        { data: { data: base64, mimeType: file.type } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
+            toast({ title: "QR-код загружен" });
+          },
+          onError: () => toast({ title: "Ошибка загрузки QR", variant: "destructive" }),
+        },
+      );
+    };
+    reader.readAsDataURL(file);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  return (
+    <div className="border border-border p-4 space-y-3 mt-2">
+      <p className="text-sm font-semibold">QR-код для СБП</p>
+      {settings?.hasSbpQr ? (
+        <div className="space-y-2">
+          <img
+            src="/api/payment-settings/sbp-qr-image"
+            alt="QR СБП"
+            className="w-40 h-40 object-contain border border-border bg-white p-1"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => inputRef.current?.click()}
+              className="border border-border px-3 py-1.5 text-sm hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {uploading ? "Загружаем..." : "Заменить QR"}
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() =>
+                deleteQr(undefined as never, {
+                  onSuccess: () => {
+                    queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
+                    toast({ title: "QR-код удалён" });
+                  },
+                  onError: () => toast({ title: "Ошибка удаления QR", variant: "destructive" }),
+                })
+              }
+              className="border border-destructive/50 text-destructive px-3 py-1.5 text-sm hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            >
+              {deleting ? "Удаляем..." : "Удалить QR"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">QR-код не загружен. После загрузки кнопка «Показать QR» появится на странице оплаты СБП.</p>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+            className="inline-flex items-center gap-2 border border-border px-3 py-1.5 text-sm hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <ImageIcon className="w-4 h-4" />
+            {uploading ? "Загружаем..." : "Загрузить QR-код"}
+          </button>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
     </div>
   );
 }
