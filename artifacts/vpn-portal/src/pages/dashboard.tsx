@@ -512,7 +512,6 @@ export default function Dashboard() {
       <CollapsibleOnMobile title="Подробности использования">
         <div className="space-y-6 pt-1">
           <TrafficSection />
-          <BalanceHistorySection />
         </div>
       </CollapsibleOnMobile>
     </div>
