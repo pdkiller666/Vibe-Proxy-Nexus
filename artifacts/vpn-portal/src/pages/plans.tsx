@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Check, CreditCard, Zap, Wallet } from "lucide-react";
+import { Check, CreditCard, Zap, Wallet, CheckCircle2 } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { cn } from "@/lib/utils";
 
@@ -215,6 +215,7 @@ export default function Plans() {
           >
             {activePlans.map((plan, i) => {
               const isSelected = selectedPlanId === plan.id;
+              const isCurrentPlan = !!me?.hasActiveSubscription && me.currentPlanName === plan.name;
               return (
                 <div
                   key={plan.id}
@@ -231,13 +232,20 @@ export default function Plans() {
                   className={cn(
                     "snap-center shrink-0 w-[78%] xs:w-[70%] sm:w-[300px] md:w-[320px] bg-card border p-6 flex flex-col cursor-pointer select-none",
                     "transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2",
-                    isSelected
-                      ? "border-primary ring-2 ring-primary/40 shadow-lg"
-                      : "border-border hover:border-primary/40",
+                    isCurrentPlan
+                      ? "border-green-500 ring-2 ring-green-500/30 shadow-lg"
+                      : isSelected
+                        ? "border-primary ring-2 ring-primary/40 shadow-lg"
+                        : "border-border hover:border-primary/40",
                   )}
                 >
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="font-bold text-xl">{plan.name}</h3>
+                    {isCurrentPlan && (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                        <CheckCircle2 className="w-3 h-3" /> Активный
+                      </span>
+                    )}
                     {plan.billingType === "hourly" && (
                       <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                         <Zap className="w-3 h-3" /> Почасовой
@@ -267,6 +275,17 @@ export default function Plans() {
                     <p className="text-sm text-muted-foreground mb-6 flex-1">{plan.description}</p>
                   )}
                   {(() => {
+                    if (isCurrentPlan) {
+                      return (
+                        <button
+                          disabled
+                          className="w-full bg-green-100 text-green-700 font-bold py-3 flex items-center justify-center gap-2 cursor-default opacity-90"
+                        >
+                          <CheckCircle2 className="w-4 h-4" /> Текущий тариф
+                        </button>
+                      );
+                    }
+
                     const insufficientBalance =
                       plan.billingType === "hourly" &&
                       (!me?.balanceKopecks || (minHourlyTopupRub > 0 && balanceRub < minHourlyTopupRub));
