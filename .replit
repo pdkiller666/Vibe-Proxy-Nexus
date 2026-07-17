@@ -25,4 +25,3 @@ channel = "stable-25_05"
 
 [userenv.shared]
 ADMIN_EMAIL = "tiy247@mail.ru"
-FK_SHOP_ID = "74658"

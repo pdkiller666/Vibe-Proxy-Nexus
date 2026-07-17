@@ -4,7 +4,7 @@
  * Each button links to /api/payments/yoomoney/checkout/{paymentId}?method=<key>;
  * the server redirects to the YooMoney quickpay page with the right paymentType:
  *   card   → AC (банковская карта Visa / MasterCard / МИР)
- *   wallet → PC (кошелёк ЮMoney; СБП доступна на странице оплаты ЮMoney)
+ *   wallet → PC (кошелёк ЮMoney; на странице оплаты доступен и SberPay)
  *
  * Payment is confirmed automatically via the YooMoney HTTP notification webhook.
  */
@@ -24,7 +24,7 @@ const methods = [
   {
     key: "wallet",
     label: "ЮMoney",
-    sub: "Кошелёк / СБП",
+    sub: "Кошелёк / SberPay",
     emoji: "💜",
   },
 ] as const;
