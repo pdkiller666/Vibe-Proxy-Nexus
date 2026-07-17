@@ -12,7 +12,8 @@ import {
   UpdateVpnKeyResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
-import { removeXrayClient, isLocalXrayEnabled } from "../lib/xray";
+import { isLocalXrayEnabled, removeXrayClient } from "../lib/xray";
+import { removeRemoteXrayClient } from "../lib/remoteNode";
 import { buildSubscriptionUrl } from "../lib/subscription";
 import { buildServingVlessLink } from "../lib/vless";
 import { isTrafficLimitBlocked, issueKeyForUser, resolveTotalSlots } from "../lib/keyIssuance";
@@ -168,8 +169,9 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
   }
 
   const [existing] = await db
-    .select()
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
     .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
     .where(and(eq(vpnKeysTable.id, params.data.keyId), eq(vpnKeysTable.userId, user.id)));
 
   if (!existing) {
@@ -177,7 +179,7 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
     return;
   }
 
-  if (existing.revokedAt) {
+  if (existing.key.revokedAt) {
     // Already revoked — idempotent, return success.
     res.sendStatus(204);
     return;
@@ -193,23 +195,28 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
     await db
       .update(vpnKeysTable)
       .set({ revokedAt: new Date(), revokedReason: "user" })
-      .where(and(eq(vpnKeysTable.id, existing.id), eq(vpnKeysTable.userId, user.id)));
+      .where(and(eq(vpnKeysTable.id, existing.key.id), eq(vpnKeysTable.userId, user.id)));
   } catch (err) {
-    req.log.error({ err, keyId: existing.id }, "Failed to revoke VPN key in DB");
+    req.log.error({ err, keyId: existing.key.id }, "Failed to revoke VPN key in DB");
     res.status(500).json({ error: "Failed to revoke VPN key" });
     return;
   }
 
-  // Remove from Xray after the DB is committed. Non-fatal: the key is already
-  // DB-revoked (source of truth). If Xray removal fails the orphaned client
-  // stops being able to authenticate once the user renews/changes plans or
-  // Xray restarts — no ongoing access is granted.
-  if (isLocalXrayEnabled()) {
+  // Remove from Xray/remote node after the DB is committed. Non-fatal: the
+  // key is already DB-revoked (source of truth). Routes to remote Management
+  // API for remote nodes, or to local Xray for the Amvera node.
+  if (existing.node.managementApiUrl) {
     try {
-      await removeXrayClient(existing.uuid);
+      await removeRemoteXrayClient(existing.node, existing.key.uuid);
+    } catch (err) {
+      req.log.warn({ err, uuid: existing.key.uuid }, "Key revoked in DB but remote node removal failed");
+    }
+  } else if (isLocalXrayEnabled()) {
+    try {
+      await removeXrayClient(existing.key.uuid);
     } catch (err) {
       req.log.warn(
-        { err, uuid: existing.uuid },
+        { err, uuid: existing.key.uuid },
         "Key revoked in DB but Xray removal failed — client will stop connecting on next Xray restart",
       );
     }

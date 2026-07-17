@@ -11,6 +11,7 @@ import {
   supportTicketsTable,
   usersTable,
   vpnKeysTable,
+  vpnNodesTable,
   type User,
 } from "@workspace/db";
 import {
@@ -31,6 +32,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
+import { removeRemoteXrayClient } from "../../lib/remoteNode";
 import { logger } from "../../lib/logger";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
 
@@ -364,11 +366,20 @@ router.delete("/admin/users/:userId", requireAuth, requireAdmin, async (req, res
   // here aborts the whole deletion (no DB rows are touched yet) instead of
   // silently proceeding — the admin can retry once the node is reachable.
   const keys = await db
-    .select()
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
     .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
     .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
-  if (isLocalXrayEnabled()) {
-    for (const key of keys) {
+  for (const { key, node } of keys) {
+    if (node.managementApiUrl) {
+      try {
+        await removeRemoteXrayClient(node, key.uuid);
+      } catch (err) {
+        logger.error({ err, uuid: key.uuid, userId }, "Failed to remove client from remote node while deleting user");
+        res.status(502).json({ error: "Failed to deprovision an active VPN key; user was not deleted. Try again." });
+        return;
+      }
+    } else if (isLocalXrayEnabled()) {
       try {
         await removeXrayClient(key.uuid);
       } catch (err) {

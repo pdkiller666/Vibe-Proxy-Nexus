@@ -23,6 +23,14 @@ COPY bot/requirements.txt ./bot/requirements.txt
 RUN pip install --no-cache-dir -r bot/requirements.txt
 
 COPY bot ./bot
+
+# Compile the Xray Stats gRPC proto to Python stubs so xray_manager.py can
+# call the Stats API without needing a .proto-to-Python compile at runtime.
+RUN python -m grpc_tools.protoc \
+    -I./bot \
+    --python_out=./bot \
+    --grpc_python_out=./bot \
+    ./bot/command.proto
 COPY xray ./xray
 COPY supervisord.conf ./supervisord.conf
 COPY render-config.sh ./render-config.sh

@@ -228,6 +228,33 @@ try {
   await client.query(`ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS sbp_qr_code_mime_type text`);
   console.log("heal-schema: applied payment_settings SBP extended fields");
 
+  // M-10: vpn_nodes multi-node management API fields (2026-07-17)
+  // Add the two new columns for remote-node routing. These are nullable: NULL
+  // means the node is the local Amvera instance (existing behaviour). When set,
+  // keyIssuance and trafficPolling route to the remote Management REST API.
+  await client.query(`ALTER TABLE vpn_nodes ADD COLUMN IF NOT EXISTS management_api_url text`);
+  await client.query(`ALTER TABLE vpn_nodes ADD COLUMN IF NOT EXISTS management_api_secret text`);
+  console.log("heal-schema: applied vpn_nodes management_api_url/secret columns");
+
+  // Drop the three legacy 3X-UI panel credential columns. They have been NULL
+  // on every row in production since the 3X-UI architecture was abandoned.
+  // Wrapped in DO $ … $ so the absence of the column is a no-op, not an error.
+  await client.query(`
+    DO $
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vpn_nodes' AND column_name = 'panel_url') THEN
+        ALTER TABLE vpn_nodes DROP COLUMN panel_url;
+      END IF;
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vpn_nodes' AND column_name = 'panel_login') THEN
+        ALTER TABLE vpn_nodes DROP COLUMN panel_login;
+      END IF;
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vpn_nodes' AND column_name = 'panel_password') THEN
+        ALTER TABLE vpn_nodes DROP COLUMN panel_password;
+      END IF;
+    END $;
+  `);
+  console.log("heal-schema: dropped vpn_nodes legacy panel_* columns");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

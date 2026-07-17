@@ -8,10 +8,11 @@
  * environment without XRAY_CONFIG_PATH set) — pollUserTrafficDeltas()
  * already short-circuits to an empty map in that case.
  */
-import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
-import { jobsDb, plansTable, subscriptionsTable, vpnKeysTable } from "@workspace/db";
+import { and, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { jobsDb, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { pollUserTrafficCounters } from "./xrayStats";
 import { isLocalXrayEnabled, removeXrayClient } from "./xray";
+import { pollRemoteNodeStats, removeRemoteXrayClient } from "./remoteNode";
 import { logger } from "./logger";
 
 const TRAFFIC_POLL_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -150,14 +151,21 @@ export async function enforceTrafficLimits(): Promise<number> {
     if (row.periodBytes < limitBytes) continue;
 
     const keysToRevoke = await jobsDb
-      .select()
+      .select({ key: vpnKeysTable, node: vpnNodesTable })
       .from(vpnKeysTable)
+      .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
       .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
 
     if (keysToRevoke.length === 0) continue;
 
-    for (const key of keysToRevoke) {
-      if (isLocalXrayEnabled()) {
+    for (const { key, node } of keysToRevoke) {
+      if (node.managementApiUrl) {
+        try {
+          await removeRemoteXrayClient(node, key.uuid);
+        } catch (err) {
+          logger.error({ err, uuid: key.uuid, userId: row.userId }, "Failed to remove client from remote node after traffic limit exceeded");
+        }
+      } else if (isLocalXrayEnabled()) {
         try {
           await removeXrayClient(key.uuid);
         } catch (err) {
@@ -212,8 +220,30 @@ export async function enforceTrafficLimits(): Promise<number> {
 let flushQueue: Promise<void> = Promise.resolve();
 
 async function doFlushTrafficDeltas(): Promise<void> {
-  const counters = await pollUserTrafficCounters();
-  await applyTrafficDeltas(counters);
+  // Poll local Xray (if running on this container).
+  const allCounters = await pollUserTrafficCounters();
+
+  // Poll all active remote nodes in parallel. Their UUIDs are globally unique
+  // and disjoint from local keys, so maps can be merged without collisions.
+  const remoteNodes = await jobsDb
+    .select({
+      managementApiUrl: vpnNodesTable.managementApiUrl,
+      managementApiSecret: vpnNodesTable.managementApiSecret,
+      name: vpnNodesTable.name,
+    })
+    .from(vpnNodesTable)
+    .where(and(eq(vpnNodesTable.isActive, true), isNotNull(vpnNodesTable.managementApiUrl)));
+
+  const remoteResults = await Promise.all(
+    remoteNodes.map((node) => pollRemoteNodeStats(node)),
+  );
+  for (const nodeCounters of remoteResults) {
+    for (const [uuid, counts] of nodeCounters) {
+      allCounters.set(uuid, counts);
+    }
+  }
+
+  await applyTrafficDeltas(allCounters);
 }
 
 /**

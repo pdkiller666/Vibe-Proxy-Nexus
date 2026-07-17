@@ -16,9 +16,13 @@ export const vpnNodesTable = pgTable(
     // (5432/27017/6379) instead, since 443 is always TLS-terminated by Amvera's
     // own edge (see .agents/memory/amvera-raw-tcp-port.md).
     port: integer("port").notNull().default(443),
-    panelUrl: text("panel_url"),
-    panelLogin: text("panel_login"),
-    panelPassword: text("panel_password"),
+    // Remote Management API fields (null → this is the local Amvera node).
+    // When managementApiUrl is set, keyIssuance routes add/revoke requests to
+    // the remote node's Management REST API instead of writing to the local
+    // Xray config on disk. trafficPolling polls GET {managementApiUrl}/stats
+    // for per-UUID traffic counters from remote nodes.
+    managementApiUrl: text("management_api_url"),
+    managementApiSecret: text("management_api_secret"),
     publicKey: text("public_key"),
     shortId: text("short_id"),
     sni: text("sni").notNull(),

@@ -637,9 +637,10 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   const [sni, setSni] = useState(node?.sni ?? "");
   const [publicKey, setPublicKey] = useState("");
   const [shortId, setShortId] = useState("");
-  const [panelUrl, setPanelUrl] = useState("");
-  const [panelLogin, setPanelLogin] = useState("");
-  const [panelPassword, setPanelPassword] = useState("");
+  const [managementApiUrl, setManagementApiUrl] = useState(node?.managementApiUrl ?? "");
+  // managementApiSecret is intentionally NOT returned from the API for security.
+  // The form always starts empty; leave blank to keep the existing secret unchanged.
+  const [managementApiSecret, setManagementApiSecret] = useState("");
   const [isActive, setIsActive] = useState(node?.isActive ?? true);
   const [maxUsers, setMaxUsers] = useState(node?.maxUsers != null ? String(node.maxUsers) : "");
 
@@ -652,9 +653,8 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       sni,
       publicKey: publicKey || undefined,
       shortId: shortId || undefined,
-      panelUrl: panelUrl || undefined,
-      panelLogin: panelLogin || undefined,
-      panelPassword: panelPassword || undefined,
+      managementApiUrl: managementApiUrl || undefined,
+      managementApiSecret: managementApiSecret || undefined,
       isActive,
       maxUsers: maxUsers ? Number(maxUsers) : null,
     };
@@ -698,19 +698,18 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           onChange={(e) => setMaxUsers(e.target.value.replace(/[^0-9]/g, ""))}
           className="rounded-none"
         />
-        <Input placeholder="Panel URL" value={panelUrl} onChange={(e) => setPanelUrl(e.target.value)} className="rounded-none" />
         <Input
-          placeholder="Panel Login"
-          value={panelLogin}
-          onChange={(e) => setPanelLogin(e.target.value)}
-          className="rounded-none"
+          placeholder="Management API URL (пусто = локальный узел Amvera)"
+          value={managementApiUrl}
+          onChange={(e) => setManagementApiUrl(e.target.value)}
+          className="rounded-none col-span-2"
         />
         <Input
           type="password"
-          placeholder="Panel Password"
-          value={panelPassword}
-          onChange={(e) => setPanelPassword(e.target.value)}
-          className="rounded-none"
+          placeholder="Management API Secret (X-Management-Secret)"
+          value={managementApiSecret}
+          onChange={(e) => setManagementApiSecret(e.target.value)}
+          className="rounded-none col-span-2"
         />
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
@@ -821,6 +820,11 @@ function NodesManagement() {
               <div className="text-sm text-muted-foreground font-mono break-all">
                 {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
               </div>
+              {node.managementApiUrl && (
+                <div className="text-xs text-blue-600 font-mono break-all">
+                  Remote: {node.managementApiUrl}
+                </div>
+              )}
               <div className="text-sm text-muted-foreground">
                 Клиентов: {node.activeUserCount}
                 {node.maxUsers != null ? ` / ${node.maxUsers}` : ""}

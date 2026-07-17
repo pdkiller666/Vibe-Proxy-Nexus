@@ -398,6 +398,9 @@ export interface VpnNode {
   host?: string | null;
   port?: number;
   sni: string;
+  /** URL of the remote Management API. Null means this is the local Amvera node. */
+  /** @nullable */
+  managementApiUrl?: string | null;
   isActive: boolean;
   /** @nullable */
   maxUsers?: number | null;
@@ -412,9 +415,8 @@ export interface VpnNodeInput {
   region: string;
   host?: string;
   port?: number;
-  panelUrl?: string;
-  panelLogin?: string;
-  panelPassword?: string;
+  managementApiUrl?: string;
+  managementApiSecret?: string;
   publicKey?: string;
   shortId?: string;
   /** @minLength 1 */
@@ -434,9 +436,8 @@ export interface VpnNodeUpdate {
   region?: string;
   host?: string;
   port?: number;
-  panelUrl?: string;
-  panelLogin?: string;
-  panelPassword?: string;
+  managementApiUrl?: string;
+  managementApiSecret?: string;
   publicKey?: string;
   shortId?: string;
   /** @minLength 1 */

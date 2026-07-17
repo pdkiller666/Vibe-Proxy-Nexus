@@ -1578,6 +1578,9 @@ components:
         host: { type: ["string", "null"] }
         port: { type: integer }
         sni: { type: string }
+        # Exposed so the admin UI can show remote vs local node status.
+        # managementApiSecret is intentionally NOT exposed for security.
+        managementApiUrl: { type: ["string", "null"] }
         isActive: { type: boolean }
         maxUsers: { type: ["integer", "null"] }
         activeUserCount: { type: integer }
@@ -1591,9 +1594,8 @@ components:
         region: { type: string, minLength: 1 }
         host: { type: string }
         port: { type: integer }
-        panelUrl: { type: string }
-        panelLogin: { type: string }
-        panelPassword: { type: string }
+        managementApiUrl: { type: string }
+        managementApiSecret: { type: string }
         publicKey: { type: string }
         shortId: { type: string }
         sni: { type: string, minLength: 1 }
@@ -1607,9 +1609,8 @@ components:
         region: { type: string, minLength: 1 }
         host: { type: string }
         port: { type: integer }
-        panelUrl: { type: string }
-        panelLogin: { type: string }
-        panelPassword: { type: string }
+        managementApiUrl: { type: string }
+        managementApiSecret: { type: string }
         publicKey: { type: string }
         shortId: { type: string }
         sni: { type: string, minLength: 1 }

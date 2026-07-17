@@ -7,7 +7,8 @@ import {
   vpnNodesTable,
 } from "@workspace/db";
 import { buildDeepLink, buildVlessLink, generateKeyUuid } from "./vless";
-import { addXrayClient, isLocalXrayEnabled, removeXrayClient } from "./xray";
+import { addXrayClient, isLocalXrayEnabled } from "./xray";
+import { addRemoteXrayClient } from "./remoteNode";
 import { BRAND_NAME } from "./subscription";
 import { logger } from "./logger";
 
@@ -223,13 +224,23 @@ export async function issueKeyForUser(
   // Provision the Xray client after committing — lock released before the
   // network call. Failure: immediately revoke the DB row (compensating write)
   // so the user never sees a "working" key that can't actually connect.
-  if (isLocalXrayEnabled()) {
+  //
+  // Routing: remote nodes (managementApiUrl != null) receive a REST call to
+  // their Management API; the local Amvera node writes to its on-disk config.
+  const shouldProvision = node.managementApiUrl != null || isLocalXrayEnabled();
+  if (shouldProvision) {
     try {
-      // Use UUID (not label) as the Xray "email" tag — labels can collide
-      // across users and corrupt Xray's per-user dedup and traffic attribution.
-      await addXrayClient(uuid, uuid);
+      if (node.managementApiUrl) {
+        // Use UUID as the label/email — same rationale as local Xray:
+        // labels can collide across users and corrupt per-user traffic stats.
+        await addRemoteXrayClient(node, uuid, uuid);
+      } else {
+        // Use UUID (not label) as the Xray "email" tag — labels can collide
+        // across users and corrupt Xray's per-user dedup and traffic attribution.
+        await addXrayClient(uuid, uuid);
+      }
     } catch (err) {
-      logger.error({ err }, "issueKeyForUser: Xray provisioning failed; revoking committed DB key");
+      logger.error({ err, remote: !!node.managementApiUrl }, "issueKeyForUser: Xray provisioning failed; revoking committed DB key");
       try {
         await db
           .update(vpnKeysTable)

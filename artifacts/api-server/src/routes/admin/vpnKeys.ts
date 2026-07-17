@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 import { db, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
+import { removeRemoteXrayClient } from "../../lib/remoteNode";
 import { issueKeyForUser } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
 
@@ -55,7 +56,11 @@ router.delete("/admin/vpn-keys/:keyId", requireAuth, requireAdmin, async (req, r
   const keyId = Number(req.params.keyId);
   if (!keyId) { res.status(400).json({ error: "invalid keyId" }); return; }
 
-  const [existing] = await db.select().from(vpnKeysTable).where(eq(vpnKeysTable.id, keyId));
+  const [existing] = await db
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(eq(vpnKeysTable.id, keyId));
   if (!existing) { res.status(404).json({ error: "Key not found" }); return; }
 
   // DB-first: mark revoked before touching Xray. If the DB write succeeds but
@@ -68,13 +73,21 @@ router.delete("/admin/vpn-keys/:keyId", requireAuth, requireAdmin, async (req, r
     .set({ revokedAt: new Date(), revokedReason: "admin" })
     .where(eq(vpnKeysTable.id, keyId));
 
-  if (isLocalXrayEnabled() && !existing.revokedAt) {
-    try {
-      await removeXrayClient(existing.uuid);
-    } catch (err) {
-      // Non-fatal: DB is already the source of truth. Log so ops can notice
-      // and clean up the stale Xray entry if needed.
-      logger.warn({ err, keyId, uuid: existing.uuid }, "admin revoke: DB updated but Xray removal failed");
+  if (!existing.key.revokedAt) {
+    if (existing.node.managementApiUrl) {
+      try {
+        await removeRemoteXrayClient(existing.node, existing.key.uuid);
+      } catch (err) {
+        logger.warn({ err, keyId, uuid: existing.key.uuid }, "admin revoke: DB updated but remote node removal failed");
+      }
+    } else if (isLocalXrayEnabled()) {
+      try {
+        await removeXrayClient(existing.key.uuid);
+      } catch (err) {
+        // Non-fatal: DB is already the source of truth. Log so ops can notice
+        // and clean up the stale Xray entry if needed.
+        logger.warn({ err, keyId, uuid: existing.key.uuid }, "admin revoke: DB updated but Xray removal failed");
+      }
     }
   }
 
