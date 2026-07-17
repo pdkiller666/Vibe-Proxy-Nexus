@@ -4,12 +4,13 @@ import {
   useListMyPayments,
   useGetMe,
   useCreateBalanceTopupOrder,
+  useListMyBalanceTransactions,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Clock, CheckCircle2, XCircle, Info, Wallet, Plus } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Info, Wallet, Plus, ArrowUpCircle, ArrowDownCircle, RotateCcw, Users } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,6 +19,61 @@ function formatKopecks(kopecks: number): string {
   const cents = kopecks % 100;
   if (cents === 0) return `${rubles} ₽`;
   return `${rubles},${String(cents).padStart(2, "0")} ₽`;
+}
+
+function formatDateTime(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+}
+
+const balanceTxLabel: Record<string, string> = {
+  topup: "Пополнение",
+  debit: "Списание",
+  refund: "Возврат",
+  referral: "Реферальная комиссия",
+};
+
+function BalanceHistorySection() {
+  const { data: transactions, isLoading } = useListMyBalanceTransactions();
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+  if (!transactions || transactions.length === 0) return null;
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-3">
+      <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+        История операций с балансом
+      </p>
+      <div className="space-y-2 max-h-80 overflow-y-auto">
+        {transactions.slice(0, 30).map((tx) => {
+          const isPositive = tx.type === "topup" || tx.type === "refund" || tx.type === "referral";
+          const Icon =
+            tx.type === "topup" ? ArrowUpCircle :
+            tx.type === "refund" ? RotateCcw :
+            tx.type === "referral" ? Users :
+            ArrowDownCircle;
+          return (
+            <div key={tx.id} className="flex items-center justify-between gap-3 border-t border-border pt-2 first:border-0 first:pt-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Icon className={`w-4 h-4 shrink-0 ${isPositive ? "text-green-600" : "text-muted-foreground"}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{balanceTxLabel[tx.type] ?? tx.type}</p>
+                  {tx.description && <p className="text-xs text-muted-foreground truncate">{tx.description}</p>}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`text-sm font-bold ${isPositive ? "text-green-600" : "text-foreground"}`}>
+                  {isPositive ? "+" : "-"}
+                  {formatKopecks(Math.abs(tx.amountKopecks))}
+                </p>
+                <p className="text-xs text-muted-foreground font-mono">{formatDateTime(tx.createdAt)}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function BalanceWidget() {
@@ -124,6 +180,8 @@ export default function Payments() {
       </div>
 
       <BalanceWidget />
+
+      <BalanceHistorySection />
 
       <OnboardingTip
         id="payments-info"
