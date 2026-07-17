@@ -1,6 +1,7 @@
 /**
- * ЮMoney payment button — one button, opens YooMoney quickpay page where
- * the user picks the payment method themselves (card, SberPay, wallet).
+ * ЮMoney payment button — single button (card / SberPay).
+ * Opens YooMoney quickpay with paymentType=AC (bank card); SberPay appears
+ * on YooMoney's own page as an option.
  * Payment is confirmed automatically via the YooMoney HTTP notification webhook.
  */
 
@@ -20,14 +21,12 @@ export function YooMoneyPaymentButtons({ paymentId, amountRub }: YooMoneyPayment
         Мгновенное подтверждение — активируется автоматически сразу после оплаты.
       </p>
       <a
-        href={`/api/payments/yoomoney/checkout/${paymentId}`}
-        className="flex items-center justify-center gap-3 w-full border border-border bg-card hover:border-primary hover:bg-primary/5 transition-colors py-4 px-3"
+        href={`/api/payments/yoomoney/checkout/${paymentId}?method=card`}
+        className="flex flex-col items-center gap-1 border border-border bg-card hover:border-primary hover:bg-primary/5 transition-colors py-4 px-3 text-center w-full"
       >
-        <span className="text-2xl">💜</span>
-        <div className="text-center">
-          <div className="font-bold text-sm">Оплатить через ЮMoney</div>
-          <div className="text-xs text-muted-foreground">Карта · SberPay · Кошелёк</div>
-        </div>
+        <span className="text-2xl">💳</span>
+        <span className="font-bold text-sm">Карта / SberPay</span>
+        <span className="text-xs text-muted-foreground">Visa · Mastercard · МИР · SberPay</span>
       </a>
       <p className="text-xs text-muted-foreground">
         Оплата проходит через сервис ЮMoney (ООО НКО «ЮМани»).
