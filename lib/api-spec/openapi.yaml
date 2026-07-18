@@ -1084,7 +1084,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AdminSetUserBalanceBody"
+              $ref: "#/components/schemas/AdminSetUserBalanceRequest"
       responses:
         "200":
           description: Updated user
@@ -1109,7 +1109,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AdminSetUserPasswordBody"
+              $ref: "#/components/schemas/AdminSetUserPasswordRequest"
       responses:
         "204":
           description: Password updated
@@ -1969,7 +1969,7 @@ components:
       properties:
         ok: { type: boolean }
 
-    AdminSetUserBalanceBody:
+    AdminSetUserBalanceRequest:
       type: object
       required: [balanceKopecks]
       properties:
@@ -1977,7 +1977,7 @@ components:
           type: integer
           minimum: 0
 
-    AdminSetUserPasswordBody:
+    AdminSetUserPasswordRequest:
       type: object
       required: [password]
       properties:

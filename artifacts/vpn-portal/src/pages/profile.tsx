@@ -197,6 +197,7 @@ function ReferralSection() {
   }
 
   function handleCopyCode() {
+    if (!me) return;
     navigator.clipboard.writeText(me.referralCode);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);

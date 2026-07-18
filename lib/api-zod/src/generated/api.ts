@@ -422,11 +422,12 @@ export const UpdatePaymentNoteParams = zod.object({
   "paymentId": zod.coerce.number()
 })
 
+export const updatePaymentNoteBodyUserNoteMin = 0;
 
 
 
 export const UpdatePaymentNoteBody = zod.object({
-  "userNote": zod.string().min(0)
+  "userNote": zod.string().min(updatePaymentNoteBodyUserNoteMin)
 })
 
 export const UpdatePaymentNoteResponse = zod.object({
@@ -1450,11 +1451,46 @@ export const AdminSetUserBalanceParams = zod.object({
 
 export const adminSetUserBalanceBodyBalanceKopecksMin = 0;
 
+
+
 export const AdminSetUserBalanceBody = zod.object({
-  "balanceKopecks": zod.number().int().min(adminSetUserBalanceBodyBalanceKopecksMin)
+  "balanceKopecks": zod.number().min(adminSetUserBalanceBodyBalanceKopecksMin)
 })
 
-export const AdminSetUserBalanceResponse = UpdateUserExtraSlotsResponse
+export const AdminSetUserBalanceResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "balanceKopecks": zod.number(),
+  "referralCode": zod.string(),
+  "referredByEmail": zod.string().nullish(),
+  "referredUserCount": zod.number(),
+  "role": zod.enum(['user', 'admin']),
+  "createdAt": zod.coerce.date(),
+  "lastActiveAt": zod.coerce.date().nullish(),
+  "isOnline": zod.boolean(),
+  "vpnLastActiveAt": zod.coerce.date().nullable(),
+  "activityStatus": zod.enum(['site', 'vpn', 'offline']),
+  "activeSubscriptions": zod.number().optional(),
+  "extraDeviceSlots": zod.number(),
+  "activeSubscriptionId": zod.number().nullish(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "periodStartedAt": zod.coerce.date().nullable(),
+  "trafficLimitGb": zod.number().nullable(),
+  "trafficLimitExceeded": zod.boolean(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceededAt": zod.coerce.date().nullish(),
+  "activePlanName": zod.string().nullish(),
+  "activePlanId": zod.number().nullish(),
+  "planId": zod.number().nullish(),
+  "planName": zod.string().nullish(),
+  "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
+  "subscriptionEndsAt": zod.coerce.date().nullish()
+})
+
 
 /**
  * @summary Set a new password for a user (admin override, invalidates all sessions)
@@ -1463,9 +1499,16 @@ export const AdminSetUserPasswordParams = zod.object({
   "userId": zod.coerce.number()
 })
 
+export const adminSetUserPasswordBodyPasswordMin = 8;
+
+
+
 export const AdminSetUserPasswordBody = zod.object({
-  "password": zod.string().min(8)
+  "password": zod.string().min(adminSetUserPasswordBodyPasswordMin)
 })
+
+export const AdminSetUserPasswordResponse = zod.void()
+
 
 /**
  * @summary List all support tickets (optionally filtered by status)

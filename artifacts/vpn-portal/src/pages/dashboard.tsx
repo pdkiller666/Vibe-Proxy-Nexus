@@ -252,6 +252,7 @@ function ReferralSection() {
   }
 
   function copyCode() {
+    if (!me) return;
     navigator.clipboard.writeText(me.referralCode).then(() => {
       setCopiedCode(true);
       toast({ title: "Инвайт-код скопирован" });

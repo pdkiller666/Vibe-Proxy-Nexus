@@ -360,7 +360,7 @@ export interface AdminPayment {
 }
 
 export interface PaymentNoteUpdate {
-  /** @minLength 1 */
+  /** @minLength 0 */
   userNote: string;
 }
 
@@ -398,7 +398,6 @@ export interface VpnNode {
   host?: string | null;
   port?: number;
   sni: string;
-  /** URL of the remote Management API. Null means this is the local Amvera node. */
   /** @nullable */
   managementApiUrl?: string | null;
   isActive: boolean;
@@ -656,12 +655,12 @@ export interface CancelExtraTrafficOrderResult {
   ok: boolean;
 }
 
-export interface AdminSetUserBalanceBody {
+export interface AdminSetUserBalanceRequest {
   /** @minimum 0 */
   balanceKopecks: number;
 }
 
-export interface AdminSetUserPasswordBody {
+export interface AdminSetUserPasswordRequest {
   /** @minLength 8 */
   password: string;
 }

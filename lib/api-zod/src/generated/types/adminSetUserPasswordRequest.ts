@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface OkResult {
-  ok: boolean;
+export interface AdminSetUserPasswordRequest {
+  /** @minLength 8 */
+  password: string;
 }

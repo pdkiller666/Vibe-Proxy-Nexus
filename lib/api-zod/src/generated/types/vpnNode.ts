@@ -14,6 +14,8 @@ export interface VpnNode {
   host?: string | null;
   port?: number;
   sni: string;
+  /** @nullable */
+  managementApiUrl?: string | null;
   isActive: boolean;
   /** @nullable */
   maxUsers?: number | null;

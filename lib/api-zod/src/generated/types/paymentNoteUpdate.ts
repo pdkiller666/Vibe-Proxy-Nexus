@@ -7,6 +7,6 @@
  */
 
 export interface PaymentNoteUpdate {
-  /** @minLength 1 */
+  /** @minLength 0 */
   userNote: string;
 }

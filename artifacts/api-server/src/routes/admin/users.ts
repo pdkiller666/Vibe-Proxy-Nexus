@@ -12,6 +12,7 @@ import {
   usersTable,
   vpnKeysTable,
   vpnNodesTable,
+  balanceTransactionsTable,
   type User,
 } from "@workspace/db";
 import {
@@ -548,6 +549,12 @@ router.patch("/admin/users/:userId/balance", requireAuth, requireAdmin, async (r
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  // Generated zod validates min(0) but not integrality; the DB column is
+  // integer, so reject fractional kopecks here instead of failing at insert.
+  if (!Number.isInteger(parsed.data.balanceKopecks)) {
+    res.status(400).json({ error: "balanceKopecks must be an integer" });
+    return;
+  }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.userId));
   if (!user) {
@@ -555,10 +562,24 @@ router.patch("/admin/users/:userId/balance", requireAuth, requireAdmin, async (r
     return;
   }
 
-  await db
-    .update(usersTable)
-    .set({ balanceKopecks: parsed.data.balanceKopecks })
-    .where(eq(usersTable.id, user.id));
+  // Update balance and write an audit balance_transaction atomically so the
+  // user's unified operations history shows admin adjustments too (otherwise
+  // the balance would change with no corresponding ledger entry).
+  const delta = parsed.data.balanceKopecks - user.balanceKopecks;
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({ balanceKopecks: parsed.data.balanceKopecks })
+      .where(eq(usersTable.id, user.id));
+    if (delta !== 0) {
+      await tx.insert(balanceTransactionsTable).values({
+        userId: user.id,
+        amountKopecks: delta,
+        type: delta > 0 ? "topup" : "debit",
+        description: "Корректировка баланса администратором",
+      });
+    }
+  });
 
   const [enriched] = await enrichUsersWithTraffic([{ ...user, balanceKopecks: parsed.data.balanceKopecks }]);
   res.json(AdminSetUserBalanceResponse.parse(enriched));

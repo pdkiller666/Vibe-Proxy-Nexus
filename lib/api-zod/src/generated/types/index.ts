@@ -8,6 +8,8 @@
 
 export * from './adminPasswordResetResult';
 export * from './adminPayment';
+export * from './adminSetUserBalanceRequest';
+export * from './adminSetUserPasswordRequest';
 export * from './adminSubscriptionUpdate';
 export * from './adminUser';
 export * from './adminUserActivityStatus';

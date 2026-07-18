@@ -22,6 +22,8 @@ import type {
 import type {
   AdminPasswordResetResult,
   AdminPayment,
+  AdminSetUserBalanceRequest,
+  AdminSetUserPasswordRequest,
   AdminSubscriptionUpdate,
   AdminUser,
   AdminUserProfileUpdate,
@@ -4241,23 +4243,35 @@ export const useUpdateUserExtraSlots = <TError = ErrorType<unknown>,
     }
 
 export const getAdminSetUserBalanceUrl = (userId: number,) => {
-  return `/api/admin/users/${userId}/balance`;
+
+
+
+
+  return `/api/admin/users/${userId}/balance`
 }
 
+/**
+ * @summary Set a user's balance directly (in kopecks)
+ */
 export const adminSetUserBalance = async (userId: number,
-    adminSetUserBalanceBody: AdminSetUserBalanceBody, options?: RequestInit): Promise<AdminUser> => {
+    adminSetUserBalanceRequest: AdminSetUserBalanceRequest, options?: RequestInit): Promise<AdminUser> => {
+
   return customFetch<AdminUser>(getAdminSetUserBalanceUrl(userId),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(adminSetUserBalanceBody)
-  });
-}
+    body: JSON.stringify(adminSetUserBalanceRequest)
+  }
+);}
+
+
+
 
 export const getAdminSetUserBalanceMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserBalance>>, TError,{userId: number;data: BodyType<AdminSetUserBalanceBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof adminSetUserBalance>>, TError,{userId: number;data: BodyType<AdminSetUserBalanceBody>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserBalance>>, TError,{userId: number;data: BodyType<AdminSetUserBalanceRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminSetUserBalance>>, TError,{userId: number;data: BodyType<AdminSetUserBalanceRequest>}, TContext> => {
+
 const mutationKey = ['adminSetUserBalance'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
@@ -4265,50 +4279,70 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminSetUserBalance>>, {userId: number;data: BodyType<AdminSetUserBalanceBody>}> = (props) => {
-      const {userId,data} = props ?? {};
-      return adminSetUserBalance(userId,data,requestOptions)
-    }
 
-  return  { mutationFn, ...mutationOptions }
-}
 
-export type AdminSetUserBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof adminSetUserBalance>>>
-export type AdminSetUserBalanceMutationBody = BodyType<AdminSetUserBalanceBody>
-export type AdminSetUserBalanceMutationError = ErrorType<unknown>
 
-/**
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminSetUserBalance>>, {userId: number;data: BodyType<AdminSetUserBalanceRequest>}> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  adminSetUserBalance(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminSetUserBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof adminSetUserBalance>>>
+    export type AdminSetUserBalanceMutationBody = BodyType<AdminSetUserBalanceRequest>
+    export type AdminSetUserBalanceMutationError = ErrorType<unknown>
+
+    /**
  * @summary Set a user's balance directly (in kopecks)
  */
 export const useAdminSetUserBalance = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserBalance>>, TError,{userId: number;data: BodyType<AdminSetUserBalanceBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserBalance>>, TError,{userId: number;data: BodyType<AdminSetUserBalanceRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof adminSetUserBalance>>,
         TError,
-        {userId: number;data: BodyType<AdminSetUserBalanceBody>},
+        {userId: number;data: BodyType<AdminSetUserBalanceRequest>},
         TContext
       > => {
       return useMutation(getAdminSetUserBalanceMutationOptions(options));
     }
 
 export const getAdminSetUserPasswordUrl = (userId: number,) => {
-  return `/api/admin/users/${userId}/set-password`;
+
+
+
+
+  return `/api/admin/users/${userId}/set-password`
 }
 
+/**
+ * @summary Set a new password for a user (admin override, invalidates all sessions)
+ */
 export const adminSetUserPassword = async (userId: number,
-    adminSetUserPasswordBody: AdminSetUserPasswordBody, options?: RequestInit): Promise<void> => {
+    adminSetUserPasswordRequest: AdminSetUserPasswordRequest, options?: RequestInit): Promise<void> => {
+
   return customFetch<void>(getAdminSetUserPasswordUrl(userId),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(adminSetUserPasswordBody)
-  });
-}
+    body: JSON.stringify(adminSetUserPasswordRequest)
+  }
+);}
+
+
+
 
 export const getAdminSetUserPasswordMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserPassword>>, TError,{userId: number;data: BodyType<AdminSetUserPasswordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof adminSetUserPassword>>, TError,{userId: number;data: BodyType<AdminSetUserPasswordBody>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserPassword>>, TError,{userId: number;data: BodyType<AdminSetUserPasswordRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminSetUserPassword>>, TError,{userId: number;data: BodyType<AdminSetUserPasswordRequest>}, TContext> => {
+
 const mutationKey = ['adminSetUserPassword'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
@@ -4316,27 +4350,35 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {...options, mutation: {...options.mutation, mutationKey}}
       : {mutation: { mutationKey, }, request: undefined};
 
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminSetUserPassword>>, {userId: number;data: BodyType<AdminSetUserPasswordBody>}> = (props) => {
-      const {userId,data} = props ?? {};
-      return adminSetUserPassword(userId,data,requestOptions)
-    }
 
-  return  { mutationFn, ...mutationOptions }
-}
 
-export type AdminSetUserPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof adminSetUserPassword>>>
-export type AdminSetUserPasswordMutationBody = BodyType<AdminSetUserPasswordBody>
-export type AdminSetUserPasswordMutationError = ErrorType<unknown>
 
-/**
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminSetUserPassword>>, {userId: number;data: BodyType<AdminSetUserPasswordRequest>}> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  adminSetUserPassword(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminSetUserPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof adminSetUserPassword>>>
+    export type AdminSetUserPasswordMutationBody = BodyType<AdminSetUserPasswordRequest>
+    export type AdminSetUserPasswordMutationError = ErrorType<unknown>
+
+    /**
  * @summary Set a new password for a user (admin override, invalidates all sessions)
  */
 export const useAdminSetUserPassword = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserPassword>>, TError,{userId: number;data: BodyType<AdminSetUserPasswordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserPassword>>, TError,{userId: number;data: BodyType<AdminSetUserPasswordRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof adminSetUserPassword>>,
         TError,
-        {userId: number;data: BodyType<AdminSetUserPasswordBody>},
+        {userId: number;data: BodyType<AdminSetUserPasswordRequest>},
         TContext
       > => {
       return useMutation(getAdminSetUserPasswordMutationOptions(options));
