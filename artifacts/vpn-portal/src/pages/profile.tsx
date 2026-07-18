@@ -180,6 +180,7 @@ function PasswordSection() {
 function ReferralSection() {
   const { data: me } = useGetMe();
   const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   if (!me?.referralCode) return null;
 
@@ -193,6 +194,12 @@ function ReferralSection() {
     navigator.clipboard.writeText(referralLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleCopyCode() {
+    navigator.clipboard.writeText(me.referralCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
   }
 
   return (
@@ -216,6 +223,23 @@ function ReferralSection() {
         >
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           {copied ? "Скопировано" : "Скопировать"}
+        </button>
+      </div>
+      <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Инвайт-код:</span>
+          <Input
+            value={me.referralCode}
+            readOnly
+            className="rounded-none w-36 font-mono text-sm tracking-widest text-center"
+          />
+        </div>
+        <button
+          onClick={handleCopyCode}
+          className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity"
+        >
+          {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copiedCode ? "Скопировано" : "Скопировать"}
         </button>
       </div>
       <div className="flex gap-6 flex-wrap text-sm pt-1">

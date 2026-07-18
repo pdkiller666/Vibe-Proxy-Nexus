@@ -237,6 +237,7 @@ function ReferralSection() {
   const { data: me } = useGetMe();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   if (!me?.referralCode) return null;
 
@@ -247,6 +248,14 @@ function ReferralSection() {
       setCopied(true);
       toast({ title: "Реферальная ссылка скопирована" });
       setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(me.referralCode).then(() => {
+      setCopiedCode(true);
+      toast({ title: "Инвайт-код скопирован" });
+      setTimeout(() => setCopiedCode(false), 2000);
     });
   }
 
@@ -268,6 +277,21 @@ function ReferralSection() {
         >
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           {copied ? "Скопировано" : "Копировать"}
+        </button>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Инвайт-код:</span>
+          <div className="font-mono text-sm bg-muted px-3 py-2 select-all tracking-widest">
+            {me.referralCode}
+          </div>
+        </div>
+        <button
+          onClick={copyCode}
+          className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
+        >
+          {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copiedCode ? "Скопировано" : "Копировать"}
         </button>
       </div>
       <div className="flex items-center gap-6 flex-wrap text-sm border-t border-border pt-3">
