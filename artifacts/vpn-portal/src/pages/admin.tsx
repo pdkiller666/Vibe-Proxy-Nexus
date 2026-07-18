@@ -114,8 +114,15 @@ function SummarySection() {
             {data.revenueByDay.map((d) => (
               <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 group relative">
                 <div
-                  className="w-full bg-orange-500/80 hover:bg-orange-500 transition-colors min-h-[2px]"
-                  style={{ height: `${(d.amountRub / maxRevenue) * 100}%` }}
+                  className="w-full bg-orange-500/80 hover:bg-orange-500 transition-colors"
+                  style={{
+                    // For zero-revenue days keep a 2px hairline so the bar is visible.
+                    // Use inline minHeight so it isn't overridden by the height value
+                    // (Tailwind min-h-* loses to inline style specificity).
+                    height: d.amountRub > 0
+                      ? `${Math.max(4, (d.amountRub / maxRevenue) * 100)}%`
+                      : "2px",
+                  }}
                   title={`${new Date(d.date).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}: ${d.amountRub} ₽`}
                 />
               </div>

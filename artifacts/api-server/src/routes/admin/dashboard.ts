@@ -61,12 +61,15 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       .groupBy(plansTable.name),
     db
       .select({
-        date: sql<string>`to_char(${paymentsTable.confirmedAt}, 'YYYY-MM-DD')`,
+        // AT TIME ZONE 'UTC' forces UTC date extraction regardless of the
+        // Postgres session timezone — must match the backend loop's toISOString()
+        // which also produces UTC dates.
+        date: sql<string>`to_char(${paymentsTable.confirmedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
         amountRub: sum(paymentsTable.amountRub),
       })
       .from(paymentsTable)
       .where(and(eq(paymentsTable.status, "confirmed"), gte(paymentsTable.confirmedAt, startOf14Days)))
-      .groupBy(sql`to_char(${paymentsTable.confirmedAt}, 'YYYY-MM-DD')`),
+      .groupBy(sql`to_char(${paymentsTable.confirmedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`),
   ]);
 
   const revenueByDate = new Map(revenueByDayRows.map((r) => [r.date, Number(r.amountRub ?? 0)]));
