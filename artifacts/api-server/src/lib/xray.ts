@@ -83,23 +83,25 @@ async function reloadXray(): Promise<void> {
     .catch((err) => logger.error({ err }, "Failed to flush traffic deltas before restarting Xray"));
 
   // Restart Xray via supervisorctl so the updated on-disk config takes effect.
-  // Takes ~2 s; existing connected clients reconnect automatically.
+  // Takes ~2 s normally; existing connected clients reconnect automatically.
   //
-  // Uses the async `exec` (not `execSync`) so this does not block the whole
-  // Node event loop — a synchronous restart used to freeze every other
-  // in-flight request (including other admins' key issuance) for the full
-  // ~2 s, which risked client/proxy timeouts that made a *successful* issue
-  // look like a failure to the caller, prompting a retry that created a
-  // second key for the same user.
+  // Hard timeout of 10 s: if supervisord is stalled (e.g. Xray is slow to
+  // stop while draining connections), execAsync would block indefinitely —
+  // long enough for Amvera's reverse-proxy to drop the HTTP connection. The
+  // caller would see a network error even though the key is already in the DB
+  // and the config was already written to disk, causing admins to retry and
+  // create duplicate keys. With the timeout, after 10 s we log and proceed;
+  // supervisord continues the restart in the background and the new client
+  // becomes active once Xray comes back up (the on-disk config already has it).
   try {
-    await execAsync("supervisorctl restart xray");
+    await execAsync("supervisorctl restart xray", { timeout: 10_000 });
   } catch (err) {
     // The on-disk config was already durably written before this call (see
     // callers below), so the new client takes effect on the next container
-    // restart even if this immediate reload fails. Log and swallow rather
-    // than fail the whole request — the config write, which is the part
-    // that must succeed, already happened.
-    logger.error({ err }, "Failed to restart Xray after config change; change will apply on next restart");
+    // restart even if this immediate reload fails or times out. Log and swallow
+    // rather than fail the whole request — the config write is the part that
+    // must succeed, and it already happened.
+    logger.warn({ err }, "Xray restart timed out or failed; client will activate on next Xray boot");
   }
 }
 

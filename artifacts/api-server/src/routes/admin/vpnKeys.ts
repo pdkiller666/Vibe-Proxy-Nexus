@@ -42,7 +42,18 @@ router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res)
   // reason "traffic_limit". The admin panel shows this as a "briefly active"
   // key. To grant a persistent extra key in this state, either clear
   // trafficLimitExceededAt or sell the user a traffic top-up first.
-  const result = await issueKeyForUser(userId, Number.MAX_SAFE_INTEGER, nodeId);
+  let result: Awaited<ReturnType<typeof issueKeyForUser>>;
+  try {
+    result = await issueKeyForUser(userId, Number.MAX_SAFE_INTEGER, nodeId);
+  } catch (err) {
+    // issueKeyForUser has internal try-catch for all expected paths; this
+    // outer catch handles truly unexpected exceptions (e.g. DB pool exhausted
+    // during the pre-transaction node queries) so the route always sends a
+    // response instead of hanging and triggering an Amvera proxy timeout.
+    logger.error({ err, userId, nodeId }, "admin vpn-key issue: unexpected error in issueKeyForUser");
+    res.status(500).json({ error: "Internal error while issuing key" });
+    return;
+  }
 
   if (!result.ok) {
     res.status(result.status).json({ error: result.error });
