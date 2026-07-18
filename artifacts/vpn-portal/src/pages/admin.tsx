@@ -20,6 +20,8 @@ import {
   useUpdateUserSubscription,
   useDeleteUser,
   useAdminResetUserPassword,
+  useAdminSetUserBalance,
+  useAdminSetUserPassword,
   useGetPaymentSettings,
   useUploadSbpQr,
   useDeleteSbpQr,
@@ -965,6 +967,105 @@ function UserSubscriptionEditor({ user }: { user: AdminUser }) {
   );
 }
 
+function UserBalanceEditor({ user }: { user: AdminUser }) {
+  const { mutate: setBalance, isPending } = useAdminSetUserBalance();
+  const { toast } = useToast();
+  // Input in rubles, backend expects kopecks
+  const [value, setValue] = useState(String((user.balanceKopecks / 100).toFixed(2)));
+
+  function handleSave() {
+    const rubles = parseFloat(value.replace(",", "."));
+    if (isNaN(rubles) || rubles < 0) {
+      toast({ title: "Некорректное значение", variant: "destructive" });
+      return;
+    }
+    const kopecks = Math.round(rubles * 100);
+    setBalance(
+      { userId: user.id, data: { balanceKopecks: kopecks } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+          toast({ title: `Баланс установлен: ${rubles.toFixed(2)} ₽` });
+        },
+        onError: (err: unknown) =>
+          toast({
+            title: err instanceof Error ? err.message : "Ошибка изменения баланса",
+            variant: "destructive",
+          }),
+      },
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Input
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="rounded-none w-36 font-mono"
+        placeholder="0.00"
+      />
+      <span className="text-sm text-muted-foreground">₽</span>
+      <button
+        onClick={handleSave}
+        disabled={isPending}
+        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+      >
+        Установить
+      </button>
+    </div>
+  );
+}
+
+function UserSetPasswordEditor({ user }: { user: AdminUser }) {
+  const { mutate: setPassword, isPending } = useAdminSetUserPassword();
+  const { toast } = useToast();
+  const [password, setPasswordValue] = useState("");
+
+  function handleSave() {
+    if (password.length < 8) {
+      toast({ title: "Минимум 8 символов", variant: "destructive" });
+      return;
+    }
+    setPassword(
+      { userId: user.id, data: { password } },
+      {
+        onSuccess: () => {
+          setPasswordValue("");
+          toast({ title: "Пароль установлен. Все сессии пользователя завершены." });
+        },
+        onError: (err: unknown) =>
+          toast({
+            title: err instanceof Error ? err.message : "Ошибка смены пароля",
+            variant: "destructive",
+          }),
+      },
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Input
+        type="password"
+        value={password}
+        onChange={(e) => setPasswordValue(e.target.value)}
+        className="rounded-none max-w-64"
+        placeholder="Новый пароль (мин. 8 символов)"
+      />
+      <button
+        onClick={handleSave}
+        disabled={isPending || password.length < 8}
+        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+      >
+        Задать пароль
+      </button>
+      <span className="text-xs text-muted-foreground">Все сессии пользователя будут завершены.</span>
+    </div>
+  );
+}
+
 function UserProfileEditor({ user }: { user: AdminUser }) {
   const { mutate: updateProfile, isPending } = useUpdateUserProfile();
   const { toast } = useToast();
@@ -1414,6 +1515,14 @@ function UsersManagement() {
                 <div className="space-y-1.5">
                   <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Профиль</div>
                   <UserProfileEditor user={user} />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Баланс</div>
+                  <UserBalanceEditor user={user} />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Пароль</div>
+                  <UserSetPasswordEditor user={user} />
                 </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Подписка</div>

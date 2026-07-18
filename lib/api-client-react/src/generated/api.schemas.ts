@@ -656,6 +656,16 @@ export interface CancelExtraTrafficOrderResult {
   ok: boolean;
 }
 
+export interface AdminSetUserBalanceBody {
+  /** @minimum 0 */
+  balanceKopecks: number;
+}
+
+export interface AdminSetUserPasswordBody {
+  /** @minLength 8 */
+  password: string;
+}
+
 export interface DeviceSlotsUpdate {
   /** @minimum 0 */
   extraDeviceSlots: number;

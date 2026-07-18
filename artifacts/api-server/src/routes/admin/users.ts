@@ -15,6 +15,11 @@ import {
   type User,
 } from "@workspace/db";
 import {
+  AdminSetUserBalanceBody,
+  AdminSetUserBalanceParams,
+  AdminSetUserBalanceResponse,
+  AdminSetUserPasswordBody,
+  AdminSetUserPasswordParams,
   DeleteUserParams,
   ListAdminUsersResponse,
   UpdateUserExtraSlotsBody,
@@ -30,6 +35,7 @@ import {
   UpdateUserSubscriptionParams,
   UpdateUserSubscriptionResponse,
 } from "@workspace/api-zod";
+import { hashPassword } from "../../lib/password";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { removeRemoteXrayClient } from "../../lib/remoteNode";
@@ -528,6 +534,62 @@ router.patch("/admin/users/:userId/extra-slots", requireAuth, requireAdmin, asyn
 
   const [enriched] = await enrichUsersWithTraffic([user]);
   res.json(UpdateUserExtraSlotsResponse.parse(enriched));
+});
+
+router.patch("/admin/users/:userId/balance", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const params = AdminSetUserBalanceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const parsed = AdminSetUserBalanceBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.userId));
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  await db
+    .update(usersTable)
+    .set({ balanceKopecks: parsed.data.balanceKopecks })
+    .where(eq(usersTable.id, user.id));
+
+  const [enriched] = await enrichUsersWithTraffic([{ ...user, balanceKopecks: parsed.data.balanceKopecks }]);
+  res.json(AdminSetUserBalanceResponse.parse(enriched));
+});
+
+router.patch("/admin/users/:userId/set-password", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const params = AdminSetUserPasswordParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const parsed = AdminSetUserPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.userId));
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const passwordHash = await hashPassword(parsed.data.password);
+
+  // Update password and invalidate all existing sessions for security.
+  await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
+  await db.delete(sessionsTable).where(eq(sessionsTable.userId, user.id));
+
+  res.status(204).end();
 });
 
 export default router;

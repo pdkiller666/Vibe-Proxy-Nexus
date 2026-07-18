@@ -1442,6 +1442,32 @@ export const UpdateUserExtraSlotsResponse = zod.object({
 
 
 /**
+ * @summary Set a user's balance directly (in kopecks)
+ */
+export const AdminSetUserBalanceParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const adminSetUserBalanceBodyBalanceKopecksMin = 0;
+
+export const AdminSetUserBalanceBody = zod.object({
+  "balanceKopecks": zod.number().int().min(adminSetUserBalanceBodyBalanceKopecksMin)
+})
+
+export const AdminSetUserBalanceResponse = UpdateUserExtraSlotsResponse
+
+/**
+ * @summary Set a new password for a user (admin override, invalidates all sessions)
+ */
+export const AdminSetUserPasswordParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const AdminSetUserPasswordBody = zod.object({
+  "password": zod.string().min(8)
+})
+
+/**
  * @summary List all support tickets (optionally filtered by status)
  */
 export const ListAdminTicketsQueryParams = zod.object({
