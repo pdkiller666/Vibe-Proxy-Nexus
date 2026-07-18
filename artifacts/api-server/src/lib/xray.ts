@@ -64,19 +64,23 @@ function getClients(config: Record<string, any>): XrayClient[] {
 
 async function reloadXray(): Promise<void> {
   // Restarting Xray zeroes its in-memory Stats API counters (see
-  // xrayStats.ts / trafficPolling.ts). Flush whatever has accumulated since
-  // the last scheduled poll into Postgres first, so this deliberate restart
-  // never becomes a silent traffic-loss window. Dynamic import avoids a
-  // circular dependency at module-load time (trafficPolling.ts imports from
-  // this file); a failure here is logged and swallowed rather than blocking
-  // the config change — worst case the next scheduled poll still recovers
-  // it correctly via the lastSeen/restart-detection logic.
-  try {
-    const { flushTrafficDeltas } = await import("./trafficPolling");
-    await flushTrafficDeltas();
-  } catch (err) {
-    logger.error({ err }, "Failed to flush traffic deltas before restarting Xray");
-  }
+  // xrayStats.ts / trafficPolling.ts). Start flushing whatever has accumulated
+  // since the last scheduled poll into Postgres, but do NOT await the result.
+  //
+  // Why fire-and-forget: reloadXray() is always called from inside withLock(),
+  // which serialises all Xray config writes. flushTrafficDeltas() → pollUserTrafficCounters()
+  // issues a gRPC call to Xray's Stats API; if Xray is momentarily busy or
+  // mid-restart, that gRPC call can hang for tens of seconds. Awaiting it here
+  // blocks the HTTP response even though the on-disk config has already been
+  // written (writeConfig() runs before reloadXray()), so Amvera's proxy times
+  // out and the caller sees "Ошибка выдачи ключа" — but the key IS active
+  // in the DB and will be loaded by Xray on its next restart.
+  //
+  // Worst case when flushing loses the race with the restart: the next scheduled
+  // poll picks up the gap correctly via the lastSeen / restart-detection logic.
+  import("./trafficPolling")
+    .then(({ flushTrafficDeltas }) => flushTrafficDeltas())
+    .catch((err) => logger.error({ err }, "Failed to flush traffic deltas before restarting Xray"));
 
   // Restart Xray via supervisorctl so the updated on-disk config takes effect.
   // Takes ~2 s; existing connected clients reconnect automatically.
