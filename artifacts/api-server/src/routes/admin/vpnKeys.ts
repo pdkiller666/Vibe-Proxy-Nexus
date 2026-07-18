@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { db, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
@@ -42,6 +42,27 @@ router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res)
   // reason "traffic_limit". The admin panel shows this as a "briefly active"
   // key. To grant a persistent extra key in this state, either clear
   // trafficLimitExceededAt or sell the user a traffic top-up first.
+  // Idempotency guard: if an active key for this user was created within the
+  // last 30 seconds, return it instead of issuing another. This makes the
+  // operation safe against ANY duplicate delivery of the same request —
+  // Amvera's reverse proxy is known to retry a POST against the upstream when
+  // the first attempt exceeds its timeout, which used to create two keys from
+  // a single admin click. A human admin legitimately issuing a second key for
+  // the same user will simply wait >30 s, so this window is safe.
+  const dupWindow = new Date(Date.now() - 30_000);
+  const [recent] = await db
+    .select({ key: vpnKeysTable, nodeName: vpnNodesTable.name })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt), gte(vpnKeysTable.createdAt, dupWindow)))
+    .orderBy(desc(vpnKeysTable.createdAt))
+    .limit(1);
+  if (recent) {
+    logger.warn({ userId, keyId: recent.key.id }, "admin vpn-key issue: duplicate request within 30s window — returning existing key");
+    res.status(201).json({ ...recent.key, nodeName: recent.nodeName });
+    return;
+  }
+
   let result: Awaited<ReturnType<typeof issueKeyForUser>>;
   try {
     result = await issueKeyForUser(userId, Number.MAX_SAFE_INTEGER, nodeId);

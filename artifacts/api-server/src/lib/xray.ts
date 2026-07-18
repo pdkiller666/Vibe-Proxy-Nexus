@@ -62,6 +62,25 @@ function getClients(config: Record<string, any>): XrayClient[] {
   return clients as XrayClient[];
 }
 
+// Debounced, fire-and-forget Xray restart. Callers (addXrayClient /
+// removeXrayClient) must NOT await the restart: the on-disk config is already
+// durably written by the time this is called, so the change is guaranteed to
+// take effect — either via this restart or the next container boot. Awaiting
+// the restart inside the HTTP request path kept the response open long enough
+// for Amvera's reverse proxy to time out AND RETRY the POST against the
+// upstream, which created two keys from a single admin click. Debouncing also
+// coalesces bursts (e.g. several revocations in one traffic-enforcement tick)
+// into a single restart.
+let restartQueued = false;
+function scheduleXrayRestart(): void {
+  if (restartQueued) return;
+  restartQueued = true;
+  setTimeout(() => {
+    restartQueued = false;
+    void reloadXray();
+  }, 300);
+}
+
 async function reloadXray(): Promise<void> {
   // Restarting Xray zeroes its in-memory Stats API counters (see
   // xrayStats.ts / trafficPolling.ts). Start flushing whatever has accumulated
@@ -121,7 +140,7 @@ export async function addXrayClient(uuid: string, email: string): Promise<void> 
     // Persist first — the client survives a container restart even if the
     // reload below fails; the next boot will pick this client up automatically.
     await writeConfig(config);
-    await reloadXray();
+    scheduleXrayRestart();
   });
 }
 
@@ -134,6 +153,6 @@ export async function removeXrayClient(uuid: string): Promise<void> {
     const next = clients.filter((c) => c.id !== uuid);
     config["inbounds"][0]["settings"]["clients"] = next;
     await writeConfig(config);
-    await reloadXray();
+    scheduleXrayRestart();
   });
 }
