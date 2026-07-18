@@ -112,9 +112,14 @@ function SummarySection() {
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-card border border-border p-5">
           <div className="text-xs font-mono uppercase mb-3 text-muted-foreground">Доход по дням (14 дней)</div>
-          <div className="flex items-end gap-1 h-32">
+          {/* No items-end here: flex children must stretch to the full h-32 so
+              the percentage bar heights inside resolve against a real height.
+              With items-end the per-day column shrank to content height (0),
+              collapsing every revenue bar to 0px while the 2px zero-day
+              hairlines stayed visible — a completely "flat" chart. */}
+          <div className="flex gap-1 h-32">
             {data.revenueByDay.map((d) => (
-              <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 group relative">
+              <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 group relative h-full">
                 <div
                   className="w-full bg-orange-500/80 hover:bg-orange-500 transition-colors"
                   style={{
