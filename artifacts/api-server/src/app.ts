@@ -13,6 +13,11 @@ import { startSubscriptionExpiryJob } from "./lib/subscriptionLifecycle";
 import { startTrafficPollingJob } from "./lib/trafficPolling";
 import { startHourlyBillingJob } from "./lib/hourlyBilling";
 
+// Fail fast if required secrets are missing — better to crash on startup than
+// to start serving requests and fail mysteriously on the first authenticated
+// call. getSessionSecret() already throws; calling it here makes it eager.
+getSessionSecret();
+
 const app: Express = express();
 
 // Amvera's edge (Envoy) terminates TLS and forwards plain HTTP to the

@@ -19,10 +19,10 @@ export const vpnKeysTable = pgTable(
     id: serial("id").primaryKey(),
     userId: integer("user_id")
       .notNull()
-      .references(() => usersTable.id),
+      .references(() => usersTable.id, { onDelete: "cascade" }),
     nodeId: integer("node_id")
       .notNull()
-      .references(() => vpnNodesTable.id),
+      .references(() => vpnNodesTable.id, { onDelete: "restrict" }),
     uuid: text("uuid").notNull(),
     label: text("label").notNull(),
     // Optional free-text note the user attaches when issuing the key (e.g.

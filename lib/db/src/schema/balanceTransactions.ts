@@ -15,7 +15,7 @@ export const balanceTransactionsTable = pgTable(
       .references(() => usersTable.id, { onDelete: "cascade" }),
     amountKopecks: integer("amount_kopecks").notNull(),
     type: text("type", { enum: balanceTransactionTypeValues }).notNull(),
-    paymentId: integer("payment_id").references(() => paymentsTable.id),
+    paymentId: integer("payment_id").references(() => paymentsTable.id, { onDelete: "set null" }),
     description: text("description"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

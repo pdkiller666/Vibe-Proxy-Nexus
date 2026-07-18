@@ -18,10 +18,10 @@ export const subscriptionsTable = pgTable(
     id: serial("id").primaryKey(),
     userId: integer("user_id")
       .notNull()
-      .references(() => usersTable.id),
+      .references(() => usersTable.id, { onDelete: "cascade" }),
     planId: integer("plan_id")
       .notNull()
-      .references(() => plansTable.id),
+      .references(() => plansTable.id, { onDelete: "restrict" }),
     status: text("status", { enum: subscriptionStatusValues })
       .notNull()
       .default("pending_payment"),

@@ -17,10 +17,10 @@ export const paymentsTable = pgTable(
   {
     id: serial("id").primaryKey(),
     subscriptionId: integer("subscription_id")
-      .references(() => subscriptionsTable.id),
+      .references(() => subscriptionsTable.id, { onDelete: "set null" }),
     userId: integer("user_id")
       .notNull()
-      .references(() => usersTable.id),
+      .references(() => usersTable.id, { onDelete: "cascade" }),
     type: text("type", { enum: paymentTypeValues }).notNull().default("subscription"),
     provider: text("provider", { enum: paymentProviderValues }).notNull(),
     amountRub: integer("amount_rub").notNull(),

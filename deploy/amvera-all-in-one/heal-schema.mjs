@@ -255,6 +255,160 @@ try {
   `);
   console.log("heal-schema: dropped vpn_nodes legacy panel_* columns");
 
+  // M-11: FK onDelete rules (2026-07-18)
+  // Drizzle-kit push cannot alter existing FK constraints without data loss
+  // prompts, so we do it directly here. Each block: drop the old unnamed
+  // constraint (looked up by pg_constraint) and recreate it with the correct
+  // ON DELETE action. All operations are idempotent — they check whether the
+  // desired constraint already exists before touching anything.
+  await client.query(`
+    DO $
+    DECLARE
+      cname text;
+    BEGIN
+      -- vpn_keys.user_id → CASCADE
+      SELECT conname INTO cname
+        FROM pg_constraint
+        WHERE conrelid = 'vpn_keys'::regclass
+          AND confrelid = 'users'::regclass
+          AND contype = 'f';
+      IF cname IS NOT NULL THEN
+        EXECUTE 'ALTER TABLE vpn_keys DROP CONSTRAINT ' || quote_ident(cname);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'vpn_keys'::regclass
+          AND confrelid = 'users'::regclass
+          AND contype = 'f'
+          AND confdeltype = 'c'
+      ) THEN
+        ALTER TABLE vpn_keys ADD CONSTRAINT vpn_keys_user_id_fkey
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+      END IF;
+
+      -- vpn_keys.node_id → RESTRICT
+      SELECT conname INTO cname
+        FROM pg_constraint
+        WHERE conrelid = 'vpn_keys'::regclass
+          AND confrelid = 'vpn_nodes'::regclass
+          AND contype = 'f';
+      IF cname IS NOT NULL AND cname != 'vpn_keys_node_id_fkey_restrict' THEN
+        EXECUTE 'ALTER TABLE vpn_keys DROP CONSTRAINT ' || quote_ident(cname);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'vpn_keys'::regclass
+          AND confrelid = 'vpn_nodes'::regclass
+          AND contype = 'f'
+          AND confdeltype = 'r'
+      ) THEN
+        ALTER TABLE vpn_keys ADD CONSTRAINT vpn_keys_node_id_fkey
+          FOREIGN KEY (node_id) REFERENCES vpn_nodes(id) ON DELETE RESTRICT;
+      END IF;
+
+      -- subscriptions.user_id → CASCADE
+      SELECT conname INTO cname
+        FROM pg_constraint
+        WHERE conrelid = 'subscriptions'::regclass
+          AND confrelid = 'users'::regclass
+          AND contype = 'f';
+      IF cname IS NOT NULL THEN
+        EXECUTE 'ALTER TABLE subscriptions DROP CONSTRAINT ' || quote_ident(cname);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'subscriptions'::regclass
+          AND confrelid = 'users'::regclass
+          AND contype = 'f'
+          AND confdeltype = 'c'
+      ) THEN
+        ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_user_id_fkey
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+      END IF;
+
+      -- subscriptions.plan_id → RESTRICT
+      SELECT conname INTO cname
+        FROM pg_constraint
+        WHERE conrelid = 'subscriptions'::regclass
+          AND confrelid = 'plans'::regclass
+          AND contype = 'f';
+      IF cname IS NOT NULL THEN
+        EXECUTE 'ALTER TABLE subscriptions DROP CONSTRAINT ' || quote_ident(cname);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'subscriptions'::regclass
+          AND confrelid = 'plans'::regclass
+          AND contype = 'f'
+          AND confdeltype = 'r'
+      ) THEN
+        ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_plan_id_fkey
+          FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE RESTRICT;
+      END IF;
+
+      -- payments.user_id → CASCADE
+      SELECT conname INTO cname
+        FROM pg_constraint
+        WHERE conrelid = 'payments'::regclass
+          AND confrelid = 'users'::regclass
+          AND contype = 'f';
+      IF cname IS NOT NULL THEN
+        EXECUTE 'ALTER TABLE payments DROP CONSTRAINT ' || quote_ident(cname);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'payments'::regclass
+          AND confrelid = 'users'::regclass
+          AND contype = 'f'
+          AND confdeltype = 'c'
+      ) THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_user_id_fkey
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+      END IF;
+
+      -- payments.subscription_id → SET NULL
+      SELECT conname INTO cname
+        FROM pg_constraint
+        WHERE conrelid = 'payments'::regclass
+          AND confrelid = 'subscriptions'::regclass
+          AND contype = 'f';
+      IF cname IS NOT NULL THEN
+        EXECUTE 'ALTER TABLE payments DROP CONSTRAINT ' || quote_ident(cname);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'payments'::regclass
+          AND confrelid = 'subscriptions'::regclass
+          AND contype = 'f'
+          AND confdeltype = 'n'
+      ) THEN
+        ALTER TABLE payments ADD CONSTRAINT payments_subscription_id_fkey
+          FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL;
+      END IF;
+
+      -- balance_transactions.payment_id → SET NULL
+      SELECT conname INTO cname
+        FROM pg_constraint
+        WHERE conrelid = 'balance_transactions'::regclass
+          AND confrelid = 'payments'::regclass
+          AND contype = 'f';
+      IF cname IS NOT NULL THEN
+        EXECUTE 'ALTER TABLE balance_transactions DROP CONSTRAINT ' || quote_ident(cname);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'balance_transactions'::regclass
+          AND confrelid = 'payments'::regclass
+          AND contype = 'f'
+          AND confdeltype = 'n'
+      ) THEN
+        ALTER TABLE balance_transactions ADD CONSTRAINT balance_transactions_payment_id_fkey
+          FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL;
+      END IF;
+    END $;
+  `);
+  console.log("heal-schema: applied FK onDelete rules (M-11)");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
