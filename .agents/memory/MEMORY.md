@@ -7,6 +7,7 @@
 - [Amvera internal DB TLS verification](amvera-internal-db-tls.md) — sslmode=require against self-signed CNPG cert breaks every query identically (looks like missing schema, isn't); fix with rejectUnauthorized:false.
 - [VPN node seeding](vpn-node-seeding.md) — key issuance 404s if `vpn_nodes` is empty; all-in-one deploy needs one row seeded from REALITY_* env vars, not automatic.
 - [Amvera raw TCP port limitation](amvera-raw-tcp-port.md) — containerPort's comma-separated list is HTTP-only; confirmed Amvera always terminates TLS on 443 itself, no raw TCP passthrough for Reality/VLESS without Dedicated IPv4. Resolved via VLESS+WebSocket (see file for details).
+- [Multi-node WS architecture](multi-node-ws-arch.md) — remote VPS nodes via Management REST API; local Amvera node via on-disk Xray config; vpn_nodes.managementApiUrl IS NULL = local.
 - [VPN subscription URL design](vpn-subscription-links.md) — self-updating subscription link (stateless HMAC token, base64 body, branded headers) replaces raw pasted vless links; key labels must never contain user email.
 - [Xray gRPC proto loading & stats](xray-grpc-proto-loading.md) — protobufjs needs resolvePath override for include-root-relative proto imports; QueryStats(reset:true) works, GetUsersStats is UNIMPLEMENTED; Xray "email" tag must be a unique id (UUID), never a user-facing label.
 - [Artifact re-registration on re-import](artifact-reregistration.md) — listArtifacts() empty + proxy 502 despite intact artifact.toml files? createArtifact for one artifact re-registers the others too.

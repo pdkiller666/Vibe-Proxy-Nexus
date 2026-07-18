@@ -32,7 +32,11 @@ export default function SignUpPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const search = useSearch();
-  const ref = new URLSearchParams(search).get("ref")?.trim() ?? "";
+
+  // refCode can come from the URL (?ref=...) or be typed in manually on the invite screen.
+  const [refCode, setRefCode] = useState(new URLSearchParams(search).get("ref")?.trim() ?? "");
+  const [inviteInput, setInviteInput] = useState("");
+  const [inviteError, setInviteError] = useState("");
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(RegisterBody.omit({ ref: true })),
@@ -62,27 +66,62 @@ export default function SignUpPage() {
       return;
     }
     setConsentError(false);
-    registerMutation.mutate({ data: { ...values, name: values.name || undefined, ref } });
+    registerMutation.mutate({ data: { ...values, name: values.name || undefined, ref: refCode } });
   }
 
-  if (!ref) {
+  // No ref yet — show the invite-code entry screen instead of a dead end.
+  if (!refCode) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-[#F4F4F5] px-4 font-sans">
-        <div className="w-[440px] max-w-full bg-white border border-black/10 p-8 text-center">
-          <div className="flex items-center gap-3 mb-8 justify-center">
+        <div className="w-[440px] max-w-full bg-white border border-black/10 p-8">
+          <div className="flex items-center gap-3 mb-8">
             <div className="w-8 h-8 bg-orange-600 flex items-center justify-center">
               <Shield className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-lg tracking-tight">VPNexus</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-black mb-2">Регистрация только по приглашению</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-black mb-1">Введите инвайт-код</h1>
           <p className="text-gray-500 mb-6">
-            Чтобы создать аккаунт, перейдите по реферальной ссылке действующего пользователя VPNexus — её можно найти
-            в профиле, в разделе «Реферальная программа».
+            Регистрация открыта только по приглашению. Введите код, полученный от действующего пользователя VPNexus.
           </p>
-          <Link href={`${basePath}/sign-in`} className="text-orange-600 font-semibold hover:text-orange-700">
-            У меня уже есть аккаунт
-          </Link>
+          <div className="space-y-3">
+            <Input
+              type="text"
+              placeholder="Инвайт-код"
+              value={inviteInput}
+              onChange={(e) => {
+                setInviteInput(e.target.value);
+                setInviteError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const code = inviteInput.trim();
+                  if (!code) { setInviteError("Введите инвайт-код"); return; }
+                  setRefCode(code);
+                }
+              }}
+              className="rounded-none border-gray-300 focus-visible:ring-orange-600 font-mono tracking-widest"
+              autoFocus
+            />
+            {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
+            <Button
+              className="w-full rounded-none bg-orange-600 hover:bg-orange-700 text-white font-mono"
+              onClick={() => {
+                const code = inviteInput.trim();
+                if (!code) { setInviteError("Введите инвайт-код"); return; }
+                setRefCode(code);
+              }}
+            >
+              Продолжить
+            </Button>
+          </div>
+          <p className="text-sm text-gray-500 mt-6">
+            Уже есть аккаунт?{" "}
+            <Link href={`${basePath}/sign-in`} className="text-orange-600 font-semibold hover:text-orange-700">
+              Войти
+            </Link>
+          </p>
         </div>
       </div>
     );
