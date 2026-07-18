@@ -2104,54 +2104,7 @@ function VpnKeysManagement() {
         </span>
       </div>
 
-      <div className="space-y-2">
-        {pagedKeys.map((key) => (
-          <div
-            key={key.id}
-            className={`bg-card border p-4 ${key.revokedAt ? "border-border opacity-50" : "border-border"}`}
-          >
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="min-w-0 space-y-1">
-                <div className="font-bold text-sm break-all">{key.userEmail}</div>
-                <div className="text-xs text-muted-foreground font-mono">
-                  {key.label} · {key.nodeName} · {formatDate(key.createdAt)}
-                  {key.revokedAt && <span className="ml-2 text-destructive">Отозван {formatDate(key.revokedAt)}</span>}
-                </div>
-                <div className="text-xs text-muted-foreground font-mono">
-                  За период: {formatBytes(key.periodUpBytes + key.periodDownBytes)} · Всего:{" "}
-                  {formatBytes(key.trafficUpBytes + key.trafficDownBytes)}
-                </div>
-                {!key.revokedAt && (
-                  <div className="flex items-center gap-2 bg-muted/50 border border-border px-2 py-1 font-mono text-xs overflow-hidden max-w-lg">
-                    <span className="truncate flex-1">{key.vlessLink}</span>
-                    <button
-                      onClick={() => copyLink(key.id, key.vlessLink)}
-                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      {copiedId === key.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                )}
-              </div>
-              {!key.revokedAt && (
-                <button
-                  onClick={() => revokeMutation.mutate(key.id)}
-                  disabled={revokeMutation.isPending}
-                  className="flex items-center gap-1.5 text-sm text-destructive hover:opacity-70 transition-opacity shrink-0 whitespace-nowrap"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Отозвать
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-muted-foreground text-sm">Ключей не найдено.</p>
-        )}
-        <PaginationBar page={effectivePageK} total={filtered.length} onPage={setPage} />
-      </div>
-
-      <div className="border-t border-border pt-4">
+      <div className="border border-border p-4">
         <div className="text-sm font-bold mb-3">Выдать ключ пользователю вручную</div>
         <div className="flex items-start gap-2 flex-wrap">
           {/* Searchable user picker */}
@@ -2212,6 +2165,54 @@ function VpnKeysManagement() {
           </button>
         </div>
       </div>
+
+      <div className="space-y-2">
+        {pagedKeys.map((key) => (
+          <div
+            key={key.id}
+            className={`bg-card border p-4 ${key.revokedAt ? "border-border opacity-50" : "border-border"}`}
+          >
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0 space-y-1">
+                <div className="font-bold text-sm break-all">{key.userEmail}</div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  {key.label} · {key.nodeName} · {formatDate(key.createdAt)}
+                  {key.revokedAt && <span className="ml-2 text-destructive">Отозван {formatDate(key.revokedAt)}</span>}
+                </div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  За период: {formatBytes(key.periodUpBytes + key.periodDownBytes)} · Всего:{" "}
+                  {formatBytes(key.trafficUpBytes + key.trafficDownBytes)}
+                </div>
+                {!key.revokedAt && (
+                  <div className="flex items-center gap-2 bg-muted/50 border border-border px-2 py-1 font-mono text-xs overflow-hidden max-w-lg">
+                    <span className="truncate flex-1">{key.vlessLink}</span>
+                    <button
+                      onClick={() => copyLink(key.id, key.vlessLink)}
+                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {copiedId === key.id ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {!key.revokedAt && (
+                <button
+                  onClick={() => revokeMutation.mutate(key.id)}
+                  disabled={revokeMutation.isPending}
+                  className="flex items-center gap-1.5 text-sm text-destructive hover:opacity-70 transition-opacity shrink-0 whitespace-nowrap"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Отозвать
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-muted-foreground text-sm">Ключей не найдено.</p>
+        )}
+        <PaginationBar page={effectivePageK} total={filtered.length} onPage={setPage} />
+      </div>
+
     </div>
   );
 }
