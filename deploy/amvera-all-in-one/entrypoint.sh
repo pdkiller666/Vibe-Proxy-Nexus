@@ -83,4 +83,11 @@ fi
   fi
 ) &
 
+# The web process runs as the unprivileged `node` user (supervisord.conf
+# [program:web] user=node), but the Xray config file/dir above were created
+# by this script as root. Hand ownership to `node` so key issuance/revocation
+# (which rewrites the config atomically via .tmp + rename in the same dir)
+# keeps working. Xray itself only READS the config, so node-ownership is fine.
+chown -R node "$(dirname "$XRAY_CONFIG_PATH")"
+
 exec supervisord -c /app/supervisord.conf
