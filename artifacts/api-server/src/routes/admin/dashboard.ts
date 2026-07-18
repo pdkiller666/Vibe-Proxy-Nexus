@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, count, eq, gte, inArray, sql, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, sum } from "drizzle-orm";
 import { db, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
@@ -59,20 +59,26 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
       .where(eq(subscriptionsTable.status, "active"))
       .groupBy(plansTable.name),
+    // Fetch raw (confirmedAt, amountRub) pairs for the 14-day window and
+    // aggregate by UTC date in JavaScript. Doing the date grouping in SQL via
+    // to_char() + AT TIME ZONE proved fragile across different Postgres session
+    // timezones (grouping key didn't always match the JS loop's toISOString()
+    // output), so we aggregate here to guarantee consistent UTC dates.
     db
-      .select({
-        // AT TIME ZONE 'UTC' forces UTC date extraction regardless of the
-        // Postgres session timezone — must match the backend loop's toISOString()
-        // which also produces UTC dates.
-        date: sql<string>`to_char(${paymentsTable.confirmedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
-        amountRub: sum(paymentsTable.amountRub),
-      })
+      .select({ confirmedAt: paymentsTable.confirmedAt, amountRub: paymentsTable.amountRub })
       .from(paymentsTable)
-      .where(and(eq(paymentsTable.status, "confirmed"), gte(paymentsTable.confirmedAt, startOf14Days)))
-      .groupBy(sql`to_char(${paymentsTable.confirmedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`),
+      .where(and(eq(paymentsTable.status, "confirmed"), gte(paymentsTable.confirmedAt, startOf14Days))),
   ]);
 
-  const revenueByDate = new Map(revenueByDayRows.map((r) => [r.date, Number(r.amountRub ?? 0)]));
+  // Group raw payment rows by UTC date — toISOString().slice(0,10) produces
+  // the same "YYYY-MM-DD" format used in the loop below, so keys always match.
+  const revenueByDate = new Map<string, number>();
+  for (const p of revenueByDayRows) {
+    if (!p.confirmedAt) continue;
+    const key = p.confirmedAt.toISOString().slice(0, 10);
+    revenueByDate.set(key, (revenueByDate.get(key) ?? 0) + p.amountRub);
+  }
+
   const revenueByDay: { date: string; amountRub: number }[] = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
