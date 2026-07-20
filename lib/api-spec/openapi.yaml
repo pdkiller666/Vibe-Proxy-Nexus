@@ -1421,13 +1421,16 @@ components:
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
         sbpRecipientName: { type: string }
         instructions: { type: ["string", "null"] }
+        # Payment-method visibility toggles — admin can enable/disable each
+        # payment tile on checkout pages independently.
         yookassaEnabled: { type: boolean }
+        sbpEnabled: { type: boolean }
         extraDeviceSlotPriceRub: { type: integer }
         allowFreeExtraDeviceSlot: { type: boolean }
         # Self-service traffic top-up pricing — see paymentSettings schema
@@ -1464,6 +1467,7 @@ components:
         sbpRecipientName: { type: string }
         instructions: { type: string }
         yookassaEnabled: { type: boolean }
+        sbpEnabled: { type: boolean }
         extraDeviceSlotPriceRub: { type: integer, minimum: 0 }
         allowFreeExtraDeviceSlot: { type: boolean }
         extraTrafficPriceRub: { type: integer, minimum: 0 }

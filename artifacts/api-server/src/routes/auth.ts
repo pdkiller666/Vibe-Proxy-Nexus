@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, usersTable, plansTable, subscriptionsTable, paymentSettingsTable } from "@workspace/db";
 import {
   RegisterBody,
@@ -88,10 +88,14 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
   try {
     const [settings] = await db.select().from(paymentSettingsTable).limit(1);
     if (settings?.trialEnabled) {
+      // Only consider monthly plans: hourly plans have priceRub=0 and would
+      // always win the sort, but an hourly trial is meaningless — the user
+      // starts with balance=0 so the first billing tick would immediately
+      // stop their VPN access.
       const [trialPlan] = await db
         .select()
         .from(plansTable)
-        .where(eq(plansTable.isActive, true))
+        .where(and(eq(plansTable.isActive, true), eq(plansTable.billingType, "monthly")))
         .orderBy(asc(plansTable.priceRub), asc(plansTable.id))
         .limit(1);
 

@@ -61,30 +61,37 @@ export function YooMoneyPaymentButtons({
       </p>
 
       {/* ── Tiles ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-2">
-        {/* Карта / SberPay — auto-confirm */}
-        <a
-          href={`/api/payments/yoomoney/checkout/${paymentId}?method=card`}
-          className="flex flex-col items-center gap-1 border border-border bg-card hover:border-primary hover:bg-primary/5 transition-colors py-4 px-3 text-center"
-        >
-          <span className="text-2xl">💳</span>
-          <span className="font-bold text-sm">Карта / SberPay</span>
-          <span className="text-xs text-muted-foreground">Visa · MC · МИР · SberPay</span>
-        </a>
+      {/* Visibility of each tile is controlled by admin toggles in payment
+          settings. Both default to true so nothing changes on existing
+          installs. settings===undefined (loading) treated as enabled. */}
+      <div className={["grid gap-2", settings?.sbpEnabled !== false && settings?.yookassaEnabled !== false ? "grid-cols-2" : "grid-cols-1"].join(" ")}>
+        {/* Карта / SberPay — auto-confirm via YooMoney */}
+        {settings?.yookassaEnabled !== false && (
+          <a
+            href={`/api/payments/yoomoney/checkout/${paymentId}?method=card`}
+            className="flex flex-col items-center gap-1 border border-border bg-card hover:border-primary hover:bg-primary/5 transition-colors py-4 px-3 text-center"
+          >
+            <span className="text-2xl">💳</span>
+            <span className="font-bold text-sm">Карта / SberPay</span>
+            <span className="text-xs text-muted-foreground">Visa · MC · МИР · SberPay</span>
+          </a>
+        )}
 
         {/* СБП — manual, expands instructions */}
-        <button
-          type="button"
-          onClick={() => setSbpOpen((v) => !v)}
-          className={[
-            "flex flex-col items-center gap-1 border bg-card hover:border-primary hover:bg-primary/5 transition-colors py-4 px-3 text-center",
-            sbpOpen ? "border-primary bg-primary/5" : "border-border",
-          ].join(" ")}
-        >
-          <span className="text-2xl">⚡</span>
-          <span className="font-bold text-sm">СБП</span>
-          <span className="text-xs text-muted-foreground">Озон Банк · ручное подтверждение</span>
-        </button>
+        {settings?.sbpEnabled !== false && (
+          <button
+            type="button"
+            onClick={() => setSbpOpen((v) => !v)}
+            className={[
+              "flex flex-col items-center gap-1 border bg-card hover:border-primary hover:bg-primary/5 transition-colors py-4 px-3 text-center",
+              sbpOpen ? "border-primary bg-primary/5" : "border-border",
+            ].join(" ")}
+          >
+            <span className="text-2xl">⚡</span>
+            <span className="font-bold text-sm">СБП</span>
+            <span className="text-xs text-muted-foreground">Озон Банк · ручное подтверждение</span>
+          </button>
+        )}
       </div>
 
       {/* ── СБП instructions (expands when tile is clicked) ───────────── */}

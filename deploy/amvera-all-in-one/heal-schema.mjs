@@ -464,6 +464,21 @@ try {
   }
   console.log("heal-schema: applied FK onDelete rules (M-11)");
 
+  // ── M-12: payment method visibility toggles ──────────────────────────────
+  // sbp_enabled: new column — controls whether the SBP tile appears on
+  //   checkout pages. DEFAULT true keeps existing behaviour intact.
+  // yookassa_enabled: column already exists but defaulted to false since it
+  //   was never wired to the UI. The card tile was always visible before this
+  //   change, so flip existing false rows to true to preserve that behaviour.
+  await client.query(`
+    ALTER TABLE payment_settings
+      ADD COLUMN IF NOT EXISTS sbp_enabled boolean NOT NULL DEFAULT true;
+  `);
+  await client.query(`
+    UPDATE payment_settings SET yookassa_enabled = true WHERE yookassa_enabled = false;
+  `);
+  console.log("heal-schema: M-12 payment method toggles (sbp_enabled + yookassa_enabled backfill)");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

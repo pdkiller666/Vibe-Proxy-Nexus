@@ -1565,6 +1565,8 @@ function PaymentSettingsForm() {
   const [referralCommissionPercent, setReferralCommissionPercent] = useState("0");
   const [sbpPaymentUrl, setSbpPaymentUrl] = useState("");
   const [showManualSbpDetails, setShowManualSbpDetails] = useState(false);
+  const [yookassaEnabled, setYookassaEnabled] = useState(true);
+  const [sbpEnabled, setSbpEnabled] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -1584,6 +1586,8 @@ function PaymentSettingsForm() {
     setReferralCommissionPercent(String(settings.referralCommissionPercent ?? 0));
     setSbpPaymentUrl(settings.sbpPaymentUrl ?? "");
     setShowManualSbpDetails(settings.showManualSbpDetails ?? false);
+    setYookassaEnabled(settings.yookassaEnabled ?? true);
+    setSbpEnabled(settings.sbpEnabled ?? true);
     setInitialized(true);
   }
 
@@ -1607,6 +1611,8 @@ function PaymentSettingsForm() {
           referralCommissionPercent: Number(referralCommissionPercent) || 0,
           sbpPaymentUrl: sbpPaymentUrl.trim(),
           showManualSbpDetails,
+          yookassaEnabled,
+          sbpEnabled,
         },
       },
       {
@@ -1623,6 +1629,41 @@ function PaymentSettingsForm() {
 
   return (
     <div className="bg-card border border-border p-5 space-y-3 max-w-xl">
+      {/* Payment method visibility toggles */}
+      <div className="border border-border p-4 space-y-3">
+        <p className="text-sm font-semibold">Способы оплаты</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Карта / SberPay (ЮMoney)</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Показывать тайл «Карта / SberPay» на страницах оплаты</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={yookassaEnabled}
+              onChange={(e) => setYookassaEnabled(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">СБП</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Показывать тайл «СБП» на страницах оплаты</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={sbpEnabled}
+              onChange={(e) => setSbpEnabled(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+        </div>
+      </div>
+
       {/* SBP online payment settings */}
       <div className="border border-border p-4 space-y-3">
         <p className="text-sm font-semibold">СБП — ссылка и QR</p>

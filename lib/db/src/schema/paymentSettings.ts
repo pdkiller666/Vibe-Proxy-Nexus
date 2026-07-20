@@ -44,6 +44,13 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   // sbpQrCodeData/MimeType: base64 QR image served via /payment-settings/sbp-qr-image.
   sbpPaymentUrl: text("sbp_payment_url").notNull().default(""),
   showManualSbpDetails: boolean("show_manual_sbp_details").notNull().default(false),
+  // Payment-method visibility toggles — controlled from the admin panel.
+  // yookassaEnabled: show the "Карта / SberPay" tile on checkout pages.
+  //   Defaults to true (backfilled via heal-schema M-12 for existing rows
+  //   because the tile was always visible before this toggle existed).
+  // sbpEnabled: show the "СБП" tile on checkout pages.
+  //   Defaults to true so existing installs are unaffected on upgrade.
+  sbpEnabled: boolean("sbp_enabled").notNull().default(true),
   sbpQrCodeData: text("sbp_qr_code_data"),
   sbpQrCodeMimeType: text("sbp_qr_code_mime_type"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

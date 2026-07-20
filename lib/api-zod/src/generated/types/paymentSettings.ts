@@ -12,7 +12,8 @@ export interface PaymentSettings {
   sbpRecipientName: string;
   /** @nullable */
   instructions?: string | null;
-  yookassaEnabled?: boolean;
+  yookassaEnabled: boolean;
+  sbpEnabled: boolean;
   extraDeviceSlotPriceRub: number;
   allowFreeExtraDeviceSlot: boolean;
   extraTrafficPriceRub: number;
