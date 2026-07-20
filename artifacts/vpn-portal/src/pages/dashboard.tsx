@@ -488,7 +488,15 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Quick nav (moved up: most-used sections, no long scroll to reach them) ── */}
+      {/* ── Usage detail: right after subscription so traffic/key info is
+           immediately visible; collapsed on mobile to keep the hero clean ── */}
+      <CollapsibleOnMobile title="Подробности использования">
+        <div className="space-y-6 pt-1">
+          <TrafficSection />
+        </div>
+      </CollapsibleOnMobile>
+
+      {/* ── Quick nav ─────────────────────────────────────────────────── */}
       <div className="grid md:grid-cols-3 gap-4">
         <Link
           href="/plans"
@@ -531,14 +539,6 @@ export default function Dashboard() {
 
       {/* ── Referral ──────────────────────────────────────────────── */}
       <ReferralSection />
-
-      {/* ── Usage detail: collapsed by default on mobile so it doesn't add
-           scroll before the sections above; always expanded on desktop ── */}
-      <CollapsibleOnMobile title="Подробности использования">
-        <div className="space-y-6 pt-1">
-          <TrafficSection />
-        </div>
-      </CollapsibleOnMobile>
     </div>
   );
 }
