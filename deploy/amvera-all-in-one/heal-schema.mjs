@@ -238,9 +238,9 @@ try {
 
   // Drop the three legacy 3X-UI panel credential columns. They have been NULL
   // on every row in production since the 3X-UI architecture was abandoned.
-  // Wrapped in DO $ … $ so the absence of the column is a no-op, not an error.
+  // Wrapped in DO $$ … $ so the absence of the column is a no-op, not an error.
   await client.query(`
-    DO $
+    DO $$
     BEGIN
       IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vpn_nodes' AND column_name = 'panel_url') THEN
         ALTER TABLE vpn_nodes DROP COLUMN panel_url;
@@ -251,7 +251,7 @@ try {
       IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vpn_nodes' AND column_name = 'panel_password') THEN
         ALTER TABLE vpn_nodes DROP COLUMN panel_password;
       END IF;
-    END $;
+    END $$;
   `);
   console.log("heal-schema: dropped vpn_nodes legacy panel_* columns");
 
@@ -276,7 +276,7 @@ try {
   await client.query("BEGIN");
   try {
     await client.query(`
-      DO $
+      DO $$
       DECLARE
         r    RECORD;
         col  int2[];
@@ -455,7 +455,7 @@ try {
           ALTER TABLE balance_transactions ADD CONSTRAINT balance_transactions_payment_id_fkey
             FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL;
         END IF;
-      END $;
+      END $$;
     `);
     await client.query("COMMIT");
   } catch (err) {
