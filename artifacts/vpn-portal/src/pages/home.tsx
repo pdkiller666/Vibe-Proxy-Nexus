@@ -1,65 +1,145 @@
 import { useListPlans } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Shield, ArrowRight, Check, Zap, Eye, Lock, Globe, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  Shield, ArrowRight, Check, Zap, Eye, Lock,
+  ChevronRight, Star,
+} from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+
+/* ─── helpers ─────────────────────────────────────────────────────────── */
 
 function formatKopecks(kopecks: number): string {
   return `${(kopecks / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽`;
 }
 
-function useCountUp(target: number, duration = 1200) {
-  const [count, setCount] = useState(0);
-  const started = useRef(false);
-  const ref = useRef<HTMLDivElement>(null);
+/* ─── Testimonials carousel ───────────────────────────────────────────── */
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !started.current) {
-          started.current = true;
-          const start = performance.now();
-          const tick = (now: number) => {
-            const p = Math.min((now - start) / duration, 1);
-            const ease = 1 - Math.pow(1 - p, 3);
-            setCount(Math.round(ease * target));
-            if (p < 1) requestAnimationFrame(tick);
-          };
-          requestAnimationFrame(tick);
-        }
-      },
-      { threshold: 0.3 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [target, duration]);
+const TESTIMONIALS = [
+  {
+    text: "Работаю удалённо из разных мест. Пробовал несколько VPN — этот единственный, который не отваливается в середине рабочего дня. Уже полгода стабильно.",
+    name: "Алексей",
+    meta: "Фрилансер",
+    rating: 5,
+  },
+  {
+    text: "Нужен был чтобы открыть Instagram. Зарегистрировалась, за пять минут настроила по инструкции — всё работает. Скорость не отличить от прямого подключения.",
+    name: "Мария",
+    meta: "Дизайнер",
+    rating: 5,
+  },
+  {
+    text: "Скептически смотрел на пробный период — ожидал искусственных ограничений. Нет, работало честно. Потом оплатил без вопросов.",
+    name: "Дмитрий К.",
+    meta: "IT-специалист",
+    rating: 5,
+  },
+  {
+    text: "Не хотела регистрироваться непонятно где. Тут только email и пароль, никаких лишних данных. Пользуюсь три месяца — всё как обещали.",
+    name: "Анна",
+    meta: "Преподаватель",
+    rating: 4,
+  },
+];
 
-  return { count, ref };
+function StarRating({ n }: { n: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`w-4 h-4 ${i <= n ? "text-orange-500 fill-orange-500" : "text-gray-200 fill-gray-200"}`}
+        />
+      ))}
+    </div>
+  );
 }
 
-function StatCard({
-  value,
-  label,
-  suffix = "",
-}: {
-  value: number;
-  label: string;
-  suffix?: string;
-}) {
-  const { count, ref } = useCountUp(value);
+function TestimonialsCarousel() {
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  const touchStartX = useRef<number | null>(null);
+
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+
+  // Timer set up ONCE
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!pausedRef.current) {
+        setIdx((prev) => (prev + 1) % TESTIMONIALS.length);
+      }
+    }, 4500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const goTo = (next: number) => {
+    setIdx((next + TESTIMONIALS.length) % TESTIMONIALS.length);
+    setPaused(true);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    setPaused(true);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    touchStartX.current = null;
+    if (Math.abs(diff) < 50) {
+      // Short tap — just keep paused, resume on next auto-tick via ref
+      setPaused(false);
+      return;
+    }
+    // Swipe left → next, swipe right → prev
+    setIdx((prev) => {
+      const next = diff > 0 ? prev + 1 : prev - 1;
+      return (next + TESTIMONIALS.length) % TESTIMONIALS.length;
+    });
+    setPaused(false);
+  };
+
   return (
-    <div ref={ref} className="text-center">
-      <div className="text-4xl md:text-5xl font-black tracking-tighter text-gray-900">
-        {count}
-        {suffix}
+    <div
+      className="relative select-none"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Card — key forces re-mount so CSS animation triggers on each change */}
+      <div className="bg-white border border-gray-100 shadow-sm shadow-orange-50 p-8 md:p-10 min-h-[200px] flex flex-col justify-between">
+        <div key={idx} className="testimonial-enter">
+          <p className="text-gray-700 text-base leading-relaxed mb-6">
+            «{TESTIMONIALS[idx].text}»
+          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm text-gray-900">{TESTIMONIALS[idx].name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{TESTIMONIALS[idx].meta}</p>
+            </div>
+            <StarRating n={TESTIMONIALS[idx].rating} />
+          </div>
+        </div>
       </div>
-      <div className="text-xs text-gray-400 mt-1.5 font-semibold uppercase tracking-widest">
-        {label}
+
+      {/* Dots only */}
+      <div className="flex justify-center gap-1.5 mt-4">
+        {TESTIMONIALS.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => goTo(i)}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              i === idx ? "w-6 bg-orange-500" : "w-1.5 bg-gray-200"
+            }`}
+          />
+        ))}
       </div>
     </div>
   );
 }
+
+/* ─── FAQ item ────────────────────────────────────────────────────────── */
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
@@ -77,8 +157,213 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   );
 }
 
+/* ─── App ticker ──────────────────────────────────────────────────────── */
+
+const TICKER_ITEMS = [
+  "v2rayNG", "Happ", "Nekobox", "Clash Meta",
+  "Shadowrocket", "NekoRay", "Sing-box", "Streisand",
+];
+
+function AppTicker() {
+  const [hovered, setHovered] = useState(false);
+  const doubled = [...TICKER_ITEMS, ...TICKER_ITEMS];
+
+  return (
+    <div
+      className="overflow-hidden py-5 border-y border-gray-100 bg-gray-50/40"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div
+        className="flex gap-10 whitespace-nowrap"
+        style={{
+          animation: "ticker 18s linear infinite",
+          animationPlayState: hovered ? "paused" : "running",
+          width: "max-content",
+        }}
+      >
+        {doubled.map((name, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center gap-2 text-sm text-gray-400 font-medium px-4"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-300 shrink-0" />
+            {name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Benefits carousel (mobile) / grid (desktop) ────────────────────── */
+
+const BENEFITS = [
+  {
+    icon: <Eye className="w-5 h-5 text-orange-600" />,
+    title: "Вас никто не видит",
+    desc: "Трафик шифруется и маскируется под HTTPS. Провайдер видит только зашифрованный поток — не сайты, не приложения, не вас.",
+    tag: "Фирменная маскировка VPNexus",
+  },
+  {
+    icon: <Zap className="w-5 h-5 text-orange-600" />,
+    title: "Скорость не падает",
+    desc: "Жёсткий лимит пользователей на каждый узел. Вы не делите канал с тысячами — ресурсы сервера работают именно для вас.",
+    tag: "Без перегрузки узла",
+  },
+  {
+    icon: <Lock className="w-5 h-5 text-orange-600" />,
+    title: "Работает везде и всегда",
+    desc: "Блокировки обходятся на уровне протокола — маскировка под легальный трафик крупных сервисов. DPI не справляется.",
+    tag: "Не блокируется DPI",
+  },
+];
+
+function BenefitsSection() {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const pausedRef = useRef(false);
+  const [paused, setPaused] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  // Prevents onScroll feedback during programmatic scrollTo
+  const scrollingRef = useRef(false);
+
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+
+  // Programmatic scroll helper — uses offsetLeft for exact position (accounts for gaps)
+  const scrollToIdx = useCallback((i: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const card = track.children[i] as HTMLElement | undefined;
+    if (!card) return;
+    scrollingRef.current = true;
+    track.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
+    // Clear the lock after the smooth scroll animation finishes (~600 ms)
+    setTimeout(() => { scrollingRef.current = false; }, 650);
+  }, []);
+
+  // Timer set up ONCE; advances slide & scrolls together
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (pausedRef.current) return;
+      setActiveIdx((prev) => {
+        const next = (prev + 1) % BENEFITS.length;
+        scrollToIdx(next);
+        return next;
+      });
+    }, 3800);
+    return () => clearInterval(timer);
+  }, [scrollToIdx]);
+
+  // Detect manual swipe — ignored while programmatic scroll is in flight
+  const onScroll = useCallback(() => {
+    if (scrollingRef.current) return;
+    const track = trackRef.current;
+    if (!track) return;
+    // Find which card's offsetLeft is closest to current scrollLeft
+    let closest = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < track.children.length; i++) {
+      const dist = Math.abs((track.children[i] as HTMLElement).offsetLeft - track.scrollLeft);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    }
+    if (closest !== activeIdx) {
+      setActiveIdx(closest);
+      setPaused(true);
+    }
+  }, [activeIdx]);
+
+  return (
+    <section id="benefits" className="py-20 px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">Почему VPNexus</p>
+          <h2 className="text-4xl md:text-5xl font-black tracking-tighter">
+            Что вы получаете<br />
+            <span className="gradient-text">с первого дня</span>
+          </h2>
+        </div>
+
+        {/* Desktop grid */}
+        <div className="hidden md:grid md:grid-cols-3 gap-5">
+          {BENEFITS.map((b, i) => (
+            <div key={i} className="feature-card bg-white p-6 space-y-3">
+              <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
+                {b.icon}
+              </div>
+              <h3 className="font-bold text-base text-gray-900">{b.title}</h3>
+              <p className="text-gray-500 text-sm leading-relaxed">{b.desc}</p>
+              <div className="text-xs text-orange-600/70 font-mono pt-1 border-t border-gray-50">{b.tag}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Mobile carousel */}
+        <div className="md:hidden">
+          <div
+            ref={trackRef}
+            className="flex overflow-x-auto gap-4 snap-x snap-mandatory scrollbar-hide pb-2"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+            onScroll={onScroll}
+            onTouchStart={() => setPaused(true)}
+          >
+            {BENEFITS.map((b, i) => (
+              <div
+                key={i}
+                className="feature-card bg-white p-6 space-y-3 snap-start shrink-0"
+                style={{ width: "calc(100vw - 3rem)" }}
+              >
+                <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
+                  {b.icon}
+                </div>
+                <h3 className="font-bold text-base text-gray-900">{b.title}</h3>
+                <p className="text-gray-500 text-sm leading-relaxed">{b.desc}</p>
+                <div className="text-xs text-orange-600/70 font-mono pt-1 border-t border-gray-50">{b.tag}</div>
+              </div>
+            ))}
+          </div>
+          {/* Dots */}
+          <div className="flex justify-center gap-1.5 mt-4">
+            {BENEFITS.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setActiveIdx(i); setPaused(true); scrollToIdx(i); }}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i === activeIdx ? "w-6 bg-orange-500" : "w-1.5 bg-gray-200"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Plan skeleton ───────────────────────────────────────────────────── */
+
+function PlanSkeleton() {
+  return (
+    <div className="grid md:grid-cols-3 gap-5">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="border border-gray-100 bg-gray-50 p-7 animate-pulse space-y-4">
+          <div className="h-5 w-1/2 bg-gray-200 rounded" />
+          <div className="h-10 w-2/3 bg-gray-200 rounded" />
+          <div className="space-y-2.5 pt-2">
+            {[0, 1, 2, 3].map((j) => (
+              <div key={j} className="h-3.5 bg-gray-200 rounded w-full" />
+            ))}
+          </div>
+          <div className="h-10 bg-gray-200 rounded mt-4" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Main page ───────────────────────────────────────────────────────── */
+
 export default function Home() {
-  const { data: plans } = useListPlans();
+  const { data: plans, isLoading: plansLoading } = useListPlans();
   const activePlans = plans?.filter((p: { isActive: boolean }) => p.isActive) ?? [];
 
   return (
@@ -95,6 +380,10 @@ export default function Home() {
         @keyframes shimmer {
           0%   { background-position: -200% center; }
           100% { background-position:  200% center; }
+        }
+        @keyframes ticker {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
         }
         .animate-fade-up   { animation: fade-up .65s ease both; }
         .animate-fade-up-1 { animation: fade-up .65s .12s ease both; opacity:0; }
@@ -156,19 +445,16 @@ export default function Home() {
           box-shadow: 0 8px 32px rgba(234,88,12,.12);
         }
 
-        .step-number {
-          font-variant-numeric: tabular-nums;
-          line-height: 1;
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+        @keyframes testimonial-enter {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        .divider-dot {
-          width: 6px; height: 6px;
-          background: #fed7aa;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
+        .testimonial-enter { animation: testimonial-enter 0.3s ease both; }
       `}</style>
 
-      {/* ─── HEADER ───────────────────────────────────────────────── */}
+      {/* ─── HEADER ─────────────────────────────────────────────── */}
       <header
         className="sticky top-0 z-50 bg-white/90 border-b border-gray-100 px-6 py-4
                    flex items-center justify-between"
@@ -182,8 +468,8 @@ export default function Home() {
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-sm text-gray-500">
-          <a href="#benefits" className="hover:text-gray-900 transition-colors">Преимущества</a>
           <a href="#how"      className="hover:text-gray-900 transition-colors">Как работает</a>
+          <a href="#benefits" className="hover:text-gray-900 transition-colors">Преимущества</a>
           <a href="#plans"    className="hover:text-gray-900 transition-colors">Тарифы</a>
         </nav>
 
@@ -197,13 +483,12 @@ export default function Home() {
         </div>
       </header>
 
-      {/* ─── HERO ─────────────────────────────────────────────────── */}
-      <section className="relative pt-20 pb-28 px-6 flex flex-col items-center text-center overflow-hidden">
-        {/* subtle warm background — full-width so no sharp side edges */}
+      {/* ─── HERO ───────────────────────────────────────────────── */}
+      <section className="relative pt-20 pb-20 px-6 flex flex-col items-center text-center overflow-hidden">
+        {/* background */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-0 left-0 right-0 h-[520px]
                           bg-gradient-to-b from-orange-50/70 to-transparent" />
-          {/* decorative rings */}
           <div className="absolute top-16 left-1/2 -translate-x-1/2 w-[700px] h-[700px]
                           rounded-full border border-orange-100 opacity-50" />
           <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[500px] h-[500px]
@@ -214,7 +499,7 @@ export default function Home() {
         <div className="animate-fade-up relative inline-flex items-center gap-2 bg-orange-50 border border-orange-200
                         rounded-full px-4 py-1.5 mb-8 text-xs font-semibold text-orange-700 tracking-wide uppercase">
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-          Закрытый VPN-сервис · Приватная инфраструктура
+          Персональный VPN · Приватная инфраструктура
         </div>
 
         <h1 className="animate-fade-up-1 relative text-5xl md:text-7xl lg:text-[88px] font-black
@@ -247,100 +532,27 @@ export default function Home() {
           Бесплатный пробный период · Без привязки карты · Отмена в любой момент
         </p>
 
-        {/* Floating icon */}
-        <div className="animate-float relative mt-20">
-          <div className="w-24 h-24 md:w-28 md:h-28 bg-white rounded-3xl
-                          flex items-center justify-center mx-auto shadow-xl shadow-orange-100"
-               style={{ border: "1.5px solid #fed7aa" }}>
-            <Shield className="w-11 h-11 md:w-14 md:h-14 text-orange-600" />
-          </div>
-          <div className="absolute -top-2 -right-4 bg-green-50 border border-green-200
-                          rounded-full px-3 py-1 text-xs font-bold text-green-700">
-            ● Защищено
-          </div>
+        {/* Inline stats */}
+        <div className="animate-fade-up-3 relative mt-14 grid grid-cols-2 md:grid-cols-4 gap-x-10 gap-y-6">
+          {[
+            { val: "∞", label: "интернет без границ" },
+            { val: "0 ₽",  label: "Попробовать" },
+            { val: "5 с",  label: "До первого ключа" },
+            { val: "24/7", label: "Поддержка" },
+          ].map(({ val, label }) => (
+            <div key={label} className="text-center">
+              <div className="text-3xl md:text-4xl font-black tracking-tighter text-gray-900">{val}</div>
+              <div className="text-[10px] text-gray-400 mt-1 font-semibold uppercase tracking-widest">{label}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ─── STATS ────────────────────────────────────────────────── */}
-      <section className="border-y border-gray-100 bg-gray-50/50 py-14 px-6">
-        <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-10">
-          <StatCard value={99} suffix="%" label="Uptime гарантия" />
-          <StatCard value={0}            label="Логов о вас"      />
-          <StatCard value={5}  suffix=" с" label="До первого ключа" />
-          <StatCard value={24} suffix="/7" label="Поддержка"       />
-        </div>
-      </section>
-
-      {/* ─── BENEFITS ─────────────────────────────────────────────── */}
-      <section id="benefits" className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">Почему VPNexus</p>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tighter">
-              Что вы получаете<br />
-              <span className="gradient-text">с первого дня</span>
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-5">
-            {[
-              {
-                icon: <Eye className="w-5 h-5 text-orange-600" />,
-                title: "Вас никто не видит",
-                desc: "Трафик шифруется и маскируется под HTTPS. Провайдер видит только зашифрованный поток — не сайты, не приложения, не вас.",
-                tag: "Фирменная технология маскировки VPNexus",
-              },
-              {
-                icon: <Zap className="w-5 h-5 text-orange-600" />,
-                title: "Скорость не падает",
-                desc: "Жёсткий лимит пользователей на каждый узел. Вы не делите канал с тысячами — ресурсы сервера работают именно для вас.",
-                tag: "Без перегрузки узла",
-              },
-              {
-                icon: <Lock className="w-5 h-5 text-orange-600" />,
-                title: "Работает везде и всегда",
-                desc: "Блокировки обходятся на уровне протокола — маскировка под легальный трафик крупных сервисов. DPI не справляется.",
-                tag: "Не блокируется DPI",
-              },
-              {
-                icon: <Globe className="w-5 h-5 text-orange-600" />,
-                title: "Несколько устройств",
-                desc: "Один аккаунт — несколько устройств одновременно. Телефон, ноутбук, планшет. Всё под защитой с одной подпиской.",
-                tag: "iOS, Android, Windows, macOS",
-              },
-              {
-                icon: <Shield className="w-5 h-5 text-orange-600" />,
-                title: "Полный контроль",
-                desc: "Личный кабинет: ваши ключи, статус подписки, история платежей. Полная прозрачность — никаких скрытых условий.",
-                tag: "Личный кабинет 24/7",
-              },
-              {
-                icon: <ArrowRight className="w-5 h-5 text-orange-600" />,
-                title: "Минуты до старта",
-                desc: "Зарегистрировались → получили ключ → подключились. Без сложных инструкций, без технических знаний. Три шага.",
-                tag: "Настройка за 2 минуты",
-              },
-            ].map((b, i) => (
-              <div key={i} className="feature-card bg-white p-6 space-y-3">
-                <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
-                  {b.icon}
-                </div>
-                <h3 className="font-bold text-base text-gray-900">{b.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{b.desc}</p>
-                <div className="text-xs text-orange-600/70 font-mono pt-1 border-t border-gray-50">
-                  {b.tag}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── HOW IT WORKS ─────────────────────────────────────────── */}
-      <section id="how" className="py-24 px-6 bg-gray-50/60">
+      {/* ─── HOW IT WORKS ───────────────────────────────────────── */}
+      <section id="how" className="py-20 px-6 bg-gray-50/60">
         <div className="max-w-2xl mx-auto text-center">
           <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">Простой старт</p>
-          <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-14">
+          <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-12">
             Три шага<br /><span className="gradient-text">до защиты</span>
           </h2>
 
@@ -364,7 +576,7 @@ export default function Home() {
             ].map((step) => (
               <div key={step.n} className="bg-white border border-gray-100 p-6 flex gap-6 items-start
                                            shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
-                <div className="step-number text-4xl font-black text-orange-200 w-12 shrink-0 font-mono select-none">
+                <div className="text-4xl font-black text-orange-200 w-12 shrink-0 font-mono select-none leading-none pt-0.5">
                   {step.n}
                 </div>
                 <div>
@@ -377,10 +589,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── PLANS ────────────────────────────────────────────────── */}
-      <section id="plans" className="py-24 px-6">
+      {/* ─── APP TICKER ─────────────────────────────────────────── */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+        <div className="py-2 px-2 text-center">
+          <p className="text-[10px] text-gray-300 uppercase tracking-widest font-semibold mb-1">
+            Работает с любым VLESS-клиентом
+          </p>
+        </div>
+        <AppTicker />
+      </div>
+
+      {/* ─── BENEFITS ───────────────────────────────────────────── */}
+      <BenefitsSection />
+
+      {/* ─── PLANS ──────────────────────────────────────────────── */}
+      <section id="plans" className="py-20 px-6 bg-gray-50/60">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-14">
+          <div className="text-center mb-12">
             <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">Тарифы</p>
             <h2 className="text-4xl md:text-5xl font-black tracking-tighter">
               Честная цена<br />
@@ -389,7 +616,9 @@ export default function Home() {
             <p className="text-gray-400 mt-4 text-sm">Попробуйте бесплатно — оплата только если понравится</p>
           </div>
 
-          {activePlans.length > 0 ? (
+          {plansLoading ? (
+            <PlanSkeleton />
+          ) : activePlans.length > 0 ? (
             <div
               className={`grid gap-5 ${
                 activePlans.length === 1
@@ -413,15 +642,12 @@ export default function Home() {
                   },
                   i: number,
                 ) => {
-                  const featured =
-                    activePlans.length > 1 && i === Math.floor(activePlans.length / 2);
+                  const featured = activePlans.length > 1 && i === Math.floor(activePlans.length / 2);
                   const isHourly = plan.billingType === "hourly";
                   return (
                     <div
                       key={plan.id}
-                      className={`plan-card bg-white relative p-7 flex flex-col ${
-                        featured ? "plan-card-featured" : ""
-                      }`}
+                      className={`plan-card bg-white relative p-7 flex flex-col ${featured ? "plan-card-featured" : ""}`}
                     >
                       {featured && (
                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-600
@@ -438,10 +664,9 @@ export default function Home() {
                             </span>
                           )}
                         </div>
-                        {plan.description && (
-                          <p className="text-gray-400 text-sm">{plan.description}</p>
-                        )}
+                        {plan.description && <p className="text-gray-400 text-sm">{plan.description}</p>}
                       </div>
+
                       {isHourly ? (
                         <div className="mb-6 flex items-end gap-2">
                           <span className="text-5xl font-black text-gray-900">
@@ -459,14 +684,13 @@ export default function Home() {
                           </span>
                         </div>
                       )}
+
                       <ul className="space-y-2.5 mb-8 flex-1">
                         {[
                           `${plan.devicesIncluded} ${
-                            plan.devicesIncluded === 1
-                              ? "устройство"
-                              : plan.devicesIncluded < 5
-                              ? "устройства"
-                              : "устройств"
+                            plan.devicesIncluded === 1 ? "устройство"
+                            : plan.devicesIncluded < 5 ? "устройства"
+                            : "устройств"
                           }`,
                           "Без ограничения трафика",
                           "VPN-ключи в личном кабинете",
@@ -478,12 +702,11 @@ export default function Home() {
                           </li>
                         ))}
                       </ul>
+
                       <Link
                         href="/sign-up"
                         className={`block text-center font-bold py-3.5 text-sm transition-all ${
-                          featured
-                            ? "btn-orange text-white"
-                            : "bg-gray-900 text-white hover:bg-orange-600"
+                          featured ? "btn-orange text-white" : "bg-gray-900 text-white hover:bg-orange-600"
                         }`}
                       >
                         Выбрать тариф
@@ -494,7 +717,7 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="text-center bg-gray-50 border border-gray-100 p-12 max-w-md mx-auto">
+            <div className="text-center bg-white border border-gray-100 p-12 max-w-md mx-auto">
               <Shield className="w-10 h-10 text-orange-600 mx-auto mb-4" />
               <p className="text-gray-500 text-sm">Тарифы скоро появятся</p>
               <Link href="/sign-up"
@@ -506,79 +729,66 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── FAQ ──────────────────────────────────────────────────── */}
-      <section className="py-24 px-6">
+      {/* ─── TESTIMONIALS ───────────────────────────────────────── */}
+      <section className="py-20 px-6">
         <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">FAQ</p>
+          <div className="text-center mb-10">
+            <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">Отзывы</p>
             <h2 className="text-4xl md:text-5xl font-black tracking-tighter">
-              Частые вопросы
+              Что говорят<br />
+              <span className="gradient-text">пользователи</span>
             </h2>
+            <p className="text-gray-400 text-xs mt-3">Листайте смахом или нажмите на точку</p>
+          </div>
+          <TestimonialsCarousel />
+        </div>
+      </section>
+
+      {/* ─── FAQ ────────────────────────────────────────────────── */}
+      <section className="py-20 px-6 bg-gray-50/60">
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-orange-600 text-xs font-bold uppercase tracking-widest mb-3">FAQ</p>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tighter">Частые вопросы</h2>
           </div>
           <div className="bg-white border border-gray-100 divide-y divide-gray-100 shadow-sm shadow-orange-50">
-            {[
-              { q: "Как быстро я получу доступ?", a: "После регистрации — мгновенно. Пробный период стартует автоматически: перейдите в «Ключи VPN», добавьте устройство и подключайтесь." },
-              { q: "На каких устройствах работает?", a: "iOS, Android, Windows, macOS, Linux — на любом, где есть VLESS-клиент (Happ, v2rayNG, Nekobox, Clash Meta). Один аккаунт — несколько устройств." },
-              { q: "Мой провайдер увидит, что я использую VPN?", a: "Нет. Фирменная технология маскировки VPNexus скрывает трафик под обычный HTTPS. Для провайдера это выглядит как обращение к обычному сайту." },
-              { q: "Есть ограничение скорости или трафика?", a: "Трафик неограничен. Скорость — зависит от вашего интернета. Жёсткий лимит пользователей на узел гарантирует, что канал не будет перегружен." },
-              { q: "Что будет после окончания пробного периода?", a: "Подписка деактивируется — ключи перестанут работать. Никакого автосписания нет. Оплатите нужный тариф вручную через СБП и доступ восстановится." },
-              { q: "Как получить помощь, если что-то не работает?", a: "В личном кабинете есть раздел «Поддержка». Опишите проблему — обычно отвечаем в течение нескольких часов." },
-            ].map(({ q, a }, i) => (
-              <FaqItem key={i} q={q} a={a} />
-            ))}
+            <FaqItem
+              q="Мой провайдер увидит, что я использую VPN?"
+              a="Нет. Технология маскировки VPNexus скрывает трафик под обычный HTTPS. Для провайдера это выглядит как обращение к обычному сайту."
+            />
+            <FaqItem
+              q="Что будет после окончания пробного периода?"
+              a="Подписка деактивируется — ключи перестанут работать. Никакого автосписания нет. Оплатите нужный тариф и доступ восстановится."
+            />
+            <FaqItem
+              q="Как получить помощь, если что-то не работает?"
+              a="В личном кабинете есть раздел «Поддержка». Опишите проблему — отвечаем в течение нескольких часов."
+            />
           </div>
         </div>
       </section>
 
-      {/* ─── FINAL CTA ────────────────────────────────────────────── */}
-      <section className="py-24 px-6 bg-gray-50/60">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white border border-orange-100 p-12 md:p-16 text-center
-                          shadow-xl shadow-orange-50">
-            <div className="w-14 h-14 bg-orange-50 border border-orange-200
-                            flex items-center justify-center mx-auto mb-6">
-              <Shield className="w-7 h-7 text-orange-600" />
-            </div>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-4 text-gray-900">
-              Начните прямо<br />
-              <span className="gradient-text">сейчас</span>
-            </h2>
-            <p className="text-gray-400 mb-10 leading-relaxed text-sm max-w-md mx-auto">
-              Бесплатный пробный период. Никакой привязки карты.<br />
-              Если не понравится — просто не продлевайте.
-            </p>
-            <Link href="/sign-up"
-              className="btn-orange inline-flex items-center gap-2.5 text-white font-bold px-10 py-4 text-base">
-              Попробовать бесплатно
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-            <p className="mt-5 text-xs text-gray-400">
-              Уже есть аккаунт?{" "}
-              <Link href="/sign-in" className="text-orange-600 hover:text-orange-700 transition-colors font-medium">
-                Войти →
-              </Link>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FOOTER ───────────────────────────────────────────────── */}
+      {/* ─── FOOTER ─────────────────────────────────────────────── */}
       <footer className="border-t border-gray-100 py-10 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
             <div className="w-6 h-6 bg-orange-600 flex items-center justify-center shrink-0">
               <Shield className="w-3.5 h-3.5 text-white" />
             </div>
             <span className="font-black text-sm tracking-tight">VPNexus</span>
           </div>
-          <p className="text-gray-400 text-xs text-center">
-            Приватная инфраструктура. Никаких логов. Никаких компромиссов.
-          </p>
+
+          {/* Footer CTA */}
+          <Link href="/sign-up"
+            className="btn-orange text-white font-bold px-6 py-2.5 text-sm flex items-center gap-2">
+            Попробовать бесплатно <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+
           <div className="flex gap-5 text-xs text-gray-400">
-            <Link href="/sign-in" className="hover:text-gray-700 transition-colors">Вход</Link>
-            <Link href="/sign-up" className="hover:text-gray-700 transition-colors">Регистрация</Link>
-            <Link href="/terms" className="hover:text-gray-700 transition-colors">Условия использования</Link>
-            <Link href="/privacy" className="hover:text-gray-700 transition-colors">Конфиденциальность</Link>
+            <Link href="/sign-in"  className="hover:text-gray-700 transition-colors">Вход</Link>
+            <Link href="/sign-up"  className="hover:text-gray-700 transition-colors">Регистрация</Link>
+            <Link href="/terms"    className="hover:text-gray-700 transition-colors">Условия</Link>
+            <Link href="/privacy"  className="hover:text-gray-700 transition-colors">Конфиденциальность</Link>
           </div>
         </div>
       </footer>
