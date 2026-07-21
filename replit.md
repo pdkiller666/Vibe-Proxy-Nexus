@@ -10,6 +10,7 @@
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/db exec tsc -p .` — rebuild the db package after editing its schema (required before typecheck sees new types)
 - `./deploy.sh "Сообщение на русском о том, что изменилось"` — deploy to production (pushes to GitHub, which triggers Amvera's auto-build). Main agent's shell blocks `git push`, so this is the only way to ship.
 - Required env: `DATABASE_URL` — Postgres connection string
 
@@ -35,7 +36,9 @@
 
 - **Deployment target is Amvera Cloud, all-in-one**: the whole project (React frontend + Express API + Xray-core VPN) ships as a single Docker image and runs in one Amvera container, managed by `supervisord`. Replit is the dev environment only. Only Postgres stays external. See `deploy/amvera-all-in-one/`.
 - **VPN transport is VLESS over WebSocket, not raw TCP or Reality.** Amvera's edge (Traefik/Envoy) always terminates TLS itself and only forwards plain HTTP(S)/WebSocket to the container on the app's single public port (8080). Raw-TCP VLESS and Reality are both incompatible with that. The working setup: Xray listens on `127.0.0.1:10000` for plain VLESS+WS (`security: none`), and the Node server itself proxies the `/vpnws` WebSocket upgrade to it (see `src/index.ts`). Clients connect with `security=tls&type=ws&sni=<web domain>` — a completely standard HTTPS/WebSocket connection from the outside. See `.agents/memory/amvera-raw-tcp-port.md`.
-- **Self-updating subscription URL**: instead of making users paste/manage individual `vless://` links, `GET /api/vpn-keys/subscription-url` returns one stable URL (`/api/sub/<token>`, stateless HMAC-signed, no DB row) that VPN client apps (Happ, v2rayNG, etc.) re-fetch periodically. Returns base64 of all active links plus branded headers (`Profile-Title`, `Profile-Update-Interval`, `Subscription-Userinfo`). See `.agents/memory/vpn-subscription-links.md`.
+- **Self-updating subscription URL**: instead of making users paste/manage individual `vless://` links, `GET /api/vpn-keys/subscription-url` returns one stable URL (`/api/sub/<token>`, stateless HMAC-signed, no DB row) that VPN client apps (Happ, v2rayNG, etc.) re-fetch every 3 hours (`SUBSCRIPTION_UPDATE_INTERVAL_HOURS`). Returns base64 of all active links plus branded headers (`Profile-Title`, `Profile-Update-Interval`, `Subscription-Userinfo`, `Announce`). See `.agents/memory/vpn-subscription-links.md`.
+- **Happ Announce warnings**: `GET /api/sub/:token` sets the `Announce` response header (base64 text card shown inside Happ). Logic: for hourly plans — shows balance and warning if < 24 h or < 3 h remaining; for non-hourly — prepends expiry warning if subscription ends within 5 days or today. This is the only in-client notification channel available; push/email are absent.
+- **Dashboard low-balance banners**: `dashboard.tsx` computes `hoursLeft = balanceKopecks / hourlyRateKopecks` for hourly users and renders an orange banner (3–24 h left) or red alert (< 3 h left) above the subscription hero block. For monthly users `isExpiringSoon` (≤ 5 days left) renders an orange banner. All conditions are false while `me` is loading, so no flicker.
 - **Invite-only registration**: `/sign-up` requires a valid `?ref=CODE` referral code in the URL; without it registration is blocked. Every user has a unique `referral_code`; the seed admin's code is the root. Registration via open `/sign-up` without code returns 400.
 - **Referral commission**: when admin confirms a `subscription` payment, the payer's referrer (if any) gets `referralCommissionPercent`% of the payment credited to their `balance_kopecks` automatically. Rate is 0 by default (disabled); admin sets it in payment settings.
 - **Balance and top-up**: users hold an internal `balance_kopecks` wallet. Balance is topped up via `POST /api/balance-topup-order` → admin confirms → `balance_kopecks` += amount. Balance is spent by: hourly plan billing (deducted every 5 min while traffic flows) and extra device slot purchases (when price > 0). All balance changes are logged to `balance_transactions` (types: `topup`, `debit`, `referral`, `refund`). Balance history is shown on the Payments page.
@@ -53,6 +56,7 @@
 - `deploy/amvera-vpn-node/` is kept for a FUTURE multi-region setup. Not used by the all-in-one deployment.
 - **Primary domain hotswap**: `payment_settings.primaryDomain` — if non-empty, used in generated vless/subscription links instead of the request's own hostname. Admin can change it instantly if the main domain gets blocked, without redeploying.
 - **Trial period**: `payment_settings.trialEnabled` / `trialDays` — if enabled, `POST /auth/register` automatically creates an `active` subscription (cheapest active plan, `endsAt` = now + `trialDays`) and auto-issues the user's first VPN key right after signup, so a new user can connect without paying first. Trial creation failures are caught and logged, never block registration. Silently skipped if no active plans exist.
+- **heal-schema.mjs**: runs before `drizzle-kit push` on every container start. Contains idempotent DDL patches (`ADD COLUMN IF NOT EXISTS`, unique indexes, FK ON DELETE rules, DROP COLUMN blocks) that drizzle-kit cannot apply unattended. All PL/pgSQL anonymous blocks use `DO $$ … $$` dollar-quoting (single `$` is invalid — PostgreSQL parses it as a positional parameter placeholder).
 
 ## Product
 
@@ -60,7 +64,8 @@
 - Profile page (`/profile`): user can change their own name, email (requires current password, checks uniqueness), and password (requires current password, invalidates other sessions).
 - Support (`/support`): user creates a ticket with a subject; threaded messaging between user and admin; statuses: open / answered / closed.
 - Plans page (`/plans`): snap-carousel on mobile; selected plan highlighted with ring+shadow; active subscription plan highlighted in green with «Активный» badge and disabled button «Текущий тариф» — prevents accidental re-subscription.
-- Payments page (`/payments`): shows balance widget (with top-up), **balance transaction history** (moved from dashboard), and payment history list.
+- Payments page (`/payments`): shows balance widget (with top-up), **balance transaction history**, and payment history list.
+- Dashboard (`/dashboard`): subscription status, balance, quick actions, referral section, traffic usage. Low-balance banners: orange (3–24 h left) and red critical (< 3 h left) for hourly plans; expiry banner (≤ 5 days) for monthly plans.
 - Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject with screenshot preview), plans CRUD, VPN nodes CRUD, user management (activity status, reset password, extra device slots, subscription override), payment settings (SBP URL, phone/bank/recipient toggle, QR code upload, extra slot price, referral commission %, min hourly top-up, primary domain), support ticket queue, analytics.
 
 ## Codegen rule
@@ -80,4 +85,3 @@ Never hand-edit `lib/api-zod/src/generated/` or `lib/api-client-react/src/genera
 - Product overview for humans (features, stack, screenshots) — `README.md`
 - Full repo map and API/schema reference — `PROJECT_MAP.md`
 - Production deployment details — `deploy/amvera-all-in-one/README.md`
-- Comprehensive security/logic audit (July 2026) — `AUDIT.md`
