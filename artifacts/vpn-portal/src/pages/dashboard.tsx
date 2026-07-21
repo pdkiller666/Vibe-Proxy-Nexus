@@ -347,6 +347,15 @@ export default function Dashboard() {
   const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 5;
   const isExpired = daysLeft !== null && daysLeft < 0;
 
+  // Low-balance warnings for hourly billing
+  const isHourly = me?.currentPlanBillingType === "hourly";
+  const hoursLeft =
+    isHourly && me?.hourlyRateKopecks && me.hourlyRateKopecks > 0
+      ? (me.balanceKopecks ?? 0) / me.hourlyRateKopecks
+      : null;
+  const isBalanceCritical = hoursLeft !== null && hoursLeft < 3;
+  const isBalanceLow     = hoursLeft !== null && hoursLeft >= 3 && hoursLeft < 24;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
@@ -377,6 +386,31 @@ export default function Dashboard() {
             <strong>{daysLeft === 0 ? "менее суток" : `${daysLeft} ${pluralDays(daysLeft)}`}</strong>.{" "}
             <Link href="/plans" className="underline font-semibold hover:text-orange-900">
               Продлить сейчас
+            </Link>
+          </span>
+        </div>
+      )}
+
+      {isBalanceCritical && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-300 p-4 text-sm text-red-700">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            <strong>Баланс почти исчерпан</strong> — осталось менее 3 часов работы VPN.{" "}
+            <Link href="/payments" className="underline font-semibold hover:text-red-900">
+              Пополнить прямо сейчас
+            </Link>
+          </span>
+        </div>
+      )}
+
+      {isBalanceLow && (
+        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 text-sm text-orange-700">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            Баланс заканчивается — осталось примерно{" "}
+            <strong>{Math.floor(hoursLeft!)} ч</strong> работы VPN.{" "}
+            <Link href="/payments" className="underline font-semibold hover:text-orange-900">
+              Пополнить баланс
             </Link>
           </span>
         </div>

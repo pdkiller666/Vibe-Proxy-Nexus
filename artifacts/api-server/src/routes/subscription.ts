@@ -113,7 +113,8 @@ router.get(
     // since that's the only free-text slot Happ exposes; Subscription-Userinfo
     // itself is a fixed upload/download/total/expire format Happ parses
     // strictly and can't carry arbitrary fields like a money balance.
-    let announceText = `Управляйте ключами и тарифом в личном кабинете ${BRAND_NAME}`;
+    const cabinetText = `Управляйте ключами и тарифом в личном кабинете ${BRAND_NAME}`;
+    let announceText = cabinetText;
     if (activePlan?.billingType === "hourly") {
       const [user] = await db
         .select({ balanceKopecks: usersTable.balanceKopecks })
@@ -121,7 +122,25 @@ router.get(
         .where(eq(usersTable.id, userId));
       if (user) {
         const balanceRub = (user.balanceKopecks / 100).toFixed(2);
-        announceText = `Баланс: ${balanceRub} ₽. ${announceText}`;
+        const hoursLeft =
+          activePlan.hourlyRateKopecks && activePlan.hourlyRateKopecks > 0
+            ? user.balanceKopecks / activePlan.hourlyRateKopecks
+            : Infinity;
+        if (hoursLeft < 3) {
+          announceText = `⚠️ Баланс почти исчерпан — осталось менее 3 ч работы VPN! Пополните баланс. Баланс: ${balanceRub} ₽`;
+        } else if (hoursLeft < 24) {
+          announceText = `⚠️ Баланс заканчивается — осталось ~${Math.floor(hoursLeft)} ч. Пополните баланс. Баланс: ${balanceRub} ₽`;
+        } else {
+          announceText = `Баланс: ${balanceRub} ₽. ${cabinetText}`;
+        }
+      }
+    } else if (activeSubscription?.endsAt) {
+      const msLeft = activeSubscription.endsAt.getTime() - Date.now();
+      const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+      if (daysLeft <= 1) {
+        announceText = `⚠️ Подписка истекает сегодня! Продлите прямо сейчас. ${cabinetText}`;
+      } else if (daysLeft <= 5) {
+        announceText = `⚠️ Подписка истекает через ${daysLeft} дн. Не забудьте продлить. ${cabinetText}`;
       }
     }
 
