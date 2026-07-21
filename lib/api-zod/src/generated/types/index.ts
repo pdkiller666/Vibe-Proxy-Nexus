@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminBalanceTransaction';
+export * from './adminBalanceTransactionType';
 export * from './adminPasswordResetResult';
 export * from './adminPayment';
 export * from './adminSetUserBalanceRequest';
@@ -70,6 +72,7 @@ export * from './supportTicketDetail';
 export * from './ticketStatus';
 export * from './ticketStatusFilter';
 export * from './ticketStatusUpdate';
+export * from './topTrafficUser';
 export * from './updateMeInput';
 export * from './userRole';
 export * from './userRoleUpdate';

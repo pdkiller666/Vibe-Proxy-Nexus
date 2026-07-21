@@ -802,6 +802,14 @@ export const GetAdminDashboardSummaryResponse = zod.object({
   "activeNow": zod.number(),
   "activeOnVpn": zod.number(),
   "activeOnSite": zod.number(),
+  "expiringIn3Days": zod.number(),
+  "lowBalanceHourly": zod.number(),
+  "topTrafficUsers": zod.array(zod.object({
+  "userId": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "periodBytes": zod.number()
+})),
   "newUsersLast7Days": zod.number(),
   "newUsersLast30Days": zod.number(),
   "planDistribution": zod.array(zod.object({
@@ -1513,6 +1521,24 @@ export const AdminSetUserPasswordBody = zod.object({
 })
 
 export const AdminSetUserPasswordResponse = zod.void()
+
+
+/**
+ * @summary Balance transaction history for a specific user
+ */
+export const ListAdminUserBalanceTransactionsParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const ListAdminUserBalanceTransactionsResponseItem = zod.object({
+  "id": zod.number(),
+  "amountKopecks": zod.number(),
+  "type": zod.enum(['topup', 'debit', 'refund', 'referral']),
+  "description": zod.string().nullish(),
+  "paymentId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdminUserBalanceTransactionsResponse = zod.array(ListAdminUserBalanceTransactionsResponseItem)
 
 
 /**

@@ -597,6 +597,14 @@ export interface UserRoleUpdate {
   role: UserRole;
 }
 
+export interface TopTrafficUser {
+  userId: number;
+  email: string;
+  /** @nullable */
+  name?: string | null;
+  periodBytes: number;
+}
+
 export interface PlanDistributionEntry {
   planName: string;
   count: number;
@@ -618,10 +626,34 @@ export interface DashboardSummary {
   activeNow: number;
   activeOnVpn: number;
   activeOnSite: number;
+  expiringIn3Days: number;
+  lowBalanceHourly: number;
+  topTrafficUsers: TopTrafficUser[];
   newUsersLast7Days: number;
   newUsersLast30Days: number;
   planDistribution: PlanDistributionEntry[];
   revenueByDay: RevenueByDayEntry[];
+}
+
+export type AdminBalanceTransactionType = typeof AdminBalanceTransactionType[keyof typeof AdminBalanceTransactionType];
+
+
+export const AdminBalanceTransactionType = {
+  topup: 'topup',
+  debit: 'debit',
+  refund: 'refund',
+  referral: 'referral',
+} as const;
+
+export interface AdminBalanceTransaction {
+  id: number;
+  amountKopecks: number;
+  type: AdminBalanceTransactionType;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  paymentId?: number | null;
+  createdAt: string;
 }
 
 export interface BalanceTopupOrderBody {

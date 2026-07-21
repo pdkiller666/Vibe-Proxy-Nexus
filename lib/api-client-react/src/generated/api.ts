@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminBalanceTransaction,
   AdminPasswordResetResult,
   AdminPayment,
   AdminSetUserBalanceRequest,
@@ -4383,6 +4384,83 @@ export const useAdminSetUserPassword = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getAdminSetUserPasswordMutationOptions(options));
     }
+
+export const getListAdminUserBalanceTransactionsUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/balance-transactions`
+}
+
+/**
+ * @summary Balance transaction history for a specific user
+ */
+export const listAdminUserBalanceTransactions = async (userId: number, options?: RequestInit): Promise<AdminBalanceTransaction[]> => {
+
+  return customFetch<AdminBalanceTransaction[]>(getListAdminUserBalanceTransactionsUrl(userId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminUserBalanceTransactionsQueryKey = (userId: number,) => {
+    return [
+    `/api/admin/users/${userId}/balance-transactions`
+    ] as const;
+    }
+
+
+export const getListAdminUserBalanceTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminUserBalanceTransactions>>, TError = ErrorType<unknown>>(userId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminUserBalanceTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminUserBalanceTransactionsQueryKey(userId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminUserBalanceTransactions>>> = ({ signal }) => listAdminUserBalanceTransactions(userId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: userId !== null && userId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminUserBalanceTransactions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminUserBalanceTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminUserBalanceTransactions>>>
+export type ListAdminUserBalanceTransactionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Balance transaction history for a specific user
+ */
+
+export function useListAdminUserBalanceTransactions<TData = Awaited<ReturnType<typeof listAdminUserBalanceTransactions>>, TError = ErrorType<unknown>>(
+ userId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminUserBalanceTransactions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminUserBalanceTransactionsQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAdminTicketsUrl = (params?: ListAdminTicketsParams,) => {
   const normalizedParams = new URLSearchParams();

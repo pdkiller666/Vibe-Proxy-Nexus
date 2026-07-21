@@ -7,6 +7,7 @@
  */
 import type { PlanDistributionEntry } from './planDistributionEntry';
 import type { RevenueByDayEntry } from './revenueByDayEntry';
+import type { TopTrafficUser } from './topTrafficUser';
 
 export interface DashboardSummary {
   totalUsers: number;
@@ -19,6 +20,9 @@ export interface DashboardSummary {
   activeNow: number;
   activeOnVpn: number;
   activeOnSite: number;
+  expiringIn3Days: number;
+  lowBalanceHourly: number;
+  topTrafficUsers: TopTrafficUser[];
   newUsersLast7Days: number;
   newUsersLast30Days: number;
   planDistribution: PlanDistributionEntry[];

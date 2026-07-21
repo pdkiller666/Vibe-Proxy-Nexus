@@ -38,15 +38,16 @@ import {
   useUpdateTicketStatus,
   getListAdminTicketsQueryKey,
   getGetAdminTicketQueryKey,
+  useListAdminUserBalanceTransactions,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -126,6 +127,50 @@ function SummarySection() {
         <Metric label="Новых за 7 дней" value={data.newUsersLast7Days} />
         <Metric label="Новых за 30 дней" value={data.newUsersLast30Days} />
       </div>
+      {(data.expiringIn3Days > 0 || data.lowBalanceHourly > 0) && (
+        <div className="grid md:grid-cols-2 gap-4">
+          {data.expiringIn3Days > 0 && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-300 p-4">
+              <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+              <div>
+                <div className="text-xs font-mono uppercase font-bold text-red-700">Истекают через 3 дня</div>
+                <div className="text-2xl font-bold text-red-700">{data.expiringIn3Days}</div>
+                <div className="text-xs text-red-600 mt-0.5">месячных подписок</div>
+              </div>
+            </div>
+          )}
+          {data.lowBalanceHourly > 0 && (
+            <div className="flex items-start gap-3 bg-orange-50 border border-orange-300 p-4">
+              <Wallet className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
+              <div>
+                <div className="text-xs font-mono uppercase font-bold text-orange-700">Низкий баланс</div>
+                <div className="text-2xl font-bold text-orange-700">{data.lowBalanceHourly}</div>
+                <div className="text-xs text-orange-600 mt-0.5">почасовых пользователей (&lt; 3 ч)</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {data.topTrafficUsers.length > 0 && (
+        <div className="bg-card border border-border p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
+            <div className="text-xs font-mono uppercase text-muted-foreground">Топ трафика (период)</div>
+          </div>
+          <div className="space-y-2">
+            {data.topTrafficUsers.map((u, i) => (
+              <div key={u.userId} className="flex items-center justify-between gap-3 text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-mono text-muted-foreground w-4 shrink-0">{i + 1}.</span>
+                  <span className="truncate font-medium">{u.name ?? u.email}</span>
+                  {u.name && <span className="text-xs text-muted-foreground truncate hidden sm:block">{u.email}</span>}
+                </div>
+                <span className="font-mono text-xs shrink-0 text-muted-foreground">{formatBytes(u.periodBytes)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-card border border-border p-5">
           <div className="text-xs font-mono uppercase mb-3 text-muted-foreground">Доход по дням (14 дней)</div>
@@ -214,8 +259,17 @@ function PaginationBar({ page, total, onPage }: { page: number; total: number; o
   );
 }
 
+function formatWaitTime(createdAt: string): string {
+  const ms = Date.now() - new Date(createdAt).getTime();
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  if (hours < 1) return "< 1 ч.";
+  if (hours < 24) return `${hours} ч.`;
+  return `${Math.floor(hours / 24)} дн.`;
+}
+
 function PaymentsQueue() {
   const [statusFilter, setStatusFilter] = useState<"pending" | "confirmed" | "rejected" | "all">("pending");
+  const [providerFilter, setProviderFilter] = useState<"all" | "yoomoney" | "manual_sbp">("all");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc");
   const [search, setSearch] = useState("");
   const { data: payments, isLoading } = useListAdminPayments(
@@ -274,6 +328,7 @@ function PaymentsQueue() {
 
   const filteredPayments = (payments ?? [])
     .filter((p) => {
+      if (providerFilter !== "all" && p.provider !== providerFilter) return false;
       if (!search.trim()) return true;
       const q = search.trim().toLowerCase();
       return p.userEmail.toLowerCase().includes(q) || p.reference.toLowerCase().includes(q);
@@ -316,6 +371,15 @@ function PaymentsQueue() {
           <option value="all">Все</option>
         </select>
         <select
+          value={providerFilter}
+          onChange={(e) => setProviderFilter(e.target.value as typeof providerFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все методы</option>
+          <option value="yoomoney">ЮMoney</option>
+          <option value="manual_sbp">СБП</option>
+        </select>
+        <select
           value={sort}
           onChange={(e) => setSort(e.target.value as typeof sort)}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
@@ -343,8 +407,16 @@ function PaymentsQueue() {
                       ? `Доп. трафик${payment.extraTrafficGb ? ` (+${payment.extraTrafficGb} ГБ)` : ""}`
                       : (payment.planName ?? "—")}
               </div>
-              <div className="text-sm text-muted-foreground font-mono">
-                {payment.amountRub} ₽ · {payment.reference} · {formatDate(payment.createdAt)}
+              <div className="text-sm text-muted-foreground font-mono flex items-center gap-2 flex-wrap">
+                <span>{payment.amountRub} ₽ · {payment.reference} · {formatDate(payment.createdAt)}</span>
+                <span className="text-[11px] px-1.5 py-0.5 bg-muted font-mono rounded">
+                  {payment.provider === "yoomoney" ? "ЮMoney" : "СБП"}
+                </span>
+                {payment.status === "pending" && (
+                  <span className="flex items-center gap-1 text-[11px] text-orange-600 font-mono">
+                    <Clock className="w-3 h-3" /> {formatWaitTime(payment.createdAt)}
+                  </span>
+                )}
               </div>
               {payment.userNote && (
                 <div className="text-sm mt-1 italic text-muted-foreground">«{payment.userNote}»</div>
@@ -1141,6 +1213,28 @@ function UserProfileEditor({ user }: { user: AdminUser }) {
   );
 }
 
+function BalanceTransactionRow({ tx }: { tx: AdminBalanceTransaction }) {
+  const isCredit = tx.amountKopecks > 0;
+  const typeLabel: Record<string, string> = {
+    topup: "Пополнение",
+    debit: "Списание",
+    refund: "Возврат",
+    referral: "Реферал",
+  };
+  return (
+    <div className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
+      <div className="min-w-0">
+        <div className="font-medium">{typeLabel[tx.type] ?? tx.type}</div>
+        {tx.description && <div className="text-muted-foreground truncate">{tx.description}</div>}
+        <div className="text-muted-foreground font-mono">{formatDate(tx.createdAt)}</div>
+      </div>
+      <div className={`font-mono font-bold shrink-0 ${isCredit ? "text-green-600" : "text-muted-foreground"}`}>
+        {isCredit ? "+" : ""}{(tx.amountKopecks / 100).toFixed(2)} ₽
+      </div>
+    </div>
+  );
+}
+
 function UserKeysAndPayments({ userId }: { userId: number }) {
   const { data: keys } = useQuery<AdminVpnKey[]>({
     queryKey: ["admin", "vpn-keys"],
@@ -1151,6 +1245,7 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
     },
   });
   const { data: payments } = useListAdminPayments();
+  const { data: balanceTxs } = useListAdminUserBalanceTransactions(userId);
   const { toast } = useToast();
 
   const revokeMutation = useMutation({
@@ -1209,6 +1304,19 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
                   <div className="text-foreground/70">= {formatBytes(key.trafficUpBytes + key.trafficDownBytes)}</div>
                 </div>
               </div>
+              {key.revokedAt && (
+                <div className="mt-1 text-[10px] text-muted-foreground font-mono">
+                  Отозван: {formatDate(key.revokedAt)}
+                  {key.revokedReason && (
+                    <span className="ml-1 px-1 bg-muted rounded">
+                      {key.revokedReason === "admin" ? "вручную" :
+                       key.revokedReason === "traffic_limit" ? "лимит трафика" :
+                       key.revokedReason === "subscription_expired" ? "подписка истекла" :
+                       key.revokedReason}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}
@@ -1250,6 +1358,16 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
               </div>
             </div>
           ))
+        )}
+      </div>
+      <div className="space-y-2">
+        <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide flex items-center gap-1.5">
+          <Wallet className="w-3 h-3" /> История баланса ({balanceTxs?.length ?? 0})
+        </div>
+        {!balanceTxs || balanceTxs.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Транзакций нет.</p>
+        ) : (
+          balanceTxs.map((tx) => <BalanceTransactionRow key={tx.id} tx={tx} />)
         )}
       </div>
     </div>
@@ -2001,6 +2119,7 @@ interface AdminVpnKey {
   vlessLink: string;
   createdAt: string;
   revokedAt: string | null;
+  revokedReason: string | null;
   nodeName: string;
   userEmail: string;
   trafficUpBytes: number;

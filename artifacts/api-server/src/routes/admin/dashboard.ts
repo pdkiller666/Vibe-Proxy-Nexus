@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, count, eq, gte, inArray, isNull, or, sql, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
 import { db, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
@@ -33,6 +33,9 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     [totalVpnKeys],
     [openTickets],
     activityRows,
+    [expiringIn3Days],
+    [lowBalanceHourly],
+    topTrafficRows,
     [newUsersLast7Days],
     [newUsersLast30Days],
     planDistributionRows,
@@ -81,6 +84,53 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
         GROUP BY u.id, u.last_active_at
       ) t
     `),
+    // Active monthly subscriptions expiring within 3 days.
+    db
+      .select({ value: count() })
+      .from(subscriptionsTable)
+      .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
+      .where(
+        and(
+          eq(subscriptionsTable.status, "active"),
+          eq(plansTable.billingType, "monthly"),
+          isNotNull(subscriptionsTable.endsAt),
+          gte(subscriptionsTable.endsAt, new Date()),
+          lte(subscriptionsTable.endsAt, new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)),
+        ),
+      ),
+    // Active hourly-plan users with balance < 3 hours remaining at their plan rate.
+    db
+      .select({ value: sql<number>`count(distinct ${usersTable.id})::int` })
+      .from(usersTable)
+      .innerJoin(
+        subscriptionsTable,
+        and(eq(subscriptionsTable.userId, usersTable.id), eq(subscriptionsTable.status, "active")),
+      )
+      .innerJoin(
+        plansTable,
+        and(eq(plansTable.id, subscriptionsTable.planId), eq(plansTable.billingType, "hourly")),
+      )
+      .where(
+        and(
+          isNotNull(plansTable.hourlyRateKopecks),
+          sql`${plansTable.hourlyRateKopecks} > 0`,
+          sql`${usersTable.balanceKopecks} < ${plansTable.hourlyRateKopecks} * 3`,
+        ),
+      ),
+    // Top 5 users by current-period traffic across non-revoked keys.
+    db
+      .select({
+        userId: usersTable.id,
+        email: usersTable.email,
+        name: usersTable.name,
+        periodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`,
+      })
+      .from(vpnKeysTable)
+      .innerJoin(usersTable, eq(vpnKeysTable.userId, usersTable.id))
+      .where(isNull(vpnKeysTable.revokedAt))
+      .groupBy(usersTable.id, usersTable.email, usersTable.name)
+      .orderBy(sql`sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}) desc`)
+      .limit(5),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf7Days)),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf30Days)),
     db
@@ -128,6 +178,14 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       activeOnVpn: Number(activityRows.rows[0]?.active_on_vpn ?? 0),
       activeOnSite: Number(activityRows.rows[0]?.active_on_site ?? 0),
       activeNow: Number(activityRows.rows[0]?.active_on_vpn ?? 0) + Number(activityRows.rows[0]?.active_on_site ?? 0),
+      expiringIn3Days: expiringIn3Days?.value ?? 0,
+      lowBalanceHourly: Number(lowBalanceHourly?.value ?? 0),
+      topTrafficUsers: topTrafficRows.map((r) => ({
+        userId: r.userId,
+        email: r.email,
+        name: r.name,
+        periodBytes: Number(r.periodBytes),
+      })),
       newUsersLast7Days: newUsersLast7Days?.value ?? 0,
       newUsersLast30Days: newUsersLast30Days?.value ?? 0,
       planDistribution: planDistributionRows,

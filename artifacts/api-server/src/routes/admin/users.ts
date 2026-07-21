@@ -585,6 +585,21 @@ router.patch("/admin/users/:userId/balance", requireAuth, requireAdmin, async (r
   res.json(AdminSetUserBalanceResponse.parse(enriched));
 });
 
+router.get("/admin/users/:userId/balance-transactions", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const userId = Number(req.params["userId"]);
+  if (!userId || isNaN(userId)) {
+    res.status(400).json({ error: "Invalid userId" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(balanceTransactionsTable)
+    .where(eq(balanceTransactionsTable.userId, userId))
+    .orderBy(desc(balanceTransactionsTable.createdAt))
+    .limit(100);
+  res.json(rows);
+});
+
 router.patch("/admin/users/:userId/set-password", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const params = AdminSetUserPasswordParams.safeParse(req.params);
   if (!params.success) {

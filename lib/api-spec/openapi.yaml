@@ -1114,6 +1114,27 @@ paths:
         "204":
           description: Password updated
 
+  /admin/users/{userId}/balance-transactions:
+    get:
+      operationId: listAdminUserBalanceTransactions
+      tags: [admin]
+      summary: Balance transaction history for a specific user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of balance transactions, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminBalanceTransaction"
+
   /admin/support-tickets:
     get:
       operationId: listAdminTickets
@@ -1880,7 +1901,7 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets, activeNow, activeOnVpn, activeOnSite, newUsersLast7Days, newUsersLast30Days, planDistribution, revenueByDay]
+      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets, activeNow, activeOnVpn, activeOnSite, expiringIn3Days, lowBalanceHourly, topTrafficUsers, newUsersLast7Days, newUsersLast30Days, planDistribution, revenueByDay]
       properties:
         totalUsers: { type: integer }
         activeSubscriptions: { type: integer }
@@ -1895,6 +1916,15 @@ components:
         activeOnVpn: { type: integer }
         # Users whose most recent signal is the site (lastActiveAt within 5 min, no fresher VPN signal).
         activeOnSite: { type: integer }
+        # Active monthly subscriptions ending within 3 days.
+        expiringIn3Days: { type: integer }
+        # Active hourly-plan users whose balance covers < 3 hours at their plan rate.
+        lowBalanceHourly: { type: integer }
+        # Top 5 users by current-period traffic (non-revoked keys), descending.
+        topTrafficUsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopTrafficUser"
         newUsersLast7Days: { type: integer }
         newUsersLast30Days: { type: integer }
         # Count of currently-active subscriptions grouped by plan name.
@@ -1908,6 +1938,28 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RevenueByDayEntry"
+
+    TopTrafficUser:
+      type: object
+      required: [userId, email, periodBytes]
+      properties:
+        userId: { type: integer }
+        email: { type: string }
+        name: { type: ["string", "null"] }
+        periodBytes: { type: integer }
+
+    AdminBalanceTransaction:
+      type: object
+      required: [id, amountKopecks, type, createdAt]
+      properties:
+        id: { type: integer }
+        amountKopecks: { type: integer }
+        type:
+          type: string
+          enum: [topup, debit, refund, referral]
+        description: { type: ["string", "null"] }
+        paymentId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
 
     PlanDistributionEntry:
       type: object
