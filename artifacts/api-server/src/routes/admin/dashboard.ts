@@ -1,9 +1,12 @@
 import { Router, type IRouter } from "express";
-import { and, count, eq, gte, inArray, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, or, sql, sum } from "drizzle-orm";
 import { db, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
+
+// Mirror the same threshold used in admin/users.ts for the per-user status badge.
+const VPN_ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
 
 const router: IRouter = Router();
 
@@ -18,6 +21,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
   const startOf30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const startOf7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const onlineThreshold = new Date(Date.now() - ONLINE_THRESHOLD_MS);
+  const vpnOnlineThreshold = new Date(Date.now() - VPN_ONLINE_THRESHOLD_MS);
   const startOf14Days = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
   const [
@@ -50,7 +54,22 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       .select({ value: count() })
       .from(supportTicketsTable)
       .where(inArray(supportTicketsTable.status, ["open", "answered"])),
-    db.select({ value: count() }).from(usersTable).where(gte(usersTable.lastActiveAt, onlineThreshold)),
+    // Count users who are either on the site (lastActiveAt) OR using VPN
+    // (lastTrafficAt on any non-revoked key). LEFT JOIN + COUNT DISTINCT avoids
+    // double-counting users who have multiple active keys.
+    db
+      .select({ value: sql<number>`count(distinct ${usersTable.id})::int` })
+      .from(usersTable)
+      .leftJoin(
+        vpnKeysTable,
+        and(eq(vpnKeysTable.userId, usersTable.id), isNull(vpnKeysTable.revokedAt)),
+      )
+      .where(
+        or(
+          gte(usersTable.lastActiveAt, onlineThreshold),
+          gte(vpnKeysTable.lastTrafficAt, vpnOnlineThreshold),
+        ),
+      ),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf7Days)),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf30Days)),
     db
