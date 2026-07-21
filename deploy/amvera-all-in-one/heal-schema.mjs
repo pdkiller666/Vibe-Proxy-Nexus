@@ -238,7 +238,7 @@ try {
 
   // Drop the three legacy 3X-UI panel credential columns. They have been NULL
   // on every row in production since the 3X-UI architecture was abandoned.
-  // Wrapped in DO $$ … $ so the absence of the column is a no-op, not an error.
+  // Wrapped in DO $ … $ so the absence of the column is a no-op, not an error.
   await client.query(`
     DO $$
     BEGIN
