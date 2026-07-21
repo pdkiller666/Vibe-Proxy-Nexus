@@ -1880,7 +1880,7 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets, activeNow, newUsersLast7Days, newUsersLast30Days, planDistribution, revenueByDay]
+      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets, activeNow, activeOnVpn, activeOnSite, newUsersLast7Days, newUsersLast30Days, planDistribution, revenueByDay]
       properties:
         totalUsers: { type: integer }
         activeSubscriptions: { type: integer }
@@ -1889,8 +1889,12 @@ components:
         last30DaysRevenueRub: { type: integer }
         totalVpnKeys: { type: integer }
         openTickets: { type: integer }
-        # Users with lastActiveAt within the last 5 minutes.
+        # Total online = activeOnVpn + activeOnSite (mutually exclusive, mirrors badge logic).
         activeNow: { type: integer }
+        # Users whose most recent signal is VPN traffic (lastTrafficAt within 10 min, and more recent than site activity).
+        activeOnVpn: { type: integer }
+        # Users whose most recent signal is the site (lastActiveAt within 5 min, no fresher VPN signal).
+        activeOnSite: { type: integer }
         newUsersLast7Days: { type: integer }
         newUsersLast30Days: { type: integer }
         # Count of currently-active subscriptions grouped by plan name.

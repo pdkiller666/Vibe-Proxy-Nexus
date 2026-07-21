@@ -32,7 +32,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     [last30DaysRevenue],
     [totalVpnKeys],
     [openTickets],
-    [activeNow],
+    activityRows,
     [newUsersLast7Days],
     [newUsersLast30Days],
     planDistributionRows,
@@ -54,22 +54,33 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       .select({ value: count() })
       .from(supportTicketsTable)
       .where(inArray(supportTicketsTable.status, ["open", "answered"])),
-    // Count users who are either on the site (lastActiveAt) OR using VPN
-    // (lastTrafficAt on any non-revoked key). LEFT JOIN + COUNT DISTINCT avoids
-    // double-counting users who have multiple active keys.
-    db
-      .select({ value: sql<number>`count(distinct ${usersTable.id})::int` })
-      .from(usersTable)
-      .leftJoin(
-        vpnKeysTable,
-        and(eq(vpnKeysTable.userId, usersTable.id), isNull(vpnKeysTable.revokedAt)),
-      )
-      .where(
-        or(
-          gte(usersTable.lastActiveAt, onlineThreshold),
-          gte(vpnKeysTable.lastTrafficAt, vpnOnlineThreshold),
-        ),
-      ),
+    // Single query that mirrors the three-state badge logic in admin/users.ts:
+    // - "vpn"  → max(lastTrafficAt) within 10 min AND more recent than lastActiveAt
+    // - "site" → lastActiveAt within 5 min AND no fresher VPN signal
+    // The two groups are mutually exclusive so they sum to activeNow.
+    db.execute<{ active_on_vpn: string; active_on_site: string }>(sql`
+      SELECT
+        COUNT(DISTINCT CASE WHEN activity = 'vpn'  THEN user_id END)::int AS active_on_vpn,
+        COUNT(DISTINCT CASE WHEN activity = 'site' THEN user_id END)::int AS active_on_site
+      FROM (
+        SELECT
+          u.id AS user_id,
+          CASE
+            WHEN MAX(k.last_traffic_at) >= ${vpnOnlineThreshold}
+                 AND (u.last_active_at IS NULL OR MAX(k.last_traffic_at) >= u.last_active_at)
+              THEN 'vpn'
+            WHEN u.last_active_at >= ${onlineThreshold}
+                 AND (MAX(k.last_traffic_at) IS NULL OR MAX(k.last_traffic_at) < ${vpnOnlineThreshold}
+                      OR u.last_active_at > MAX(k.last_traffic_at))
+              THEN 'site'
+            ELSE NULL
+          END AS activity
+        FROM ${usersTable} u
+        LEFT JOIN ${vpnKeysTable} k
+          ON k.user_id = u.id AND k.revoked_at IS NULL
+        GROUP BY u.id, u.last_active_at
+      ) t
+    `),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf7Days)),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf30Days)),
     db
@@ -114,7 +125,9 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       last30DaysRevenueRub: Number(last30DaysRevenue?.value ?? 0),
       totalVpnKeys: totalVpnKeys?.value ?? 0,
       openTickets: openTickets?.value ?? 0,
-      activeNow: activeNow?.value ?? 0,
+      activeOnVpn: Number(activityRows.rows[0]?.active_on_vpn ?? 0),
+      activeOnSite: Number(activityRows.rows[0]?.active_on_site ?? 0),
+      activeNow: Number(activityRows.rows[0]?.active_on_vpn ?? 0) + Number(activityRows.rows[0]?.active_on_site ?? 0),
       newUsersLast7Days: newUsersLast7Days?.value ?? 0,
       newUsersLast30Days: newUsersLast30Days?.value ?? 0,
       planDistribution: planDistributionRows,

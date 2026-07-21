@@ -616,6 +616,8 @@ export interface DashboardSummary {
   totalVpnKeys: number;
   openTickets: number;
   activeNow: number;
+  activeOnVpn: number;
+  activeOnSite: number;
   newUsersLast7Days: number;
   newUsersLast30Days: number;
   planDistribution: PlanDistributionEntry[];

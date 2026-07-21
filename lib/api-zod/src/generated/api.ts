@@ -800,6 +800,8 @@ export const GetAdminDashboardSummaryResponse = zod.object({
   "totalVpnKeys": zod.number(),
   "openTickets": zod.number(),
   "activeNow": zod.number(),
+  "activeOnVpn": zod.number(),
+  "activeOnSite": zod.number(),
   "newUsersLast7Days": zod.number(),
   "newUsersLast30Days": zod.number(),
   "planDistribution": zod.array(zod.object({

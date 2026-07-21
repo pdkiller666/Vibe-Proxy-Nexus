@@ -98,7 +98,24 @@ function SummarySection() {
     <div className="space-y-4">
       <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Metric label="Пользователи" value={data.totalUsers} />
-        <Metric label="Онлайн сейчас" value={data.activeNow} highlight={data.activeNow > 0} />
+        <div className={`bg-card border p-5 ${data.activeNow > 0 ? "border-orange-400 bg-orange-50/50" : "border-border"}`}>
+          <div className={`text-xs font-mono uppercase mb-1 ${data.activeNow > 0 ? "text-orange-600 font-bold" : "text-muted-foreground"}`}>Онлайн сейчас</div>
+          <div className={`text-2xl font-bold ${data.activeNow > 0 ? "text-orange-700" : ""}`}>{data.activeNow}</div>
+          {data.activeNow > 0 && (
+            <div className="flex gap-2 mt-1.5 flex-wrap">
+              {data.activeOnVpn > 0 && (
+                <span className="text-[11px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                  VPN: {data.activeOnVpn}
+                </span>
+              )}
+              {data.activeOnSite > 0 && (
+                <span className="text-[11px] font-mono bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
+                  Сайт: {data.activeOnSite}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         <Metric label="Активные подписки" value={data.activeSubscriptions} />
         <Metric label="Ожидают оплаты" value={data.pendingPayments} highlight={data.pendingPayments > 0} />
         <Metric label="Доход (30 дней)" value={`${data.last30DaysRevenueRub} ₽`} />
