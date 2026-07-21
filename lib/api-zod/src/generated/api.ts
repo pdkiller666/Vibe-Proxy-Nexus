@@ -1199,7 +1199,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "planId": zod.number().nullish(),
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "adminNote": zod.string().nullish()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
@@ -1295,7 +1296,8 @@ export const UpdateUserProfileResponse = zod.object({
   "planId": zod.number().nullish(),
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "adminNote": zod.string().nullish()
 })
 
 
@@ -1351,7 +1353,8 @@ export const UpdateUserRoleResponse = zod.object({
   "planId": zod.number().nullish(),
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "adminNote": zod.string().nullish()
 })
 
 
@@ -1401,7 +1404,8 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "planId": zod.number().nullish(),
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "adminNote": zod.string().nullish()
 })
 
 
@@ -1451,7 +1455,8 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "planId": zod.number().nullish(),
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "adminNote": zod.string().nullish()
 })
 
 
@@ -1501,7 +1506,8 @@ export const AdminSetUserBalanceResponse = zod.object({
   "planId": zod.number().nullish(),
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
-  "subscriptionEndsAt": zod.coerce.date().nullish()
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "adminNote": zod.string().nullish()
 })
 
 
@@ -1524,6 +1530,30 @@ export const AdminSetUserPasswordResponse = zod.void()
 
 
 /**
+ * @summary Invalidate all active sessions for a user (force sign-out on all devices)
+ */
+export const AdminForceLogoutParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const AdminForceLogoutResponse = zod.void()
+
+
+/**
+ * @summary Update the private admin note for a user
+ */
+export const AdminSetUserNoteParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const AdminSetUserNoteBody = zod.object({
+  "note": zod.string().nullable()
+})
+
+export const AdminSetUserNoteResponse = zod.void()
+
+
+/**
  * @summary Balance transaction history for a specific user
  */
 export const ListAdminUserBalanceTransactionsParams = zod.object({
@@ -1539,6 +1569,20 @@ export const ListAdminUserBalanceTransactionsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListAdminUserBalanceTransactionsResponse = zod.array(ListAdminUserBalanceTransactionsResponseItem)
+
+
+/**
+ * @summary Ping a VPN node's management API and return its health status
+ */
+export const GetVpnNodeHealthParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const GetVpnNodeHealthResponse = zod.object({
+  "ok": zod.boolean(),
+  "latencyMs": zod.number().nullish(),
+  "error": zod.string().nullish()
+})
 
 
 /**

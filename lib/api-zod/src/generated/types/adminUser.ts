@@ -54,4 +54,6 @@ export interface AdminUser {
   subscriptionStatus?: SubscriptionStatus | null;
   /** @nullable */
   subscriptionEndsAt?: Date | null;
+  /** @nullable */
+  adminNote?: string | null;
 }

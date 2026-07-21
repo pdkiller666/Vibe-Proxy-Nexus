@@ -479,6 +479,13 @@ try {
   `);
   console.log("heal-schema: M-12 payment method toggles (sbp_enabled + yookassa_enabled backfill)");
 
+  // ── M-13: admin_note column on users ──────────────────────────────────────
+  // Private memo field visible only in the admin panel; never exposed to users.
+  await client.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_note text;
+  `);
+  console.log("heal-schema: M-13 admin_note column added to users");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

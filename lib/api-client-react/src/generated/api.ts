@@ -27,6 +27,7 @@ import type {
   AdminSetUserPasswordRequest,
   AdminSubscriptionUpdate,
   AdminUser,
+  AdminUserNoteUpdate,
   AdminUserProfileUpdate,
   BalanceTopupOrderBody,
   BalanceTopupOrderResult,
@@ -79,6 +80,7 @@ import type {
   VpnKeyInput,
   VpnKeyRenameInput,
   VpnNode,
+  VpnNodeHealthResult,
   VpnNodeInput,
   VpnNodeUpdate
 } from './api.schemas';
@@ -4385,6 +4387,147 @@ export const useAdminSetUserPassword = <TError = ErrorType<unknown>,
       return useMutation(getAdminSetUserPasswordMutationOptions(options));
     }
 
+export const getAdminForceLogoutUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/force-logout`
+}
+
+/**
+ * @summary Invalidate all active sessions for a user (force sign-out on all devices)
+ */
+export const adminForceLogout = async (userId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getAdminForceLogoutUrl(userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAdminForceLogoutMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminForceLogout>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminForceLogout>>, TError,{userId: number}, TContext> => {
+
+const mutationKey = ['adminForceLogout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminForceLogout>>, {userId: number}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  adminForceLogout(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminForceLogoutMutationResult = NonNullable<Awaited<ReturnType<typeof adminForceLogout>>>
+
+    export type AdminForceLogoutMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Invalidate all active sessions for a user (force sign-out on all devices)
+ */
+export const useAdminForceLogout = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminForceLogout>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminForceLogout>>,
+        TError,
+        {userId: number},
+        TContext
+      > => {
+      return useMutation(getAdminForceLogoutMutationOptions(options));
+    }
+
+export const getAdminSetUserNoteUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/note`
+}
+
+/**
+ * @summary Update the private admin note for a user
+ */
+export const adminSetUserNote = async (userId: number,
+    adminUserNoteUpdate: AdminUserNoteUpdate, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getAdminSetUserNoteUrl(userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminUserNoteUpdate)
+  }
+);}
+
+
+
+
+export const getAdminSetUserNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserNote>>, TError,{userId: number;data: BodyType<AdminUserNoteUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminSetUserNote>>, TError,{userId: number;data: BodyType<AdminUserNoteUpdate>}, TContext> => {
+
+const mutationKey = ['adminSetUserNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminSetUserNote>>, {userId: number;data: BodyType<AdminUserNoteUpdate>}> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  adminSetUserNote(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminSetUserNoteMutationResult = NonNullable<Awaited<ReturnType<typeof adminSetUserNote>>>
+    export type AdminSetUserNoteMutationBody = BodyType<AdminUserNoteUpdate>
+    export type AdminSetUserNoteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update the private admin note for a user
+ */
+export const useAdminSetUserNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminSetUserNote>>, TError,{userId: number;data: BodyType<AdminUserNoteUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminSetUserNote>>,
+        TError,
+        {userId: number;data: BodyType<AdminUserNoteUpdate>},
+        TContext
+      > => {
+      return useMutation(getAdminSetUserNoteMutationOptions(options));
+    }
+
 export const getListAdminUserBalanceTransactionsUrl = (userId: number,) => {
 
 
@@ -4450,6 +4593,83 @@ export function useListAdminUserBalanceTransactions<TData = Awaited<ReturnType<t
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAdminUserBalanceTransactionsQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVpnNodeHealthUrl = (nodeId: number,) => {
+
+
+
+
+  return `/api/admin/vpn-nodes/${nodeId}/health`
+}
+
+/**
+ * @summary Ping a VPN node's management API and return its health status
+ */
+export const getVpnNodeHealth = async (nodeId: number, options?: RequestInit): Promise<VpnNodeHealthResult> => {
+
+  return customFetch<VpnNodeHealthResult>(getGetVpnNodeHealthUrl(nodeId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVpnNodeHealthQueryKey = (nodeId: number,) => {
+    return [
+    `/api/admin/vpn-nodes/${nodeId}/health`
+    ] as const;
+    }
+
+
+export const getGetVpnNodeHealthQueryOptions = <TData = Awaited<ReturnType<typeof getVpnNodeHealth>>, TError = ErrorType<unknown>>(nodeId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeHealth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVpnNodeHealthQueryKey(nodeId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVpnNodeHealth>>> = ({ signal }) => getVpnNodeHealth(nodeId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: nodeId !== null && nodeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeHealth>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVpnNodeHealthQueryResult = NonNullable<Awaited<ReturnType<typeof getVpnNodeHealth>>>
+export type GetVpnNodeHealthQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Ping a VPN node's management API and return its health status
+ */
+
+export function useGetVpnNodeHealth<TData = Awaited<ReturnType<typeof getVpnNodeHealth>>, TError = ErrorType<unknown>>(
+ nodeId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeHealth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVpnNodeHealthQueryOptions(nodeId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

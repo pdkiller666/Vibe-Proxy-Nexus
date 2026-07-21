@@ -1114,6 +1114,42 @@ paths:
         "204":
           description: Password updated
 
+  /admin/users/{userId}/force-logout:
+    post:
+      operationId: adminForceLogout
+      tags: [admin]
+      summary: Invalidate all active sessions for a user (force sign-out on all devices)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Sessions cleared
+
+  /admin/users/{userId}/note:
+    patch:
+      operationId: adminSetUserNote
+      tags: [admin]
+      summary: Update the private admin note for a user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserNoteUpdate"
+      responses:
+        "204":
+          description: Note saved
+
   /admin/users/{userId}/balance-transactions:
     get:
       operationId: listAdminUserBalanceTransactions
@@ -1134,6 +1170,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdminBalanceTransaction"
+
+  /admin/vpn-nodes/{nodeId}/health:
+    get:
+      operationId: getVpnNodeHealth
+      tags: [admin]
+      summary: Ping a VPN node's management API and return its health status
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Health result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNodeHealthResult"
 
   /admin/support-tickets:
     get:
@@ -1869,6 +1924,8 @@ components:
             - $ref: "#/components/schemas/SubscriptionStatus"
             - type: "null"
         subscriptionEndsAt: { type: ["string", "null"], format: date-time }
+        # Private admin-only memo (never exposed in user-facing endpoints).
+        adminNote: { type: ["string", "null"] }
 
     AdminUserProfileUpdate:
       type: object
@@ -1938,6 +1995,20 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RevenueByDayEntry"
+
+    AdminUserNoteUpdate:
+      type: object
+      required: [note]
+      properties:
+        note: { type: ["string", "null"] }
+
+    VpnNodeHealthResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        latencyMs: { type: ["integer", "null"] }
+        error: { type: ["string", "null"] }
 
     TopTrafficUser:
       type: object

@@ -39,6 +39,10 @@ import {
   getListAdminTicketsQueryKey,
   getGetAdminTicketQueryKey,
   useListAdminUserBalanceTransactions,
+  useAdminForceLogout,
+  useAdminSetUserNote,
+  useGetVpnNodeHealth,
+  getGetVpnNodeHealthQueryKey,
 } from "@workspace/api-client-react";
 import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
@@ -389,6 +393,25 @@ function PaymentsQueue() {
           <option value="amount_desc">По сумме (убыв.)</option>
           <option value="amount_asc">По сумме (возр.)</option>
         </select>
+        <button
+          onClick={() => {
+            const header = "ID,Дата,Email,Тариф,Тип,Провайдер,Сумма (₽),Статус,Референс";
+            const rows = filteredPayments.map((p) =>
+              [p.id, p.createdAt, p.userEmail, p.planName ?? "", p.type, p.provider, p.amountRub, p.status, p.reference]
+                .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
+                .join(",")
+            );
+            const csv = [header, ...rows].join("\n");
+            const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = `payments-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="border border-border px-3 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
+        >
+          Экспорт CSV
+        </button>
       </div>
       {filteredPayments.length === 0 && (
         <p className="text-muted-foreground">Платежей не найдено.</p>
@@ -933,7 +956,8 @@ function NodesManagement() {
                 {node.maxUsers != null ? ` / ${node.maxUsers}` : ""}
               </div>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 shrink-0 items-center">
+              <NodeHealthButton nodeId={node.id} />
               <button onClick={() => setEditingId(node.id)} className="p-2 text-muted-foreground hover:text-primary">
                 <Pencil className="w-4 h-4" />
               </button>
@@ -1232,6 +1256,94 @@ function BalanceTransactionRow({ tx }: { tx: AdminBalanceTransaction }) {
         {isCredit ? "+" : ""}{(tx.amountKopecks / 100).toFixed(2)} ₽
       </div>
     </div>
+  );
+}
+
+function ForceLogoutButton({ userId }: { userId: number }) {
+  const { mutate, isPending } = useAdminForceLogout();
+  const { toast } = useToast();
+  return (
+    <button
+      onClick={() =>
+        mutate(
+          { userId },
+          {
+            onSuccess: () => toast({ title: "Все сессии пользователя завершены" }),
+            onError: () => toast({ title: "Ошибка принудительного выхода", variant: "destructive" }),
+          },
+        )
+      }
+      disabled={isPending}
+      className="border border-border px-4 py-2 text-sm font-medium hover:border-destructive hover:text-destructive transition-colors disabled:opacity-50"
+    >
+      Выйти со всех устройств
+    </button>
+  );
+}
+
+function AdminNoteEditor({ userId, initialNote }: { userId: number; initialNote: string | null }) {
+  const [note, setNote] = useState(initialNote ?? "");
+  const { mutate, isPending } = useAdminSetUserNote();
+  const { toast } = useToast();
+
+  function handleSave() {
+    mutate(
+      { userId, data: { note: note.trim() || null } },
+      {
+        onSuccess: () => toast({ title: "Заметка сохранена" }),
+        onError: () => toast({ title: "Ошибка сохранения заметки", variant: "destructive" }),
+      },
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Внутренняя заметка для администраторов (не видна пользователю)..."
+        className="rounded-none text-sm min-h-[80px] resize-y"
+      />
+      <button
+        onClick={handleSave}
+        disabled={isPending}
+        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+      >
+        Сохранить заметку
+      </button>
+    </div>
+  );
+}
+
+function NodeHealthButton({ nodeId }: { nodeId: number }) {
+  const [enabled, setEnabled] = useState(false);
+  const { data, isFetching, error } = useGetVpnNodeHealth(nodeId, {
+    query: { enabled, staleTime: 0, gcTime: 0, retry: false, queryKey: getGetVpnNodeHealthQueryKey(nodeId) },
+  });
+
+  if (!enabled) {
+    return (
+      <button
+        onClick={() => setEnabled(true)}
+        className="p-2 text-muted-foreground hover:text-primary transition-colors"
+        title="Проверить доступность"
+      >
+        <Shield className="w-4 h-4" />
+      </button>
+    );
+  }
+
+  if (isFetching) return <span className="text-xs font-mono text-muted-foreground px-2">Пинг...</span>;
+  if (error || !data) return <span className="text-xs font-mono text-destructive px-2">Ошибка</span>;
+
+  return (
+    <span
+      className={`text-xs font-mono px-2 cursor-pointer ${data.ok ? "text-green-600" : "text-destructive"}`}
+      onClick={() => setEnabled(false)}
+      title="Нажмите чтобы скрыть"
+    >
+      {data.ok ? `✓ ${data.latencyMs != null ? `${data.latencyMs}ms` : "OK"}` : `✗ ${data.error ?? "Недоступен"}`}
+    </span>
   );
 }
 
@@ -1573,6 +1685,7 @@ function UsersManagement() {
                 >
                   {user.role === "admin" ? "Понизить" : "Назначить админом"}
                 </button>
+                <ForceLogoutButton userId={user.id} />
                 <button
                   onClick={() => handleDelete(user.id)}
                   disabled={deleting}
@@ -1663,6 +1776,10 @@ function UsersManagement() {
                 <div className="space-y-1.5">
                   <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Пароль</div>
                   <UserSetPasswordEditor user={user} />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Заметка администратора</div>
+                  <AdminNoteEditor userId={user.id} initialNote={user.adminNote ?? null} />
                 </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Подписка</div>
@@ -2354,7 +2471,19 @@ function VpnKeysManagement() {
                 <div className="font-bold text-sm break-all">{key.userEmail}</div>
                 <div className="text-xs text-muted-foreground font-mono">
                   {key.label} · {key.nodeName} · {formatDate(key.createdAt)}
-                  {key.revokedAt && <span className="ml-2 text-destructive">Отозван {formatDate(key.revokedAt)}</span>}
+                  {key.revokedAt && (
+                    <>
+                      <span className="ml-2 text-destructive">Отозван {formatDate(key.revokedAt)}</span>
+                      {key.revokedReason && (
+                        <span className="ml-1 px-1 bg-muted text-muted-foreground rounded text-[10px]">
+                          {key.revokedReason === "admin" ? "вручную" :
+                           key.revokedReason === "traffic_limit" ? "лимит трафика" :
+                           key.revokedReason === "subscription_expired" ? "подписка истекла" :
+                           key.revokedReason}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">
                   За период: {formatBytes(key.periodUpBytes + key.periodDownBytes)} · Всего:{" "}

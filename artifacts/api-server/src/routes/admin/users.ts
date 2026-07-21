@@ -585,6 +585,21 @@ router.patch("/admin/users/:userId/balance", requireAuth, requireAdmin, async (r
   res.json(AdminSetUserBalanceResponse.parse(enriched));
 });
 
+router.post("/admin/users/:userId/force-logout", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const userId = Number(req.params["userId"]);
+  if (!userId || isNaN(userId)) { res.status(400).json({ error: "Invalid userId" }); return; }
+  await db.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
+  res.status(204).end();
+});
+
+router.patch("/admin/users/:userId/note", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const userId = Number(req.params["userId"]);
+  if (!userId || isNaN(userId)) { res.status(400).json({ error: "Invalid userId" }); return; }
+  const { note } = req.body as { note?: string | null };
+  await db.update(usersTable).set({ adminNote: note ?? null }).where(eq(usersTable.id, userId));
+  res.status(204).end();
+});
+
 router.get("/admin/users/:userId/balance-transactions", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const userId = Number(req.params["userId"]);
   if (!userId || isNaN(userId)) {

@@ -575,6 +575,8 @@ export interface AdminUser {
   subscriptionStatus?: SubscriptionStatus | null;
   /** @nullable */
   subscriptionEndsAt?: string | null;
+  /** @nullable */
+  adminNote?: string | null;
 }
 
 export interface AdminUserProfileUpdate {
@@ -633,6 +635,19 @@ export interface DashboardSummary {
   newUsersLast30Days: number;
   planDistribution: PlanDistributionEntry[];
   revenueByDay: RevenueByDayEntry[];
+}
+
+export interface AdminUserNoteUpdate {
+  /** @nullable */
+  note: string | null;
+}
+
+export interface VpnNodeHealthResult {
+  ok: boolean;
+  /** @nullable */
+  latencyMs?: number | null;
+  /** @nullable */
+  error?: string | null;
 }
 
 export type AdminBalanceTransactionType = typeof AdminBalanceTransactionType[keyof typeof AdminBalanceTransactionType];
