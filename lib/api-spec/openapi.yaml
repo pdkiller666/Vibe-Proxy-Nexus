@@ -891,6 +891,41 @@ paths:
         "204":
           description: Deleted
 
+  /admin/referrals:
+    get:
+      operationId: listAdminReferrals
+      tags: [admin]
+      summary: List referrers with their stats
+      responses:
+        "200":
+          description: Referral stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminReferralEntry"
+
+  /admin/notifications:
+    get:
+      operationId: getAdminNotifications
+      tags: [admin]
+      summary: Recent payment events for polling-based notifications
+      parameters:
+        - name: since
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Notification events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminNotification"
+
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -2192,6 +2227,30 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SupportMessage"
+
+    AdminReferralEntry:
+      type: object
+      required: [userId, email, referredCount, totalRevenueRub, commissionsRub]
+      properties:
+        userId: { type: integer }
+        email: { type: string }
+        name: { type: ["string", "null"] }
+        referredCount: { type: integer }
+        totalRevenueRub: { type: integer }
+        commissionsRub: { type: integer }
+
+    AdminNotification:
+      type: object
+      required: [id, status, provider, amountRub, type, createdAt, userEmail]
+      properties:
+        id: { type: integer }
+        status: { type: string }
+        provider: { type: string }
+        amountRub: { type: integer }
+        type: { type: string }
+        createdAt: { type: string, format: date-time }
+        userEmail: { type: string }
+        extraTrafficGb: { type: ["integer", "null"] }
 
     SupportMessageInput:
       type: object

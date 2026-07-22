@@ -787,6 +787,28 @@ export interface SupportTicketDetail {
   messages: SupportMessage[];
 }
 
+export interface AdminReferralEntry {
+  userId: number;
+  email: string;
+  /** @nullable */
+  name?: string | null;
+  referredCount: number;
+  totalRevenueRub: number;
+  commissionsRub: number;
+}
+
+export interface AdminNotification {
+  id: number;
+  status: string;
+  provider: string;
+  amountRub: number;
+  type: string;
+  createdAt: string;
+  userEmail: string;
+  /** @nullable */
+  extraTrafficGb?: number | null;
+}
+
 export interface SupportMessageInput {
   /**
      * @minLength 1
@@ -803,6 +825,10 @@ export interface TicketStatusUpdate {
 
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
+};
+
+export type GetAdminNotificationsParams = {
+since?: string;
 };
 
 export type ListAdminTicketsParams = {

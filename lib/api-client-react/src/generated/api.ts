@@ -21,8 +21,10 @@ import type {
 
 import type {
   AdminBalanceTransaction,
+  AdminNotification,
   AdminPasswordResetResult,
   AdminPayment,
+  AdminReferralEntry,
   AdminSetUserBalanceRequest,
   AdminSetUserPasswordRequest,
   AdminSubscriptionUpdate,
@@ -46,6 +48,7 @@ import type {
   ExtraTrafficOrderResult,
   ForgotPasswordInput,
   ForgotPasswordResult,
+  GetAdminNotificationsParams,
   HealthStatus,
   ListAdminPaymentsParams,
   ListAdminTicketsParams,
@@ -3596,6 +3599,167 @@ export const useDeleteVpnNode = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteVpnNodeMutationOptions(options));
     }
+
+export const getListAdminReferralsUrl = () => {
+
+
+
+
+  return `/api/admin/referrals`
+}
+
+/**
+ * @summary List referrers with their stats
+ */
+export const listAdminReferrals = async ( options?: RequestInit): Promise<AdminReferralEntry[]> => {
+
+  return customFetch<AdminReferralEntry[]>(getListAdminReferralsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminReferralsQueryKey = () => {
+    return [
+    `/api/admin/referrals`
+    ] as const;
+    }
+
+
+export const getListAdminReferralsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminReferrals>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminReferrals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminReferralsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminReferrals>>> = ({ signal }) => listAdminReferrals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminReferrals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminReferralsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminReferrals>>>
+export type ListAdminReferralsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List referrers with their stats
+ */
+
+export function useListAdminReferrals<TData = Awaited<ReturnType<typeof listAdminReferrals>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminReferrals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminReferralsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminNotificationsUrl = (params?: GetAdminNotificationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/notifications?${stringifiedParams}` : `/api/admin/notifications`
+}
+
+/**
+ * @summary Recent payment events for polling-based notifications
+ */
+export const getAdminNotifications = async (params?: GetAdminNotificationsParams, options?: RequestInit): Promise<AdminNotification[]> => {
+
+  return customFetch<AdminNotification[]>(getGetAdminNotificationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminNotificationsQueryKey = (params?: GetAdminNotificationsParams,) => {
+    return [
+    `/api/admin/notifications`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminNotifications>>, TError = ErrorType<unknown>>(params?: GetAdminNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminNotificationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminNotifications>>> = ({ signal }) => getAdminNotifications(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminNotifications>>>
+export type GetAdminNotificationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Recent payment events for polling-based notifications
+ */
+
+export function useGetAdminNotifications<TData = Awaited<ReturnType<typeof getAdminNotifications>>, TError = ErrorType<unknown>>(
+ params?: GetAdminNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminNotificationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAdminUsersUrl = () => {
 

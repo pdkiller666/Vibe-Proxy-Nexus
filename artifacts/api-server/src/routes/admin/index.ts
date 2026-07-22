@@ -9,6 +9,8 @@ import vpnKeysRouter from "./vpnKeys";
 import usersRouter from "./users";
 import passwordResetRouter from "./passwordReset";
 import supportRouter from "./support";
+import referralsRouter from "./referrals";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -26,5 +28,7 @@ router.use(vpnKeysRouter);
 router.use(usersRouter);
 router.use(passwordResetRouter);
 router.use(supportRouter);
+router.use(referralsRouter);
+router.use(notificationsRouter);
 
 export default router;

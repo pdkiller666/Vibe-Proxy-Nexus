@@ -1168,6 +1168,40 @@ export const DeleteVpnNodeResponse = zod.void()
 
 
 /**
+ * @summary List referrers with their stats
+ */
+export const ListAdminReferralsResponseItem = zod.object({
+  "userId": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "referredCount": zod.number(),
+  "totalRevenueRub": zod.number(),
+  "commissionsRub": zod.number()
+})
+export const ListAdminReferralsResponse = zod.array(ListAdminReferralsResponseItem)
+
+
+/**
+ * @summary Recent payment events for polling-based notifications
+ */
+export const GetAdminNotificationsQueryParams = zod.object({
+  "since": zod.date().optional()
+})
+
+export const GetAdminNotificationsResponseItem = zod.object({
+  "id": zod.number(),
+  "status": zod.string(),
+  "provider": zod.string(),
+  "amountRub": zod.number(),
+  "type": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "userEmail": zod.string(),
+  "extraTrafficGb": zod.number().nullish()
+})
+export const GetAdminNotificationsResponse = zod.array(GetAdminNotificationsResponseItem)
+
+
+/**
  * @summary List all users
  */
 export const ListAdminUsersResponseItem = zod.object({

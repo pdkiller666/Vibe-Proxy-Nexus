@@ -8,8 +8,10 @@
 
 export * from './adminBalanceTransaction';
 export * from './adminBalanceTransactionType';
+export * from './adminNotification';
 export * from './adminPasswordResetResult';
 export * from './adminPayment';
+export * from './adminReferralEntry';
 export * from './adminSetUserBalanceRequest';
 export * from './adminSetUserPasswordRequest';
 export * from './adminSubscriptionUpdate';
@@ -35,6 +37,7 @@ export * from './extraSlotOrderResult';
 export * from './extraTrafficOrderResult';
 export * from './forgotPasswordInput';
 export * from './forgotPasswordResult';
+export * from './getAdminNotificationsParams';
 export * from './healthStatus';
 export * from './listAdminPaymentsParams';
 export * from './listAdminTicketsParams';

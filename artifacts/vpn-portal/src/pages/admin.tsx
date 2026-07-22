@@ -43,15 +43,16 @@ import {
   useAdminSetUserNote,
   useGetVpnNodeHealth,
   getGetVpnNodeHealthQueryKey,
+  useListAdminReferrals,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -81,6 +82,78 @@ function Badge({ count }: { count: number }) {
       {count > 99 ? "99+" : count}
     </span>
   );
+}
+
+// ─── Payment notification poller ─────────────────────────────────────────────
+// Polls /admin/notifications every 30 s and shows in-app toasts for new events.
+// Uses a ref-based "seen" set so each event fires at most one toast per session.
+function useNotificationPoller(): AdminNotification[] {
+  const { toast } = useToast();
+  const seenIds = useRef<Set<number>>(new Set());
+  // Start from 2 min ago so any pending payment that arrived while the admin
+  // was on another tab is surfaced immediately on mount.
+  const sinceRef = useRef(new Date(Date.now() - 2 * 60 * 1000).toISOString());
+  const [recent, setRecent] = useState<AdminNotification[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(
+          `/api/admin/notifications?since=${encodeURIComponent(sinceRef.current)}`,
+          { credentials: "include" },
+        );
+        if (!res.ok || cancelled) return;
+        const data: AdminNotification[] = await res.json();
+        const now = new Date().toISOString();
+        const newItems = data.filter((n) => !seenIds.current.has(n.id));
+
+        for (const n of newItems) {
+          seenIds.current.add(n.id);
+          const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : "СБП";
+          const typeLabel =
+            n.type === "extra_device_slot" ? "Доп. устройство" :
+            n.type === "balance_topup"     ? "Пополнение баланса" :
+            n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` (+${n.extraTrafficGb} ГБ)` : ""}` :
+                                             "Подписка";
+
+          if (n.status === "pending") {
+            toast({
+              title: "Новый платёж",
+              description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽ · ${providerLabel}`,
+            });
+          } else if (n.status === "confirmed") {
+            toast({
+              title: "Платёж подтверждён",
+              description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽`,
+            });
+          } else if (n.status === "rejected") {
+            toast({
+              title: "Платёж отклонён",
+              description: `${n.userEmail} · ${n.amountRub} ₽`,
+              variant: "destructive",
+            });
+          }
+        }
+
+        if (newItems.length > 0) {
+          setRecent((prev) => [...newItems.reverse(), ...prev].slice(0, 30));
+        }
+        sinceRef.current = now;
+      } catch {
+        // Network error — silently skip this tick.
+      }
+    }
+
+    const timer = setInterval(poll, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [toast]);
+
+  return recent;
 }
 
 function SummarySection() {
@@ -1517,20 +1590,122 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
   );
 }
 
+// ─── Referrals tab ────────────────────────────────────────────────────────────
+function ReferralsManagement() {
+  const { data, isLoading } = useListAdminReferrals();
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+
+  const rows = data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-muted-foreground">
+        Пользователи, которые привлекли хотя бы одного участника по реф. ссылке.
+        Доход — сумма подтверждённых платежей приглашённых пользователей; комиссия — начисления на баланс реферера.
+      </div>
+      {rows.length === 0 ? (
+        <div className="bg-muted/50 border border-border p-10 text-center text-sm text-muted-foreground">
+          <Share2 className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
+          Реферальных записей нет
+        </div>
+      ) : (
+        <div className="border border-border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Реферер</th>
+                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Приглашено</th>
+                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Доход рефер.</th>
+                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Комиссия</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map((r) => (
+                <tr key={r.userId} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-2.5">
+                    <div className="font-medium">{r.name ?? r.email}</div>
+                    {r.name && <div className="text-xs text-muted-foreground font-mono">{r.email}</div>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono font-bold">{r.referredCount}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{r.totalRevenueRub} ₽</td>
+                  <td className="px-4 py-2.5 text-right font-mono">
+                    <span className={r.commissionsRub > 0 ? "text-green-600 font-bold" : "text-muted-foreground"}>
+                      {r.commissionsRub} ₽
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t border-border bg-muted/20">
+              <tr>
+                <td className="px-4 py-2 text-xs text-muted-foreground">Итого рефереров: {rows.length}</td>
+                <td className="px-4 py-2 text-right font-mono font-bold text-xs">
+                  {rows.reduce((s, r) => s + r.referredCount, 0)}
+                </td>
+                <td className="px-4 py-2 text-right font-mono text-xs">
+                  {rows.reduce((s, r) => s + r.totalRevenueRub, 0)} ₽
+                </td>
+                <td className="px-4 py-2 text-right font-mono text-xs text-green-600 font-bold">
+                  {rows.reduce((s, r) => s + r.commissionsRub, 0)} ₽
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Users management ─────────────────────────────────────────────────────────
 function UsersManagement() {
   const { data: users, isLoading } = useListAdminUsers();
   const { mutate: updateRole } = useUpdateUserRole();
   const { mutate: updateExtraSlots } = useUpdateUserExtraSlots();
   const { mutate: resetPassword, isPending: resettingPassword } = useAdminResetUserPassword();
   const { mutate: deleteUser, isPending: deleting } = useDeleteUser();
+  const { mutate: forceLogout } = useAdminForceLogout();
   const { toast } = useToast();
   const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [subscriptionFilter, setSubscriptionFilter] = useState<"all" | "active" | "none">("all");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic" | "online">("date_desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  function toggleSelected(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function bulkForceLogout() {
+    selectedIds.forEach((id) => forceLogout({ userId: id }));
+    toast({ title: `Выход выполнен для ${selectedIds.size} пользователей` });
+    setSelectedIds(new Set());
+  }
+
+  function bulkExportCsv() {
+    const selected = (users ?? []).filter((u) => selectedIds.has(u.id));
+    const header = "ID,Email,Имя,Роль,Баланс (₽),Тариф,Трафик (байт),Реф. код";
+    const rows = selected.map((u) =>
+      [u.id, u.email, u.name ?? "", u.role, (u.balanceKopecks / 100).toFixed(2), u.activePlanName ?? "", u.trafficUpBytes + u.trafficDownBytes, u.referralCode]
+        .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const csv = [header, ...rows].join("\n");
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" })),
+      download: `users-selected-${new Date().toISOString().slice(0, 10)}.csv`,
+    });
+    a.click(); URL.revokeObjectURL(a.href);
+  }
 
   function toggleRole(userId: number, currentRole: string) {
     const role = currentRole === "admin" ? "user" : "admin";
@@ -1604,6 +1779,11 @@ function UsersManagement() {
       (u) => !search || u.email.toLowerCase().includes(search.toLowerCase()) || (u.name ?? "").toLowerCase().includes(search.toLowerCase()),
     )
     .filter((u) => roleFilter === "all" || u.role === roleFilter)
+    .filter((u) => {
+      if (subscriptionFilter === "active") return u.subscriptionStatus === "active";
+      if (subscriptionFilter === "none") return u.subscriptionStatus !== "active" && !u.activePlanName;
+      return true;
+    })
     .sort((a, b) => {
       switch (sort) {
         case "date_asc":
@@ -1641,6 +1821,15 @@ function UsersManagement() {
           <option value="all">Все роли</option>
           <option value="admin">Администраторы</option>
           <option value="user">Пользователи</option>
+        </select>
+        <select
+          value={subscriptionFilter}
+          onChange={(e) => setSubscriptionFilter(e.target.value as typeof subscriptionFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все подписки</option>
+          <option value="active">С активной</option>
+          <option value="none">Без подписки</option>
         </select>
         <select
           value={sort}
@@ -1685,12 +1874,35 @@ function UsersManagement() {
           Экспорт CSV
         </button>
       </div>
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 flex-wrap bg-primary/5 border border-primary/30 p-3">
+          <span className="text-sm font-bold text-primary">{selectedIds.size} выбрано</span>
+          <button onClick={bulkForceLogout} className="border border-border px-3 py-1.5 text-sm hover:border-destructive hover:text-destructive transition-colors">
+            Выйти со всех устройств
+          </button>
+          <button onClick={bulkExportCsv} className="border border-border px-3 py-1.5 text-sm hover:border-primary hover:text-primary transition-colors">
+            Экспорт CSV
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-auto">
+            Снять выделение
+          </button>
+        </div>
+      )}
       {pagedUsers.map((user) => {
         const expanded = expandedId === user.id;
+        const isSelected = selectedIds.has(user.id);
         return (
-          <div key={user.id} className="bg-card border border-border p-4 space-y-3">
+          <div key={user.id} className={`bg-card border p-4 space-y-3 transition-colors ${isSelected ? "border-primary/50 bg-primary/5" : "border-border"}`}>
             <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="min-w-0 break-words">
+              <div className="min-w-0 break-words flex items-start gap-2">
+                <button
+                  onClick={() => toggleSelected(user.id)}
+                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                  title={isSelected ? "Снять выделение" : "Выбрать"}
+                >
+                  {isSelected ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                </button>
+                <div>
                 <div className="font-bold break-all flex items-center gap-2 flex-wrap">
                   <span
                     className={`inline-block w-2 h-2 rounded-full shrink-0 ${
@@ -1734,7 +1946,8 @@ function UsersManagement() {
                   {user.activityStatus === "offline" && user.lastActiveAt && ` · был(а) на сайте ${formatDate(user.lastActiveAt)}`}
                   {user.activityStatus === "offline" && !user.lastActiveAt && user.vpnLastActiveAt && ` · VPN: ${formatDate(user.vpnLastActiveAt)}`}
                 </div>
-              </div>
+                </div>{/* close inner text wrapper */}
+              </div>{/* close min-w-0 flex container */}
               <div className="flex gap-2 flex-wrap w-full sm:w-auto">
                 <button
                   onClick={() => setExpandedId(expanded ? null : user.id)}
@@ -2804,6 +3017,74 @@ function SupportManagement() {
   );
 }
 
+// ─── Notification Bell ────────────────────────────────────────────────────────
+function NotificationBell() {
+  const notifications = useNotificationPoller();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+        title="Уведомления о платежах"
+      >
+        <Bell className="w-5 h-5" />
+        {notifications.length > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
+            {notifications.length > 99 ? "99+" : notifications.length}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border shadow-lg z-50 max-h-96 overflow-y-auto">
+            <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+              <span className="text-xs font-bold uppercase text-muted-foreground">Уведомления</span>
+              <span className="text-xs text-muted-foreground">{notifications.length} за сессию</span>
+            </div>
+            {notifications.length === 0 ? (
+              <p className="px-3 py-4 text-sm text-muted-foreground text-center">Нет уведомлений</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {notifications.map((n) => {
+                  const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : "СБП";
+                  const typeLabel =
+                    n.type === "extra_device_slot" ? "Доп. устройство" :
+                    n.type === "balance_topup"     ? "Пополнение" :
+                    n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` +${n.extraTrafficGb}ГБ` : ""}` :
+                                                     "Подписка";
+                  const statusCls =
+                    n.status === "pending"   ? "text-orange-600" :
+                    n.status === "confirmed" ? "text-green-600"  : "text-destructive";
+                  const statusLabel =
+                    n.status === "pending"   ? "Ожидает" :
+                    n.status === "confirmed" ? "Подтверждён" : "Отклонён";
+                  return (
+                    <div key={n.id} className="px-3 py-2.5 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium truncate">{n.userEmail}</span>
+                        <span className={`font-mono font-bold shrink-0 ${statusCls}`}>{statusLabel}</span>
+                      </div>
+                      <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap font-mono">
+                        <span>{n.amountRub} ₽</span>
+                        <span>·</span><span>{typeLabel}</span>
+                        <span>·</span><span>{providerLabel}</span>
+                        <span>·</span><span>{formatDate(n.createdAt.toString())}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   const { data: summary } = useGetAdminDashboardSummary();
   const pendingPayments = summary?.pendingPayments ?? 0;
@@ -2811,9 +3092,12 @@ export default function Admin() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Панель администратора</h1>
-        <p className="text-muted-foreground font-mono text-sm mt-1">Управление сервисом VPNexus.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Панель администратора</h1>
+          <p className="text-muted-foreground font-mono text-sm mt-1">Управление сервисом VPNexus.</p>
+        </div>
+        <NotificationBell />
       </div>
 
       <SummarySection />
@@ -2822,29 +3106,32 @@ export default function Admin() {
         <div className="relative -mx-4 md:mx-0">
           <div className="overflow-x-auto px-4 md:px-0">
             <TabsList className="rounded-none w-max min-w-full md:w-auto">
-            <TabsTrigger value="payments" className="rounded-none gap-1.5 whitespace-nowrap">
-              <CreditCard className="w-4 h-4" /> Платежи
-              <Badge count={pendingPayments} />
-            </TabsTrigger>
-            <TabsTrigger value="plans" className="rounded-none gap-1.5 whitespace-nowrap">
-              <Shield className="w-4 h-4" /> Тарифы
-            </TabsTrigger>
-            <TabsTrigger value="nodes" className="rounded-none gap-1.5 whitespace-nowrap">
-              <Settings className="w-4 h-4" /> Узлы
-            </TabsTrigger>
-            <TabsTrigger value="vpn-keys" className="rounded-none gap-1.5 whitespace-nowrap">
-              <Key className="w-4 h-4" /> Ключи VPN
-            </TabsTrigger>
-            <TabsTrigger value="users" className="rounded-none gap-1.5 whitespace-nowrap">
-              <Users className="w-4 h-4" /> Пользователи
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="rounded-none gap-1.5 whitespace-nowrap">
-              <Settings className="w-4 h-4" /> Реквизиты
-            </TabsTrigger>
-            <TabsTrigger value="support" className="rounded-none gap-1.5 whitespace-nowrap">
-              <MessageCircle className="w-4 h-4" /> Поддержка
-              <Badge count={openTickets} />
-            </TabsTrigger>
+              <TabsTrigger value="payments" className="rounded-none gap-1.5 whitespace-nowrap">
+                <CreditCard className="w-4 h-4" /> Платежи
+                <Badge count={pendingPayments} />
+              </TabsTrigger>
+              <TabsTrigger value="plans" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Shield className="w-4 h-4" /> Тарифы
+              </TabsTrigger>
+              <TabsTrigger value="nodes" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Settings className="w-4 h-4" /> Узлы
+              </TabsTrigger>
+              <TabsTrigger value="vpn-keys" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Key className="w-4 h-4" /> Ключи VPN
+              </TabsTrigger>
+              <TabsTrigger value="users" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Users className="w-4 h-4" /> Пользователи
+              </TabsTrigger>
+              <TabsTrigger value="referrals" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Share2 className="w-4 h-4" /> Рефералы
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Settings className="w-4 h-4" /> Реквизиты
+              </TabsTrigger>
+              <TabsTrigger value="support" className="rounded-none gap-1.5 whitespace-nowrap">
+                <MessageCircle className="w-4 h-4" /> Поддержка
+                <Badge count={openTickets} />
+              </TabsTrigger>
             </TabsList>
           </div>
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent md:hidden" />
@@ -2863,6 +3150,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="users" className="pt-4">
           <UsersManagement />
+        </TabsContent>
+        <TabsContent value="referrals" className="pt-4">
+          <ReferralsManagement />
         </TabsContent>
         <TabsContent value="settings" className="pt-4">
           <PaymentSettingsForm />
