@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   useGetAdminDashboardSummary,
@@ -130,6 +130,10 @@ function SummarySection() {
         <Metric label="Выпущено ключей" value={data.totalVpnKeys} />
         <Metric label="Новых за 7 дней" value={data.newUsersLast7Days} />
         <Metric label="Новых за 30 дней" value={data.newUsersLast30Days} />
+      </div>
+      <div className="grid md:grid-cols-2 gap-4">
+        <Metric label="Привлечено по рефералам" value={data.referralCount} />
+        <Metric label="Комиссии за месяц" value={`${data.referralCommissionsThisMonthRub} ₽`} />
       </div>
       {(data.expiringIn3Days > 0 || data.lowBalanceHourly > 0) && (
         <div className="grid md:grid-cols-2 gap-4">
@@ -278,6 +282,7 @@ function PaymentsQueue() {
   const [search, setSearch] = useState("");
   const { data: payments, isLoading } = useListAdminPayments(
     statusFilter === "all" ? undefined : { status: statusFilter },
+    { query: { queryKey: getListAdminPaymentsQueryKey(statusFilter === "all" ? undefined : { status: statusFilter }), refetchInterval: statusFilter === "pending" ? 30_000 : false } },
   );
   const { mutate: confirm } = useConfirmPayment();
   const { mutate: reject } = useRejectPayment();
@@ -1317,9 +1322,25 @@ function AdminNoteEditor({ userId, initialNote }: { userId: number; initialNote:
 
 function NodeHealthButton({ nodeId }: { nodeId: number }) {
   const [enabled, setEnabled] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const { data, isFetching, error } = useGetVpnNodeHealth(nodeId, {
-    query: { enabled, staleTime: 0, gcTime: 0, retry: false, queryKey: getGetVpnNodeHealthQueryKey(nodeId) },
+    query: {
+      enabled,
+      staleTime: 0,
+      gcTime: 0,
+      retry: false,
+      queryKey: getGetVpnNodeHealthQueryKey(nodeId),
+    },
   });
+
+  // Record timestamp when result arrives
+  const prevFetching = useRef(false);
+  useEffect(() => {
+    if (prevFetching.current && !isFetching && enabled) {
+      setCheckedAt(new Date());
+    }
+    prevFetching.current = isFetching;
+  }, [isFetching, enabled]);
 
   if (!enabled) {
     return (
@@ -1334,16 +1355,26 @@ function NodeHealthButton({ nodeId }: { nodeId: number }) {
   }
 
   if (isFetching) return <span className="text-xs font-mono text-muted-foreground px-2">Пинг...</span>;
-  if (error || !data) return <span className="text-xs font-mono text-destructive px-2">Ошибка</span>;
 
   return (
-    <span
-      className={`text-xs font-mono px-2 cursor-pointer ${data.ok ? "text-green-600" : "text-destructive"}`}
-      onClick={() => setEnabled(false)}
-      title="Нажмите чтобы скрыть"
+    <button
+      onClick={() => { setEnabled(false); setCheckedAt(null); }}
+      className="text-left"
+      title="Нажмите чтобы сбросить"
     >
-      {data.ok ? `✓ ${data.latencyMs != null ? `${data.latencyMs}ms` : "OK"}` : `✗ ${data.error ?? "Недоступен"}`}
-    </span>
+      {error || !data ? (
+        <span className="text-xs font-mono text-destructive px-2">✗ Ошибка</span>
+      ) : (
+        <span className={`text-xs font-mono px-2 ${data.ok ? "text-green-600" : "text-destructive"}`}>
+          {data.ok ? `✓ ${data.latencyMs != null ? `${data.latencyMs}ms` : "OK"}` : `✗ ${data.error ?? "Недоступен"}`}
+        </span>
+      )}
+      {checkedAt && (
+        <span className="block text-[9px] font-mono text-muted-foreground px-2">
+          {checkedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -1622,6 +1653,37 @@ function UsersManagement() {
           <option value="traffic">По трафику</option>
           <option value="online">Сначала онлайн</option>
         </select>
+        <button
+          onClick={() => {
+            const header = "ID,Дата регистрации,Email,Имя,Роль,Баланс (₽),Тариф,Трафик всего (байт),Реф. код,Приглашён";
+            const rows = filtered.map((u) =>
+              [
+                u.id,
+                u.createdAt,
+                u.email,
+                u.name ?? "",
+                u.role,
+                (u.balanceKopecks / 100).toFixed(2),
+                u.activePlanName ?? "",
+                u.trafficUpBytes + u.trafficDownBytes,
+                u.referralCode,
+                u.referredByEmail ?? "",
+              ]
+                .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
+                .join(","),
+            );
+            const csv = [header, ...rows].join("\n");
+            const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+            const a = Object.assign(document.createElement("a"), {
+              href: URL.createObjectURL(blob),
+              download: `users-${new Date().toISOString().slice(0, 10)}.csv`,
+            });
+            a.click(); URL.revokeObjectURL(a.href);
+          }}
+          className="border border-border px-3 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
+        >
+          Экспорт CSV
+        </button>
       </div>
       {pagedUsers.map((user) => {
         const expanded = expandedId === user.id;
@@ -1648,6 +1710,14 @@ function UsersManagement() {
                   />
                   {user.name ? `${user.name} · ` : ""}
                   {user.email}
+                  {user.adminNote && (
+                    <span
+                      title={user.adminNote}
+                      className="inline-flex items-center px-1 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded cursor-default"
+                    >
+                      📝
+                    </span>
+                  )}
                   {user.activityStatus === "site" && (
                     <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
                       На сайте
@@ -2276,7 +2346,7 @@ function VpnKeysManagement() {
     queryFn: async () => {
       const res = await fetch("/api/admin/users", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
-      return res.json() as Promise<Array<{ id: number; email: string }>>;
+      return res.json() as Promise<Array<{ id: number; email: string; trafficLimitExceeded?: boolean }>>;
     },
   });
 
@@ -2450,13 +2520,21 @@ function VpnKeysManagement() {
               </div>
             )}
           </div>
-          <button
-            onClick={handleIssueClick}
-            disabled={!issuingUserId || issueMutation.isPending}
-            className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" /> Выдать ключ
-          </button>
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={handleIssueClick}
+              disabled={!issuingUserId || issueMutation.isPending}
+              className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" /> Выдать ключ
+            </button>
+            {issuingUserId && (users ?? []).find((u) => u.id === issuingUserId)?.trafficLimitExceeded && (
+              <p className="text-xs text-orange-600 font-mono flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                У пользователя превышен лимит трафика — ключ будет автоматически отозван через ~1 минуту.
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

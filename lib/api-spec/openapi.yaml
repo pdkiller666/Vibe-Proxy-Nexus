@@ -1958,7 +1958,7 @@ components:
 
     DashboardSummary:
       type: object
-      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets, activeNow, activeOnVpn, activeOnSite, expiringIn3Days, lowBalanceHourly, topTrafficUsers, newUsersLast7Days, newUsersLast30Days, planDistribution, revenueByDay]
+      required: [totalUsers, activeSubscriptions, pendingPayments, monthlyRevenueRub, last30DaysRevenueRub, totalVpnKeys, openTickets, activeNow, activeOnVpn, activeOnSite, expiringIn3Days, lowBalanceHourly, topTrafficUsers, newUsersLast7Days, newUsersLast30Days, planDistribution, revenueByDay, referralCount, referralCommissionsThisMonthRub]
       properties:
         totalUsers: { type: integer }
         activeSubscriptions: { type: integer }
@@ -1995,6 +1995,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RevenueByDayEntry"
+        # Total number of users who registered via a referral link.
+        referralCount: { type: integer }
+        # Sum of referral commissions credited this calendar month (in rubles).
+        referralCommissionsThisMonthRub: { type: integer }
 
     AdminUserNoteUpdate:
       type: object

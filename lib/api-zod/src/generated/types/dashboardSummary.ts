@@ -27,4 +27,6 @@ export interface DashboardSummary {
   newUsersLast30Days: number;
   planDistribution: PlanDistributionEntry[];
   revenueByDay: RevenueByDayEntry[];
+  referralCount: number;
+  referralCommissionsThisMonthRub: number;
 }

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, count, eq, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
-import { db, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
+import { db, balanceTransactionsTable, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
@@ -38,6 +38,8 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     topTrafficRows,
     [newUsersLast7Days],
     [newUsersLast30Days],
+    [referralCount],
+    [referralCommissionsRow],
     planDistributionRows,
     revenueByDayRows,
   ] = await Promise.all([
@@ -133,6 +135,13 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       .limit(5),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf7Days)),
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf30Days)),
+    // Total users who joined via a referral link.
+    db.select({ value: count() }).from(usersTable).where(isNotNull(usersTable.referredByUserId)),
+    // Referral commissions credited this calendar month.
+    db
+      .select({ value: sum(balanceTransactionsTable.amountKopecks) })
+      .from(balanceTransactionsTable)
+      .where(and(eq(balanceTransactionsTable.type, "referral"), gte(balanceTransactionsTable.createdAt, startOfMonth))),
     db
       .select({ planName: plansTable.name, count: count() })
       .from(subscriptionsTable)
@@ -188,6 +197,8 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       })),
       newUsersLast7Days: newUsersLast7Days?.value ?? 0,
       newUsersLast30Days: newUsersLast30Days?.value ?? 0,
+      referralCount: referralCount?.value ?? 0,
+      referralCommissionsThisMonthRub: Math.round(Number(referralCommissionsRow?.value ?? 0) / 100),
       planDistribution: planDistributionRows,
       revenueByDay,
     }),

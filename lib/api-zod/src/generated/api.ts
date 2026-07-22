@@ -819,7 +819,9 @@ export const GetAdminDashboardSummaryResponse = zod.object({
   "revenueByDay": zod.array(zod.object({
   "date": zod.coerce.date(),
   "amountRub": zod.number()
-}))
+})),
+  "referralCount": zod.number(),
+  "referralCommissionsThisMonthRub": zod.number()
 })
 
 
