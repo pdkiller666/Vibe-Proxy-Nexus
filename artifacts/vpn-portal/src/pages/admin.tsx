@@ -1943,8 +1943,14 @@ function UsersManagement() {
                 </div>
                 <div className="text-sm text-muted-foreground font-mono">
                   {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
-                  {user.activityStatus === "offline" && user.lastActiveAt && ` · был(а) на сайте ${formatDate(user.lastActiveAt)}`}
-                  {user.activityStatus === "offline" && !user.lastActiveAt && user.vpnLastActiveAt && ` · VPN: ${formatDate(user.vpnLastActiveAt)}`}
+                  {user.activityStatus === "offline" && (() => {
+                    // Show whichever signal is more recent — site or VPN.
+                    const siteTs = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+                    const vpnTs  = user.vpnLastActiveAt ? new Date(user.vpnLastActiveAt).getTime() : 0;
+                    if (siteTs === 0 && vpnTs === 0) return null;
+                    if (vpnTs > siteTs) return ` · VPN: ${formatDate(user.vpnLastActiveAt!)}`;
+                    return ` · был(а) на сайте ${formatDate(user.lastActiveAt!)}`;
+                  })()}
                 </div>
                 </div>{/* close inner text wrapper */}
               </div>{/* close min-w-0 flex container */}
