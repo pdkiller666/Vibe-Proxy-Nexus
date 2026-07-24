@@ -215,6 +215,8 @@ export interface PaymentSettings {
   allowFreeExtraTraffic: boolean;
   trialEnabled: boolean;
   trialDays: number;
+  /** @nullable */
+  trialPlanId?: number | null;
   minHourlyTopupRub?: number;
   primaryDomain?: string;
   referralCommissionPercent?: number;
@@ -244,6 +246,8 @@ export interface PaymentSettingsUpdate {
      * @maximum 365
      */
   trialDays?: number;
+  /** @nullable */
+  trialPlanId?: number | null;
   /** @minimum 0 */
   minHourlyTopupRub?: number;
   primaryDomain?: string;

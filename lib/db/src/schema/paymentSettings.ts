@@ -24,6 +24,11 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   allowFreeExtraTraffic: boolean("allow_free_extra_traffic").notNull().default(false),
   trialEnabled: boolean("trial_enabled").notNull().default(false),
   trialDays: integer("trial_days").notNull().default(5),
+  // Which plan is assigned to new users during the trial. When null the system
+  // falls back to the cheapest active monthly plan automatically.
+  // FK enforced at the DB level (heal-schema M-14) with ON DELETE SET NULL so
+  // deleting a plan never leaves an unresolvable reference here.
+  trialPlanId: integer("trial_plan_id"),
   // Minimum wallet balance (in rubles) a user must hold/top up before an
   // hourly plan can be activated. 0 = no minimum beyond the normal
   // one-tick balance check in subscriptions.ts.

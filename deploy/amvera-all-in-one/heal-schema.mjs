@@ -486,6 +486,16 @@ try {
   `);
   console.log("heal-schema: M-13 admin_note column added to users");
 
+  // ── M-14: trial_plan_id column on payment_settings ───────────────────────
+  // Nullable FK → plans(id) ON DELETE SET NULL. When non-null, the referenced
+  // plan is used as the trial plan instead of auto-selecting the cheapest one.
+  // ON DELETE SET NULL means deleting a plan never leaves a dangling reference.
+  await client.query(`
+    ALTER TABLE payment_settings
+      ADD COLUMN IF NOT EXISTS trial_plan_id int REFERENCES plans(id) ON DELETE SET NULL;
+  `);
+  console.log("heal-schema: M-14 trial_plan_id column added to payment_settings");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

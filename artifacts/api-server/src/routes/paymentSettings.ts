@@ -31,6 +31,7 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
         allowFreeExtraTraffic: false,
         trialEnabled: false,
         trialDays: 5,
+        trialPlanId: null,
         minHourlyTopupRub: 0,
         sbpPaymentUrl: "",
         showManualSbpDetails: false,

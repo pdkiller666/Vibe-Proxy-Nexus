@@ -2088,8 +2088,12 @@ function UsersManagement() {
 
 function PaymentSettingsForm() {
   const { data: settings, isLoading } = useGetPaymentSettings();
+  const { data: plans } = useListPlans();
   const { mutate: update, isPending } = useUpdatePaymentSettings();
   const { toast } = useToast();
+  // Only monthly plans are valid for trial (hourly plans start at 0₽ and
+  // immediately cut off access when the user's balance=0 hits the first tick).
+  const monthlyPlans = (plans ?? []).filter((p) => p.billingType === "monthly" && p.isActive);
   const [sbpPhone, setSbpPhone] = useState("");
   const [sbpBank, setSbpBank] = useState("");
   const [sbpRecipientName, setSbpRecipientName] = useState("");
@@ -2101,6 +2105,7 @@ function PaymentSettingsForm() {
   const [allowFreeExtraTraffic, setAllowFreeExtraTraffic] = useState(false);
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialDays, setTrialDays] = useState("5");
+  const [trialPlanId, setTrialPlanId] = useState<number | null>(null);
   const [minHourlyTopupRub, setMinHourlyTopupRub] = useState("0");
   const [primaryDomain, setPrimaryDomain] = useState("");
   const [referralCommissionPercent, setReferralCommissionPercent] = useState("0");
@@ -2122,6 +2127,7 @@ function PaymentSettingsForm() {
     setAllowFreeExtraTraffic(settings.allowFreeExtraTraffic ?? false);
     setTrialEnabled(settings.trialEnabled ?? false);
     setTrialDays(String(settings.trialDays ?? 5));
+    setTrialPlanId(settings.trialPlanId ?? null);
     setMinHourlyTopupRub(String(settings.minHourlyTopupRub ?? 0));
     setPrimaryDomain(settings.primaryDomain ?? "");
     setReferralCommissionPercent(String(settings.referralCommissionPercent ?? 0));
@@ -2147,6 +2153,7 @@ function PaymentSettingsForm() {
           allowFreeExtraTraffic,
           trialEnabled,
           trialDays: Number(trialDays) || 5,
+          trialPlanId: trialPlanId ?? null,
           minHourlyTopupRub: Number(minHourlyTopupRub) || 0,
           primaryDomain: primaryDomain.trim(),
           referralCommissionPercent: Number(referralCommissionPercent) || 0,
@@ -2341,20 +2348,39 @@ function PaymentSettingsForm() {
           </label>
         </div>
         {trialEnabled && (
-          <div>
-            <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Длительность пробного периода (дней)</label>
-            <Input
-              type="number"
-              min="1"
-              max="365"
-              placeholder="5"
-              value={trialDays}
-              onChange={(e) => setTrialDays(e.target.value.replace(/[^0-9]/g, ""))}
-              className="rounded-none max-w-[140px]"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Используется наиболее дешёвый из активных тарифов. Создайте тариф заранее.
-            </p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Длительность пробного периода (дней)</label>
+              <Input
+                type="number"
+                min="1"
+                max="365"
+                placeholder="5"
+                value={trialDays}
+                onChange={(e) => setTrialDays(e.target.value.replace(/[^0-9]/g, ""))}
+                className="rounded-none max-w-[140px]"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Тариф для пробного периода</label>
+              <select
+                value={trialPlanId ?? ""}
+                onChange={(e) => setTrialPlanId(e.target.value ? Number(e.target.value) : null)}
+                className="border border-border bg-background px-3 py-2 text-sm rounded-none w-full max-w-xs"
+              >
+                <option value="">Авто — наиболее дешёвый месячный тариф</option>
+                {monthlyPlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.trafficLimitGb ? ` — ${p.trafficLimitGb} ГБ` : " — без лимита"}
+                    {`, ${p.devicesIncluded} уст.`}
+                  </option>
+                ))}
+              </select>
+              {monthlyPlans.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">Нет активных месячных тарифов. Создайте тариф заранее.</p>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -21,6 +21,8 @@ export interface PaymentSettings {
   allowFreeExtraTraffic: boolean;
   trialEnabled: boolean;
   trialDays: number;
+  /** @nullable */
+  trialPlanId?: number | null;
   minHourlyTopupRub?: number;
   primaryDomain?: string;
   referralCommissionPercent?: number;

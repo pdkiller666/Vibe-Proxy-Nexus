@@ -88,16 +88,39 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
   try {
     const [settings] = await db.select().from(paymentSettingsTable).limit(1);
     if (settings?.trialEnabled) {
-      // Only consider monthly plans: hourly plans have priceRub=0 and would
-      // always win the sort, but an hourly trial is meaningless — the user
-      // starts with balance=0 so the first billing tick would immediately
-      // stop their VPN access.
-      const [trialPlan] = await db
-        .select()
-        .from(plansTable)
-        .where(and(eq(plansTable.isActive, true), eq(plansTable.billingType, "monthly")))
-        .orderBy(asc(plansTable.priceRub), asc(plansTable.id))
-        .limit(1);
+      // Resolve the trial plan: admin-selected first, auto-select as fallback.
+      // Auto-select only considers monthly plans — hourly plans have priceRub=0
+      // and would always win the sort, but an hourly trial is meaningless since
+      // balance=0 means the first billing tick immediately stops VPN access.
+      let trialPlan: typeof plansTable.$inferSelect | undefined;
+
+      if (settings.trialPlanId) {
+        // Admin explicitly picked a plan. Verify it's still active — if it was
+        // deactivated or deleted (ON DELETE SET NULL clears the FK), fall through
+        // to auto-select so the trial still fires rather than silently skipping.
+        const [explicit] = await db
+          .select()
+          .from(plansTable)
+          .where(and(eq(plansTable.id, settings.trialPlanId), eq(plansTable.isActive, true)))
+          .limit(1);
+        trialPlan = explicit;
+        if (!trialPlan) {
+          logger.warn(
+            { userId: user.id, trialPlanId: settings.trialPlanId },
+            "Trial plan is inactive/missing — falling back to cheapest monthly plan",
+          );
+        }
+      }
+
+      if (!trialPlan) {
+        const [cheapest] = await db
+          .select()
+          .from(plansTable)
+          .where(and(eq(plansTable.isActive, true), eq(plansTable.billingType, "monthly")))
+          .orderBy(asc(plansTable.priceRub), asc(plansTable.id))
+          .limit(1);
+        trialPlan = cheapest;
+      }
 
       if (trialPlan) {
         const trialDays = settings.trialDays ?? 5;

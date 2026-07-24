@@ -1551,6 +1551,8 @@ components:
         allowFreeExtraTraffic: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer }
+        # Which plan is assigned during trial (null = auto: cheapest active monthly plan).
+        trialPlanId: { type: ["integer", "null"] }
         # Minimum wallet balance (in rubles) a user must top up before an
         # hourly plan can be activated. 0 = no minimum required.
         minHourlyTopupRub: { type: integer }
@@ -1586,6 +1588,8 @@ components:
         allowFreeExtraTraffic: { type: boolean }
         trialEnabled: { type: boolean }
         trialDays: { type: integer, minimum: 1, maximum: 365 }
+        # null clears the explicit plan choice and reverts to auto-select (cheapest monthly).
+        trialPlanId: { type: ["integer", "null"] }
         minHourlyTopupRub: { type: integer, minimum: 0 }
         primaryDomain: { type: string }
         referralCommissionPercent: { type: integer, minimum: 0, maximum: 100 }
