@@ -17,7 +17,13 @@ const router: IRouter = Router();
 // Defence-in-depth: requireAdmin at the router level means a forgotten
 // middleware on a new sub-route cannot accidentally expose an admin endpoint.
 // Individual routes keep their own requireAuth + requireAdmin guards too.
-router.use(requireAuth, requireAdmin);
+//
+// IMPORTANT: the admin router is mounted without a path prefix (router.use(adminRouter))
+// so that all routes can keep their /admin/ prefix in their own path strings.
+// The regex below ensures this middleware ONLY fires for /admin/* paths —
+// without it, any request not handled by an earlier router (e.g. the YooMoney
+// checkout GET) would hit requireAdmin here and return 403 for regular users.
+router.use(/^\/admin(\/|$)/, requireAuth, requireAdmin);
 
 router.use(dashboardRouter);
 router.use(plansRouter);
