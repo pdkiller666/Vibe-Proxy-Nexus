@@ -19,9 +19,12 @@ import {
   AdminSetUserBalanceBody,
   AdminSetUserBalanceParams,
   AdminSetUserBalanceResponse,
+  AdminSetUserNoteBody,
+  AdminSetUserNoteParams,
   AdminSetUserPasswordBody,
   AdminSetUserPasswordParams,
   DeleteUserParams,
+  ListAdminUserBalanceTransactionsResponse,
   ListAdminUsersResponse,
   UpdateUserExtraSlotsBody,
   UpdateUserExtraSlotsParams,
@@ -593,10 +596,11 @@ router.post("/admin/users/:userId/force-logout", requireAuth, requireAdmin, asyn
 });
 
 router.patch("/admin/users/:userId/note", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const userId = Number(req.params["userId"]);
-  if (!userId || isNaN(userId)) { res.status(400).json({ error: "Invalid userId" }); return; }
-  const { note } = req.body as { note?: string | null };
-  await db.update(usersTable).set({ adminNote: note ?? null }).where(eq(usersTable.id, userId));
+  const params = AdminSetUserNoteParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const body = AdminSetUserNoteBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  await db.update(usersTable).set({ adminNote: body.data.note }).where(eq(usersTable.id, params.data.userId));
   res.status(204).end();
 });
 
@@ -607,12 +611,19 @@ router.get("/admin/users/:userId/balance-transactions", requireAuth, requireAdmi
     return;
   }
   const rows = await db
-    .select()
+    .select({
+      id: balanceTransactionsTable.id,
+      amountKopecks: balanceTransactionsTable.amountKopecks,
+      type: balanceTransactionsTable.type,
+      description: balanceTransactionsTable.description,
+      paymentId: balanceTransactionsTable.paymentId,
+      createdAt: balanceTransactionsTable.createdAt,
+    })
     .from(balanceTransactionsTable)
     .where(eq(balanceTransactionsTable.userId, userId))
     .orderBy(desc(balanceTransactionsTable.createdAt))
     .limit(100);
-  res.json(rows);
+  res.json(ListAdminUserBalanceTransactionsResponse.parse(rows));
 });
 
 router.patch("/admin/users/:userId/set-password", requireAuth, requireAdmin, async (req, res): Promise<void> => {

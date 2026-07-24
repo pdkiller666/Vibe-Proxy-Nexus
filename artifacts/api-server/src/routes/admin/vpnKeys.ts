@@ -1,11 +1,17 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { z } from "zod";
 import { db, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { removeRemoteXrayClient } from "../../lib/remoteNode";
 import { issueKeyForUser } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
+
+const IssueAdminVpnKeyBody = z.object({
+  userId: z.number().int().positive(),
+  nodeId: z.number().int().positive().optional(),
+});
 
 const router: IRouter = Router();
 
@@ -43,8 +49,9 @@ router.get("/admin/vpn-keys", requireAuth, requireAdmin, async (_req, res): Prom
 });
 
 router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const { userId, nodeId } = req.body as { userId?: number; nodeId?: number };
-  if (!userId) { res.status(400).json({ error: "userId required" }); return; }
+  const bodyParsed = IssueAdminVpnKeyBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { userId, nodeId } = bodyParsed.data;
 
   // Routed through the same issueKeyForUser as the self-service route
   // (previously this reimplemented node selection and picked *any* active
