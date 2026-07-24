@@ -1491,8 +1491,8 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
         ) : (
           userKeys.map((key) => (
             <div key={key.id} className={`bg-muted/30 border border-border px-2 py-1.5 text-xs ${key.revokedAt ? "opacity-60" : ""}`}>
-              <div className="flex items-center justify-between gap-2">
-                <div className={key.revokedAt ? "text-muted-foreground line-through font-medium" : "font-medium"}>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className={`min-w-0 truncate ${key.revokedAt ? "text-muted-foreground line-through font-medium" : "font-medium"}`}>
                   {key.label}
                 </div>
                 {!key.revokedAt && (
