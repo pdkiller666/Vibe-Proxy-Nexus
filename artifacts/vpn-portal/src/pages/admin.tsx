@@ -40,6 +40,8 @@ import {
   getGetAdminTicketQueryKey,
   useListAdminUserBalanceTransactions,
   useAdminForceLogout,
+  useAdminBanUser,
+  useAdminUnbanUser,
   useAdminSetUserNote,
   useGetVpnNodeHealth,
   getGetVpnNodeHealthQueryKey,
@@ -1391,6 +1393,57 @@ function ForceLogoutButton({ userId }: { userId: number }) {
   );
 }
 
+function BanButton({ userId, isBanned }: { userId: number; isBanned: boolean }) {
+  const { mutate: ban, isPending: banning } = useAdminBanUser();
+  const { mutate: unban, isPending: unbanning } = useAdminUnbanUser();
+  const { toast } = useToast();
+  const isPending = banning || unbanning;
+
+  if (isBanned) {
+    return (
+      <button
+        onClick={() =>
+          unban(
+            { userId },
+            {
+              onSuccess: () => {
+                toast({ title: "Блокировка снята" });
+                queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+              },
+              onError: () => toast({ title: "Ошибка при разблокировке", variant: "destructive" }),
+            },
+          )
+        }
+        disabled={isPending}
+        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+      >
+        Разблокировать
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={() =>
+        ban(
+          { userId },
+          {
+            onSuccess: () => {
+              toast({ title: "Пользователь заблокирован" });
+              queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+            },
+            onError: () => toast({ title: "Ошибка при блокировке", variant: "destructive" }),
+          },
+        )
+      }
+      disabled={isPending}
+      className="border border-amber-500 text-amber-600 px-4 py-2 text-sm font-medium hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-50"
+    >
+      Заблокировать
+    </button>
+  );
+}
+
 function AdminNoteEditor({ userId, initialNote }: { userId: number; initialNote: string | null }) {
   const [note, setNote] = useState(initialNote ?? "");
   const { mutate, isPending } = useAdminSetUserNote();
@@ -2007,6 +2060,7 @@ function UsersManagement() {
                   {user.role === "admin" ? "Понизить" : "Назначить админом"}
                 </button>
                 <ForceLogoutButton userId={user.id} />
+                <BanButton userId={user.id} isBanned={user.isBanned} />
                 <button
                   onClick={() => handleDelete(user.id)}
                   disabled={deleting}

@@ -102,5 +102,6 @@ export async function buildMeData(user: User, requestHost?: string) {
     referralEarningsKopecks: Number(earningsResult?.total ?? 0),
     referredUserCount,
     referralLinkHost,
+    isBanned: user.isBanned,
   };
 }

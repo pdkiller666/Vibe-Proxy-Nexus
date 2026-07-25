@@ -55,7 +55,8 @@ export const RegisterResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
-  "referralLinkHost": zod.string()
+  "referralLinkHost": zod.string(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -93,7 +94,8 @@ export const LoginResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
-  "referralLinkHost": zod.string()
+  "referralLinkHost": zod.string(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -159,7 +161,8 @@ export const GetMeResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
-  "referralLinkHost": zod.string()
+  "referralLinkHost": zod.string(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -192,7 +195,8 @@ export const UpdateMeResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
-  "referralLinkHost": zod.string()
+  "referralLinkHost": zod.string(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -230,7 +234,8 @@ export const ChangeMyEmailResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
-  "referralLinkHost": zod.string()
+  "referralLinkHost": zod.string(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -1239,7 +1244,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
-  "adminNote": zod.string().nullish()
+  "adminNote": zod.string().nullish(),
+  "isBanned": zod.boolean()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
@@ -1336,7 +1342,8 @@ export const UpdateUserProfileResponse = zod.object({
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
-  "adminNote": zod.string().nullish()
+  "adminNote": zod.string().nullish(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -1393,7 +1400,8 @@ export const UpdateUserRoleResponse = zod.object({
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
-  "adminNote": zod.string().nullish()
+  "adminNote": zod.string().nullish(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -1444,7 +1452,8 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
-  "adminNote": zod.string().nullish()
+  "adminNote": zod.string().nullish(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -1495,7 +1504,8 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
-  "adminNote": zod.string().nullish()
+  "adminNote": zod.string().nullish(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -1546,7 +1556,8 @@ export const AdminSetUserBalanceResponse = zod.object({
   "planName": zod.string().nullish(),
   "subscriptionStatus": zod.union([zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),zod.null()]).optional(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
-  "adminNote": zod.string().nullish()
+  "adminNote": zod.string().nullish(),
+  "isBanned": zod.boolean()
 })
 
 
@@ -1576,6 +1587,26 @@ export const AdminForceLogoutParams = zod.object({
 })
 
 export const AdminForceLogoutResponse = zod.void()
+
+
+/**
+ * @summary Block a user account (revokes VPN keys and forces sign-out)
+ */
+export const AdminBanUserParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const AdminBanUserResponse = zod.void()
+
+
+/**
+ * @summary Unblock a user account (restores VPN access if subscription is active)
+ */
+export const AdminUnbanUserParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const AdminUnbanUserResponse = zod.void()
 
 
 /**

@@ -1164,6 +1164,36 @@ paths:
         "204":
           description: Sessions cleared
 
+  /admin/users/{userId}/ban:
+    post:
+      operationId: adminBanUser
+      tags: [admin]
+      summary: Block a user account (revokes VPN keys and forces sign-out)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: User banned
+
+  /admin/users/{userId}/unban:
+    post:
+      operationId: adminUnbanUser
+      tags: [admin]
+      summary: Unblock a user account (restores VPN access if subscription is active)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: User unbanned
+
   /admin/users/{userId}/note:
     patch:
       operationId: adminSetUserNote
@@ -1416,6 +1446,7 @@ components:
           referralLinkHost,
           extraTrafficGb,
           trafficLimitExceeded,
+          isBanned,
         ]
       properties:
         id: { type: integer }
@@ -1466,6 +1497,9 @@ components:
         # otherwise the request's own (technical) host as a safety-net
         # fallback. Frontend must use this instead of window.location.origin.
         referralLinkHost: { type: string }
+        # true while the account is administratively blocked. The frontend
+        # must show a "banned" screen rather than redirecting to sign-in.
+        isBanned: { type: boolean }
 
     PlanBillingType:
       type: string
@@ -1892,6 +1926,7 @@ components:
           balanceKopecks,
           referralCode,
           referredUserCount,
+          isBanned,
         ]
       properties:
         id: { type: integer }
@@ -1965,6 +2000,8 @@ components:
         subscriptionEndsAt: { type: ["string", "null"], format: date-time }
         # Private admin-only memo (never exposed in user-facing endpoints).
         adminNote: { type: ["string", "null"] }
+        # true while the account is administratively blocked.
+        isBanned: { type: boolean }
 
     AdminUserProfileUpdate:
       type: object

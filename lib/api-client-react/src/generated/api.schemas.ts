@@ -128,6 +128,7 @@ export interface Me {
   referralEarningsKopecks: number;
   referredUserCount: number;
   referralLinkHost: string;
+  isBanned: boolean;
 }
 
 export interface Plan {
@@ -581,6 +582,7 @@ export interface AdminUser {
   subscriptionEndsAt?: string | null;
   /** @nullable */
   adminNote?: string | null;
+  isBanned: boolean;
 }
 
 export interface AdminUserProfileUpdate {

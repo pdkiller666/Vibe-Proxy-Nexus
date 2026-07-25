@@ -10,7 +10,7 @@ import {
   ChangeMyPasswordBody,
   ChangeMyPasswordResponse,
 } from "@workspace/api-zod";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireAuthAllowBanned } from "../lib/auth";
 import { buildMeData } from "../lib/meResponse";
 import { hashPassword, verifyPassword } from "../lib/password";
 import { invalidateUserSessions } from "../lib/session";
@@ -21,7 +21,7 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-router.get("/me", requireAuth, async (req, res): Promise<void> => {
+router.get("/me", requireAuthAllowBanned, async (req, res): Promise<void> => {
   const user = req.appUser!;
   res.json(GetMeResponse.parse(await buildMeData(user, req.get("host") ?? "")));
 });

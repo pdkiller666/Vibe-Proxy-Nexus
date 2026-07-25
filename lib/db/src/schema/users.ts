@@ -1,4 +1,4 @@
-import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -28,6 +28,11 @@ export const usersTable = pgTable("users", {
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
   // Private admin-only memo field — never exposed in user-facing API responses.
   adminNote: text("admin_note"),
+  // Administratively blocked. When true, requireAuth returns 403 AccountBanned
+  // for all routes except GET /me (so the frontend can show a "banned" screen
+  // rather than silently redirecting to sign-in). VPN keys are revoked and
+  // sessions are cleared on ban; ensureActiveKeyForUser is called on unban.
+  isBanned: boolean("is_banned").notNull().default(false),
 },
 (table) => [
   // Referral-tree traversal and commission attribution walk this FK on every

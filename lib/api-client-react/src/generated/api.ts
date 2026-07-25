@@ -4621,6 +4621,146 @@ export const useAdminForceLogout = <TError = ErrorType<unknown>,
       return useMutation(getAdminForceLogoutMutationOptions(options));
     }
 
+export const getAdminBanUserUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/ban`
+}
+
+/**
+ * @summary Block a user account (revokes VPN keys and forces sign-out)
+ */
+export const adminBanUser = async (userId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getAdminBanUserUrl(userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAdminBanUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminBanUser>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminBanUser>>, TError,{userId: number}, TContext> => {
+
+const mutationKey = ['adminBanUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminBanUser>>, {userId: number}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  adminBanUser(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminBanUserMutationResult = NonNullable<Awaited<ReturnType<typeof adminBanUser>>>
+
+    export type AdminBanUserMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Block a user account (revokes VPN keys and forces sign-out)
+ */
+export const useAdminBanUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminBanUser>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminBanUser>>,
+        TError,
+        {userId: number},
+        TContext
+      > => {
+      return useMutation(getAdminBanUserMutationOptions(options));
+    }
+
+export const getAdminUnbanUserUrl = (userId: number,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/unban`
+}
+
+/**
+ * @summary Unblock a user account (restores VPN access if subscription is active)
+ */
+export const adminUnbanUser = async (userId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getAdminUnbanUserUrl(userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAdminUnbanUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUnbanUser>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminUnbanUser>>, TError,{userId: number}, TContext> => {
+
+const mutationKey = ['adminUnbanUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminUnbanUser>>, {userId: number}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  adminUnbanUser(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminUnbanUserMutationResult = NonNullable<Awaited<ReturnType<typeof adminUnbanUser>>>
+
+    export type AdminUnbanUserMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Unblock a user account (restores VPN access if subscription is active)
+ */
+export const useAdminUnbanUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUnbanUser>>, TError,{userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adminUnbanUser>>,
+        TError,
+        {userId: number},
+        TContext
+      > => {
+      return useMutation(getAdminUnbanUserMutationOptions(options));
+    }
+
 export const getAdminSetUserNoteUrl = (userId: number,) => {
 
 

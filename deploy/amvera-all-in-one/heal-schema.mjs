@@ -529,6 +529,16 @@ try {
   `);
   console.log("heal-schema: M-15 support_tickets ON DELETE CASCADE + status index");
 
+  // ── M-16: is_banned column on users ──────────────────────────────────────
+  // Allows administrators to block a user account without deleting it.
+  // When true, requireAuth returns 403 AccountBanned (except GET /me, which
+  // stays open so the frontend can show a "banned" screen instead of sign-in).
+  // DEFAULT false preserves existing behaviour for all current users.
+  await client.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned boolean NOT NULL DEFAULT false;
+  `);
+  console.log("heal-schema: M-16 is_banned column added to users");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

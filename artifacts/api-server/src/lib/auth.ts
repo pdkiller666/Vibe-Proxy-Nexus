@@ -11,7 +11,13 @@ declare global {
   }
 }
 
-export async function requireAuth(
+/**
+ * Validates the session token and attaches the user to `req.appUser`.
+ * Does NOT check `isBanned` — use this only for endpoints that must remain
+ * accessible while an account is administratively blocked (e.g. GET /me, so
+ * the frontend can display a "banned" screen instead of redirecting to sign-in).
+ */
+export async function requireAuthAllowBanned(
   req: Request,
   res: Response,
   next: NextFunction,
@@ -32,6 +38,24 @@ export async function requireAuth(
 
   req.appUser = user;
   next();
+}
+
+/**
+ * Validates the session token, attaches the user to `req.appUser`, and blocks
+ * banned accounts with 403 AccountBanned. Use this for all regular routes.
+ */
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  await requireAuthAllowBanned(req, res, () => {
+    if (req.appUser?.isBanned) {
+      res.status(403).json({ error: "AccountBanned" });
+      return;
+    }
+    next();
+  });
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {

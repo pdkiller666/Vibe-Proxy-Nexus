@@ -37,4 +37,5 @@ export interface Me {
   referralEarningsKopecks: number;
   referredUserCount: number;
   referralLinkHost: string;
+  isBanned: boolean;
 }

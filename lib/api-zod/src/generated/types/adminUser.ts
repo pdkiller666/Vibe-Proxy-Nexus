@@ -56,4 +56,5 @@ export interface AdminUser {
   subscriptionEndsAt?: Date | null;
   /** @nullable */
   adminNote?: string | null;
+  isBanned: boolean;
 }

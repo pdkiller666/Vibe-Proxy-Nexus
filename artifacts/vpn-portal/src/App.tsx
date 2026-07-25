@@ -55,6 +55,17 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     return <Redirect to="/sign-in" />;
   }
 
+  if (me.isBanned) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-4 bg-[#F4F4F5] p-8 text-center">
+        <div className="text-2xl font-semibold text-red-600">Аккаунт заблокирован</div>
+        <p className="text-sm text-gray-500 max-w-sm">
+          Ваш аккаунт был заблокирован администратором. Если вы считаете это ошибкой, обратитесь в поддержку.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <Layout>
       <Component />
@@ -75,6 +86,17 @@ function AdminRoute() {
 
   if (!me || isError) {
     return <Redirect to="/sign-in" />;
+  }
+
+  if (me.isBanned) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-4 bg-[#F4F4F5] p-8 text-center">
+        <div className="text-2xl font-semibold text-red-600">Аккаунт заблокирован</div>
+        <p className="text-sm text-gray-500 max-w-sm">
+          Ваш аккаунт был заблокирован администратором. Если вы считаете это ошибкой, обратитесь в поддержку.
+        </p>
+      </div>
+    );
   }
 
   if (me.role !== "admin") {

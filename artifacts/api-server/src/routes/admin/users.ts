@@ -43,6 +43,7 @@ import { hashPassword } from "../../lib/password";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { removeRemoteXrayClient } from "../../lib/remoteNode";
+import { ensureActiveKeyForUser } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
 
@@ -421,6 +422,9 @@ router.delete("/admin/users/:userId", requireAuth, requireAdmin, async (req, res
     await tx.delete(paymentsTable).where(eq(paymentsTable.userId, userId));
     await tx.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
     await tx.delete(vpnKeysTable).where(eq(vpnKeysTable.userId, userId));
+    // Null-out self-referencing FK on any referred users before deleting,
+    // otherwise PostgreSQL raises a FK constraint violation (NO ACTION default).
+    await tx.update(usersTable).set({ referredByUserId: null }).where(eq(usersTable.referredByUserId, userId));
     await tx.delete(usersTable).where(eq(usersTable.id, userId));
   });
 
@@ -592,6 +596,71 @@ router.post("/admin/users/:userId/force-logout", requireAuth, requireAdmin, asyn
   const userId = Number(req.params["userId"]);
   if (!userId || isNaN(userId)) { res.status(400).json({ error: "Invalid userId" }); return; }
   await db.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
+  res.status(204).end();
+});
+
+router.post("/admin/users/:userId/ban", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const userId = Number(req.params["userId"]);
+  if (!userId || isNaN(userId)) { res.status(400).json({ error: "Invalid userId" }); return; }
+  if (req.appUser?.id === userId) { res.status(400).json({ error: "Cannot ban your own account" }); return; }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+  // Collect active keys before the transaction so we have node metadata for
+  // the Xray removal step (which runs outside the transaction, non-fatally).
+  const activeKeys = await db
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
+
+  // DB write: ban flag + revoke all active keys + force-logout — atomically.
+  await db.transaction(async (tx) => {
+    await tx.update(usersTable).set({ isBanned: true }).where(eq(usersTable.id, userId));
+    if (activeKeys.length > 0) {
+      await tx
+        .update(vpnKeysTable)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
+    }
+    await tx.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
+  });
+
+  // Remove from Xray nodes (non-fatal — DB revokedAt is already the authority).
+  for (const { key, node } of activeKeys) {
+    try {
+      if (node.managementApiUrl) {
+        await removeRemoteXrayClient(node, key.uuid);
+      } else if (isLocalXrayEnabled()) {
+        await removeXrayClient(key.uuid);
+      }
+    } catch (err) {
+      logger.warn({ err, uuid: key.uuid, userId }, "ban: failed to remove key from Xray (non-fatal)");
+    }
+  }
+
+  res.status(204).end();
+});
+
+router.post("/admin/users/:userId/unban", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const userId = Number(req.params["userId"]);
+  if (!userId || isNaN(userId)) { res.status(400).json({ error: "Invalid userId" }); return; }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  if (!user.isBanned) { res.status(400).json({ error: "User is not banned" }); return; }
+
+  await db.update(usersTable).set({ isBanned: false }).where(eq(usersTable.id, userId));
+
+  // Restore VPN key if the user has an active subscription (non-fatal if the
+  // node is temporarily unreachable — the user can reconnect on next request).
+  try {
+    await ensureActiveKeyForUser(userId);
+  } catch (err) {
+    logger.warn({ err, userId }, "unban: ensureActiveKeyForUser failed (non-fatal)");
+  }
+
   res.status(204).end();
 });
 
