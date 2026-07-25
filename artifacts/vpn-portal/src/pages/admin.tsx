@@ -52,7 +52,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -160,19 +160,47 @@ function SummarySection() {
   const { data, isLoading } = useGetAdminDashboardSummary({
     query: { queryKey: getGetAdminDashboardSummaryQueryKey(), refetchInterval: 30_000 },
   });
-  if (isLoading || !data) {
-    return (
-      <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full" />
-        ))}
-      </div>
-    );
-  }
 
-  const maxRevenue = Math.max(1, ...data.revenueByDay.map((d) => d.amountRub));
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem("admin-summary-collapsed");
+      if (saved !== null) return saved === "true";
+    } catch {}
+    return typeof window !== "undefined" && window.innerWidth < 768;
+  });
+
+  const toggle = () => {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem("admin-summary-collapsed", String(next)); } catch {}
+      return next;
+    });
+  };
+
+  const maxRevenue = !isLoading && data ? Math.max(1, ...data.revenueByDay.map((d) => d.amountRub)) : 1;
 
   return (
+    <div className="border border-border">
+      <button
+        onClick={toggle}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+      >
+        <span className="text-xs font-mono uppercase font-bold text-muted-foreground tracking-wider">
+          Статистика и сводка
+        </span>
+        {collapsed
+          ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+      </button>
+      {!collapsed && (
+      <div className="px-4 pb-4 pt-3 border-t border-border">
+      {(isLoading || !data) ? (
+        <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+      ) : (
     <div className="space-y-4">
       <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Metric label="Пользователи" value={data.totalUsers} />
@@ -308,6 +336,10 @@ function SummarySection() {
           )}
         </div>
       </div>
+    </div>
+      )}
+      </div>
+      )}
     </div>
   );
 }
@@ -3135,9 +3167,9 @@ export default function Admin() {
       <SummarySection />
 
       <Tabs defaultValue="payments">
-        <div className="relative -mx-4 md:mx-0">
+        <div className="relative -mx-4 md:mx-0 sticky top-0 z-40 bg-background border-b border-border">
           <div className="overflow-x-auto px-4 md:px-0">
-            <TabsList className="rounded-none w-max min-w-full md:w-auto">
+            <TabsList className="rounded-none w-max min-w-full md:w-auto border-b-0">
               <TabsTrigger value="payments" className="rounded-none gap-1.5 whitespace-nowrap">
                 <CreditCard className="w-4 h-4" /> Платежи
                 <Badge count={pendingPayments} />
