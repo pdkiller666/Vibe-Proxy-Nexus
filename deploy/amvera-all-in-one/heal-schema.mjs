@@ -539,6 +539,57 @@ try {
   `);
   console.log("heal-schema: M-16 is_banned column added to users");
 
+  // ── M-17: users.referred_by_user_id FK → ON DELETE SET NULL ──────────────
+  // The self-referencing FK was originally created without an ON DELETE action
+  // (defaults to NO ACTION / RESTRICT). Any delete path that bypasses the
+  // app-level null-out in admin/users.ts (raw SQL, migrations, direct DB
+  // access) would raise a FK violation. Recreating it with ON DELETE SET NULL
+  // makes the database itself the safety net.
+  //
+  // Uses the cursor-loop pattern from M-11: drop ALL existing FKs on this
+  // specific column (by attnum) then re-add the canonical one with SET NULL,
+  // skipping the re-add if it already exists (idempotent).
+  await client.query("BEGIN");
+  try {
+    await client.query(`
+      DO $$
+      DECLARE
+        r   RECORD;
+        col int2[];
+      BEGIN
+        -- ── users.referred_by_user_id → SET NULL ───────────────────────────
+        col := ARRAY[(SELECT attnum FROM pg_attribute
+                      WHERE attrelid = 'users'::regclass
+                        AND attname  = 'referred_by_user_id')]::int2[];
+        FOR r IN
+          SELECT conname FROM pg_constraint
+          WHERE conrelid  = 'users'::regclass
+            AND confrelid = 'users'::regclass
+            AND contype   = 'f'
+            AND conkey    = col
+        LOOP
+          EXECUTE 'ALTER TABLE users DROP CONSTRAINT ' || quote_ident(r.conname);
+        END LOOP;
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid  = 'users'::regclass
+            AND confrelid = 'users'::regclass
+            AND contype   = 'f'
+            AND conkey    = col
+            AND confdeltype = 'n'
+        ) THEN
+          ALTER TABLE users ADD CONSTRAINT users_referred_by_user_id_fkey
+            FOREIGN KEY (referred_by_user_id) REFERENCES users(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  }
+  console.log("heal-schema: M-17 users.referred_by_user_id FK → ON DELETE SET NULL");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

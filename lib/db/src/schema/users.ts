@@ -17,10 +17,11 @@ export const usersTable = pgTable("users", {
   // any pre-existing rows on startup — never leave this null/empty.
   referralCode: text("referral_code").notNull().unique().default(""),
   // Who invited this user, if anyone (null only for the very first/seed
-  // admin account, which has no referrer). Self-referencing FK — no
-  // onDelete cascade, since deleting a referrer must not delete their
-  // referrals (see admin/users.ts delete route, which doesn't touch this).
-  referredByUserId: integer("referred_by_user_id").references((): AnyPgColumn => usersTable.id),
+  // admin account, which has no referrer). Self-referencing FK with ON DELETE
+  // SET NULL — deleting a referrer nulls this column on their referrals rather
+  // than blocking the delete or cascading it. The app-level null-out in
+  // admin/users.ts is kept as defence-in-depth.
+  referredByUserId: integer("referred_by_user_id").references((): AnyPgColumn => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // Updated (throttled, at most once/minute) on any authenticated request —
   // see requireAuth/getUserBySessionToken in the api-server. Used by the

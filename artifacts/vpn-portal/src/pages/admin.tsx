@@ -2007,6 +2007,11 @@ function UsersManagement() {
                   />
                   {user.name ? `${user.name} · ` : ""}
                   {user.email}
+                  {user.isBanned && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 rounded cursor-default">
+                      ЗАБЛ
+                    </span>
+                  )}
                   {user.adminNote && (
                     <span
                       title={user.adminNote}
