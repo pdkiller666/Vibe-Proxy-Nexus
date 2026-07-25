@@ -3167,7 +3167,7 @@ export default function Admin() {
       <SummarySection />
 
       <Tabs defaultValue="payments">
-        <div className="relative -mx-4 md:mx-0 sticky top-0 z-40 bg-background border-b border-border">
+        <div className="relative -mx-4 md:mx-0 sticky top-0 z-10 bg-background border-b border-border">
           <div className="overflow-x-auto px-4 md:px-0">
             <TabsList className="rounded-none w-max min-w-full md:w-auto border-b-0">
               <TabsTrigger value="payments" className="rounded-none gap-1.5 whitespace-nowrap">
