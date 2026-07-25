@@ -27,8 +27,8 @@
 
 ## Where things live
 
-- `artifacts/api-server` — Express backend: routes under `src/routes/` (and `src/routes/admin/`), auth in `src/lib/auth.ts` + `src/lib/session.ts`, VLESS link generation in `src/lib/vless.ts`, subscription-URL tokens in `src/lib/subscription.ts`, local Xray config management in `src/lib/xray.ts`, traffic polling + key revocation from `src/lib/trafficPolling.ts`, hourly balance billing from `src/lib/hourlyBilling.ts`, subscription auto-expiry/key-revocation in `src/lib/subscriptionLifecycle.ts`, YooMoney webhook in `src/routes/yoomoney.ts`.
-- `artifacts/vpn-portal` — React/Vite frontend. Pages in `src/pages/` (home, sign-in/up, forgot/reset-password, dashboard, plans, checkout, balance-topup, slot-checkout, traffic-checkout, keys, payments, support, profile, admin, not-found). Shared query client in `src/lib/query-client.ts`.
+- `artifacts/api-server` — Express backend: routes under `src/routes/` (and `src/routes/admin/`), auth in `src/lib/auth.ts` (middlewares: `requireAuth` блокирует забаненных → 403 AccountBanned; `requireAuthAllowBanned` — без проверки `isBanned`, только для `GET /me`; `requireAdmin`) + `src/lib/session.ts`, VLESS link generation in `src/lib/vless.ts`, subscription-URL tokens in `src/lib/subscription.ts`, local Xray config management in `src/lib/xray.ts`, traffic polling + key revocation from `src/lib/trafficPolling.ts`, hourly balance billing from `src/lib/hourlyBilling.ts`, subscription auto-expiry/key-revocation in `src/lib/subscriptionLifecycle.ts`, YooMoney webhook in `src/routes/yoomoney.ts`.
+- `artifacts/vpn-portal` — React/Vite frontend. Pages in `src/pages/` (home, sign-in/up, forgot/reset-password, dashboard, plans, checkout, balance-topup, slot-checkout, traffic-checkout, keys, payments, support, profile, admin, not-found). `ProtectedRoute` и `AdminRoute` в `App.tsx` проверяют `me.isBanned` (после auth-guard) и показывают экран «Аккаунт заблокирован» вместо редиректа. Shared query client in `src/lib/query-client.ts`.
 - `deploy/amvera-all-in-one/` — the Docker deployment package actually used in production (Xray-core + Node server + Postgres schema push, all in one container). See its README for details.
 - `deploy/amvera-vpn-node/` — self-contained package for a FUTURE multi-region setup (separate VPN nodes + secured management API). Not used today.
 
@@ -66,7 +66,7 @@
 - Plans page (`/plans`): snap-carousel on mobile; selected plan highlighted with ring+shadow; active subscription plan highlighted in green with «Активный» badge and disabled button «Текущий тариф» — prevents accidental re-subscription.
 - Payments page (`/payments`): shows balance widget (with top-up), **balance transaction history**, and payment history list.
 - Dashboard (`/dashboard`): subscription status, balance, quick actions, referral section, traffic usage. Low-balance banners: orange (3–24 h left) and red critical (< 3 h left) for hourly plans; expiry banner (≤ 5 days) for monthly plans.
-- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject with screenshot preview), plans CRUD, VPN nodes CRUD, user management (activity status, reset password, extra device slots, subscription override), payment settings (SBP URL, phone/bank/recipient toggle, QR code upload, extra slot price, referral commission %, min hourly top-up, primary domain), support ticket queue, analytics.
+- Admin panel (`/admin`, gated by role): pending payments queue (confirm/reject with screenshot preview), plans CRUD, VPN nodes CRUD, user management (activity status, ban/unban с бейджем «ЗАБЛ», force-logout, reset password, set password, корректировка баланса, extra device slots, subscription override, приватные заметки), payment settings (SBP URL, phone/bank/recipient toggle, QR code upload, extra slot price, referral commission %, min hourly top-up, primary domain), support ticket queue, analytics.
 
 ## Codegen rule
 
