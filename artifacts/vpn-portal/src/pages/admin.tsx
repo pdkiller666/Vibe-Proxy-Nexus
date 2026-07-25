@@ -470,13 +470,13 @@ function PaymentsQueue() {
       <div className="flex items-center gap-3 flex-wrap">
         <Input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder="Поиск по email или референсу"
           className="rounded-none min-w-0 flex-1 basis-48"
         />
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
           <option value="pending">Ожидающие</option>
@@ -486,7 +486,7 @@ function PaymentsQueue() {
         </select>
         <select
           value={providerFilter}
-          onChange={(e) => setProviderFilter(e.target.value as typeof providerFilter)}
+          onChange={(e) => { setProviderFilter(e.target.value as typeof providerFilter); setPage(1); }}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
           <option value="all">Все методы</option>
@@ -495,7 +495,7 @@ function PaymentsQueue() {
         </select>
         <select
           value={sort}
-          onChange={(e) => setSort(e.target.value as typeof sort)}
+          onChange={(e) => { setSort(e.target.value as typeof sort); setPage(1); }}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
           <option value="date_desc">Сначала новые</option>
@@ -1842,12 +1842,12 @@ function UsersManagement() {
         <Input
           placeholder="Поиск по email или имени..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="rounded-none max-w-xs"
         />
         <select
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+          onChange={(e) => { setRoleFilter(e.target.value as typeof roleFilter); setPage(1); }}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
           <option value="all">Все роли</option>
@@ -1856,7 +1856,7 @@ function UsersManagement() {
         </select>
         <select
           value={subscriptionFilter}
-          onChange={(e) => setSubscriptionFilter(e.target.value as typeof subscriptionFilter)}
+          onChange={(e) => { setSubscriptionFilter(e.target.value as typeof subscriptionFilter); setPage(1); }}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
           <option value="all">Все подписки</option>
@@ -1865,7 +1865,7 @@ function UsersManagement() {
         </select>
         <select
           value={sort}
-          onChange={(e) => setSort(e.target.value as typeof sort)}
+          onChange={(e) => { setSort(e.target.value as typeof sort); setPage(1); }}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
           <option value="date_desc">Сначала новые</option>

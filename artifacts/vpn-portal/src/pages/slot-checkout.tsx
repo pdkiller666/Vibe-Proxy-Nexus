@@ -41,7 +41,7 @@ export default function SlotCheckout() {
   const { id } = useParams<{ id: string }>();
   const paymentId = Number(id);
   const [, setLocation] = useLocation();
-  const { data: payments, isLoading: paymentsLoading } = useListMyPayments({
+  const { data: payments, isLoading: paymentsLoading, isError: paymentsError } = useListMyPayments({
     query: {
       queryKey: getListMyPaymentsQueryKey(),
       refetchInterval: (query) => {
@@ -101,6 +101,21 @@ export default function SlotCheckout() {
       <div className="space-y-4 max-w-xl">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
+
+  if (paymentsError) {
+    return (
+      <div className="max-w-xl animate-in fade-in duration-500 space-y-3">
+        <p className="text-destructive font-medium">Не удалось загрузить данные платежа.</p>
+        <p className="text-sm text-muted-foreground">Проверьте соединение и попробуйте ещё раз.</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-primary font-medium hover:underline"
+        >
+          Обновить страницу
+        </button>
       </div>
     );
   }

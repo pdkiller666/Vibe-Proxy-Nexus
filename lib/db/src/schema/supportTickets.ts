@@ -9,13 +9,16 @@ export const supportTicketsTable = pgTable(
     id: serial("id").primaryKey(),
     userId: integer("user_id")
       .notNull()
-      .references(() => usersTable.id),
+      .references(() => usersTable.id, { onDelete: "cascade" }),
     subject: text("subject").notNull(),
     status: text("status", { enum: ticketStatusValues }).notNull().default("open"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("support_tickets_user_id_idx").on(table.userId)],
+  (table) => [
+    index("support_tickets_user_id_idx").on(table.userId),
+    index("support_tickets_status_idx").on(table.status),
+  ],
 );
 
 export const supportMessagesTable = pgTable(

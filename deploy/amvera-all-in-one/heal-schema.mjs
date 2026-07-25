@@ -496,6 +496,39 @@ try {
   `);
   console.log("heal-schema: M-14 trial_plan_id column added to payment_settings");
 
+  // ── M-15: support_tickets ON DELETE CASCADE + status index ───────────────
+  // Without CASCADE, deleting a user who has support tickets raises a FK
+  // constraint violation. Drop-then-recreate the FK regardless of its current
+  // name so the migration is idempotent.
+  await client.query(`
+    DO $$
+    DECLARE
+      _con text;
+    BEGIN
+      SELECT tc.constraint_name INTO _con
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema   = kcu.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_name      = 'support_tickets'
+        AND kcu.column_name    = 'user_id';
+      IF _con IS NOT NULL THEN
+        EXECUTE format('ALTER TABLE support_tickets DROP CONSTRAINT %I', _con);
+      END IF;
+      ALTER TABLE support_tickets
+        ADD CONSTRAINT support_tickets_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN
+      NULL; -- already recreated with CASCADE
+    END $$;
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS support_tickets_status_idx
+      ON support_tickets (status);
+  `);
+  console.log("heal-schema: M-15 support_tickets ON DELETE CASCADE + status index");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
