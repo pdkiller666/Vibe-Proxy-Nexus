@@ -1,8 +1,8 @@
 import { useListPlans } from "@workspace/api-client-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Shield, ArrowRight, Check, Zap, Eye, Lock,
-  ChevronRight, Star,
+  ChevronRight, Star, Users,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
 
@@ -365,6 +365,17 @@ function PlanSkeleton() {
 export default function Home() {
   const { data: plans, isLoading: plansLoading } = useListPlans();
   const activePlans = plans?.filter((p: { isActive: boolean }) => p.isActive) ?? [];
+  const [, navigate] = useLocation();
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteErr, setInviteErr] = useState(false);
+
+  function handleInviteSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const code = inviteCode.trim();
+    if (!code) { setInviteErr(true); return; }
+    setInviteErr(false);
+    navigate(`/sign-up?ref=${encodeURIComponent(code)}`);
+  }
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans overflow-x-hidden">
@@ -529,8 +540,34 @@ export default function Home() {
         </div>
 
         <p className="animate-fade-up-3 relative mt-5 text-xs text-gray-400">
-          Бесплатный пробный период · Без привязки карты · Отмена в любой момент
+          Бесплатный пробный период · Без привязки карты · Доступ по приглашению
         </p>
+
+        {/* Invite-code shortcut: users who already have a code skip the intermediate screen */}
+        <form
+          onSubmit={handleInviteSubmit}
+          className="animate-fade-up-3 relative mt-8 w-full max-w-sm flex flex-col items-center gap-2"
+        >
+          <p className="text-xs text-gray-400 mb-1">Уже есть инвайт-код? Введите его и сразу к регистрации:</p>
+          <div className="flex w-full gap-2">
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={(e) => { setInviteCode(e.target.value); setInviteErr(false); }}
+              placeholder="Инвайт-код"
+              className={`flex-1 border px-4 py-2.5 text-sm font-mono tracking-widest outline-none focus:ring-2 focus:ring-orange-400 transition ${
+                inviteErr ? "border-red-400" : "border-gray-200"
+              }`}
+            />
+            <button
+              type="submit"
+              className="btn-orange text-white font-bold px-5 py-2.5 text-sm shrink-0 flex items-center gap-1.5"
+            >
+              Войти <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {inviteErr && <p className="text-xs text-red-500 self-start">Введите инвайт-код</p>}
+        </form>
 
         {/* Inline stats */}
         <div className="animate-fade-up-3 relative mt-14 grid grid-cols-2 md:grid-cols-4 gap-x-10 gap-y-6">
@@ -560,8 +597,8 @@ export default function Home() {
             {[
               {
                 n: "01",
-                title: "Регистрируйтесь",
-                desc: "Email и пароль — больше ничего. Пробный период стартует автоматически сразу после создания аккаунта.",
+                title: "Получите приглашение",
+                desc: "VPNexus работает только по инвайту — попросите действующего пользователя поделиться реферальной ссылкой или кодом. Это сделано намеренно: закрытая база = стабильная нагрузка на узлы.",
               },
               {
                 n: "02",
@@ -729,6 +766,46 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ─── INVITE ONLY ────────────────────────────────────────── */}
+      <section className="py-20 px-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-orange-50 border border-orange-100 p-8 md:p-10 flex flex-col md:flex-row gap-8 items-start">
+            <div className="w-12 h-12 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center shrink-0">
+              <Users className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="flex-1 space-y-3">
+              <p className="text-orange-600 text-xs font-bold uppercase tracking-widest">Доступ по приглашению</p>
+              <h2 className="text-2xl md:text-3xl font-black tracking-tight text-gray-900">
+                Не массовый сервис —<br />закрытое сообщество
+              </h2>
+              <p className="text-gray-600 text-sm leading-relaxed">
+                Регистрация в VPNexus открыта только по реферальной ссылке или инвайт-коду от действующего пользователя.
+                Это не случайно: ограниченное число участников позволяет держать нагрузку под контролем —
+                каждый узел работает с запасом, скорость не падает в часы пик.
+              </p>
+              <p className="text-gray-500 text-sm leading-relaxed">
+                Попросите того, кто вас сюда отправил, скинуть личную реферальную ссылку из личного кабинета.
+                Она выглядит так: <span className="font-mono text-xs bg-white border border-gray-200 px-2 py-0.5 rounded">vpnexus.pro/sign-up?ref=КОД</span>
+              </p>
+              <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/sign-up"
+                  className="btn-orange text-white font-bold px-6 py-3 text-sm flex items-center gap-2 justify-center sm:justify-start"
+                >
+                  Зарегистрироваться по инвайту <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/sign-in"
+                  className="btn-outline text-gray-600 hover:text-gray-900 font-medium px-6 py-3 text-sm flex items-center gap-2 justify-center bg-white"
+                >
+                  Уже есть аккаунт? Войти
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── TESTIMONIALS ───────────────────────────────────────── */}
       <section className="py-20 px-6">
         <div className="max-w-2xl mx-auto">
@@ -759,6 +836,10 @@ export default function Home() {
             <FaqItem
               q="Что будет после окончания пробного периода?"
               a="Подписка деактивируется — ключи перестанут работать. Никакого автосписания нет. Оплатите нужный тариф и доступ восстановится."
+            />
+            <FaqItem
+              q="Как зарегистрироваться? Нужен инвайт?"
+              a="Да, регистрация открыта только по приглашению. Попросите действующего пользователя поделиться реферальной ссылкой из его личного кабинета или прислать инвайт-код. Перейдите по ссылке или введите код на странице регистрации — дальше только email и пароль."
             />
             <FaqItem
               q="Как получить помощь, если что-то не работает?"
