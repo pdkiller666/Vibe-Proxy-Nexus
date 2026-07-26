@@ -233,11 +233,13 @@ export async function issueKeyForUser(
       if (node.managementApiUrl) {
         // Use UUID as the label/email — same rationale as local Xray:
         // labels can collide across users and corrupt per-user traffic stats.
-        await addRemoteXrayClient(node, uuid, uuid);
+        // limitIp: 1 enforces one simultaneous source IP per key (= one device).
+        await addRemoteXrayClient(node, uuid, uuid, 1);
       } else {
         // Use UUID (not label) as the Xray "email" tag — labels can collide
         // across users and corrupt Xray's per-user dedup and traffic attribution.
-        await addXrayClient(uuid, uuid);
+        // limitIp: 1 enforces one simultaneous source IP per key (= one device).
+        await addXrayClient(uuid, uuid, 1);
       }
     } catch (err) {
       logger.error({ err, remote: !!node.managementApiUrl }, "issueKeyForUser: Xray provisioning failed; revoking committed DB key");

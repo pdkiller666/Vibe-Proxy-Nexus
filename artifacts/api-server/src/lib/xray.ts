@@ -29,6 +29,8 @@ interface XrayClient {
   id: string;
   email?: string;
   flow?: string;
+  /** Maximum simultaneous source IPs allowed for this client (Xray enforces at protocol level). */
+  limitIp?: number;
 }
 
 export function isLocalXrayEnabled(): boolean {
@@ -124,7 +126,7 @@ async function reloadXray(): Promise<void> {
   }
 }
 
-export async function addXrayClient(uuid: string, email: string): Promise<void> {
+export async function addXrayClient(uuid: string, email: string, limitIp?: number): Promise<void> {
   if (!isLocalXrayEnabled()) return;
   await withLock(async () => {
     const config = await readConfig();
@@ -135,7 +137,9 @@ export async function addXrayClient(uuid: string, email: string): Promise<void> 
     // happens when a key was re-issued (DB assigned a new UUID but the old UUID
     // still sits in the on-disk config). The DB record is the source of truth.
     const cleaned = clients.filter((c) => c.email !== email);
-    cleaned.push({ id: uuid, email });
+    const newClient: XrayClient = { id: uuid, email };
+    if (limitIp !== undefined) newClient.limitIp = limitIp;
+    cleaned.push(newClient);
     config["inbounds"][0]["settings"]["clients"] = cleaned;
     // Persist first — the client survives a container restart even if the
     // reload below fails; the next boot will pick this client up automatically.

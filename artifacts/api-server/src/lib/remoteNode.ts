@@ -34,11 +34,14 @@ export async function addRemoteXrayClient(
   node: RemoteNodeRef,
   uuid: string,
   label: string,
+  limitIp?: number,
 ): Promise<void> {
+  const body: Record<string, unknown> = { uuid, label };
+  if (limitIp !== undefined) body.limitIp = limitIp;
   const res = await remoteNodeFetch(node, "/clients", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uuid, label }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
