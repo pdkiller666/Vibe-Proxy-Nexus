@@ -109,10 +109,18 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
       распределение по тарифам, доход по дням за 14 дней, rolling 30-day revenue
     - `users.ts` — список пользователей с вычисляемым `activityStatus`
       (`"site"` / `"vpn"` / `"offline"`, побеждает более свежий сигнал),
-      `vpnLastActiveAt`, трафик за период, лимит трафика, активный план;
-      `PATCH /admin/users/:id/role`, `PATCH /admin/users/:id`,
-      `DELETE /admin/users/:id`, `PATCH /admin/users/:id/subscription`,
-      `PATCH /admin/users/:id/extra-slots`
+      `vpnLastActiveAt`, трафик за период, лимит трафика, активный план, флаг `isBanned`;
+      `PATCH /admin/users/:id/role` (блокирует понижение последнего админа),
+      `PATCH /admin/users/:id` (профиль),
+      `DELETE /admin/users/:id` (Xray deprovision first → DB TX; блокирует себя и последнего админа),
+      `PATCH /admin/users/:id/subscription`, `PATCH /admin/users/:id/extra-slots`,
+      `POST /admin/users/:id/force-logout`,
+      `POST /admin/users/:id/ban` (атомарно: isBanned=true + revoke active keys + delete sessions → Xray non-fatal),
+      `POST /admin/users/:id/unban` (isBanned=false + ensureActiveKeyForUser non-fatal),
+      `PATCH /admin/users/:id/note` (приватная заметка),
+      `GET /admin/users/:id/balance-transactions`,
+      `PATCH /admin/users/:id/set-password`,
+      `PATCH /admin/users/:id/set-balance` (с audit balance_transaction)
     - `passwordReset.ts` — выдать ссылку сброса пароля пользователю
     - `payments.ts` — `GET /admin/payments`, `POST /admin/payments/:id/confirm`
       (транзакционно, идемпотентно; ветви: subscription / extra_device_slot /
@@ -132,7 +140,7 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
       `DELETE /admin/vpn-keys/:id`
 
 - `src/lib/`:
-  - `auth.ts` — middlewares `requireAuth` / `requireAdmin`
+  - `auth.ts` — middlewares: `requireAuth` (сессия + проверка `isBanned` → 403 AccountBanned), `requireAuthAllowBanned` (только сессия, без `isBanned` — только для `GET /me`), `requireAdmin`
   - `session.ts` — БД-сессии (кука `vpn_session`, 30 дней), троттлированное
     обновление `users.lastActiveAt` (раз/мин), `ONLINE_THRESHOLD_MS` = 5 мин;
     токены хэшируются SHA-256 перед записью в БД
@@ -157,11 +165,11 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
   - `loginRateLimit.ts` — 5 попыток / 15 мин, in-memory Map (не синхронизируется при multi-instance)
   - `vless.ts` — генерация UUID и VLESS+WS-ссылок, `generatePaymentReference`
   - `subscription.ts` — HMAC-токены подписочной ссылки, `BRAND_NAME`, `SUBSCRIPTION_UPDATE_INTERVAL_HOURS` = 3
-  - `xray.ts` — правка живого конфига Xray на диске + `supervisorctl restart xray`
+  - `xray.ts` — правка живого конфига Xray на диске + `supervisorctl restart xray`; `addXrayClient(uuid, email, limitIp?)` принимает опциональный `limitIp` и добавляет его в объект клиента (backward-compatible); все новые ключи получают `limitIp: 1`
   - `staticServer.ts` — отдаёт собранный фронтенд из `STATIC_DIR`
   - `meResponse.ts` — общий билдер данных для `/api/me`; считает `deviceSlots` =
     `plan.devicesIncluded + subscription.extraDeviceSlots`
-  - `keyIssuance.ts` — логика выдачи VPN-ключа (проверка слотов, нод, добавление в Xray)
+  - `keyIssuance.ts` — логика выдачи VPN-ключа (проверка слотов, нод, добавление в Xray); передаёт `limitIp: 1` в `addXrayClient` и `addRemoteXrayClient` — покрывает все пути выдачи (ручной, auto после оплаты/анбана, trial)
   - `seedAdmin.ts` — при старте создаёт первого админа из `ADMIN_EMAIL`/`ADMIN_PASSWORD`
   - `backfillReferralCodes.ts` — при старте назначает `referral_code` старым строкам, у которых он пустой
   - `logger.ts` — pino
@@ -175,7 +183,7 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
 React + Vite + TypeScript, роутинг через `wouter`, состояние сервера — через TanStack Query.
 
 - `src/App.tsx` — маршруты: публичные (`/`, `/sign-in`, `/sign-up`, `/forgot-password`,
-  `/reset-password`), защищённые через `ProtectedRoute`, админские через `AdminRoute`.
+  `/reset-password`), защищённые через `ProtectedRoute` (после auth-guard проверяет `me.isBanned` → экран «Аккаунт заблокирован»), админские через `AdminRoute` (аналогичная проверка `isBanned` перед `role !== "admin"`).
 - `src/pages/`:
   - `home` — лендинг; герой со статами (`∞ / интернет без границ`, `0 ₽ / Попробовать`,
     `5 с / До первого ключа`, `24/7 / Поддержка`); секции: «Три шага», «Что вы получаете»
@@ -244,7 +252,7 @@ lib/api-spec/openapi.yaml  (источник истины — ВСЕГДА ре�
 
 | Таблица | Ключевые поля | Назначение |
 |---|---|---|
-| `users` | email (unique), passwordHash, name, role (user/admin), balanceKopecks (default 0), referralCode (unique), referredByUserId (nullable FK→users), lastActiveAt (nullable) | пользователи; `lastActiveAt` — основа онлайн-статуса "на сайте"; `balanceKopecks` — внутренний кошелёк; `referralCode` — уникальный код для приглашения |
+| `users` | email (unique), passwordHash, name, role (user/admin), balanceKopecks (default 0), referralCode (unique), referredByUserId (nullable FK→users **ON DELETE SET NULL**), lastActiveAt (nullable), adminNote (nullable), isBanned (boolean, default false) | пользователи; `lastActiveAt` — основа онлайн-статуса "на сайте"; `balanceKopecks` — внутренний кошелёк; `referralCode` — уникальный код для приглашения; `isBanned` — заблокирован (middleware 403 AccountBanned); `adminNote` — приватная заметка администратора |
 | `sessions` | token (SHA-256 хэш, PK), userId, expiresAt | БД-сессии (кука `vpn_session`, 30 дней); токен хранится захэшированным |
 | `password_reset_tokens` | token (SHA-256 хэш, PK), userId, expiresAt | одноразовые токены сброса пароля (TTL 30 мин); токен хранится захэшированным |
 | `plans` | name, description, priceRub, durationDays, devicesIncluded (default 1), trafficLimitGb (nullable=безлимит), billingType (monthly/hourly), hourlyRateKopecks (nullable), isActive | тарифные планы |
@@ -262,6 +270,7 @@ lib/api-spec/openapi.yaml  (источник истины — ВСЕГДА ре�
 `heal-schema.mjs` — нетривиальные DDL-изменения (уникальные индексы, FK constraints,
 DROP COLUMN), которые drizzle-kit push не может выполнить автоматически без промпта.
 Все PL/pgSQL блоки используют `DO $$ … $$` (двойное dollar-quoting).
+Текущие миграции: M-0→M-15 (исторические), M-16 (`users.is_banned`), M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL).
 
 ## deploy/ — деплой
 
