@@ -129,7 +129,17 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
   // If no plans exist yet the trial is silently skipped.
   try {
     const [settings] = await db.select().from(paymentSettingsTable).limit(1);
-    if (settings?.trialEnabled) {
+
+    // An invite link with explicit planId or trialDays overrides is treated as
+    // a per-link trial grant and bypasses the global trialEnabled switch.
+    // Rationale: if an admin explicitly configured trial settings on a link
+    // (e.g. a VIP campaign), those settings must fire even when the global
+    // trial toggle is off. A link with both fields null has no override intent
+    // and falls through to the global flag like any regular registration.
+    const hasInviteLinkTrialOverride =
+      inviteLink != null && (inviteLink.planId != null || inviteLink.trialDays != null);
+
+    if (settings?.trialEnabled || hasInviteLinkTrialOverride) {
       // Resolve the trial plan: admin-selected first, auto-select as fallback.
       // Auto-select only considers monthly plans — hourly plans have priceRub=0
       // and would always win the sort, but an hourly trial is meaningless since

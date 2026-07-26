@@ -101,15 +101,21 @@ router.post("/admin/invite-links", requireAuth, requireAdmin, async (req, res): 
 
   const { note, planId, trialDays, maxUses, expiresAt } = parsed.data;
 
-  // Verify planId points to an active plan when provided.
+  // Verify planId points to an active monthly plan when provided.
+  // Monthly-only: hourly plans have priceRub=0 so their first billing tick
+  // immediately kills VPN access when the new user's balance is zero.
   if (planId != null) {
     const [plan] = await db
-      .select({ id: plansTable.id })
+      .select({ id: plansTable.id, billingType: plansTable.billingType })
       .from(plansTable)
       .where(and(eq(plansTable.id, planId), eq(plansTable.isActive, true)))
       .limit(1);
     if (!plan) {
       res.status(400).json({ error: "Указанный тариф не найден или неактивен" });
+      return;
+    }
+    if (plan.billingType !== "monthly") {
+      res.status(400).json({ error: "Для инвайт-ссылки можно выбрать только месячный тариф" });
       return;
     }
   }
@@ -174,15 +180,19 @@ router.patch("/admin/invite-links/:linkId", requireAuth, requireAdmin, async (re
   const { linkId } = params.data;
   const { note, isActive, planId, trialDays, maxUses, expiresAt } = parsed.data;
 
-  // Validate planId when being set to a non-null value.
+  // Validate planId when being set to a non-null value — must be active and monthly.
   if (planId != null) {
     const [plan] = await db
-      .select({ id: plansTable.id })
+      .select({ id: plansTable.id, billingType: plansTable.billingType })
       .from(plansTable)
       .where(and(eq(plansTable.id, planId), eq(plansTable.isActive, true)))
       .limit(1);
     if (!plan) {
       res.status(400).json({ error: "Указанный тариф не найден или неактивен" });
+      return;
+    }
+    if (plan.billingType !== "monthly") {
+      res.status(400).json({ error: "Для инвайт-ссылки можно выбрать только месячный тариф" });
       return;
     }
   }

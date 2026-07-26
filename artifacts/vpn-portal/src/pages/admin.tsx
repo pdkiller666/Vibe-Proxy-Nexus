@@ -1984,7 +1984,9 @@ function InviteLinksManagement() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const { data: links, isLoading } = useListAdminInviteLinks();
   const { data: plans } = useListPlans();
+  const { data: paymentSettings } = useGetPaymentSettings();
   const { toast } = useToast();
+  const trialDisabled = paymentSettings !== undefined && !paymentSettings.trialEnabled;
 
   const { mutate: createLink, isPending: creating } = useCreateAdminInviteLink({
     mutation: {
@@ -2067,6 +2069,28 @@ function InviteLinksManagement() {
           <Plus className="w-3.5 h-3.5" /> Создать
         </button>
       </div>
+
+      {/* Warning: global trial disabled, but per-link overrides still work */}
+      {trialDisabled && (
+        <div className="flex items-start gap-2.5 border border-amber-300 bg-amber-50/60 px-3 py-2.5 text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+          <span>
+            Глобальный пробный период <strong>выключен</strong> в Настройках. Ссылки с явно заданным тарифом или
+            длиной пробника всё равно выдадут пробник — остальные не выдадут.
+            Чтобы пробник работал для всех ссылок без оверрайда, включите его в{" "}
+            <button
+              type="button"
+              className="underline underline-offset-2 hover:text-amber-900 transition-colors"
+              onClick={() => {
+                const el = document.querySelector('[data-tab="settings"]') as HTMLButtonElement | null;
+                el?.click();
+              }}
+            >
+              Настройках
+            </button>.
+          </span>
+        </div>
+      )}
 
       {/* Create form */}
       {showForm && (
