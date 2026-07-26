@@ -102,7 +102,7 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
 
   const [user] = await db
     .insert(usersTable)
-    .values({ email, passwordHash, name: name ?? null, referredByUserId: referrerId })
+    .values({ email, passwordHash, name: name ?? null, referredByUserId: referrerId, inviteLinkId: resolvedInviteLinkId })
     .onConflictDoNothing({ target: usersTable.email })
     .returning();
 

@@ -874,6 +874,18 @@ export interface AdminInviteLinkUpdateInput {
   expiresAt?: string | null;
 }
 
+export interface AdminInviteLinkUser {
+  id: number;
+  email: string;
+  /** @nullable */
+  name: string | null;
+  createdAt: string;
+}
+
+export type GetAdminInviteLinkUsersParams = {
+  linkId: number;
+};
+
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
 };

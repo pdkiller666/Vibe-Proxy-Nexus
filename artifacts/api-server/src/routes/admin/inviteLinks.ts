@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
-import { db, inviteLinksTable, plansTable } from "@workspace/db";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { db, inviteLinksTable, plansTable, usersTable } from "@workspace/db";
 import {
   CreateAdminInviteLinkBody,
   CreateAdminInviteLinkResponse,
@@ -9,6 +9,7 @@ import {
   UpdateAdminInviteLinkParams,
   UpdateAdminInviteLinkResponse,
   DeleteAdminInviteLinkParams,
+  GetAdminInviteLinkUsersParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { logger } from "../../lib/logger";
@@ -221,6 +222,48 @@ router.patch("/admin/invite-links/:linkId", requireAuth, requireAdmin, async (re
 
   const [row] = await selectWithPlan().where(eq(inviteLinksTable.id, updated.id));
   res.json(UpdateAdminInviteLinkResponse.parse(formatLink(row!)));
+});
+
+// ── GET /admin/invite-links/:linkId/users ────────────────────────────────────
+router.get("/admin/invite-links/:linkId/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const params = GetAdminInviteLinkUsersParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const { linkId } = params.data;
+
+  // Verify the link exists before returning its audience so we get a proper
+  // 404 instead of an empty array for non-existent link IDs.
+  const [link] = await db
+    .select({ id: inviteLinksTable.id })
+    .from(inviteLinksTable)
+    .where(eq(inviteLinksTable.id, linkId))
+    .limit(1);
+
+  if (!link) {
+    res.status(404).json({ error: "Ссылка не найдена" });
+    return;
+  }
+
+  const users = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      name: usersTable.name,
+      createdAt: usersTable.createdAt,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.inviteLinkId, linkId))
+    .orderBy(asc(usersTable.createdAt));
+
+  res.json(users.map((u) => ({
+    id: u.id,
+    email: u.email,
+    name: u.name ?? null,
+    createdAt: u.createdAt.toISOString(),
+  })));
 });
 
 // ── DELETE /admin/invite-links/:linkId ───────────────────────────────────────

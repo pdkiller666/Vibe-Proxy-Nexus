@@ -938,6 +938,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminInviteLink"
 
+  /admin/invite-links/{linkId}/users:
+    get:
+      operationId: getAdminInviteLinkUsers
+      tags: [admin]
+      summary: List users who registered via an admin invite link
+      parameters:
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of users registered via this invite link
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminInviteLinkUser"
+
   /admin/invite-links/{linkId}:
     patch:
       operationId: updateAdminInviteLink
@@ -2378,6 +2399,15 @@ components:
       properties:
         status:
           $ref: "#/components/schemas/TicketStatus"
+
+    AdminInviteLinkUser:
+      type: object
+      required: [id, email, createdAt]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        name: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
 
     AdminInviteLink:
       type: object

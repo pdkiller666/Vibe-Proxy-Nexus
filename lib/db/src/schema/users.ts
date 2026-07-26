@@ -34,11 +34,18 @@ export const usersTable = pgTable("users", {
   // rather than silently redirecting to sign-in). VPN keys are revoked and
   // sessions are cleared on ban; ensureActiveKeyForUser is called on unban.
   isBanned: boolean("is_banned").notNull().default(false),
+  // Which admin invite link this user registered through, if any. Nullable FK
+  // to invite_links(id) with ON DELETE SET NULL — enforced at DB level via
+  // heal-schema M-19. No TypeScript-level .references() here to avoid a
+  // circular import (inviteLinks.ts already imports usersTable from this file).
+  inviteLinkId: integer("invite_link_id"),
 },
 (table) => [
   // Referral-tree traversal and commission attribution walk this FK on every
   // subscription payment confirmation.
   index("users_referred_by_user_id_idx").on(table.referredByUserId),
+  // Admin invite-link audience lookup: "who registered via link X?"
+  index("users_invite_link_id_idx").on(table.inviteLinkId),
 ]);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({

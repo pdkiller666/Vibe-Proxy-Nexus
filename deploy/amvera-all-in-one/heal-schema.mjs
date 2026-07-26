@@ -625,6 +625,35 @@ try {
   `);
   console.log("heal-schema: M-18 invite_links table + indexes");
 
+  // ── M-19: users.invite_link_id FK → invite_links ─────────────────────────
+  // Records which admin invite link each user registered through. This enables
+  // "show me who came from this campaign link" queries in the admin panel.
+  // Nullable so users registered before this feature (or via plain referral
+  // code) are unaffected. ON DELETE SET NULL: deleting an invite link never
+  // removes the user rows — it just clears the attribution reference.
+  await client.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_link_id integer;
+  `);
+  // Add FK constraint idempotently (may already exist on repeated runs).
+  await client.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'users_invite_link_id_fkey'
+          AND conrelid = 'users'::regclass
+      ) THEN
+        ALTER TABLE users
+          ADD CONSTRAINT users_invite_link_id_fkey
+          FOREIGN KEY (invite_link_id) REFERENCES invite_links(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS users_invite_link_id_idx ON users(invite_link_id);
+  `);
+  console.log("heal-schema: M-19 users.invite_link_id FK → invite_links");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

@@ -51,8 +51,9 @@ import {
   useUpdateAdminInviteLink,
   useDeleteAdminInviteLink,
   getListAdminInviteLinksQueryKey,
+  useGetAdminInviteLinkUsers,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1684,18 +1685,26 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
 function InviteLinkRow({
   link,
   basePath,
+  isEditing,
+  isViewingUsers,
   onToggleActive,
   onDelete,
   onCopyUrl,
+  onEdit,
+  onViewUsers,
 }: {
   link: AdminInviteLink;
   basePath: string;
+  isEditing: boolean;
+  isViewingUsers: boolean;
   onToggleActive: () => void;
   onDelete: () => void;
   onCopyUrl: () => void;
+  onEdit: () => void;
+  onViewUsers: () => void;
 }) {
   return (
-    <tr className={`hover:bg-muted/30 transition-colors ${!link.isActive ? "opacity-50" : ""}`}>
+    <tr className={`hover:bg-muted/30 transition-colors ${!link.isActive ? "opacity-50" : ""} ${isEditing ? "bg-orange-50/40" : ""}`}>
       <td className="px-4 py-2.5 max-w-[200px]">
         <div className="font-medium truncate">{link.note ?? <span className="text-muted-foreground italic">без заметки</span>}</div>
         <div className="flex items-center gap-1 mt-0.5">
@@ -1746,13 +1755,226 @@ function InviteLinkRow({
         {link.expiresAt ? formatDate(link.expiresAt) : "—"}
       </td>
       <td className="px-4 py-2.5">
-        <button
-          onClick={onDelete}
-          className="p-1 text-muted-foreground hover:text-red-500 transition-colors"
-          title="Удалить ссылку"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onViewUsers}
+            className={`p-1 transition-colors ${isViewingUsers ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
+            title="Посмотреть пользователей этой ссылки"
+          >
+            <Users className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onEdit}
+            className={`p-1 transition-colors ${isEditing ? "text-orange-600" : "text-muted-foreground hover:text-foreground"}`}
+            title="Редактировать ссылку"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1 text-muted-foreground hover:text-red-500 transition-colors"
+            title="Удалить ссылку"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** Expandable panel showing all users who registered via a specific invite link. */
+function InviteLinkUsersPanel({ linkId, linkCode }: { linkId: number; linkCode: string }) {
+  const { data: users, isLoading } = useGetAdminInviteLinkUsers(linkId);
+
+  return (
+    <tr className="bg-blue-50/40 border-b border-blue-100">
+      <td colSpan={6} className="px-4 py-3">
+        <div className="space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
+            Пользователи по ссылке <span className="font-mono">{linkCode}</span>
+          </p>
+          {isLoading ? (
+            <div className="text-xs text-muted-foreground">Загрузка...</div>
+          ) : !users?.length ? (
+            <div className="text-xs text-muted-foreground italic">
+              Никто ещё не зарегистрировался по этой ссылке
+            </div>
+          ) : (
+            <div className="border border-blue-100 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-blue-100 bg-blue-50/60">
+                    <th className="text-left px-3 py-1.5 font-bold uppercase text-muted-foreground">Пользователь</th>
+                    <th className="text-left px-3 py-1.5 font-bold uppercase text-muted-foreground">Email</th>
+                    <th className="text-left px-3 py-1.5 font-bold uppercase text-muted-foreground">Дата регистрации</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-blue-50">
+                  {(users as AdminInviteLinkUser[]).map((u) => (
+                    <tr key={u.id} className="hover:bg-blue-50/40">
+                      <td className="px-3 py-1.5 font-medium">{u.name ?? <span className="text-muted-foreground italic">без имени</span>}</td>
+                      <td className="px-3 py-1.5 font-mono text-muted-foreground">{u.email}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground">{formatDate(u.createdAt as unknown as string)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-blue-100 bg-blue-50/40">
+                  <tr>
+                    <td colSpan={3} className="px-3 py-1.5 text-muted-foreground">
+                      Всего: <span className="font-bold">{users.length}</span>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** Convert a UTC ISO string to a YYYY-MM-DDTHH:mm string in the browser's local timezone,
+ *  suitable for use as the value of a <input type="datetime-local"> element. */
+function toLocalDatetimeInput(isoString: string | Date): string {
+  const d = typeof isoString === "string" ? new Date(isoString) : isoString;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function InviteLinkEditRow({
+  link,
+  plans,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  link: AdminInviteLink;
+  plans: Plan[];
+  onSave: (data: { note?: string; planId?: number | null; trialDays?: number | null; maxUses?: number | null; expiresAt?: string | null }) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [note, setNote] = useState(link.note ?? "");
+  const [planId, setPlanId] = useState(link.planId != null ? String(link.planId) : "");
+  const [trialDays, setTrialDays] = useState(link.trialDays != null ? String(link.trialDays) : "");
+  const [maxUses, setMaxUses] = useState(link.maxUses != null ? String(link.maxUses) : "");
+
+  // Initialize in local time so the displayed value matches the user's clock,
+  // and track the original value so we only send the field when it actually changed.
+  const initialExpiresAt = link.expiresAt ? toLocalDatetimeInput(link.expiresAt as unknown as string) : "";
+  const [expiresAt, setExpiresAt] = useState(initialExpiresAt);
+  const [expiresAtTouched, setExpiresAtTouched] = useState(false);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    // Only include expiresAt in the payload when the user explicitly changed it,
+    // to avoid accidentally overwriting or drifting an untouched expiry value.
+    const expiresAtPayload: { expiresAt?: string | null } = expiresAtTouched
+      ? { expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null }
+      : {};
+    onSave({
+      note: note.trim() || undefined,
+      planId: planId ? Number(planId) : null,
+      trialDays: trialDays ? Number(trialDays) : null,
+      maxUses: maxUses ? Number(maxUses) : null,
+      ...expiresAtPayload,
+    });
+  }
+
+  const monthlyPlans = plans.filter((p) => p.isActive && p.billingType === "monthly");
+
+  return (
+    <tr className="bg-orange-50/60 border-b border-orange-200">
+      <td colSpan={6} className="px-4 py-3">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-orange-700">
+            Редактировать: <span className="font-mono">{link.code}</span>
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">Заметка</label>
+              <Input
+                placeholder="Например: Telegram-канал @vpnexus или Иван из команды"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="rounded-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Тариф <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <select
+                value={planId}
+                onChange={(e) => setPlanId(e.target.value)}
+                className="w-full border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">По умолчанию (глобальная настройка)</option>
+                {monthlyPlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — {p.priceRub} ₽/мес
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Пробный период, дней <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                placeholder="Стандарт (из настроек)"
+                value={trialDays}
+                onChange={(e) => setTrialDays(e.target.value)}
+                className="rounded-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Лимит использований <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="Без лимита"
+                value={maxUses}
+                onChange={(e) => setMaxUses(e.target.value)}
+                className="rounded-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Действует до <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <Input
+                type="datetime-local"
+                value={expiresAt}
+                onChange={(e) => { setExpiresAt(e.target.value); setExpiresAtTouched(true); }}
+                className="rounded-none"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-3 py-1.5 text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-4 py-1.5 text-sm bg-orange-600 hover:bg-orange-700 text-white font-mono transition-colors disabled:opacity-50"
+            >
+              {isSaving ? "Сохранение..." : "Сохранить"}
+            </button>
+          </div>
+        </form>
       </td>
     </tr>
   );
@@ -1776,10 +1998,25 @@ function InviteLinksManagement() {
     },
   });
 
+  const [editingLinkId, setEditingLinkId] = useState<number | null>(null);
+  const [viewingUsersLinkId, setViewingUsersLinkId] = useState<number | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   const { mutate: updateLink } = useUpdateAdminInviteLink({
     mutation: {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() }),
-      onError: () => toast({ title: "Ошибка обновления", variant: "destructive" }),
+      onSuccess: (_data, variables) => {
+        queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() });
+        // Only close edit form and show toast when it was an edit (not a toggle)
+        if (editingLinkId === variables.linkId) {
+          setEditingLinkId(null);
+          toast({ title: "Ссылка обновлена" });
+        }
+        setIsSavingEdit(false);
+      },
+      onError: () => {
+        toast({ title: "Ошибка обновления", variant: "destructive" });
+        setIsSavingEdit(false);
+      },
     },
   });
 
@@ -1946,21 +2183,43 @@ function InviteLinksManagement() {
             </thead>
             <tbody className="divide-y divide-border">
               {links.map((link) => (
-                <InviteLinkRow
-                  key={link.id}
-                  link={link}
-                  basePath={basePath}
-                  onToggleActive={() =>
-                    updateLink({ linkId: link.id, data: { isActive: !link.isActive } })
-                  }
-                  onDelete={() => deleteLink({ linkId: link.id })}
-                  onCopyUrl={() => {
-                    const url = `${window.location.origin}${basePath}/sign-up?ref=${link.code}`;
-                    navigator.clipboard.writeText(url).then(() =>
-                      toast({ title: "Ссылка скопирована", description: link.note ?? link.code }),
-                    );
-                  }}
-                />
+                <>
+                  <InviteLinkRow
+                    key={link.id}
+                    link={link}
+                    basePath={basePath}
+                    isEditing={editingLinkId === link.id}
+                    isViewingUsers={viewingUsersLinkId === link.id}
+                    onToggleActive={() =>
+                      updateLink({ linkId: link.id, data: { isActive: !link.isActive } })
+                    }
+                    onDelete={() => deleteLink({ linkId: link.id })}
+                    onCopyUrl={() => {
+                      const url = `${window.location.origin}${basePath}/sign-up?ref=${link.code}`;
+                      navigator.clipboard.writeText(url).then(() =>
+                        toast({ title: "Ссылка скопирована", description: link.note ?? link.code }),
+                      );
+                    }}
+                    onEdit={() => setEditingLinkId(editingLinkId === link.id ? null : link.id)}
+                    onViewUsers={() => setViewingUsersLinkId(viewingUsersLinkId === link.id ? null : link.id)}
+                  />
+                  {viewingUsersLinkId === link.id && (
+                    <InviteLinkUsersPanel key={`users-${link.id}`} linkId={link.id} linkCode={link.code} />
+                  )}
+                  {editingLinkId === link.id && (
+                    <InviteLinkEditRow
+                      key={`edit-${link.id}`}
+                      link={link}
+                      plans={plans ?? []}
+                      isSaving={isSavingEdit}
+                      onCancel={() => setEditingLinkId(null)}
+                      onSave={(data) => {
+                        setIsSavingEdit(true);
+                        updateLink({ linkId: link.id, data });
+                      }}
+                    />
+                  )}
+                </>
               ))}
             </tbody>
           </table>

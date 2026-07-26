@@ -1283,6 +1283,22 @@ export const DeleteAdminInviteLinkResponse = zod.void()
 
 
 /**
+ * @summary List users who registered via an admin invite link
+ */
+export const GetAdminInviteLinkUsersParams = zod.object({
+  "linkId": zod.coerce.number()
+})
+
+export const GetAdminInviteLinkUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const GetAdminInviteLinkUsersResponse = zod.array(GetAdminInviteLinkUsersResponseItem)
+
+
+/**
  * @summary Recent payment events for polling-based notifications
  */
 export const GetAdminNotificationsQueryParams = zod.object({
