@@ -590,6 +590,41 @@ try {
   }
   console.log("heal-schema: M-17 users.referred_by_user_id FK → ON DELETE SET NULL");
 
+  // ── M-18: invite_links table ──────────────────────────────────────────────
+  // Admin-created invite links with per-link plan/trial overrides.
+  // Code is 12 chars (vs 8 for user referral codes) — distinct length means
+  // zero namespace collision; auth.ts checks this table first.
+  // created_by_user_id CASCADE: deleting an admin removes their invite links.
+  // plan_id SET NULL: deleting a plan never leaves a dangling FK.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS invite_links (
+      id                   serial        PRIMARY KEY,
+      code                 text          NOT NULL,
+      note                 text,
+      created_by_user_id   integer       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      plan_id              integer       REFERENCES plans(id) ON DELETE SET NULL,
+      trial_days           integer,
+      max_uses             integer,
+      used_count           integer       NOT NULL DEFAULT 0,
+      is_active            boolean       NOT NULL DEFAULT true,
+      expires_at           timestamptz,
+      created_at           timestamptz   NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'invite_links_code_unique') THEN
+        CREATE UNIQUE INDEX invite_links_code_unique ON invite_links(code);
+      END IF;
+    END $$;
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS invite_links_created_by_user_id_idx
+      ON invite_links(created_by_user_id)
+  `);
+  console.log("heal-schema: M-18 invite_links table + indexes");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

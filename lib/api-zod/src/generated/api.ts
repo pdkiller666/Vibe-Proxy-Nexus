@@ -1190,6 +1190,99 @@ export const ListAdminReferralsResponse = zod.array(ListAdminReferralsResponseIt
 
 
 /**
+ * @summary List admin-created invite links
+ */
+export const ListAdminInviteLinksResponseItem = zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "note": zod.string().nullable(),
+  "createdByUserId": zod.number(),
+  "planId": zod.number().nullable(),
+  "planName": zod.string().nullable(),
+  "trialDays": zod.number().nullable(),
+  "maxUses": zod.number().nullable(),
+  "usedCount": zod.number(),
+  "isActive": zod.boolean(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdminInviteLinksResponse = zod.array(ListAdminInviteLinksResponseItem)
+
+
+/**
+ * @summary Create an admin invite link
+ */
+
+
+
+
+export const CreateAdminInviteLinkBody = zod.object({
+  "note": zod.string().optional(),
+  "planId": zod.number().optional(),
+  "trialDays": zod.number().min(1).optional(),
+  "maxUses": zod.number().min(1).optional(),
+  "expiresAt": zod.coerce.date().optional()
+})
+
+export const CreateAdminInviteLinkResponse = zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "note": zod.string().nullable(),
+  "createdByUserId": zod.number(),
+  "planId": zod.number().nullable(),
+  "planName": zod.string().nullable(),
+  "trialDays": zod.number().nullable(),
+  "maxUses": zod.number().nullable(),
+  "usedCount": zod.number(),
+  "isActive": zod.boolean(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update an admin invite link (note, isActive, planId, trialDays, maxUses, expiresAt)
+ */
+export const UpdateAdminInviteLinkParams = zod.object({
+  "linkId": zod.coerce.number()
+})
+
+export const UpdateAdminInviteLinkBody = zod.object({
+  "note": zod.string().nullish(),
+  "isActive": zod.boolean().optional(),
+  "planId": zod.number().nullish(),
+  "trialDays": zod.number().nullish(),
+  "maxUses": zod.number().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})
+
+export const UpdateAdminInviteLinkResponse = zod.object({
+  "id": zod.number(),
+  "code": zod.string(),
+  "note": zod.string().nullable(),
+  "createdByUserId": zod.number(),
+  "planId": zod.number().nullable(),
+  "planName": zod.string().nullable(),
+  "trialDays": zod.number().nullable(),
+  "maxUses": zod.number().nullable(),
+  "usedCount": zod.number(),
+  "isActive": zod.boolean(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an admin invite link
+ */
+export const DeleteAdminInviteLinkParams = zod.object({
+  "linkId": zod.coerce.number()
+})
+
+export const DeleteAdminInviteLinkResponse = zod.void()
+
+
+/**
  * @summary Recent payment events for polling-based notifications
  */
 export const GetAdminNotificationsQueryParams = zod.object({

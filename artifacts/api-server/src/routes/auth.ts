@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, asc, eq } from "drizzle-orm";
-import { db, usersTable, plansTable, subscriptionsTable, paymentSettingsTable } from "@workspace/db";
+import { and, asc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
+import { db, inviteLinksTable, usersTable, plansTable, subscriptionsTable, paymentSettingsTable } from "@workspace/db";
 import {
   RegisterBody,
   RegisterResponse,
@@ -49,14 +49,46 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
   const email = normalizeEmail(parsed.data.email);
   const { password, name, ref } = parsed.data;
 
-  // Invite-only: every registration must carry a valid referrer's code. No
-  // bootstrap exception — the seeded admin account already has one (see
-  // seedAdmin.ts), so it's the root of every invite chain.
-  const [referrer] = await db.select().from(usersTable).where(eq(usersTable.referralCode, ref.trim()));
+  // Invite-only lookup — two tiers, checked in priority order:
+  //   1. Admin invite links (invite_links table) — carry per-link plan/trial
+  //      overrides and a usage counter. Code length is 12 chars, deliberately
+  //      longer than the 8-char user referral codes, so the two pools never
+  //      collide. Rejected when isActive=false, expired, or maxUses reached.
+  //   2. User referral codes (users.referral_code) — standard invite chain;
+  //      no per-link overrides; commission attribution still applies.
+  const trimmedRef = ref.trim();
 
-  if (!referrer) {
-    res.status(400).json({ error: "Недействительная реферальная ссылка. Регистрация возможна только по приглашению." });
-    return;
+  const [inviteLink] = await db
+    .select()
+    .from(inviteLinksTable)
+    .where(
+      and(
+        eq(inviteLinksTable.code, trimmedRef),
+        eq(inviteLinksTable.isActive, true),
+        or(isNull(inviteLinksTable.expiresAt), gt(inviteLinksTable.expiresAt, new Date())),
+        or(isNull(inviteLinksTable.maxUses), lt(inviteLinksTable.usedCount, inviteLinksTable.maxUses)),
+      ),
+    );
+
+  let referrerId: number;
+  let resolvedInviteLinkId: number | null = null;
+
+  if (inviteLink) {
+    // Admin-created invite link — use the link creator as referrer so any
+    // configured commission flows to the admin who issued the link.
+    referrerId = inviteLink.createdByUserId;
+    resolvedInviteLinkId = inviteLink.id;
+  } else {
+    // Fall back to standard user referral code.
+    const [referrer] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.referralCode, trimmedRef));
+    if (!referrer) {
+      res.status(400).json({ error: "Недействительная реферальная ссылка. Регистрация возможна только по приглашению." });
+      return;
+    }
+    referrerId = referrer.id;
   }
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
@@ -70,7 +102,7 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
 
   const [user] = await db
     .insert(usersTable)
-    .values({ email, passwordHash, name: name ?? null, referredByUserId: referrer.id })
+    .values({ email, passwordHash, name: name ?? null, referredByUserId: referrerId })
     .onConflictDoNothing({ target: usersTable.email })
     .returning();
 
@@ -80,6 +112,16 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
   }
 
   await assignReferralCode(user.id);
+
+  // Atomically increment usage counter so the admin can track registrations
+  // per invite link. Done after successful user creation (not inside the
+  // onConflictDoNothing block) so a duplicate-email race never inflates the count.
+  if (resolvedInviteLinkId !== null) {
+    await db
+      .update(inviteLinksTable)
+      .set({ usedCount: sql`${inviteLinksTable.usedCount} + 1` })
+      .where(eq(inviteLinksTable.id, resolvedInviteLinkId));
+  }
 
   // Trial subscription: if enabled in settings, create an active subscription
   // immediately so the user can try the service without paying first.
@@ -94,20 +136,25 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
       // balance=0 means the first billing tick immediately stops VPN access.
       let trialPlan: typeof plansTable.$inferSelect | undefined;
 
-      if (settings.trialPlanId) {
-        // Admin explicitly picked a plan. Verify it's still active — if it was
-        // deactivated or deleted (ON DELETE SET NULL clears the FK), fall through
-        // to auto-select so the trial still fires rather than silently skipping.
+      // Plan resolution priority (highest → lowest):
+      //   1. invite link planId override (per-link, set at link creation time)
+      //   2. global trialPlanId from payment_settings (admin-selected)
+      //   3. cheapest active monthly plan (auto-select fallback)
+      const overridePlanId = inviteLink?.planId ?? settings.trialPlanId ?? null;
+
+      if (overridePlanId) {
+        // Verify the plan is still active — if deleted/deactivated, fall through
+        // to auto-select so the trial fires rather than silently skipping.
         const [explicit] = await db
           .select()
           .from(plansTable)
-          .where(and(eq(plansTable.id, settings.trialPlanId), eq(plansTable.isActive, true)))
+          .where(and(eq(plansTable.id, overridePlanId), eq(plansTable.isActive, true)))
           .limit(1);
         trialPlan = explicit;
         if (!trialPlan) {
           logger.warn(
-            { userId: user.id, trialPlanId: settings.trialPlanId },
-            "Trial plan is inactive/missing — falling back to cheapest monthly plan",
+            { userId: user.id, overridePlanId },
+            "Override trial plan is inactive/missing — falling back to cheapest monthly plan",
           );
         }
       }
@@ -123,7 +170,8 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
       }
 
       if (trialPlan) {
-        const trialDays = settings.trialDays ?? 5;
+        // trialDays priority: invite-link override → global setting → 5-day default.
+        const trialDays = inviteLink?.trialDays ?? settings.trialDays ?? 5;
         const startsAt = new Date();
         const endsAt = new Date(startsAt.getTime() + trialDays * 24 * 60 * 60 * 1000);
         await db.insert(subscriptionsTable).values({

@@ -906,6 +906,76 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdminReferralEntry"
 
+  /admin/invite-links:
+    get:
+      operationId: listAdminInviteLinks
+      tags: [admin]
+      summary: List admin-created invite links
+      responses:
+        "200":
+          description: List of invite links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminInviteLink"
+    post:
+      operationId: createAdminInviteLink
+      tags: [admin]
+      summary: Create an admin invite link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminInviteLinkCreateInput"
+      responses:
+        "201":
+          description: Created invite link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminInviteLink"
+
+  /admin/invite-links/{linkId}:
+    patch:
+      operationId: updateAdminInviteLink
+      tags: [admin]
+      summary: Update an admin invite link (note, isActive, planId, trialDays, maxUses, expiresAt)
+      parameters:
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminInviteLinkUpdateInput"
+      responses:
+        "200":
+          description: Updated invite link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminInviteLink"
+    delete:
+      operationId: deleteAdminInviteLink
+      tags: [admin]
+      summary: Delete an admin invite link
+      parameters:
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /admin/notifications:
     get:
       operationId: getAdminNotifications
@@ -2308,3 +2378,39 @@ components:
       properties:
         status:
           $ref: "#/components/schemas/TicketStatus"
+
+    AdminInviteLink:
+      type: object
+      required: [id, code, note, createdByUserId, planId, planName, trialDays, maxUses, usedCount, isActive, expiresAt, createdAt]
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        note: { type: ["string", "null"] }
+        createdByUserId: { type: integer }
+        planId: { type: ["integer", "null"] }
+        planName: { type: ["string", "null"] }
+        trialDays: { type: ["integer", "null"] }
+        maxUses: { type: ["integer", "null"] }
+        usedCount: { type: integer }
+        isActive: { type: boolean }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    AdminInviteLinkCreateInput:
+      type: object
+      properties:
+        note: { type: string }
+        planId: { type: integer }
+        trialDays: { type: integer, minimum: 1 }
+        maxUses: { type: integer, minimum: 1 }
+        expiresAt: { type: string, format: date-time }
+
+    AdminInviteLinkUpdateInput:
+      type: object
+      properties:
+        note: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        planId: { type: ["integer", "null"] }
+        trialDays: { type: ["integer", "null"] }
+        maxUses: { type: ["integer", "null"] }
+        expiresAt: { type: ["string", "null"], format: date-time }

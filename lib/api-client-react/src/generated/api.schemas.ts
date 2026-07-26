@@ -829,6 +829,51 @@ export interface TicketStatusUpdate {
   status: TicketStatus;
 }
 
+export interface AdminInviteLink {
+  id: number;
+  code: string;
+  /** @nullable */
+  note: string | null;
+  createdByUserId: number;
+  /** @nullable */
+  planId: number | null;
+  /** @nullable */
+  planName: string | null;
+  /** @nullable */
+  trialDays: number | null;
+  /** @nullable */
+  maxUses: number | null;
+  usedCount: number;
+  isActive: boolean;
+  /** @nullable */
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminInviteLinkCreateInput {
+  note?: string;
+  planId?: number;
+  /** @minimum 1 */
+  trialDays?: number;
+  /** @minimum 1 */
+  maxUses?: number;
+  expiresAt?: string;
+}
+
+export interface AdminInviteLinkUpdateInput {
+  /** @nullable */
+  note?: string | null;
+  isActive?: boolean;
+  /** @nullable */
+  planId?: number | null;
+  /** @nullable */
+  trialDays?: number | null;
+  /** @nullable */
+  maxUses?: number | null;
+  /** @nullable */
+  expiresAt?: string | null;
+}
+
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
 };

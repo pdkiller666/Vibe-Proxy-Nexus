@@ -8,6 +8,9 @@
 
 export * from './adminBalanceTransaction';
 export * from './adminBalanceTransactionType';
+export * from './adminInviteLink';
+export * from './adminInviteLinkCreateInput';
+export * from './adminInviteLinkUpdateInput';
 export * from './adminNotification';
 export * from './adminPasswordResetResult';
 export * from './adminPayment';

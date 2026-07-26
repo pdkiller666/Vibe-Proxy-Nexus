@@ -10,6 +10,7 @@ import usersRouter from "./users";
 import passwordResetRouter from "./passwordReset";
 import supportRouter from "./support";
 import referralsRouter from "./referrals";
+import inviteLinksRouter from "./inviteLinks";
 import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
@@ -35,6 +36,7 @@ router.use(usersRouter);
 router.use(passwordResetRouter);
 router.use(supportRouter);
 router.use(referralsRouter);
+router.use(inviteLinksRouter);
 router.use(notificationsRouter);
 
 export default router;

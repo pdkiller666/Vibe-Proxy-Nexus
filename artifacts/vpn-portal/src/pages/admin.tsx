@@ -46,15 +46,20 @@ import {
   useGetVpnNodeHealth,
   getGetVpnNodeHealthQueryKey,
   useListAdminReferrals,
+  useListAdminInviteLinks,
+  useCreateAdminInviteLink,
+  useUpdateAdminInviteLink,
+  useDeleteAdminInviteLink,
+  getListAdminInviteLinksQueryKey,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -1675,6 +1680,296 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
   );
 }
 
+// ─── Invite Links tab ─────────────────────────────────────────────────────────
+function InviteLinkRow({
+  link,
+  basePath,
+  onToggleActive,
+  onDelete,
+  onCopyUrl,
+}: {
+  link: AdminInviteLink;
+  basePath: string;
+  onToggleActive: () => void;
+  onDelete: () => void;
+  onCopyUrl: () => void;
+}) {
+  return (
+    <tr className={`hover:bg-muted/30 transition-colors ${!link.isActive ? "opacity-50" : ""}`}>
+      <td className="px-4 py-2.5 max-w-[200px]">
+        <div className="font-medium truncate">{link.note ?? <span className="text-muted-foreground italic">без заметки</span>}</div>
+        <div className="flex items-center gap-1 mt-0.5">
+          <span className="font-mono text-xs text-muted-foreground tracking-widest">{link.code}</span>
+          <button
+            onClick={onCopyUrl}
+            title="Скопировать ссылку"
+            className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Copy className="w-3 h-3" />
+          </button>
+        </div>
+      </td>
+      <td className="px-4 py-2.5">
+        <div className="text-xs">
+          {link.planName ? (
+            <span className="font-medium">{link.planName}</span>
+          ) : (
+            <span className="text-muted-foreground">по умолч.</span>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground mt-0.5">
+          {link.trialDays != null ? `${link.trialDays} дн.` : "стандарт"}
+        </div>
+      </td>
+      <td className="px-4 py-2.5 text-right font-mono">
+        <span className={link.maxUses != null && link.usedCount >= link.maxUses ? "text-red-500 font-bold" : ""}>
+          {link.usedCount}
+        </span>
+        {link.maxUses != null && (
+          <span className="text-muted-foreground">/{link.maxUses}</span>
+        )}
+      </td>
+      <td className="px-4 py-2.5 text-center">
+        <button
+          onClick={onToggleActive}
+          className={`w-6 h-6 flex items-center justify-center mx-auto border transition-colors ${
+            link.isActive
+              ? "border-green-500 text-green-600 hover:bg-red-50 hover:border-red-400 hover:text-red-500"
+              : "border-border text-muted-foreground hover:border-green-400 hover:text-green-600"
+          }`}
+          title={link.isActive ? "Деактивировать" : "Активировать"}
+        >
+          {link.isActive ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+        </button>
+      </td>
+      <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+        {link.expiresAt ? formatDate(link.expiresAt) : "—"}
+      </td>
+      <td className="px-4 py-2.5">
+        <button
+          onClick={onDelete}
+          className="p-1 text-muted-foreground hover:text-red-500 transition-colors"
+          title="Удалить ссылку"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function InviteLinksManagement() {
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const { data: links, isLoading } = useListAdminInviteLinks();
+  const { data: plans } = useListPlans();
+  const { toast } = useToast();
+
+  const { mutate: createLink, isPending: creating } = useCreateAdminInviteLink({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() });
+        setShowForm(false);
+        setNote(""); setPlanId(""); setTrialDays(""); setMaxUses(""); setExpiresAt("");
+        toast({ title: "Ссылка создана" });
+      },
+      onError: () => toast({ title: "Ошибка создания", variant: "destructive" }),
+    },
+  });
+
+  const { mutate: updateLink } = useUpdateAdminInviteLink({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() }),
+      onError: () => toast({ title: "Ошибка обновления", variant: "destructive" }),
+    },
+  });
+
+  const { mutate: deleteLink } = useDeleteAdminInviteLink({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() });
+        toast({ title: "Ссылка удалена" });
+      },
+      onError: () => toast({ title: "Ошибка удаления", variant: "destructive" }),
+    },
+  });
+
+  const [showForm, setShowForm] = useState(false);
+  const [note, setNote] = useState("");
+  const [planId, setPlanId] = useState("");
+  const [trialDays, setTrialDays] = useState("");
+  const [maxUses, setMaxUses] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    createLink({
+      data: {
+        ...(note.trim() ? { note: note.trim() } : {}),
+        ...(planId ? { planId: Number(planId) } : {}),
+        ...(trialDays ? { trialDays: Number(trialDays) } : {}),
+        ...(maxUses ? { maxUses: Number(maxUses) } : {}),
+        ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+      },
+    });
+  }
+
+  const monthlyPlans = plans?.filter((p) => p.isActive && p.billingType === "monthly") ?? [];
+
+  return (
+    <div className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-muted-foreground max-w-xl">
+          Создавайте именные инвайт-ссылки для конкретных кампаний или людей — с индивидуальным тарифом,
+          длиной пробного периода и лимитом использований. Код 12 символов, уникальный для каждой ссылки.
+        </p>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-mono px-3 py-1.5 transition-colors shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" /> Создать
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showForm && (
+        <form
+          onSubmit={handleCreate}
+          className="border border-orange-200 bg-orange-50/40 p-4 space-y-3"
+        >
+          <p className="text-xs font-bold uppercase tracking-wider text-orange-700">Новая инвайт-ссылка</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">Заметка (для кого / зачем)</label>
+              <Input
+                placeholder="Например: Telegram-канал @vpnexus или Иван из команды"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="rounded-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Тариф пробника <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <select
+                value={planId}
+                onChange={(e) => setPlanId(e.target.value)}
+                className="w-full border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">По умолчанию (глобальная настройка)</option>
+                {monthlyPlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — {p.priceRub} ₽/мес
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Пробный период, дней <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                placeholder="Стандарт (из настроек)"
+                value={trialDays}
+                onChange={(e) => setTrialDays(e.target.value)}
+                className="rounded-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Лимит использований <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="Без лимита"
+                value={maxUses}
+                onChange={(e) => setMaxUses(e.target.value)}
+                className="rounded-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Действует до <span className="text-muted-foreground/60">(опционально)</span>
+              </label>
+              <Input
+                type="datetime-local"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="rounded-none"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <button
+              type="button"
+              onClick={() => { setShowForm(false); setNote(""); setPlanId(""); setTrialDays(""); setMaxUses(""); setExpiresAt(""); }}
+              className="px-3 py-1.5 text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={creating}
+              className="px-4 py-1.5 text-sm bg-orange-600 hover:bg-orange-700 text-white font-mono transition-colors disabled:opacity-50"
+            >
+              {creating ? "Создание..." : "Создать ссылку"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Links table */}
+      {isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : !links?.length ? (
+        <div className="bg-muted/50 border border-border p-10 text-center text-sm text-muted-foreground">
+          <Link2 className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
+          Нет инвайт-ссылок — нажмите «Создать»
+        </div>
+      ) : (
+        <div className="border border-border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Заметка / Код</th>
+                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Тариф / Пробник</th>
+                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Исп.</th>
+                <th className="text-center px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Акт.</th>
+                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Истекает</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {links.map((link) => (
+                <InviteLinkRow
+                  key={link.id}
+                  link={link}
+                  basePath={basePath}
+                  onToggleActive={() =>
+                    updateLink({ linkId: link.id, data: { isActive: !link.isActive } })
+                  }
+                  onDelete={() => deleteLink({ linkId: link.id })}
+                  onCopyUrl={() => {
+                    const url = `${window.location.origin}${basePath}/sign-up?ref=${link.code}`;
+                    navigator.clipboard.writeText(url).then(() =>
+                      toast({ title: "Ссылка скопирована", description: link.note ?? link.code }),
+                    );
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Referrals tab ────────────────────────────────────────────────────────────
 function ReferralsManagement() {
   const { data, isLoading } = useListAdminReferrals();
@@ -3245,6 +3540,9 @@ export default function Admin() {
               <TabsTrigger value="users" className="rounded-none gap-1.5 whitespace-nowrap">
                 <Users className="w-4 h-4" /> Пользователи
               </TabsTrigger>
+              <TabsTrigger value="invites" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Link2 className="w-4 h-4" /> Инвайты
+              </TabsTrigger>
               <TabsTrigger value="referrals" className="rounded-none gap-1.5 whitespace-nowrap">
                 <Share2 className="w-4 h-4" /> Рефералы
               </TabsTrigger>
@@ -3273,6 +3571,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="users" className="pt-4">
           <UsersManagement />
+        </TabsContent>
+        <TabsContent value="invites" className="pt-4">
+          <InviteLinksManagement />
         </TabsContent>
         <TabsContent value="referrals" className="pt-4">
           <ReferralsManagement />

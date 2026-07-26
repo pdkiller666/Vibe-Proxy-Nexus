@@ -21,6 +21,9 @@ import type {
 
 import type {
   AdminBalanceTransaction,
+  AdminInviteLink,
+  AdminInviteLinkCreateInput,
+  AdminInviteLinkUpdateInput,
   AdminNotification,
   AdminPasswordResetResult,
   AdminPayment,
@@ -3676,6 +3679,294 @@ export function useListAdminReferrals<TData = Awaited<ReturnType<typeof listAdmi
 
 
 
+
+export const getListAdminInviteLinksUrl = () => {
+
+
+
+
+  return `/api/admin/invite-links`
+}
+
+/**
+ * @summary List admin-created invite links
+ */
+export const listAdminInviteLinks = async ( options?: RequestInit): Promise<AdminInviteLink[]> => {
+
+  return customFetch<AdminInviteLink[]>(getListAdminInviteLinksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminInviteLinksQueryKey = () => {
+    return [
+    `/api/admin/invite-links`
+    ] as const;
+    }
+
+
+export const getListAdminInviteLinksQueryOptions = <TData = Awaited<ReturnType<typeof listAdminInviteLinks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminInviteLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminInviteLinksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminInviteLinks>>> = ({ signal }) => listAdminInviteLinks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminInviteLinks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminInviteLinksQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminInviteLinks>>>
+export type ListAdminInviteLinksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List admin-created invite links
+ */
+
+export function useListAdminInviteLinks<TData = Awaited<ReturnType<typeof listAdminInviteLinks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminInviteLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminInviteLinksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAdminInviteLinkUrl = () => {
+
+
+
+
+  return `/api/admin/invite-links`
+}
+
+/**
+ * @summary Create an admin invite link
+ */
+export const createAdminInviteLink = async (adminInviteLinkCreateInput: AdminInviteLinkCreateInput, options?: RequestInit): Promise<AdminInviteLink> => {
+
+  return customFetch<AdminInviteLink>(getCreateAdminInviteLinkUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminInviteLinkCreateInput)
+  }
+);}
+
+
+
+
+export const getCreateAdminInviteLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminInviteLink>>, TError,{data: BodyType<AdminInviteLinkCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminInviteLink>>, TError,{data: BodyType<AdminInviteLinkCreateInput>}, TContext> => {
+
+const mutationKey = ['createAdminInviteLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminInviteLink>>, {data: BodyType<AdminInviteLinkCreateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminInviteLink(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminInviteLinkMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminInviteLink>>>
+    export type CreateAdminInviteLinkMutationBody = BodyType<AdminInviteLinkCreateInput>
+    export type CreateAdminInviteLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create an admin invite link
+ */
+export const useCreateAdminInviteLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminInviteLink>>, TError,{data: BodyType<AdminInviteLinkCreateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminInviteLink>>,
+        TError,
+        {data: BodyType<AdminInviteLinkCreateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminInviteLinkMutationOptions(options));
+    }
+
+export const getUpdateAdminInviteLinkUrl = (linkId: number,) => {
+
+
+
+
+  return `/api/admin/invite-links/${linkId}`
+}
+
+/**
+ * @summary Update an admin invite link (note, isActive, planId, trialDays, maxUses, expiresAt)
+ */
+export const updateAdminInviteLink = async (linkId: number,
+    adminInviteLinkUpdateInput: AdminInviteLinkUpdateInput, options?: RequestInit): Promise<AdminInviteLink> => {
+
+  return customFetch<AdminInviteLink>(getUpdateAdminInviteLinkUrl(linkId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminInviteLinkUpdateInput)
+  }
+);}
+
+
+
+
+export const getUpdateAdminInviteLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminInviteLink>>, TError,{linkId: number;data: BodyType<AdminInviteLinkUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminInviteLink>>, TError,{linkId: number;data: BodyType<AdminInviteLinkUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateAdminInviteLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminInviteLink>>, {linkId: number;data: BodyType<AdminInviteLinkUpdateInput>}> = (props) => {
+          const {linkId,data} = props ?? {};
+
+          return  updateAdminInviteLink(linkId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminInviteLinkMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminInviteLink>>>
+    export type UpdateAdminInviteLinkMutationBody = BodyType<AdminInviteLinkUpdateInput>
+    export type UpdateAdminInviteLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update an admin invite link (note, isActive, planId, trialDays, maxUses, expiresAt)
+ */
+export const useUpdateAdminInviteLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminInviteLink>>, TError,{linkId: number;data: BodyType<AdminInviteLinkUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminInviteLink>>,
+        TError,
+        {linkId: number;data: BodyType<AdminInviteLinkUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminInviteLinkMutationOptions(options));
+    }
+
+export const getDeleteAdminInviteLinkUrl = (linkId: number,) => {
+
+
+
+
+  return `/api/admin/invite-links/${linkId}`
+}
+
+/**
+ * @summary Delete an admin invite link
+ */
+export const deleteAdminInviteLink = async (linkId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteAdminInviteLinkUrl(linkId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAdminInviteLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminInviteLink>>, TError,{linkId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminInviteLink>>, TError,{linkId: number}, TContext> => {
+
+const mutationKey = ['deleteAdminInviteLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAdminInviteLink>>, {linkId: number}> = (props) => {
+          const {linkId} = props ?? {};
+
+          return  deleteAdminInviteLink(linkId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAdminInviteLinkMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAdminInviteLink>>>
+
+    export type DeleteAdminInviteLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete an admin invite link
+ */
+export const useDeleteAdminInviteLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminInviteLink>>, TError,{linkId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAdminInviteLink>>,
+        TError,
+        {linkId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteAdminInviteLinkMutationOptions(options));
+    }
 
 export const getGetAdminNotificationsUrl = (params?: GetAdminNotificationsParams,) => {
   const normalizedParams = new URLSearchParams();
