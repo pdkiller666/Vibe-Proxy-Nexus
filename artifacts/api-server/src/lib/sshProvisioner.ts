@@ -546,10 +546,14 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     );
     emitSuccess(job, "Контейнер запущен ✓");
 
-    // ── Step 7: UFW — open ports 443 and 8443 ─────────────────────────────
-    emitStep(job, "🔒 Настройка UFW (открываем 443, 8443)...");
+    // ── Step 7: UFW — open ports 80, 443, 8443 ────────────────────────────
+    // Port 80 MUST be open: certbot uses HTTP-01 challenge (Let's Encrypt
+    // fetches /.well-known/acme-challenge/* over plain HTTP) and nginx
+    // keeps 80 open for HTTP→HTTPS redirects and certbot auto-renewal.
+    emitStep(job, "🔒 Настройка UFW (открываем 80, 443, 8443)...");
     const ufwSetup = [
       "ufw allow 22/tcp comment 'SSH' 2>/dev/null || true",
+      "ufw allow 80/tcp comment 'HTTP (Let\\'s Encrypt + nginx redirect)' 2>/dev/null || true",
       "ufw allow 443/tcp comment 'HTTPS/VPN' 2>/dev/null || true",
       "ufw allow 8443/tcp comment 'VPN Mgmt API' 2>/dev/null || true",
       "ufw --force enable 2>/dev/null || true",
