@@ -3410,6 +3410,7 @@ function VpnKeysManagement() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "revoked">("all");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic">("date_desc");
   const [page, setPage] = useState(1);
+  const [issuingNodeId, setIssuingNodeId] = useState<number | "auto">("auto");
   // Guards against a genuine double-click firing two overlapping issue
   // requests before React commits `issueMutation.isPending` and disables the
   // button — a slow issue request (Xray provisioning) made this window wide
@@ -3434,13 +3435,24 @@ function VpnKeysManagement() {
     },
   });
 
+  const { data: activeNodes } = useQuery({
+    queryKey: ["vpn-nodes-active"],
+    queryFn: async () => {
+      const res = await fetch("/api/vpn-nodes", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json() as Promise<Array<{ id: number; name: string }>>;
+    },
+  });
+
   const issueMutation = useMutation({
     mutationFn: async (userId: number) => {
+      const body: Record<string, unknown> = { userId };
+      if (issuingNodeId !== "auto") body.nodeId = issuingNodeId;
       const res = await fetch("/api/admin/vpn-keys/issue", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed");
     },
@@ -3604,6 +3616,16 @@ function VpnKeysManagement() {
               </div>
             )}
           </div>
+          <select
+            value={issuingNodeId}
+            onChange={(e) => setIssuingNodeId(e.target.value === "auto" ? "auto" : Number(e.target.value))}
+            className="border border-border bg-background px-3 py-2 text-sm rounded-none h-10"
+          >
+            <option value="auto">Узел: авто</option>
+            {(activeNodes ?? []).map((n) => (
+              <option key={n.id} value={n.id}>{n.name}</option>
+            ))}
+          </select>
           <div className="flex flex-col gap-1">
             <button
               onClick={handleIssueClick}
