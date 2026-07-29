@@ -2,9 +2,10 @@
 
 Самостоятельный Docker-контейнер для **дополнительной VPN-ноды**. Разворачивается на любом VPS и подключается к основному серверу (Amvera) через защищённый REST Management API.
 
-> **Статус:** готов к production. Основной бэкенд (`remoteNode.ts`, `keyIssuance.ts`) полностью умеет
-> с ним работать — выдавать и отзывать ключи, собирать статистику трафика.
-> Локальная нода на Amvera (`deploy/amvera-all-in-one`) продолжает работать параллельно.
+> **Статус:** production, активно используется. Живой NL-узел на VDSina
+> (`v917715.hosted-by-vdsina.com`, Let's Encrypt, Xray 26.x) работает параллельно
+> с локальной нодой на Amvera. Основной бэкенд (`remoteNode.ts`, `keyIssuance.ts`)
+> выдаёт и отзывает ключи, собирает статистику трафика через Management API.
 
 ---
 
@@ -124,14 +125,15 @@ chmod +x setup-vps.sh && sudo ./setup-vps.sh
 
 | Поле | Значение |
 |---|---|
-| Название | Например: `VDSina-RU-1` |
-| Регион | Например: `ru` |
-| Host | IP-адрес VPS (или домен, если есть) |
+| Название | Например: `Netherlands (VDSina)` |
+| Регион | Код страны, например: `nl`, `de`, `ru` |
+| Host | IP-адрес VPS или домен (если есть Let's Encrypt сертификат) |
 | Port | `443` |
 | SNI | То же, что Host |
 | Management API URL | `http://IP:8443` (bare IP) или `https://домен` |
 | Management API Secret | Значение `MGMT_API_SECRET` из `.env` |
 | Public Key / Short ID | Оставить пустыми (не используются для VLESS+WS) |
+| Cert SHA256 | SHA-256 fingerprint самоподписанного сертификата — только для bare-IP нод без домена; домены с Let's Encrypt оставьте пустым |
 
 ---
 
@@ -162,3 +164,29 @@ curl http://localhost:8443/health
 curl -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
   http://localhost:8443/clients
 ```
+
+---
+
+## Производительность Xray: DNS и стратегия исходящих
+
+По умолчанию Xray наследует системный DNS (VPS-провайдера), что даёт заметную задержку
+при проксировании. Рекомендуется добавить в `config.json` секцию `dns` и стратегию
+`UseIPv4` на `freedom`-аутбаунде:
+
+```json
+"dns": {
+  "servers": ["1.1.1.1", "8.8.8.8", "localhost"]
+},
+```
+
+и в outbound с тегом `freedom`:
+```json
+"settings": { "domainStrategy": "UseIPv4" }
+```
+
+Также включите `sniffing` на инбаунде для корректного определения целевых доменов:
+```json
+"sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
+```
+
+Эти параметры уже включены в шаблон `xray/config.json.template` начиная с 29.07.2026.

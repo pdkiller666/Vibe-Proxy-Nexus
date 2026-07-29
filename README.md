@@ -75,7 +75,7 @@ pnpm --filter @workspace/db exec tsc -p .              # пересобрать 
 - [`replit.md`](./replit.md) — рабочие заметки для агента: архитектурные решения, соглашения, открытые вопросы по продукту.
 - [`PROJECT_MAP.md`](./PROJECT_MAP.md) — подробная карта репозитория: что где лежит, схема БД, эндпоинты API.
 - [`deploy/amvera-all-in-one/README.md`](./deploy/amvera-all-in-one/README.md) — детали продакшен-деплоя (переменные окружения, первый запуск).
-- [`deploy/amvera-vpn-node/README.md`](./deploy/amvera-vpn-node/README.md) — задел на будущее для мульти-региональной схемы (пока не используется).
+- [`deploy/amvera-vpn-node/README.md`](./deploy/amvera-vpn-node/README.md) — пакет для дополнительных VPN-нод на отдельных VPS (Xray + management API). Активно используется: живой NL-узел на VDSina.
 
 > Файлы `.md` (кроме `deploy/**/README.md`) намеренно исключены из
 > продакшен-образа (`.dockerignore`) — это внутренняя документация для

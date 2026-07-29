@@ -139,7 +139,7 @@ Xray переживает передеплой: `entrypoint.sh` перерисо
    не может применить без интерактивного промпта (уникальные индексы, FK constraints,
    DROP COLUMN и т.д.). Все блоки `DO $$ … $$` оформлены в корректном PostgreSQL
    dollar-quoting. Текущие миграции: M-0→M-15 (исторические), M-16 (`users.is_banned`),
-   M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL).
+   M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL), M-24 (`vpn_nodes.cert_sha256`).
 2. **`drizzle-kit push`** — накатывает остальные изменения схемы.
 
 ## Локальная сборка (проверка)
@@ -161,6 +161,6 @@ docker run --rm -p 8080:8080 \
 
 - **`deploy/amvera-all-in-one`** (этот пакет) — всё в одном контейнере,
   VPN-транспорт VLESS+WebSocket на общем веб-домене. Используется в проде сейчас.
-- **`deploy/amvera-vpn-node`** — только VPN-узел (Xray + management API),
-  задел на будущее для масштабирования на несколько стран/регионов.
-  Пока не подключён к основному бэкенду.
+- **`deploy/amvera-vpn-node`** — пакет для дополнительных VPN-нод (Xray + management API).
+  **Активно используется**: бэкенд полностью подключён (`remoteNode.ts`, `keyIssuance.ts`);
+  живой NL-узел на VDSina работает параллельно с этим контейнером.

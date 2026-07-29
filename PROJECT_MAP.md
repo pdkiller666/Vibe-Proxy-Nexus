@@ -163,7 +163,7 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
   - `password.ts` — хэширование паролей (scrypt, N=16384)
   - `passwordReset.ts` — токены сброса (32 байта hex, SHA-256 в БД, TTL 30 мин, одноразовые)
   - `loginRateLimit.ts` — 5 попыток / 15 мин, in-memory Map (не синхронизируется при multi-instance)
-  - `vless.ts` — генерация UUID и VLESS+WS-ссылок, `generatePaymentReference`
+  - `vless.ts` — генерация UUID и VLESS+WS-ссылок, `generatePaymentReference`; `buildServingVlessLink`: пропускает замену домена на `vpnexus.pro` для удалённых нод (`managementApiUrl != null`); для IP-нод: `pinnedPeerCertSha256` если задан `certSha256`, иначе `allowInsecure=1`; определение флага страны по полю `region` (word-boundary regex, `vdsina` исключён из правила России)
   - `subscription.ts` — HMAC-токены подписочной ссылки, `BRAND_NAME`, `SUBSCRIPTION_UPDATE_INTERVAL_HOURS` = 3
   - `xray.ts` — правка живого конфига Xray на диске + `supervisorctl restart xray`; `addXrayClient(uuid, email, limitIp?)` принимает опциональный `limitIp` и добавляет его в объект клиента (backward-compatible); все новые ключи получают `limitIp: 1`
   - `staticServer.ts` — отдаёт собранный фронтенд из `STATIC_DIR`
@@ -259,7 +259,7 @@ lib/api-spec/openapi.yaml  (источник истины — ВСЕГДА ре�
 | `subscriptions` | userId, planId, status (pending_payment/active/expired/cancelled/rejected), startsAt, endsAt (nullable для hourly), lastBilledAt (nullable, для hourly), extraDeviceSlots (default 0), trafficLimitExceededAt, revokedReason | подписки; `extraDeviceSlots` — доп. слоты, купленные в рамках этой подписки |
 | `payments` | subscriptionId (nullable), userId, type (subscription/extra_device_slot/balance_topup/extra_traffic), provider (manual_sbp/yoomoney/freekassa[legacy]), amountRub, status (pending/confirmed/rejected), reference (уникальный код), userNote (nullable, minLength 0), screenshotData (base64, Postgres), screenshotMimeType, hasScreenshot (вычисляемое), rejectionReason | платежи |
 | `payment_settings` | sbpPhone, sbpBank, sbpRecipientName, instructions, sbpPaymentUrl (ссылка на платёж в банке), showManualSbpDetails (toggle реквизитов), sbpQrCodeData (base64 QR), sbpQrCodeMimeType, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, trialEnabled, trialDays, minHourlyTopupRub, primaryDomain, referralCommissionPercent, yookassaEnabled, sbpEnabled | синглтон-настройки оплаты и продуктовые параметры |
-| `vpn_nodes` | name, region, host, port (default 443), sni, publicKey, shortId, isActive, maxUsers (nullable=безлимит) | VPN-ноды; `activeUserCount` вычисляется на лету |
+| `vpn_nodes` | name, region, host, port (default 443), sni, publicKey, shortId, isActive, maxUsers (nullable=безлимит), managementApiUrl (nullable), managementApiSecret (nullable), certSha256 (nullable) | VPN-ноды; `activeUserCount` вычисляется на лету; `managementApiUrl != null` = удалённая нода; `certSha256` — SHA-256 fingerprint сертификата для IP-нод (вместо `allowInsecure=1`) |
 | `vpn_keys` | userId, nodeId, uuid (unique), label, description (nullable), vlessLink, deepLink, revokedAt, trafficUpBytes, trafficDownBytes, periodUpBytes, periodDownBytes, periodStartedAt, lastSeenUpBytes, lastSeenDownBytes, lastTrafficAt (nullable) | выданные ключи; `period*` — сбрасываются при продлении; `lastSeen*` — предыдущий снимок из Xray для вычисления дельты |
 | `balance_transactions` | userId, amountKopecks, type (topup/debit/refund/referral), paymentId (nullable FK), description | лог всех движений баланса; отображается на странице Платежи |
 | `support_tickets` | userId, subject, status (open/answered/closed) | тикеты поддержки |
@@ -270,7 +270,7 @@ lib/api-spec/openapi.yaml  (источник истины — ВСЕГДА ре�
 `heal-schema.mjs` — нетривиальные DDL-изменения (уникальные индексы, FK constraints,
 DROP COLUMN), которые drizzle-kit push не может выполнить автоматически без промпта.
 Все PL/pgSQL блоки используют `DO $$ … $$` (двойное dollar-quoting).
-Текущие миграции: M-0→M-15 (исторические), M-16 (`users.is_banned`), M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL).
+Текущие миграции: M-0→M-15 (исторические), M-16 (`users.is_banned`), M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL), M-24 (`vpn_nodes.cert_sha256`).
 
 ## deploy/ — деплой
 
@@ -279,7 +279,8 @@ DROP COLUMN), которые drizzle-kit push не может выполнить
   README описывает все секреты и порядок настройки.
 - **`deploy/amvera-vpn-node/`** — пакет для дополнительных VPN-нод на отдельных VPS
   (Xray + management API, `X-Management-Secret`). Бэкенд полностью подключён (`remoteNode.ts`,
-  `keyIssuance.ts`). Инструкция по развёртыванию — `docs/add-vpn-node.md`.
+  `keyIssuance.ts`). **Активно используется**: живой NL-узел на VDSina
+  (`v917715.hosted-by-vdsina.com`, Let's Encrypt, Xray 26.x). Инструкция — `docs/add-vpn-node.md`.
 
 Требуемые переменные в проде:
 `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `PORT` (дефолт 8080),
