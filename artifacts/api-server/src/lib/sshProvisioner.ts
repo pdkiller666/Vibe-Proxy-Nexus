@@ -359,7 +359,9 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
       "apt-get install -y --no-install-recommends curl gnupg ca-certificates lsb-release",
       // Docker official repo
       "install -m 0755 -d /etc/apt/keyrings",
-      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg",
+      // --batch suppresses the /dev/tty open that gpg triggers in non-interactive
+      // (no-PTY) SSH sessions even for key material that needs no passphrase.
+      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --dearmor -o /etc/apt/keyrings/docker.gpg",
       "chmod a+r /etc/apt/keyrings/docker.gpg",
       // shellcheck: the ARCH/DISTRIB vars come from the upstream docker install doc
       `echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ` +
