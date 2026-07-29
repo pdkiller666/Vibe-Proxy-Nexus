@@ -25,6 +25,12 @@ const execAsync = promisify(exec);
 
 const CONFIG_PATH = process.env["XRAY_CONFIG_PATH"];
 
+// Bundled template (written by the Dockerfile into the image layer — not on the
+// persistent volume). Used as a fallback when the on-disk config is missing,
+// e.g. if the persistent volume was re-attached empty while Xray was already
+// running from a previously loaded in-memory config.
+const TEMPLATE_PATH = "/app/xray/config.json.template";
+
 interface XrayClient {
   id: string;
   email?: string;
@@ -46,14 +52,61 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function readConfig(): Promise<Record<string, any>> {
-  const raw = await fs.readFile(CONFIG_PATH!, "utf-8");
-  return JSON.parse(raw) as Record<string, any>;
+  try {
+    const raw = await fs.readFile(CONFIG_PATH!, "utf-8");
+    return JSON.parse(raw) as Record<string, any>;
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException;
+    if (nodeErr.code === "ENOENT") {
+      // Config file has gone missing — most likely the persistent volume was
+      // re-attached empty after a pod reschedule while Xray was still running
+      // from its previously loaded in-memory config. Re-initialize from the
+      // bundled template (empty clients list) so subsequent key issuance works.
+      // Existing Xray clients will stop connecting until the next container
+      // restart, which re-populates the config from the DB via entrypoint.sh.
+      logger.error(
+        { configPath: CONFIG_PATH, templatePath: TEMPLATE_PATH },
+        "xray: config.json not found on persistent volume — re-initializing from template. " +
+          "Existing Xray clients will be inactive until the next container restart.",
+      );
+      const templateRaw = await fs.readFile(TEMPLATE_PATH, "utf-8");
+      const freshConfig = JSON.parse(templateRaw) as Record<string, any>;
+      await writeConfig(freshConfig);
+      return freshConfig;
+    }
+    // For EACCES or any other error, surface the code and message clearly
+    // so Amvera's log viewer shows a human-readable string rather than a
+    // collapsed JSON object.
+    logger.error(
+      { code: nodeErr.code, message: nodeErr.message, configPath: CONFIG_PATH },
+      `xray: readConfig failed — ${nodeErr.code ?? "ERR"}: ${nodeErr.message}`,
+    );
+    throw err;
+  }
 }
 
 async function writeConfig(config: Record<string, any>): Promise<void> {
   const tmp = `${CONFIG_PATH!}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(config, null, 2), "utf-8");
-  await fs.rename(tmp, CONFIG_PATH!);
+  try {
+    await fs.writeFile(tmp, JSON.stringify(config, null, 2), "utf-8");
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException;
+    logger.error(
+      { code: nodeErr.code, message: nodeErr.message, tmpPath: tmp },
+      `xray: writeConfig failed writing .tmp file — ${nodeErr.code ?? "ERR"}: ${nodeErr.message}`,
+    );
+    throw err;
+  }
+  try {
+    await fs.rename(tmp, CONFIG_PATH!);
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException;
+    logger.error(
+      { code: nodeErr.code, message: nodeErr.message, tmpPath: tmp, configPath: CONFIG_PATH },
+      `xray: writeConfig failed renaming .tmp → config — ${nodeErr.code ?? "ERR"}: ${nodeErr.message}`,
+    );
+    throw err;
+  }
 }
 
 function getClients(config: Record<string, any>): XrayClient[] {

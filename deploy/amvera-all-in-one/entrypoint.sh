@@ -88,6 +88,13 @@ fi
 # by this script as root. Hand ownership to `node` so key issuance/revocation
 # (which rewrites the config atomically via .tmp + rename in the same dir)
 # keeps working. Xray itself only READS the config, so node-ownership is fine.
-chown -R node "$(dirname "$XRAY_CONFIG_PATH")"
+#
+# Belt-and-suspenders: some persistent-volume backends (NFS, certain CSI
+# drivers) silently ignore chown and return 0, leaving root ownership intact.
+# chmod -R u+rwX ensures the directory and files are always writable by whoever
+# owns them. The || true prevents set -e from aborting on FSes that reject chown
+# (e.g. overlay mounts with uid_map restrictions).
+chown -R node "$(dirname "$XRAY_CONFIG_PATH")" || true
+chmod -R u+rwX "$(dirname "$XRAY_CONFIG_PATH")"
 
 exec supervisord -c /app/supervisord.conf
