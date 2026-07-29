@@ -33,6 +33,10 @@ export function generateKeyUuid(): string {
  */
 const LOCATION_FLAG_RULES: Array<{ match: RegExp; flag: string }> = [
   { match: /poland|польш|warsaw|варшав|warszawa|\bwaw\d*\b|^pl$/i, flag: "🇵🇱" },
+  { match: /russia|россия|moscow|москв|\bmow\d*\b|vdsina|^ru$/i,  flag: "🇷🇺" },
+  { match: /germany|германия|frankfurt|франкфурт|berlin|берлин|hetzner|^de$/i, flag: "🇩🇪" },
+  { match: /netherlands|нидерланды|amsterdam|амстердам|^nl$/i,    flag: "🇳🇱" },
+  { match: /finland|финляндия|helsinki|хельсинки|^fi$/i,          flag: "🇫🇮" },
 ];
 
 export function flagEmojiForNode(
