@@ -654,52 +654,77 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
       { allowFailure: true },
     );
 
-    // Try Let's Encrypt first; fall back to self-signed if certbot fails.
-    // Certbot can fail for reasons outside our control:
-    //   • DNS SERVFAIL on CAA lookup (some hosting providers' default hostnames
-    //     have broken authoritative nameservers that don't answer CAA properly —
-    //     e.g. VDSina's v*.hosted-by-vdsina.com — and Let's Encrypt treats
-    //     SERVFAIL as a hard error, unlike NXDOMAIN).
-    //   • HTTP-01 challenge blocked by a provider-level firewall on port 80.
-    // In both cases we generate a self-signed cert so the node is still usable.
-    // VPN clients will need tlsInsecure / allowInsecure enabled in their config.
+    // Try Let's Encrypt; retry once after 30 s delay (DNS may not have
+    // propagated yet on first attempt). Fall back to self-signed only when both
+    // attempts fail.
+    //
+    // Known failure causes:
+    //   • DNS SERVFAIL on CAA lookup (some providers' default hostnames have
+    //     broken authoritative nameservers — e.g. VDSina v*.hosted-by-vdsina.com)
+    //   • HTTP-01 challenge blocked by a provider firewall on port 80.
+    //   • LE rate limit (50 certs / registered domain / 7 days).
+    //   • DNS not yet propagated at provisioning time.
+    //
+    // IMPORTANT: a self-signed cert means VPN clients will silently refuse to
+    // connect (TLS verification fails). The job is marked with the cert's SHA256
+    // fingerprint so the admin UI can display a prominent warning.
     let selfSignedCert = false;
-    try {
-      await runCommand(
-        conn,
-        [
-          `certbot --nginx -d ${domain}`,
-          "--non-interactive",
-          "--agree-tos",
-          `--email admin@${domain}`,
-          "--redirect",
-        ].join(" "),
-        job,
-        { timeoutMs: 5 * 60_000 },
-      );
-      await runCommand(conn, "systemctl reload nginx", job);
-      emitSuccess(job, "TLS сертификат Let's Encrypt получен ✓");
-    } catch (certbotErr) {
-      const certbotMsg = certbotErr instanceof Error ? certbotErr.message : String(certbotErr);
-      emitLog(job, `⚠️  certbot завершился с ошибкой: ${certbotMsg.slice(0, 300)}`);
-      emitLog(job, "⚠️  Генерируем самоподписанный сертификат как fallback...");
+    let selfSignedSha256: string | null = null;
+
+    const certbotCmd = [
+      `certbot --nginx -d ${domain}`,
+      "--non-interactive",
+      "--agree-tos",
+      `--email admin@${domain}`,
+      "--redirect",
+    ].join(" ");
+
+    let certbotSuccess = false;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        if (attempt === 2) {
+          emitLog(job, "⏳ Ждём 30 секунд перед повторной попыткой certbot (DNS propagation)...");
+          await runCommand(conn, "sleep 30", job, { timeoutMs: 45_000 });
+        }
+        emitLog(job, `  certbot, попытка ${attempt}/2...`);
+        await runCommand(conn, certbotCmd, job, { timeoutMs: 5 * 60_000 });
+        await runCommand(conn, "systemctl reload nginx", job);
+        emitSuccess(job, "TLS сертификат Let's Encrypt получен ✓");
+        certbotSuccess = true;
+        break;
+      } catch (certbotErr) {
+        const msg = certbotErr instanceof Error ? certbotErr.message : String(certbotErr);
+        emitLog(job, `  попытка ${attempt} провалилась: ${msg.slice(0, 200)}`);
+      }
+    }
+
+    if (!certbotSuccess) {
+      // Both attempts failed — fall back to self-signed.
+      // This WILL break VPN clients until a real cert is obtained.
+      emitError(job, "❌ certbot не смог получить сертификат (2 попытки). Переходим к самоподписанному.");
+      emitError(job, "⚠️  ВНИМАНИЕ: VPN-клиенты НЕ СМОГУТ подключиться с самоподписанным сертификатом!");
+      emitError(job, "⚠️  После развёртывания зайди на сервер и выполни: certbot --nginx -d " + domain);
 
       const certDir = "/etc/ssl/vpn-node";
       const certPath = `${certDir}/cert.pem`;
       const keyPath = `${certDir}/key.pem`;
 
-      // Two separate commands joined with &&:
-      // 1. mkdir to create the cert directory
-      // 2. openssl to generate the self-signed cert (all flags on ONE command)
-      // Previously used .join(" ") which merged mkdir and openssl into a single
-      // broken command: "mkdir -p /dir openssl req -x509 ..." → mkdir tried to
-      // create a directory literally named "openssl".
       await runCommand(
         conn,
         `mkdir -p ${certDir} && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ${keyPath} -out ${certPath} -subj "/CN=${domain}"`,
         job,
         { timeoutMs: 30_000 },
       );
+
+      // Compute SHA256 fingerprint of the self-signed cert so the DB can store
+      // it and the admin UI can show a warning badge on this node.
+      const sha256Raw = await runCommand(
+        conn,
+        `openssl x509 -in ${certPath} -outform DER | openssl dgst -sha256 -binary | base64`,
+        job,
+        { timeoutMs: 15_000, allowFailure: true },
+      );
+      selfSignedSha256 = sha256Raw.trim().split("\n").pop()?.trim() ?? null;
 
       // Replace the HTTP-only nginx config with a full HTTPS config.
       const nginxHttpsConfig = makeNginxHttpsConfig(domain, certPath, keyPath);
@@ -715,8 +740,6 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
       );
 
       selfSignedCert = true;
-      emitSuccess(job, "Самоподписанный TLS сертификат настроен ✓");
-      emitLog(job, "⚠️  Внимание: в VPN-клиентах потребуется включить «Разрешить небезопасные соединения» (allowInsecure / tlsInsecure).");
     }
 
     // ── Step 10: Wait for container to be healthy ──────────────────────────
@@ -761,6 +784,9 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
           host: domain,
           sni: domain,
           managementApiSecret: mgmtSecret,
+          // Store self-signed SHA256 so the admin UI can warn; clear it when
+          // LE cert was obtained (selfSignedSha256 === null).
+          certSha256: selfSignedSha256,
           isActive: true,
         })
         .where(eq(vpnNodesTable.id, existing.id))
@@ -777,7 +803,8 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
           sni: domain,
           managementApiUrl: mgmtApiUrl,
           managementApiSecret: mgmtSecret,
-          certSha256: null,
+          // null when LE cert was obtained; SHA256 fingerprint when self-signed.
+          certSha256: selfSignedSha256,
           isActive: true,
         })
         .returning();

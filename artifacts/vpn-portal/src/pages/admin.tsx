@@ -1675,6 +1675,17 @@ function NodesManagement() {
                   <span className="text-muted-foreground font-normal">· {node.region}</span>
                   {!node.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
                   {node.managementApiUrl && <NodePollingHealthIndicator nodeName={node.name} />}
+                  {/* Warn when a remote node uses a self-signed cert (provisioner
+                      stores the SHA256 fingerprint in certSha256 only for self-signed;
+                      LE-cert nodes have certSha256 = null). */}
+                  {node.managementApiUrl && node.certSha256 && (
+                    <span
+                      title={"Самоподписанный сертификат — VPN-клиенты не смогут подключиться!\nЗайди на сервер и выполни: certbot --nginx -d " + node.sni}
+                      className="text-xs font-normal bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-800 px-1.5 py-0.5 cursor-help"
+                    >
+                      ⚠️ Self-signed cert
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-muted-foreground font-mono break-all">
                   {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
