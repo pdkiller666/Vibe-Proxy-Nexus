@@ -1417,6 +1417,22 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   const [certSha256, setCertSha256] = useState(node?.certSha256 ?? "");
   const [isActive, setIsActive] = useState(node?.isActive ?? true);
   const [maxUsers, setMaxUsers] = useState(node?.maxUsers != null ? String(node.maxUsers) : "");
+  const [certCopied, setCertCopied] = useState(false);
+
+  // Original SNI — to detect domain changes on existing auto-provisioned nodes.
+  const originalSni = node?.sni ?? "";
+  // True when editing an existing remote (auto-provisioned) node and the domain changed.
+  const sniChanged = !!node && !!node.managementApiUrl && sni.trim() !== "" && sni.trim() !== originalSni;
+  const certbotCmd = sni.trim()
+    ? `certbot --nginx -d ${sni.trim()} --non-interactive --agree-tos --email admin@${sni.trim()}`
+    : "";
+
+  function handleSniChange(val: string) {
+    setSni(val);
+    // If host was in sync with the old SNI (typical for auto-provisioned nodes),
+    // keep it in sync automatically so the user doesn't have to update both fields.
+    if (host === originalSni) setHost(val);
+  }
 
   function handleSubmit() {
     const body = {
@@ -1459,7 +1475,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           onChange={(e) => setPort(e.target.value)}
           className="rounded-none"
         />
-        <Input placeholder="SNI" value={sni} onChange={(e) => setSni(e.target.value)} className="rounded-none" />
+        <Input placeholder="SNI / домен" value={sni} onChange={(e) => handleSniChange(e.target.value)} className="rounded-none" />
         <Input
           placeholder="Reality Public Key"
           value={publicKey}
@@ -1497,6 +1513,35 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           Активен
         </label>
       </div>
+      {sniChanged && (
+        <div className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-2 text-sm">
+          <p className="font-semibold text-amber-800 dark:text-amber-300">
+            ⚠️ Домен изменился — нужно перевыпустить SSL-сертификат вручную
+          </p>
+          <p className="text-amber-700 dark:text-amber-400 text-xs">
+            База обновится сразу после сохранения. Затем подключись по SSH к серверу и выполни:
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-amber-100 dark:bg-amber-900/50 border border-amber-300 px-2 py-1.5 text-xs font-mono break-all select-all">
+              {certbotCmd}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(certbotCmd).catch(() => {});
+                setCertCopied(true);
+                setTimeout(() => setCertCopied(false), 2000);
+              }}
+              className="shrink-0 border border-amber-400 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+            >
+              {certCopied ? "✓ Скопировано" : "Копировать"}
+            </button>
+          </div>
+          <p className="text-amber-600 dark:text-amber-500 text-xs">
+            Убедись что DNS-запись <strong>{sni.trim()}</strong> указывает на IP этого сервера до запуска команды.
+          </p>
+        </div>
+      )}
       <div className="flex gap-2">
         <button
           onClick={handleSubmit}
