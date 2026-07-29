@@ -14,6 +14,9 @@ import {
   UpdateVpnNodeResponse,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
+import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
+import { removeRemoteXrayClient } from "../../lib/remoteNode";
+import { logger } from "../../lib/logger";
 
 const router: IRouter = Router();
 const execAsync = promisify(exec);
@@ -71,22 +74,58 @@ router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, 
 
 router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const params = DeleteVpnNodeParams.safeParse(req.params);
-
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [node] = await db
-    .delete(vpnNodesTable)
-    .where(eq(vpnNodesTable.id, params.data.nodeId))
-    .returning();
+  const nodeId = params.data.nodeId;
 
+  // 1. Load the node first — need its managementApiUrl to clean up Xray.
+  const [node] = await db.select().from(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
   if (!node) {
     res.status(404).json({ error: "VPN node not found" });
     return;
   }
 
+  // 2. Load all keys on this node (active + historical). We delete them all so
+  //    the ON DELETE RESTRICT FK constraint doesn't block the node deletion.
+  const allKeys = await db
+    .select()
+    .from(vpnKeysTable)
+    .where(eq(vpnKeysTable.nodeId, nodeId));
+
+  const activeKeys = allKeys.filter((k) => !k.revokedAt);
+
+  // 3. Revoke active keys from Xray. Non-fatal — DB is the source of truth.
+  for (const key of activeKeys) {
+    if (node.managementApiUrl) {
+      try {
+        await removeRemoteXrayClient(node, key.uuid);
+      } catch (err) {
+        logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: remote Xray removal failed (ignored)");
+      }
+    } else if (isLocalXrayEnabled()) {
+      try {
+        await removeXrayClient(key.uuid);
+      } catch (err) {
+        logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: local Xray removal failed (ignored)");
+      }
+    }
+  }
+
+  // 4. Delete all keys for this node, then the node itself.
+  //    Both in a try/catch so a concurrent race doesn't leave partial state.
+  try {
+    await db.delete(vpnKeysTable).where(eq(vpnKeysTable.nodeId, nodeId));
+    await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
+  } catch (err) {
+    logger.error({ err, nodeId }, "delete node: DB deletion failed");
+    res.status(500).json({ error: "Не удалось удалить узел из базы данных" });
+    return;
+  }
+
+  logger.info({ nodeId, name: node.name, deletedKeys: allKeys.length, revokedActive: activeKeys.length }, "VPN node deleted");
   res.sendStatus(204);
 });
 

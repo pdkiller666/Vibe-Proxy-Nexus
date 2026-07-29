@@ -25,9 +25,11 @@ import {
   paymentsTable,
   subscriptionsTable,
   vpnKeysTable,
+  vpnNodesTable,
 } from "@workspace/db";
 import { logger } from "./logger";
 import { isLocalXrayEnabled, removeXrayClient } from "./xray";
+import { removeRemoteXrayClient } from "./remoteNode";
 
 const SUBSCRIPTION_EXPIRY_CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -133,16 +135,26 @@ export async function revokeKeysPastGracePeriod(): Promise<number> {
     if (!latest?.endsAt || latest.endsAt >= cutoff) continue;
 
     const keysToRevoke = await db
-      .select()
+      .select({ key: vpnKeysTable, node: vpnNodesTable })
       .from(vpnKeysTable)
+      .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
       .where(
         and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)),
       );
 
     if (keysToRevoke.length === 0) continue;
 
-    for (const key of keysToRevoke) {
-      if (isLocalXrayEnabled()) {
+    for (const { key, node } of keysToRevoke) {
+      if (node.managementApiUrl) {
+        try {
+          await removeRemoteXrayClient(node, key.uuid);
+        } catch (err) {
+          logger.error(
+            { err, uuid: key.uuid, userId, nodeId: node.id },
+            "Failed to remove client from remote Xray during grace-period key revocation",
+          );
+        }
+      } else if (isLocalXrayEnabled()) {
         try {
           await removeXrayClient(key.uuid);
         } catch (err) {

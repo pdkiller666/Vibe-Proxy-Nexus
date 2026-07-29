@@ -1520,11 +1520,17 @@ function NodesManagement() {
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
   const [managingId, setManagingId] = useState<number | null>(null);
   const [newNodeMode, setNewNodeMode] = useState<null | "provision" | "manual">(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [regionFilter, setRegionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [sort, setSort] = useState<"default" | "clients_desc" | "name">("default");
 
   function handleDelete(nodeId: number) {
+    if (confirmDeleteId !== nodeId) {
+      setConfirmDeleteId(nodeId);
+      return;
+    }
+    setConfirmDeleteId(null);
     deleteNode(
       { nodeId },
       {
@@ -1532,7 +1538,13 @@ function NodesManagement() {
           queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
           toast({ title: "Узел удалён" });
         },
-        onError: () => toast({ title: "Ошибка удаления узла", variant: "destructive" }),
+        onError: (err: unknown) => {
+          const msg =
+            err && typeof err === "object" && "message" in err
+              ? (err as { message: string }).message
+              : "Ошибка удаления узла";
+          toast({ title: msg, variant: "destructive" });
+        },
       },
     );
   }
@@ -1633,9 +1645,34 @@ function NodesManagement() {
                 <button onClick={() => { setEditingId(node.id); setManagingId(null); }} className="p-2 text-muted-foreground hover:text-primary">
                   <Pencil className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(node.id)} className="p-2 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {confirmDeleteId === node.id ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-destructive">
+                      {(node.activeUserCount ?? 0) > 0
+                        ? `Удалить узел и ${node.activeUserCount} акт. ключей?`
+                        : "Удалить узел?"}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(node.id)}
+                      className="text-xs px-2 py-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Да
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-xs px-2 py-1 border border-border hover:bg-muted"
+                    >
+                      Нет
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleDelete(node.id)}
+                    className="p-2 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
             {managingId === node.id && (

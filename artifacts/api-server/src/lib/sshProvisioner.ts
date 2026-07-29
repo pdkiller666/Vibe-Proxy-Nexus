@@ -367,13 +367,24 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
         `| tee /etc/apt/sources.list.d/docker.list > /dev/null`,
       "apt-get update -qq",
       "apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-compose-plugin",
-      "systemctl enable --now docker",
+      // Enable Docker at boot; start it with retries — on some fresh VPS providers
+      // the first start fails because cgroups/containerd haven't fully initialised
+      // yet during the same apt-get session. We try up to 5 times with 3s pauses
+      // before giving up and letting the later `docker compose up` surface the error.
+      "systemctl enable docker",
+      "for i in 1 2 3 4 5; do systemctl start docker && break || (echo \"Docker start attempt $i failed, retrying...\"; sleep 3); done",
       // Nginx + certbot
       "apt-get install -y --no-install-recommends nginx certbot python3-certbot-nginx",
       "systemctl enable nginx",
     ].join(" && ");
 
     await runCommand(conn, installScript, job, { timeoutMs: 10 * 60_000 });
+
+    // Verify Docker daemon is actually responsive before proceeding.
+    // If it isn't, the docker compose step will fail with a confusing socket error.
+    emitLog(job, "Проверка доступности Docker daemon...");
+    await runCommand(conn, "docker info", job, { timeoutMs: 30_000 });
+
     emitSuccess(job, "Docker, Nginx, certbot установлены ✓");
 
     // ── Step 3: Upload deploy files via SFTP ───────────────────────────────
