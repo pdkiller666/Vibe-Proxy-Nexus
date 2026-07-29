@@ -1,0 +1,209 @@
+🔌 Подключение к 91.228.152.241 по SSH...
+SSH-соединение установлено ✓
+📦 Обновление системы и установка Docker, Nginx, certbot...
+Это может занять 2–3 минуты...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+curl is already the newest version (8.5.0-2ubuntu10.11).
+gnupg is already the newest version (2.4.4-2ubuntu17.4).
+ca-certificates is already the newest version (20260601~24.04.1).
+lsb-release is already the newest version (12.0-2).
+0 upgraded, 0 newly installed, 0 to remove and 2 not upgraded.
+Reading package lists...
+Building dependency tree...
+Reading state information...
+docker-ce is already the newest version (5:29.6.2-1~ubuntu.24.04~noble).
+docker-ce-cli is already the newest version (5:29.6.2-1~ubuntu.24.04~noble).
+containerd.io is already the newest version (2.2.6-1~ubuntu.24.04~noble).
+docker-compose-plugin is already the newest version (5.3.1-1~ubuntu.24.04~noble).
+0 upgraded, 0 newly installed, 0 to remove and 2 not upgraded.
+Synchronizing state of docker.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable docker
+Reading package lists...
+Building dependency tree...
+⏳ ...
+Reading state information...
+nginx is already the newest version (1.24.0-2ubuntu7.15).
+certbot is already the newest version (2.9.0-1).
+python3-certbot-nginx is already the newest version (2.9.0-1).
+0 upgraded, 0 newly installed, 0 to remove and 2 not upgraded.
+Synchronizing state of nginx.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable nginx
+Проверка доступности Docker daemon...
+Client: Docker Engine - Community
+Version: 29.6.2
+Context: default
+Debug Mode: false
+Plugins:
+compose: Docker Compose (Docker Inc.)
+Version: v5.3.1
+Path: /usr/libexec/docker/cli-plugins/docker-compose
+Server:
+Containers: 1
+Running: 1
+Paused: 0
+Stopped: 0
+Images: 19
+Server Version: 29.6.2
+Storage Driver: overlayfs
+driver-type: io.containerd.snapshotter.v1
+Logging Driver: json-file
+Cgroup Driver: systemd
+Cgroup Version: 2
+Plugins:
+Volume: local
+Network: bridge host ipvlan macvlan null overlay
+Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+CDI spec directories:
+/etc/cdi
+/var/run/cdi
+Swarm: inactive
+Runtimes: io.containerd.runc.v2 runc
+Default Runtime: runc
+Init Binary: docker-init
+containerd version: 11ce9d5f3c68c941867e82890e93e815c1304f1b
+runc version: v1.3.6-0-g491b69ba
+init version: de40ad0
+Security Options:
+apparmor
+seccomp
+Profile: builtin
+cgroupns
+Kernel Version: 6.8.0-136-generic
+Operating System: Ubuntu 24.04.4 LTS
+OSType: linux
+Architecture: x86_64
+CPUs: 1
+Total Memory: 961.5MiB
+Name: 339973.fornex.cloud
+ID: 678823b0-e7d0-4ef5-9ce5-71fc2f4db42e
+Docker Root Dir: /var/lib/docker
+Debug Mode: false
+Experimental: false
+Insecure Registries:
+::1/128
+127.0.0.0/8
+Live Restore Enabled: false
+Firewall Backend: iptables
+EnableUserlandProxy: true
+UserlandProxyPath: /usr/bin/docker-proxy
+Docker, Nginx, certbot установлены ✓
+📁 Загрузка файлов на сервер...
+→ пакуем 12 KB...
+→ передаём архив на сервер...
+→ распаковываем файлы...
+→ файлы распакованы ✓
+Файлы загружены ✓
+🔑 Генерация Management API Secret...
+990b6b1ec667fc298ab64ec10f88446b9eef7effe6bb8323aaed5750b2922faf
+Файл .env создан ✓
+⚙️ Настройка Nginx...
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+Nginx настроен и запущен ✓
+🐳 Сборка и запуск Docker-контейнера...
+Docker build может занять 2–5 минут...
+time="2026-07-29T22:01:44Z" level=warning msg="Docker Compose requires buildx plugin to be installed"
+Image vpn-node-vpn-node Building
+Image vpn-node-vpn-node Building
+Sending build context to Docker daemon 12.7kB
+Step 1/19 : FROM python:3.12-slim
+---> 57cd7c3a7a27
+Step 2/19 : ARG XRAY_VERSION=26.3.27
+---> Using cache
+---> f2ff7e8a91fe
+Step 3/19 : RUN apt-get update && apt-get install -y --no-install-recommends curl unzip gettext-base ca-certificates supervisor nodejs && rm -rf /var/lib/apt/lists/*
+---> Using cache
+---> 1ef2b24b808e
+Step 4/19 : RUN curl -fsSL -o /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-linux-64.zip" && unzip /tmp/xray.zip -d /usr/local/bin xray && chmod +x /usr/local/bin/xray && rm -rf /tmp/xray.zip
+---> Using cache
+---> 91c2a591532d
+Step 5/19 : RUN mkdir -p /var/log/supervisor
+---> Using cache
+---> 4f907ada7f15
+Step 6/19 : WORKDIR /app
+---> Using cache
+---> 44a37e1ae430
+Step 7/19 : COPY bot/requirements.txt ./bot/requirements.txt
+---> Using cache
+---> bb7225fc83e2
+Step 8/19 : RUN pip install --no-cache-dir -r bot/requirements.txt
+---> Using cache
+---> 7544ba646695
+Step 9/19 : COPY bot ./bot
+---> Using cache
+---> e218290c7275
+Step 10/19 : RUN python -m grpc_tools.protoc -I./bot --python_out=./bot --grpc_python_out=./bot ./bot/command.proto
+---> Using cache
+---> a77a74a9efd5
+Step 11/19 : COPY xray ./xray
+---> Using cache
+---> a9b90c9327c7
+Step 12/19 : COPY supervisord.conf ./supervisord.conf
+---> Using cache
+---> 4e7ad04befbd
+Step 13/19 : COPY render-config.sh ./render-config.sh
+---> Using cache
+---> a8b2c60c8d9c
+Step 14/19 : RUN chmod +x ./render-config.sh
+---> Using cache
+---> dd948b2a2f7d
+Step 15/19 : EXPOSE 443 8443
+---> Using cache
+---> b2bb5b80a2a9
+Step 16/19 : ENV XRAY_CONFIG_PATH=/etc/xray/config.json
+---> Using cache
+---> f83bc0cd011f
+Step 17/19 : HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD xray -version || exit 1
+---> Using cache
+---> 71f26d001d66
+Step 18/19 : ENTRYPOINT ["/app/render-config.sh"]
+---> Using cache
+---> 00bedcf6bead
+Step 19/19 : LABEL com.docker.compose.image.builder=classic
+---> Using cache
+---> effff58bb4ec
+Successfully built effff58bb4ec
+Successfully tagged vpn-node-vpn-node:latest
+Image vpn-node-vpn-node Built
+Image vpn-node-vpn-node Built
+Container vpn-node-vpn-node-1 Recreate
+Container vpn-node-vpn-node-1 Recreated
+Container vpn-node-vpn-node-1 Starting
+Container vpn-node-vpn-node-1 Started
+Total reclaimed space: 0B
+Контейнер запущен ✓
+🔒 Настройка UFW (открываем 80, 443, 8443)...
+Skipping adding existing rule
+Skipping adding existing rule (v6)
+Rule added
+Rule added (v6)
+Rule updated
+Rule updated (v6)
+Rule updated
+Rule updated (v6)
+Firewall is active and enabled on system startup
+UFW настроен ✓
+🖥️ Установка Cockpit (веб-терминал)...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+cockpit is already the newest version (314-1).
+0 upgraded, 0 newly installed, 0 to remove and 2 not upgraded.
+Skipping adding existing rule
+Skipping adding existing rule (v6)
+Cockpit установлен ✓
+🔐 Получение TLS-сертификата для 339973.fornex.cloud...
+Убеждаемся, что домен указывает на этот IP...
+339973.fornex.cloud has address 91.228.152.241
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+Requesting a certificate for 339973.fornex.cloud
+An unexpected error occurred:
+too many certificates (50) already issued for "fornex.cloud" in the last 168h0m0s, retry after 2026-07-29 22:54:28 UTC: see https://letsencrypt.org/docs/rate-limits/#new-certificates-per-registered-domain
+Ask for help or search for solutions at https://community.letsencrypt.org. See the logfile /var/log/letsencrypt/letsencrypt.log or re-run Certbot with -v for more details.
+⚠️ certbot завершился с ошибкой: Command exited with code 1: certbot --nginx -d 339973.fornex.cloud --non-interactive --agree-tos --email adm
+⚠️ Генерируем самоподписанный сертификат как fallback...
+mkdir: invalid option -- 'x'
+Try 'mkdir --help' for more information.
+❌ Command exited with code 1: mkdir -p /etc/ssl/vpn-node openssl req -x509 -nodes -days 3650 -newkey rsa:2048

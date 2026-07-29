@@ -671,15 +671,15 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
       const certPath = `${certDir}/cert.pem`;
       const keyPath = `${certDir}/key.pem`;
 
+      // Two separate commands joined with &&:
+      // 1. mkdir to create the cert directory
+      // 2. openssl to generate the self-signed cert (all flags on ONE command)
+      // Previously used .join(" ") which merged mkdir and openssl into a single
+      // broken command: "mkdir -p /dir openssl req -x509 ..." → mkdir tried to
+      // create a directory literally named "openssl".
       await runCommand(
         conn,
-        [
-          `mkdir -p ${certDir}`,
-          `openssl req -x509 -nodes -days 3650 -newkey rsa:2048`,
-          `-keyout ${keyPath}`,
-          `-out ${certPath}`,
-          `-subj "/CN=${domain}"`,
-        ].join(" "),
+        `mkdir -p ${certDir} && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ${keyPath} -out ${certPath} -subj "/CN=${domain}"`,
         job,
         { timeoutMs: 30_000 },
       );

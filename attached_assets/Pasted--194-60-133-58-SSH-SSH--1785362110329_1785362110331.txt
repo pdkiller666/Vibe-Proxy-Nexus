@@ -1,0 +1,233 @@
+🔌 Подключение к 194.60.133.58 по SSH...
+SSH-соединение установлено ✓
+📦 Обновление системы и установка Docker, Nginx, certbot...
+Это может занять 2–3 минуты...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+curl is already the newest version (8.5.0-2ubuntu10.11).
+gnupg is already the newest version (2.4.4-2ubuntu17.4).
+ca-certificates is already the newest version (20260601~24.04.1).
+lsb-release is already the newest version (12.0-2).
+The following packages were automatically installed and are no longer required:
+bridge-utils dns-root-data dnsmasq-base ubuntu-fan
+Use 'apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 129 not upgraded.
+Reading package lists...
+Building dependency tree...
+Reading state information...
+docker-ce is already the newest version (5:29.6.2-1~ubuntu.24.04~noble).
+docker-ce-cli is already the newest version (5:29.6.2-1~ubuntu.24.04~noble).
+containerd.io is already the newest version (2.2.6-1~ubuntu.24.04~noble).
+docker-compose-plugin is already the newest version (5.3.1-1~ubuntu.24.04~noble).
+The following packages were automatically installed and are no longer required:
+bridge-utils dns-root-data dnsmasq-base ubuntu-fan
+Use 'apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 129 not upgraded.
+Synchronizing state of docker.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable docker
+Reading package lists...
+Building dependency tree...
+Reading state information...
+nginx is already the newest version (1.24.0-2ubuntu7.15).
+certbot is already the newest version (2.9.0-1).
+python3-certbot-nginx is already the newest version (2.9.0-1).
+The following packages were automatically installed and are no longer required:
+bridge-utils dns-root-data dnsmasq-base ubuntu-fan
+Use 'apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 129 not upgraded.
+Synchronizing state of nginx.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable nginx
+Проверка доступности Docker daemon...
+Client: Docker Engine - Community
+Version: 29.6.2
+Context: default
+Debug Mode: false
+Plugins:
+compose: Docker Compose (Docker Inc.)
+Version: v5.3.1
+Path: /usr/libexec/docker/cli-plugins/docker-compose
+Server:
+Containers: 1
+Running: 1
+Paused: 0
+Stopped: 0
+Images: 19
+Server Version: 29.6.2
+Storage Driver: overlayfs
+driver-type: io.containerd.snapshotter.v1
+Logging Driver: json-file
+Cgroup Driver: systemd
+Cgroup Version: 2
+Plugins:
+Volume: local
+Network: bridge host ipvlan macvlan null overlay
+Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+CDI spec directories:
+/etc/cdi
+/var/run/cdi
+Swarm: inactive
+Runtimes: io.containerd.runc.v2 runc
+Default Runtime: runc
+Init Binary: docker-init
+containerd version: 11ce9d5f3c68c941867e82890e93e815c1304f1b
+runc version: v1.3.6-0-g491b69ba
+init version: de40ad0
+Security Options:
+apparmor
+seccomp
+Profile: builtin
+cgroupns
+Kernel Version: 6.8.0-110-generic
+Operating System: Ubuntu 24.04.4 LTS
+OSType: linux
+Architecture: x86_64
+CPUs: 1
+Total Memory: 1.922GiB
+Name: v917955.hosted-by-vdsina.com
+ID: 4b5ae8e8-3737-4f48-af27-5c453d65be91
+Docker Root Dir: /var/lib/docker
+Debug Mode: false
+Experimental: false
+Insecure Registries:
+::1/128
+127.0.0.0/8
+Live Restore Enabled: false
+Firewall Backend: iptables
+EnableUserlandProxy: true
+UserlandProxyPath: /usr/bin/docker-proxy
+Docker, Nginx, certbot установлены ✓
+📁 Загрузка файлов на сервер...
+→ пакуем 12 KB...
+→ передаём архив на сервер...
+→ распаковываем файлы...
+→ файлы распакованы ✓
+Файлы загружены ✓
+🔑 Генерация Management API Secret...
+1303c4047d44e935de9ffbd25aaae898bd06c84d8a7880ae7b2f5cbb3b4ffe4d
+Файл .env создан ✓
+⚙️ Настройка Nginx...
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+Nginx настроен и запущен ✓
+🐳 Сборка и запуск Docker-контейнера...
+Docker build может занять 2–5 минут...
+time="2026-07-30T00:54:16+03:00" level=warning msg="Docker Compose requires buildx plugin to be installed"
+Image vpn-node-vpn-node Building
+Image vpn-node-vpn-node Building
+Sending build context to Docker daemon 12.7kB
+Step 1/19 : FROM python:3.12-slim
+---> 57cd7c3a7a27
+Step 2/19 : ARG XRAY_VERSION=26.3.27
+---> Using cache
+---> 1fa9cff131e1
+Step 3/19 : RUN apt-get update && apt-get install -y --no-install-recommends curl unzip gettext-base ca-certificates supervisor nodejs && rm -rf /var/lib/apt/lists/*
+---> Using cache
+---> 27a620abe233
+Step 4/19 : RUN curl -fsSL -o /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-linux-64.zip" && unzip /tmp/xray.zip -d /usr/local/bin xray && chmod +x /usr/local/bin/xray && rm -rf /tmp/xray.zip
+---> Using cache
+---> f5324ddfc97d
+Step 5/19 : RUN mkdir -p /var/log/supervisor
+---> Using cache
+---> cf50529b70f0
+Step 6/19 : WORKDIR /app
+---> Using cache
+---> 0e662410d3ad
+Step 7/19 : COPY bot/requirements.txt ./bot/requirements.txt
+---> Using cache
+---> f47b90c0e844
+Step 8/19 : RUN pip install --no-cache-dir -r bot/requirements.txt
+---> Using cache
+---> f2c0c09b2ef9
+Step 9/19 : COPY bot ./bot
+---> Using cache
+---> e1041be6cc29
+Step 10/19 : RUN python -m grpc_tools.protoc -I./bot --python_out=./bot --grpc_python_out=./bot ./bot/command.proto
+---> Using cache
+---> c33a52860ba1
+Step 11/19 : COPY xray ./xray
+---> Using cache
+---> 856fc4d633f6
+Step 12/19 : COPY supervisord.conf ./supervisord.conf
+---> Using cache
+---> 7a9325878b93
+Step 13/19 : COPY render-config.sh ./render-config.sh
+---> Using cache
+---> 7b7e9821a84f
+Step 14/19 : RUN chmod +x ./render-config.sh
+---> Using cache
+---> fe09db677715
+Step 15/19 : EXPOSE 443 8443
+---> Using cache
+---> 074925cea2a6
+Step 16/19 : ENV XRAY_CONFIG_PATH=/etc/xray/config.json
+---> Using cache
+---> b305b9e94e59
+Step 17/19 : HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD xray -version || exit 1
+---> Using cache
+---> 624ecd191667
+Step 18/19 : ENTRYPOINT ["/app/render-config.sh"]
+---> Using cache
+---> c7f69cf224e2
+Step 19/19 : LABEL com.docker.compose.image.builder=classic
+---> Using cache
+---> b577c933353c
+Successfully built b577c933353c
+Successfully tagged vpn-node-vpn-node:latest
+Image vpn-node-vpn-node Built
+Image vpn-node-vpn-node Built
+Container vpn-node-vpn-node-1 Recreate
+Container vpn-node-vpn-node-1 Recreated
+Container vpn-node-vpn-node-1 Starting
+Container vpn-node-vpn-node-1 Started
+Total reclaimed space: 0B
+Контейнер запущен ✓
+🔒 Настройка UFW (открываем 80, 443, 8443)...
+Rules updated
+Rules updated (v6)
+Rules updated
+Rules updated (v6)
+Rules updated
+Rules updated (v6)
+Rules updated
+Rules updated (v6)
+Firewall is active and enabled on system startup
+UFW настроен ✓
+🖥️ Установка Cockpit (веб-терминал)...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+cockpit is already the newest version (314-1).
+The following packages were automatically installed and are no longer required:
+bridge-utils dns-root-data dnsmasq-base ubuntu-fan
+Use 'apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 129 not upgraded.
+Skipping adding existing rule
+Skipping adding existing rule (v6)
+Cockpit установлен ✓
+🔐 Получение TLS-сертификата для v917955.hosted-by-vdsina.com...
+Убеждаемся, что домен указывает на этот IP...
+v917955.hosted-by-vdsina.com has address 194.60.133.58
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+Requesting a certificate for v917955.hosted-by-vdsina.com
+⏳ ...
+Successfully received certificate.
+Certificate is saved at: /etc/letsencrypt/live/v917955.hosted-by-vdsina.com/fullchain.pem
+Key is saved at: /etc/letsencrypt/live/v917955.hosted-by-vdsina.com/privkey.pem
+This certificate expires on 2026-10-27.
+These files will be updated when the certificate renews.
+Certbot has set up a scheduled task to automatically renew this certificate in the background.
+Deploying certificate
+Successfully deployed certificate for v917955.hosted-by-vdsina.com to /etc/nginx/sites-enabled/vpn-node
+Congratulations! You have successfully enabled HTTPS on https://v917955.hosted-by-vdsina.com
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+If you like Certbot, please consider supporting our work by:
+* Donating to ISRG / Let's Encrypt: https://letsencrypt.org/donate
+* Donating to EFF: https://eff.org/donate-le
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+TLS сертификат Let's Encrypt получен ✓
+⏳ Ожидаем готовности контейнера...
+{"status":"ok"}
+http://localhost:8443/health → ok ✓
+💾 Регистрация узла в базе данных...
+Узел «VPNexus_Нидерланды2» зарегистрирован (id=3) ✓
