@@ -272,8 +272,25 @@ export default function Plans() {
                     </>
                   )}
                   {plan.description && (
-                    <p className="text-sm text-muted-foreground mb-6 flex-1">{plan.description}</p>
+                    <p className="text-sm text-muted-foreground mb-4 flex-1">{plan.description}</p>
                   )}
+                  <ul className="space-y-1.5 mb-6 text-sm text-muted-foreground">
+                    {[
+                      `${plan.devicesIncluded} ${
+                        plan.devicesIncluded === 1 ? "устройство"
+                        : plan.devicesIncluded < 5 ? "устройства"
+                        : "устройств"
+                      }`,
+                      plan.trafficLimitGb != null
+                        ? `${plan.trafficLimitGb} ГБ трафика`
+                        : "Без ограничения трафика",
+                    ].map((feat) => (
+                      <li key={feat} className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                        {feat}
+                      </li>
+                    ))}
+                  </ul>
                   {(() => {
                     if (isCurrentPlan) {
                       return (

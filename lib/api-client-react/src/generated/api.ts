@@ -53,6 +53,7 @@ import type {
   ForgotPasswordInput,
   ForgotPasswordResult,
   GetAdminNotificationsParams,
+  GetVpnNodeSystemLogsParams,
   HealthStatus,
   ListAdminPaymentsParams,
   ListAdminTicketsParams,
@@ -92,6 +93,9 @@ import type {
   VpnNode,
   VpnNodeHealthResult,
   VpnNodeInput,
+  VpnNodeRestartXrayResult,
+  VpnNodeSystemLogs,
+  VpnNodeSystemStatus,
   VpnNodeUpdate
 } from './api.schemas';
 
@@ -5581,6 +5585,242 @@ export function useGetVpnNodeHealth<TData = Awaited<ReturnType<typeof getVpnNode
 
 
 
+
+export const getGetVpnNodeSystemStatusUrl = (nodeId: number,) => {
+
+
+
+
+  return `/api/admin/vpn-nodes/${nodeId}/system/status`
+}
+
+/**
+ * @summary Get CPU, RAM, disk and uptime for a VPN node
+ */
+export const getVpnNodeSystemStatus = async (nodeId: number, options?: RequestInit): Promise<VpnNodeSystemStatus> => {
+
+  return customFetch<VpnNodeSystemStatus>(getGetVpnNodeSystemStatusUrl(nodeId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVpnNodeSystemStatusQueryKey = (nodeId: number,) => {
+    return [
+    `/api/admin/vpn-nodes/${nodeId}/system/status`
+    ] as const;
+    }
+
+
+export const getGetVpnNodeSystemStatusQueryOptions = <TData = Awaited<ReturnType<typeof getVpnNodeSystemStatus>>, TError = ErrorType<unknown>>(nodeId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeSystemStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVpnNodeSystemStatusQueryKey(nodeId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVpnNodeSystemStatus>>> = ({ signal }) => getVpnNodeSystemStatus(nodeId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: nodeId !== null && nodeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeSystemStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVpnNodeSystemStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getVpnNodeSystemStatus>>>
+export type GetVpnNodeSystemStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get CPU, RAM, disk and uptime for a VPN node
+ */
+
+export function useGetVpnNodeSystemStatus<TData = Awaited<ReturnType<typeof getVpnNodeSystemStatus>>, TError = ErrorType<unknown>>(
+ nodeId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeSystemStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVpnNodeSystemStatusQueryOptions(nodeId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVpnNodeSystemLogsUrl = (nodeId: number,
+    params?: GetVpnNodeSystemLogsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/vpn-nodes/${nodeId}/system/logs?${stringifiedParams}` : `/api/admin/vpn-nodes/${nodeId}/system/logs`
+}
+
+/**
+ * @summary Get recent stdout log lines for a process on a VPN node
+ */
+export const getVpnNodeSystemLogs = async (nodeId: number,
+    params?: GetVpnNodeSystemLogsParams, options?: RequestInit): Promise<VpnNodeSystemLogs> => {
+
+  return customFetch<VpnNodeSystemLogs>(getGetVpnNodeSystemLogsUrl(nodeId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVpnNodeSystemLogsQueryKey = (nodeId: number,
+    params?: GetVpnNodeSystemLogsParams,) => {
+    return [
+    `/api/admin/vpn-nodes/${nodeId}/system/logs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetVpnNodeSystemLogsQueryOptions = <TData = Awaited<ReturnType<typeof getVpnNodeSystemLogs>>, TError = ErrorType<unknown>>(nodeId: number,
+    params?: GetVpnNodeSystemLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeSystemLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVpnNodeSystemLogsQueryKey(nodeId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVpnNodeSystemLogs>>> = ({ signal }) => getVpnNodeSystemLogs(nodeId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: nodeId !== null && nodeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeSystemLogs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVpnNodeSystemLogsQueryResult = NonNullable<Awaited<ReturnType<typeof getVpnNodeSystemLogs>>>
+export type GetVpnNodeSystemLogsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get recent stdout log lines for a process on a VPN node
+ */
+
+export function useGetVpnNodeSystemLogs<TData = Awaited<ReturnType<typeof getVpnNodeSystemLogs>>, TError = ErrorType<unknown>>(
+ nodeId: number,
+    params?: GetVpnNodeSystemLogsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeSystemLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVpnNodeSystemLogsQueryOptions(nodeId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRestartVpnNodeXrayUrl = (nodeId: number,) => {
+
+
+
+
+  return `/api/admin/vpn-nodes/${nodeId}/system/restart-xray`
+}
+
+/**
+ * @summary Restart the Xray process on a VPN node via supervisorctl
+ */
+export const restartVpnNodeXray = async (nodeId: number, options?: RequestInit): Promise<VpnNodeRestartXrayResult> => {
+
+  return customFetch<VpnNodeRestartXrayResult>(getRestartVpnNodeXrayUrl(nodeId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRestartVpnNodeXrayMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restartVpnNodeXray>>, TError,{nodeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restartVpnNodeXray>>, TError,{nodeId: number}, TContext> => {
+
+const mutationKey = ['restartVpnNodeXray'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restartVpnNodeXray>>, {nodeId: number}> = (props) => {
+          const {nodeId} = props ?? {};
+
+          return  restartVpnNodeXray(nodeId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestartVpnNodeXrayMutationResult = NonNullable<Awaited<ReturnType<typeof restartVpnNodeXray>>>
+
+    export type RestartVpnNodeXrayMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Restart the Xray process on a VPN node via supervisorctl
+ */
+export const useRestartVpnNodeXray = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restartVpnNodeXray>>, TError,{nodeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restartVpnNodeXray>>,
+        TError,
+        {nodeId: number},
+        TContext
+      > => {
+      return useMutation(getRestartVpnNodeXrayMutationOptions(options));
+    }
 
 export const getListAdminTicketsUrl = (params?: ListAdminTicketsParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -1393,6 +1393,78 @@ paths:
               schema:
                 $ref: "#/components/schemas/VpnNodeHealthResult"
 
+  /admin/vpn-nodes/{nodeId}/system/status:
+    get:
+      operationId: getVpnNodeSystemStatus
+      tags: [admin]
+      summary: Get CPU, RAM, disk and uptime for a VPN node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNodeSystemStatus"
+
+  /admin/vpn-nodes/{nodeId}/system/logs:
+    get:
+      operationId: getVpnNodeSystemLogs
+      tags: [admin]
+      summary: Get recent stdout log lines for a process on a VPN node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: process
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [xray, mgmt-api]
+            default: xray
+        - name: lines
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        "200":
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNodeSystemLogs"
+
+  /admin/vpn-nodes/{nodeId}/system/restart-xray:
+    post:
+      operationId: restartVpnNodeXray
+      tags: [admin]
+      summary: Restart the Xray process on a VPN node via supervisorctl
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restart result with refreshed system status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNodeRestartXrayResult"
+
   /admin/support-tickets:
     get:
       operationId: listAdminTickets
@@ -2254,6 +2326,35 @@ components:
         ok: { type: boolean }
         latencyMs: { type: ["integer", "null"] }
         error: { type: ["string", "null"] }
+
+    VpnNodeSystemStatus:
+      type: object
+      required: [cpuPercent, ramUsedBytes, ramTotalBytes, diskUsedBytes, diskTotalBytes, uptimeSeconds]
+      properties:
+        cpuPercent: { type: number }
+        ramUsedBytes: { type: integer }
+        ramTotalBytes: { type: integer }
+        diskUsedBytes: { type: integer }
+        diskTotalBytes: { type: integer }
+        uptimeSeconds: { type: integer }
+
+    VpnNodeSystemLogs:
+      type: object
+      required: [process, lines]
+      properties:
+        process: { type: string }
+        lines:
+          type: array
+          items: { type: string }
+
+    VpnNodeRestartXrayResult:
+      type: object
+      required: [ok, output, status]
+      properties:
+        ok: { type: boolean }
+        output: { type: string }
+        status:
+          $ref: "#/components/schemas/VpnNodeSystemStatus"
 
     TopTrafficUser:
       type: object

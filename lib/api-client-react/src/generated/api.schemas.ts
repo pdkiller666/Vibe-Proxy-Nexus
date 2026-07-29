@@ -682,6 +682,26 @@ export interface VpnNodeHealthResult {
   error?: string | null;
 }
 
+export interface VpnNodeSystemStatus {
+  cpuPercent: number;
+  ramUsedBytes: number;
+  ramTotalBytes: number;
+  diskUsedBytes: number;
+  diskTotalBytes: number;
+  uptimeSeconds: number;
+}
+
+export interface VpnNodeSystemLogs {
+  process: string;
+  lines: string[];
+}
+
+export interface VpnNodeRestartXrayResult {
+  ok: boolean;
+  output: string;
+  status: VpnNodeSystemStatus;
+}
+
 export type AdminBalanceTransactionType = typeof AdminBalanceTransactionType[keyof typeof AdminBalanceTransactionType];
 
 
@@ -928,6 +948,23 @@ status?: PaymentStatus;
 export type GetAdminNotificationsParams = {
 since?: string;
 };
+
+export type GetVpnNodeSystemLogsParams = {
+process?: GetVpnNodeSystemLogsProcess;
+/**
+ * @minimum 1
+ * @maximum 1000
+ */
+lines?: number;
+};
+
+export type GetVpnNodeSystemLogsProcess = typeof GetVpnNodeSystemLogsProcess[keyof typeof GetVpnNodeSystemLogsProcess];
+
+
+export const GetVpnNodeSystemLogsProcess = {
+  xray: 'xray',
+  'mgmt-api': 'mgmt-api',
+} as const;
 
 export type ListAdminTicketsParams = {
 status?: TicketStatus;

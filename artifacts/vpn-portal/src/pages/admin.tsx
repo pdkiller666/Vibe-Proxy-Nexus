@@ -57,6 +57,12 @@ import {
   useListAdminSystemEvents,
   useAcknowledgeAdminSystemEvent,
   getListAdminSystemEventsQueryKey,
+  useGetVpnNodeSystemStatus,
+  useGetVpnNodeSystemLogs,
+  useRestartVpnNodeXray,
+  getGetVpnNodeSystemStatusQueryKey,
+  getGetVpnNodeSystemLogsQueryKey,
+  GetVpnNodeSystemLogsProcess,
 } from "@workspace/api-client-react";
 import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
@@ -65,7 +71,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2 } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -1112,6 +1118,7 @@ function NodesManagement() {
   const { mutate: deleteNode } = useDeleteVpnNode();
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const [managingId, setManagingId] = useState<number | null>(null);
   const [regionFilter, setRegionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [sort, setSort] = useState<"default" | "clients_desc" | "name">("default");
@@ -1186,36 +1193,55 @@ function NodesManagement() {
         editingId === node.id ? (
           <NodeForm key={node.id} node={node} onDone={() => setEditingId(null)} />
         ) : (
-          <div key={node.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4 flex-wrap">
-            <div className="min-w-0 break-words">
-              <div className="font-bold flex items-center gap-2 flex-wrap">
-                <span>{node.name}</span>
-                <span className="text-muted-foreground font-normal">· {node.region}</span>
-                {!node.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
-                {node.managementApiUrl && <NodePollingHealthIndicator nodeName={node.name} />}
-              </div>
-              <div className="text-sm text-muted-foreground font-mono break-all">
-                {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
-              </div>
-              {node.managementApiUrl && (
-                <div className="text-xs text-blue-600 font-mono break-all">
-                  Remote: {node.managementApiUrl}
+          <div key={node.id} className="bg-card border border-border">
+            <div className="p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0 break-words">
+                <div className="font-bold flex items-center gap-2 flex-wrap">
+                  <span>{node.name}</span>
+                  <span className="text-muted-foreground font-normal">· {node.region}</span>
+                  {!node.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
+                  {node.managementApiUrl && <NodePollingHealthIndicator nodeName={node.name} />}
                 </div>
-              )}
-              <div className="text-sm text-muted-foreground">
-                Клиентов: {node.activeUserCount}
-                {node.maxUsers != null ? ` / ${node.maxUsers}` : ""}
+                <div className="text-sm text-muted-foreground font-mono break-all">
+                  {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
+                </div>
+                {node.managementApiUrl && (
+                  <div className="text-xs text-blue-600 font-mono break-all">
+                    Remote: {node.managementApiUrl}
+                  </div>
+                )}
+                <div className="text-sm text-muted-foreground">
+                  Клиентов: {node.activeUserCount}
+                  {node.maxUsers != null ? ` / ${node.maxUsers}` : ""}
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0 items-center">
+                <NodeHealthButton nodeId={node.id} />
+                <button
+                  onClick={() => setManagingId(managingId === node.id ? null : node.id)}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 border transition-colors ${
+                    managingId === node.id
+                      ? "border-primary text-primary bg-primary/5"
+                      : "border-border text-muted-foreground hover:text-primary hover:border-primary"
+                  }`}
+                  title="Управление узлом"
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Управление</span>
+                </button>
+                <button onClick={() => { setEditingId(node.id); setManagingId(null); }} className="p-2 text-muted-foreground hover:text-primary">
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button onClick={() => handleDelete(node.id)} className="p-2 text-muted-foreground hover:text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
-            <div className="flex gap-2 shrink-0 items-center">
-              <NodeHealthButton nodeId={node.id} />
-              <button onClick={() => setEditingId(node.id)} className="p-2 text-muted-foreground hover:text-primary">
-                <Pencil className="w-4 h-4" />
-              </button>
-              <button onClick={() => handleDelete(node.id)} className="p-2 text-muted-foreground hover:text-destructive">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+            {managingId === node.id && (
+              <div className="px-4 pb-4">
+                <NodeManagementPanel nodeId={node.id} />
+              </div>
+            )}
           </div>
         ),
       )}
@@ -1717,6 +1743,218 @@ function NodeHealthButton({ nodeId }: { nodeId: number }) {
         </span>
       )}
     </button>
+  );
+}
+
+// ─── Node Management Panel ────────────────────────────────────────────────────
+
+function formatUptime(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}д ${h}ч ${m}м`;
+  if (h > 0) return `${h}ч ${m}м`;
+  return `${m}м`;
+}
+
+function formatBytesShort(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} ГБ`;
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(0)} МБ`;
+  return `${(bytes / 1024).toFixed(0)} КБ`;
+}
+
+function NodeManagementPanel({ nodeId }: { nodeId: number }) {
+  const { toast } = useToast();
+  const [logProcess, setLogProcess] = useState<"xray" | "mgmt-api">("xray");
+  const [logLines, setLogLines] = useState(100);
+  const [logsEnabled, setLogsEnabled] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+
+  // Status — auto-refresh every 30s once panel is open.
+  const {
+    data: status,
+    isFetching: statusFetching,
+    error: statusError,
+    refetch: refetchStatus,
+  } = useGetVpnNodeSystemStatus(nodeId, {
+    query: {
+      queryKey: getGetVpnNodeSystemStatusQueryKey(nodeId),
+      refetchInterval: 30_000,
+      retry: false,
+    },
+  });
+
+  // Logs — only fetched when explicitly requested.
+  const {
+    data: logs,
+    isFetching: logsFetching,
+    refetch: refetchLogs,
+  } = useGetVpnNodeSystemLogs(nodeId, { process: logProcess, lines: logLines }, {
+    query: {
+      queryKey: getGetVpnNodeSystemLogsQueryKey(nodeId, { process: logProcess, lines: logLines }),
+      enabled: logsEnabled,
+      staleTime: 0,
+      gcTime: 0,
+      retry: false,
+    },
+  });
+
+  // Restart mutation.
+  const { mutate: restartXray, isPending: restarting } = useRestartVpnNodeXray({
+    mutation: {
+      onSuccess: (data) => {
+        queryClient.setQueryData(getGetVpnNodeSystemStatusQueryKey(nodeId), data.status);
+        toast({ title: data.ok ? "Xray перезапущен" : "Перезапуск завершён с ошибкой", variant: data.ok ? "default" : "destructive" });
+        setConfirmRestart(false);
+      },
+      onError: () => {
+        toast({ title: "Ошибка перезапуска Xray", variant: "destructive" });
+        setConfirmRestart(false);
+      },
+    },
+  });
+
+  const cpuBarWidth = status ? Math.min(100, status.cpuPercent) : 0;
+  const ramPercent = status ? Math.round((status.ramUsedBytes / status.ramTotalBytes) * 100) : 0;
+  const diskPercent = status ? Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100) : 0;
+
+  return (
+    <div className="mt-3 border border-border bg-muted/30 p-4 space-y-4">
+      {/* ── System status ── */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase text-muted-foreground tracking-wide flex items-center gap-1.5">
+          <Activity className="w-3.5 h-3.5" /> Системный статус
+        </span>
+        <button
+          onClick={() => refetchStatus()}
+          disabled={statusFetching}
+          className="text-muted-foreground hover:text-primary p-1 transition-colors"
+          title="Обновить"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${statusFetching ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {statusError ? (
+        <p className="text-xs text-destructive font-mono">
+          Ошибка: {statusError instanceof Error ? statusError.message : "Недоступен"}
+        </p>
+      ) : !status ? (
+        <p className="text-xs text-muted-foreground font-mono">Загрузка…</p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* CPU */}
+          <div className="bg-background border border-border p-3">
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">CPU</div>
+            <div className="text-lg font-bold">{status.cpuPercent.toFixed(1)}%</div>
+            <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${cpuBarWidth > 80 ? "bg-destructive" : cpuBarWidth > 50 ? "bg-yellow-500" : "bg-green-500"}`}
+                style={{ width: `${cpuBarWidth}%` }}
+              />
+            </div>
+          </div>
+          {/* RAM */}
+          <div className="bg-background border border-border p-3">
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">RAM</div>
+            <div className="text-lg font-bold">{ramPercent}%</div>
+            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+              {formatBytesShort(status.ramUsedBytes)} / {formatBytesShort(status.ramTotalBytes)}
+            </div>
+          </div>
+          {/* Disk */}
+          <div className="bg-background border border-border p-3">
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Диск</div>
+            <div className="text-lg font-bold">{diskPercent}%</div>
+            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+              {formatBytesShort(status.diskUsedBytes)} / {formatBytesShort(status.diskTotalBytes)}
+            </div>
+          </div>
+          {/* Uptime */}
+          <div className="bg-background border border-border p-3">
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Uptime</div>
+            <div className="text-lg font-bold">{formatUptime(status.uptimeSeconds)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Logs ── */}
+      <div>
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="text-xs font-bold uppercase text-muted-foreground tracking-wide flex items-center gap-1.5">
+            <Terminal className="w-3.5 h-3.5" /> Логи
+          </span>
+          <select
+            value={logProcess}
+            onChange={(e) => {
+              setLogProcess(e.target.value as "xray" | "mgmt-api");
+              setLogsEnabled(false);
+            }}
+            className="border border-border bg-background px-2 py-1 text-xs rounded-none"
+          >
+            <option value="xray">xray</option>
+            <option value="mgmt-api">mgmt-api</option>
+          </select>
+          <select
+            value={logLines}
+            onChange={(e) => setLogLines(Number(e.target.value))}
+            className="border border-border bg-background px-2 py-1 text-xs rounded-none"
+          >
+            <option value={50}>50 строк</option>
+            <option value={100}>100 строк</option>
+            <option value={200}>200 строк</option>
+            <option value={500}>500 строк</option>
+          </select>
+          <button
+            onClick={() => { setLogsEnabled(true); refetchLogs(); }}
+            disabled={logsFetching}
+            className="flex items-center gap-1 text-xs border border-border px-3 py-1 hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3 h-3 ${logsFetching ? "animate-spin" : ""}`} />
+            {logsEnabled ? "Обновить" : "Показать"}
+          </button>
+        </div>
+
+        {logsEnabled && (
+          <pre className="bg-black text-green-400 text-[11px] font-mono p-3 overflow-auto max-h-72 whitespace-pre-wrap break-all leading-relaxed">
+            {logsFetching
+              ? "Загрузка…"
+              : logs && logs.lines.length > 0
+              ? logs.lines.join("\n")
+              : "Нет данных"}
+          </pre>
+        )}
+      </div>
+
+      {/* ── Restart Xray ── */}
+      <div className="flex items-center gap-3 pt-1 border-t border-border">
+        {!confirmRestart ? (
+          <button
+            onClick={() => setConfirmRestart(true)}
+            className="flex items-center gap-1.5 text-xs border border-border px-3 py-1.5 hover:border-orange-500 hover:text-orange-600 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Перезапустить Xray
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Вы уверены?</span>
+            <button
+              onClick={() => restartXray({ nodeId })}
+              disabled={restarting}
+              className="text-xs bg-orange-600 text-white px-3 py-1.5 hover:bg-orange-700 transition-colors disabled:opacity-50"
+            >
+              {restarting ? "Перезапуск…" : "Да, перезапустить"}
+            </button>
+            <button
+              onClick={() => setConfirmRestart(false)}
+              className="text-xs border border-border px-3 py-1.5 hover:bg-muted transition-colors"
+            >
+              Отмена
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

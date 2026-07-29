@@ -5,3 +5,4 @@ aiogram==3.13.1
 python-dotenv==1.0.1
 grpcio==1.66.1
 grpcio-tools==1.66.1
+psutil==6.1.0

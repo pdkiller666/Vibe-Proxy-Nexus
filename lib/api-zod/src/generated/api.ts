@@ -1813,6 +1813,68 @@ export const GetVpnNodeHealthResponse = zod.object({
 
 
 /**
+ * @summary Get CPU, RAM, disk and uptime for a VPN node
+ */
+export const GetVpnNodeSystemStatusParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const GetVpnNodeSystemStatusResponse = zod.object({
+  "cpuPercent": zod.number(),
+  "ramUsedBytes": zod.number(),
+  "ramTotalBytes": zod.number(),
+  "diskUsedBytes": zod.number(),
+  "diskTotalBytes": zod.number(),
+  "uptimeSeconds": zod.number()
+})
+
+
+/**
+ * @summary Get recent stdout log lines for a process on a VPN node
+ */
+export const GetVpnNodeSystemLogsParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const getVpnNodeSystemLogsQueryProcessDefault = `xray`;
+export const getVpnNodeSystemLogsQueryLinesDefault = 100;
+export const getVpnNodeSystemLogsQueryLinesMax = 1000;
+
+
+
+export const GetVpnNodeSystemLogsQueryParams = zod.object({
+  "process": zod.enum(['xray', 'mgmt-api']).default(getVpnNodeSystemLogsQueryProcessDefault),
+  "lines": zod.coerce.number().min(1).max(getVpnNodeSystemLogsQueryLinesMax).default(getVpnNodeSystemLogsQueryLinesDefault)
+})
+
+export const GetVpnNodeSystemLogsResponse = zod.object({
+  "process": zod.string(),
+  "lines": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Restart the Xray process on a VPN node via supervisorctl
+ */
+export const RestartVpnNodeXrayParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const RestartVpnNodeXrayResponse = zod.object({
+  "ok": zod.boolean(),
+  "output": zod.string(),
+  "status": zod.object({
+  "cpuPercent": zod.number(),
+  "ramUsedBytes": zod.number(),
+  "ramTotalBytes": zod.number(),
+  "diskUsedBytes": zod.number(),
+  "diskTotalBytes": zod.number(),
+  "uptimeSeconds": zod.number()
+})
+})
+
+
+/**
  * @summary List all support tickets (optionally filtered by status)
  */
 export const ListAdminTicketsQueryParams = zod.object({

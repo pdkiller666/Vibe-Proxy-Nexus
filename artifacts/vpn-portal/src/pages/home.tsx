@@ -674,6 +674,7 @@ export default function Home() {
                     priceRub: number;
                     durationDays: number;
                     devicesIncluded: number;
+                    trafficLimitGb?: number | null;
                     billingType?: string;
                     hourlyRateKopecks?: number | null;
                   },
@@ -729,7 +730,9 @@ export default function Home() {
                             : plan.devicesIncluded < 5 ? "устройства"
                             : "устройств"
                           }`,
-                          "Без ограничения трафика",
+                          plan.trafficLimitGb != null
+                            ? `${plan.trafficLimitGb} ГБ трафика`
+                            : "Без ограничения трафика",
                           "VPN-ключи в личном кабинете",
                           "Техподдержка",
                         ].map((feat) => (
