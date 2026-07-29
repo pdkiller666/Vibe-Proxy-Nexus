@@ -293,6 +293,108 @@ function XrayConfigRemountBanner() {
   );
 }
 
+function NodeAlertsBanner() {
+  const { data: events, isLoading } = useListAdminSystemEvents({
+    query: { queryKey: getListAdminSystemEventsQueryKey(), refetchInterval: 60_000 },
+  });
+  const { mutate: acknowledge } = useAcknowledgeAdminSystemEvent({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAdminSystemEventsQueryKey() });
+      },
+    },
+  });
+
+  const nodeEvents = (events ?? []).filter((e) =>
+    e.eventType === "node_unavailable" ||
+    e.eventType === "node_overloaded" ||
+    e.eventType === "node_recovered"
+  );
+
+  if (isLoading || nodeEvents.length === 0) return null;
+
+  return (
+    <>
+      {nodeEvents.map((event) => {
+        const meta = event.metadata as {
+          nodeId?: number;
+          nodeName?: string;
+          cpuPercent?: number;
+          ramPercent?: number;
+          cpuOverloaded?: boolean;
+          ramOverloaded?: boolean;
+          consecutiveFailures?: number;
+          lastError?: string;
+          prevConsecutiveFailures?: number;
+        } | undefined;
+
+        const ts = new Date(event.createdAt).toLocaleString("ru-RU", {
+          dateStyle: "short",
+          timeStyle: "medium",
+        });
+        const nodeName = meta?.nodeName ?? `Узел #${meta?.nodeId}`;
+
+        let colorClass = "bg-red-50 border-red-400";
+        let iconColor = "text-red-600";
+        let labelColor = "text-red-700";
+        let bodyColor = "text-red-800";
+        let hintColor = "text-red-600";
+        let btnColor = "text-red-600 hover:text-red-800";
+        let label = "";
+        let body = "";
+        let hint = "";
+
+        if (event.eventType === "node_unavailable") {
+          label = `Узел «${nodeName}» недоступен`;
+          body = `Нода не отвечала ${meta?.consecutiveFailures ?? 3} проверок подряд.${meta?.lastError ? ` Последняя ошибка: ${meta.lastError}.` : ""} Время события: ${ts}.`;
+          hint = "Проверьте состояние VPS и убедитесь, что Docker-контейнер с Xray запущен.";
+        } else if (event.eventType === "node_overloaded") {
+          colorClass = "bg-amber-50 border-amber-400";
+          iconColor = "text-amber-600";
+          labelColor = "text-amber-700";
+          bodyColor = "text-amber-800";
+          hintColor = "text-amber-600";
+          btnColor = "text-amber-600 hover:text-amber-800";
+          const parts: string[] = [];
+          if (meta?.cpuOverloaded) parts.push(`CPU ${meta.cpuPercent}%`);
+          if (meta?.ramOverloaded) parts.push(`RAM ${meta.ramPercent}%`);
+          label = `Узел «${nodeName}» перегружен`;
+          body = `Превышен порог 90%: ${parts.join(", ")}. Время события: ${ts}.`;
+          hint = "Рассмотрите масштабирование или ограничение числа активных ключей на этой ноде.";
+        } else if (event.eventType === "node_recovered") {
+          colorClass = "bg-green-50 border-green-400";
+          iconColor = "text-green-600";
+          labelColor = "text-green-700";
+          bodyColor = "text-green-800";
+          hintColor = "text-green-600";
+          btnColor = "text-green-600 hover:text-green-800";
+          label = `Узел «${nodeName}» восстановлен`;
+          body = `Нода снова доступна. CPU: ${meta?.cpuPercent ?? "—"}%. Время события: ${ts}.`;
+          hint = "Предыдущий алерт о недоступности можно закрыть.";
+        }
+
+        return (
+          <div key={event.id} className={`flex items-start gap-3 border p-4 ${colorClass}`}>
+            <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${iconColor}`} />
+            <div className="flex-1 min-w-0">
+              <div className={`text-xs font-mono uppercase font-bold ${labelColor}`}>{label}</div>
+              <div className={`text-sm mt-0.5 ${bodyColor}`}>{body}</div>
+              <div className={`text-xs mt-1 ${hintColor}`}>{hint}</div>
+            </div>
+            <button
+              onClick={() => acknowledge({ eventId: event.id })}
+              className={`shrink-0 ${btnColor}`}
+              aria-label="Закрыть"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function SummarySection() {
   const { data, isLoading } = useGetAdminDashboardSummary({
     query: { queryKey: getGetAdminDashboardSummaryQueryKey(), refetchInterval: 30_000 },
@@ -4241,6 +4343,7 @@ export default function Admin() {
 
       <TrafficPollingWarningBanner />
       <XrayConfigRemountBanner />
+      <NodeAlertsBanner />
 
       <SummarySection />
 

@@ -12,6 +12,7 @@ import { csrfCheck } from "./lib/csrf";
 import { startSubscriptionExpiryJob } from "./lib/subscriptionLifecycle";
 import { startTrafficPollingJob } from "./lib/trafficPolling";
 import { startHourlyBillingJob } from "./lib/hourlyBilling";
+import { startNodeMonitoringJob } from "./lib/nodeMonitoring";
 
 // Fail fast if required secrets are missing — better to crash on startup than
 // to start serving requests and fail mysteriously on the first authenticated
@@ -117,5 +118,6 @@ startSessionCleanupJob();
 startSubscriptionExpiryJob();
 startTrafficPollingJob();
 startHourlyBillingJob();
+startNodeMonitoringJob();
 
 export default app;

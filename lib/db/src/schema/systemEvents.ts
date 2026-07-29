@@ -6,6 +6,10 @@ import { integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg
  * Current event types:
  *  - "xray_config_remount": written by readConfig() when the ENOENT recovery
  *    path fires (PVC was re-attached empty, config rebuilt from template + DB).
+ *  - "node_overloaded":   written by nodeMonitoring when CPU > 90% or RAM > 90%.
+ *  - "node_unavailable":  written by nodeMonitoring after 3 consecutive probe failures.
+ *  - "node_recovered":    written by nodeMonitoring when a previously unavailable node
+ *                         responds successfully again.
  *
  * The acknowledgedAt column is set to NOW() when an admin dismisses the banner;
  * the GET endpoint only returns rows with acknowledgedAt IS NULL so the banner

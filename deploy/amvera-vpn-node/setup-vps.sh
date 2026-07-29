@@ -123,6 +123,59 @@ systemctl enable nginx
 systemctl reload nginx
 info "Nginx configured and reloaded."
 
+# ── Install Cockpit (emergency browser-based access) ─────────────────────────
+if ! command -v cockpit &>/dev/null && ! dpkg -s cockpit &>/dev/null 2>&1; then
+    info "Installing Cockpit (browser-based emergency terminal)..."
+    apt-get update -qq
+    apt-get install -y --no-install-recommends cockpit cockpit-docker 2>/dev/null \
+        || apt-get install -y --no-install-recommends cockpit
+    systemctl enable --now cockpit.socket
+    info "Cockpit installed and enabled."
+else
+    info "Cockpit already installed."
+    systemctl enable --now cockpit.socket 2>/dev/null || true
+fi
+
+# ── Cockpit health check ──────────────────────────────────────────────────────
+if systemctl is-active --quiet cockpit.socket; then
+    info "cockpit.socket is active ✓"
+else
+    warn "cockpit.socket does not appear to be running. Check: systemctl status cockpit.socket"
+fi
+
+# ── Optional: Cockpit behind Nginx HTTPS proxy ────────────────────────────────
+COCKPIT_NGINX=false
+read -rp "$(echo -e "${YELLOW}[?]${NC} Expose Cockpit behind Nginx HTTPS proxy? (y/N) ")" _cockpit_ans
+if [[ "${_cockpit_ans,,}" == "y" ]]; then
+    COCKPIT_NGINX=true
+    COCKPIT_NGINX_CONF="/etc/nginx/sites-available/cockpit"
+    cat > "$COCKPIT_NGINX_CONF" <<'NGINXEOF'
+# Cockpit reverse proxy — reachable only after SSH tunnel or from trusted IPs.
+# Access via:  ssh -L 9090:127.0.0.1:443 root@<VPS_IP>  then open https://localhost:9090
+server {
+    listen 127.0.0.1:9091 ssl;
+    server_name localhost;
+
+    ssl_certificate     /etc/nginx/ssl/vpn-node.crt;
+    ssl_certificate_key /etc/nginx/ssl/vpn-node.key;
+
+    # Forward Cockpit's required Origin header
+    location / {
+        proxy_pass https://127.0.0.1:9090;
+        proxy_ssl_verify off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+NGINXEOF
+    ln -sf "$COCKPIT_NGINX_CONF" /etc/nginx/sites-enabled/cockpit
+    nginx -t && systemctl reload nginx
+    info "Cockpit Nginx proxy enabled on 127.0.0.1:9091 (HTTPS, localhost-only)."
+fi
+
 # ── Firewall (ufw) ────────────────────────────────────────────────────────────
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
     info "Opening firewall ports 22, 80, 443, 8443..."
@@ -130,6 +183,9 @@ if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow 80/tcp   comment "HTTP"   > /dev/null
     ufw allow 443/tcp  comment "VPN"    > /dev/null
     ufw allow 8443/tcp comment "MGMT"   > /dev/null
+    # Cockpit port 9090 must NOT be publicly accessible — SSH tunnel only
+    ufw deny 9090      comment "Cockpit (SSH-tunnel only)" > /dev/null
+    info "Port 9090 (Cockpit) blocked — accessible only via SSH tunnel."
 fi
 
 # ── Health check ─────────────────────────────────────────────────────────────
@@ -158,4 +214,15 @@ echo ""
 echo -e "${YELLOW}Note: self-signed cert — VPN clients need allowInsecure=true${NC}"
 echo -e "      in the connection config (the server sets this automatically"
 echo -e "      for nodes registered without a domain)."
+echo ""
+echo -e "${GREEN}── Cockpit (emergency browser terminal) ────────────────${NC}"
+echo -e "  Cockpit runs on port 9090 (localhost only, firewall-blocked)."
+echo -e "  Open it via SSH tunnel:"
+echo ""
+echo -e "  ${YELLOW}ssh -N -L 9090:127.0.0.1:9090 root@${VPS_IP}${NC}"
+echo ""
+echo -e "  Then open ${YELLOW}http://localhost:9090${NC} in your browser."
+if [[ "$COCKPIT_NGINX" == "true" ]]; then
+echo -e "  (Nginx HTTPS proxy also available on 127.0.0.1:9091 via the same tunnel.)"
+fi
 echo ""
