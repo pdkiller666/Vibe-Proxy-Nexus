@@ -10,5 +10,4 @@
 **/*.md
 **/.env
 **/.env.*
-deploy/amvera-vpn-node
 attached_assets/screenshots
