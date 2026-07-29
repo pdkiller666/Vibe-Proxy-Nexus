@@ -11,3 +11,4 @@ export * from "./supportTickets";
 export * from "./balanceTransactions";
 export * from "./inviteLinks";
 export * from "./systemEvents";
+export * from "./provisioningJobs";

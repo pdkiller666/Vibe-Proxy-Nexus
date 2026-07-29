@@ -6,8 +6,8 @@
  * Let's Encrypt certificate for the given domain, and registers the node in the DB.
  *
  * Progress is streamed to subscribers in real-time so the admin UI can show a
- * live log. Completed/failed jobs are kept in memory for 30 minutes so late SSE
- * clients can still catch up.
+ * live log. All job state (status + logs) is persisted to the `provisioning_jobs`
+ * table so logs survive server restarts and Amvera redeploys.
  */
 
 import { Client, type SFTPWrapper } from "ssh2";
@@ -16,7 +16,9 @@ import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { db, vpnNodesTable } from "@workspace/db";
+import { db, vpnNodesTable, provisioningJobsTable } from "@workspace/db";
+import type { ProvisionLogLine } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -34,11 +36,7 @@ export interface ProvisioningOpts {
 
 export type ProvisionLogLevel = "info" | "step" | "success" | "error";
 
-export interface ProvisionLogLine {
-  ts: number;
-  text: string;
-  level: ProvisionLogLevel;
-}
+export { ProvisionLogLine };
 
 export interface ProvisioningJob {
   id: string;
@@ -53,7 +51,7 @@ export interface ProvisioningJob {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory job store
+// In-memory job store (for live SSE fan-out of active jobs)
 // ---------------------------------------------------------------------------
 
 const jobs = new Map<string, ProvisioningJob>();
@@ -81,15 +79,84 @@ export function getJob(jobId: string): ProvisioningJob | undefined {
   return jobs.get(jobId);
 }
 
+/**
+ * Load a job from the database. Returns undefined if not found.
+ * Used by the SSE route when a job is no longer in memory (e.g. after restart).
+ */
+export async function getJobFromDb(jobId: string): Promise<Omit<ProvisioningJob, "emitter"> | undefined> {
+  const [row] = await db
+    .select()
+    .from(provisioningJobsTable)
+    .where(eq(provisioningJobsTable.id, jobId))
+    .limit(1);
+
+  if (!row) return undefined;
+
+  return {
+    id: row.id,
+    status: row.status as "running" | "done" | "error",
+    logs: (row.logs ?? []) as ProvisionLogLine[],
+    nodeId: row.nodeId ?? undefined,
+    errorMessage: row.errorMessage ?? undefined,
+    startedAt: row.startedAt.getTime(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DB persistence helpers
+// ---------------------------------------------------------------------------
+
+/** Persist the current log array to the DB (full replace). */
+async function persistLogsToDb(job: ProvisioningJob): Promise<void> {
+  try {
+    await db
+      .update(provisioningJobsTable)
+      .set({ logs: job.logs })
+      .where(eq(provisioningJobsTable.id, job.id));
+  } catch (err) {
+    logger.warn({ err, jobId: job.id }, "Failed to persist provisioning log line to DB");
+  }
+}
+
+/** Flush final job state (status, nodeId, errorMessage, finishedAt) to DB. */
+async function persistJobFinish(
+  job: ProvisioningJob,
+  status: "done" | "error",
+  extra: { nodeId?: number; errorMessage?: string },
+): Promise<void> {
+  try {
+    await db
+      .update(provisioningJobsTable)
+      .set({
+        status,
+        logs: job.logs,
+        nodeId: extra.nodeId ?? null,
+        errorMessage: extra.errorMessage ?? null,
+        finishedAt: new Date(),
+      })
+      .where(eq(provisioningJobsTable.id, job.id));
+  } catch (err) {
+    logger.warn({ err, jobId: job.id }, "Failed to persist provisioning job finish state to DB");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /** Start a provisioning job and return its id immediately. */
-export function startProvisioning(opts: ProvisioningOpts): string {
+export async function startProvisioning(opts: ProvisioningOpts): Promise<string> {
   evictOldJobs();
 
   const jobId = randomUUID();
+
+  // Insert DB row first so the job is durably recorded before any work begins.
+  await db.insert(provisioningJobsTable).values({
+    id: jobId,
+    status: "running",
+    logs: [],
+  });
+
   const job: ProvisioningJob = {
     id: jobId,
     status: "running",
@@ -109,10 +176,22 @@ export function startProvisioning(opts: ProvisioningOpts): string {
 // Logging helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Batch-write interval: every N log lines we flush the full array to Postgres.
+ * Individual emits are synchronous/in-memory; persistence happens on a cadence
+ * so we don't issue a DB UPDATE on every stdout line from the remote commands.
+ */
+const DB_FLUSH_EVERY = 10;
+
 function emitLog(job: ProvisioningJob, text: string, level: ProvisionLogLevel = "info") {
   const line: ProvisionLogLine = { ts: Date.now(), text, level };
   job.logs.push(line);
   job.emitter.emit("log", line);
+
+  // Flush to DB every DB_FLUSH_EVERY lines (non-blocking, best-effort).
+  if (job.logs.length % DB_FLUSH_EVERY === 0) {
+    void persistLogsToDb(job);
+  }
 }
 
 function emitStep(job: ProvisioningJob, text: string) {
@@ -221,11 +300,16 @@ function getSFTP(conn: Client): Promise<SFTPWrapper> {
   });
 }
 
-/** Create a remote directory, ignoring EEXIST errors. */
+/** Create a remote directory, ignoring already-exists errors. */
 function mkdirRemote(sftp: SFTPWrapper, remotePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     sftp.mkdir(remotePath, (err) => {
-      if (!err || (err as NodeJS.ErrnoException).code === "EEXIST") resolve();
+      if (!err) { resolve(); return; }
+      const code = (err as NodeJS.ErrnoException & { code: string | number }).code;
+      // ssh2 SFTP uses numeric status codes (SSH_FX_FILE_ALREADY_EXISTS = 11).
+      // Node fs uses the string "EEXIST". Accept both so re-runs on the same
+      // host don't fail with a generic "Failure" when the dir already exists.
+      if (code === "EEXIST" || code === 11) resolve();
       else reject(err);
     });
   });
@@ -394,8 +478,9 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
 
     // ── Step 3: Upload deploy files via SFTP ───────────────────────────────
     emitStep(job, "📁 Загрузка файлов на сервер...");
+    // Wipe any partial upload from previous attempts so re-runs start clean.
+    await runCommand(conn, "rm -rf /opt/vpn-node && mkdir -p /opt/vpn-node", job);
     const sftp = await getSFTP(conn);
-    await mkdirRemote(sftp, "/opt/vpn-node");
     await uploadDir(sftp, VPN_NODE_DEPLOY_DIR, "/opt/vpn-node", job);
     // Make shell scripts executable
     await runCommand(conn, "chmod +x /opt/vpn-node/render-config.sh", job);
@@ -536,6 +621,11 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     // ── Done ───────────────────────────────────────────────────────────────
     job.status = "done";
     job.nodeId = node.id;
+
+    // Persist final state to DB before emitting events (so reconnecting clients
+    // see the completed state even if they connect after the emitter fires).
+    await persistJobFinish(job, "done", { nodeId: node.id });
+
     job.emitter.emit("done", node.id);
     logger.info({ nodeId: node.id, domain }, "VPN node provisioned successfully");
   } catch (err: unknown) {
@@ -543,6 +633,10 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     emitError(job, `❌ ${msg}`);
     job.status = "error";
     job.errorMessage = msg;
+
+    // Persist final state to DB before emitting events.
+    await persistJobFinish(job, "error", { errorMessage: msg });
+
     job.emitter.emit("error", msg);
     logger.error({ err, sshHost: opts.sshHost }, "Node provisioning failed");
   } finally {

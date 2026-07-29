@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
-import { startProvisioning, getJob } from "../../lib/sshProvisioner";
+import { startProvisioning, getJob, getJobFromDb } from "../../lib/sshProvisioner";
 
 // Defined inline to avoid workspace-package resolution issues during tsc.
 // The shape must stay in sync with the openapi.yaml VpnNodeProvisionInput schema.
@@ -32,7 +32,7 @@ router.post(
       return;
     }
 
-    const jobId = startProvisioning(parsed.data);
+    const jobId = await startProvisioning(parsed.data);
     res.status(202).json({ jobId });
   },
 );
@@ -40,6 +40,10 @@ router.post(
 // ---------------------------------------------------------------------------
 // GET /admin/vpn-nodes/provision/:jobId/logs  (Server-Sent Events)
 // Streams provisioning progress to the client.
+//
+// On connect the server replays all buffered log lines so the client always
+// sees the full history — whether the job is still running, already finished,
+// or was loaded from the database after a server restart.
 //
 // Event format:
 //   data: { "type": "log",   "ts": 123, "text": "...", "level": "info" }
@@ -50,11 +54,74 @@ router.get(
   "/admin/vpn-nodes/provision/:jobId/logs",
   requireAuth,
   requireAdmin,
-  (req, res): void => {
+  async (req, res): Promise<void> => {
     const { jobId } = req.params;
-    const job = getJob(jobId as string);
 
-    if (!job) {
+    // Fast path: job is still alive in memory (active or recently finished).
+    const liveJob = getJob(jobId as string);
+
+    if (liveJob) {
+      // SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no"); // disable Nginx buffering
+      res.flushHeaders();
+
+      const send = (payload: Record<string, unknown>) => {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      };
+
+      // Replay already-buffered log lines
+      for (const line of liveJob.logs) {
+        send({ type: "log", ...line });
+      }
+
+      // If job is already finished, send the terminal event and close
+      if (liveJob.status === "done") {
+        send({ type: "done", nodeId: liveJob.nodeId });
+        res.end();
+        return;
+      }
+      if (liveJob.status === "error") {
+        send({ type: "error", message: liveJob.errorMessage });
+        res.end();
+        return;
+      }
+
+      // Subscribe to future events
+      const onLog = (line: { ts: number; text: string; level: string }) => {
+        send({ type: "log", ...line });
+      };
+      const onDone = (nodeId: number) => {
+        send({ type: "done", nodeId });
+        res.end();
+      };
+      const onError = (message: string) => {
+        send({ type: "error", message });
+        res.end();
+      };
+
+      liveJob.emitter.on("log", onLog);
+      liveJob.emitter.once("done", onDone);
+      liveJob.emitter.once("error", onError);
+
+      // Clean up listeners when the client disconnects
+      req.on("close", () => {
+        liveJob.emitter.off("log", onLog);
+        liveJob.emitter.off("done", onDone);
+        liveJob.emitter.off("error", onError);
+      });
+
+      return;
+    }
+
+    // Slow path: job is no longer in memory — load historical state from DB.
+    // This covers the case where the server restarted while the job was running
+    // or after a TTL eviction of a completed job.
+    const dbJob = await getJobFromDb(jobId as string);
+
+    if (!dbJob) {
       res.status(404).json({ error: "Provisioning job not found" });
       return;
     }
@@ -63,53 +130,29 @@ router.get(
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no"); // disable Nginx buffering
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
     const send = (payload: Record<string, unknown>) => {
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
 
-    // Replay already-buffered log lines
-    for (const line of job.logs) {
+    // Replay all persisted log lines
+    for (const line of dbJob.logs) {
       send({ type: "log", ...line });
     }
 
-    // If job is already finished, send the terminal event and close
-    if (job.status === "done") {
-      send({ type: "done", nodeId: job.nodeId });
-      res.end();
-      return;
-    }
-    if (job.status === "error") {
-      send({ type: "error", message: job.errorMessage });
-      res.end();
-      return;
+    if (dbJob.status === "done") {
+      send({ type: "done", nodeId: dbJob.nodeId });
+    } else if (dbJob.status === "error") {
+      send({ type: "error", message: dbJob.errorMessage });
+    } else {
+      // Job was "running" when the server crashed — treat as error so the UI
+      // doesn't hang forever waiting for an SSE event that will never arrive.
+      send({ type: "error", message: "Сервер был перезапущен во время провижинга. Проверьте состояние VPS вручную." });
     }
 
-    // Subscribe to future events
-    const onLog = (line: { ts: number; text: string; level: string }) => {
-      send({ type: "log", ...line });
-    };
-    const onDone = (nodeId: number) => {
-      send({ type: "done", nodeId });
-      res.end();
-    };
-    const onError = (message: string) => {
-      send({ type: "error", message });
-      res.end();
-    };
-
-    job.emitter.on("log", onLog);
-    job.emitter.once("done", onDone);
-    job.emitter.once("error", onError);
-
-    // Clean up listeners when the client disconnects
-    req.on("close", () => {
-      job.emitter.off("log", onLog);
-      job.emitter.off("done", onDone);
-      job.emitter.off("error", onError);
-    });
+    res.end();
   },
 );
 
