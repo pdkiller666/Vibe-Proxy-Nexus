@@ -94,6 +94,11 @@ info "Starting container..."
 docker compose up -d
 info "Container running."
 
+# Remove dangling build cache immediately — the full cache can grow to 1+ GB
+# and is not needed once the image is built and running.
+info "Cleaning Docker build cache..."
+docker builder prune -af --filter "until=1h" 2>/dev/null || true
+
 # ── Self-signed TLS certificate ───────────────────────────────────────────────
 mkdir -p /etc/nginx/ssl
 if [[ ! -f /etc/nginx/ssl/vpn-node.crt ]]; then
@@ -141,6 +146,14 @@ if systemctl is-active --quiet cockpit.socket; then
     info "cockpit.socket is active ✓"
 else
     warn "cockpit.socket does not appear to be running. Check: systemctl status cockpit.socket"
+fi
+
+# ── Allow root login in Cockpit ───────────────────────────────────────────────
+# Ubuntu 24.04 ships /etc/cockpit/disallowed-users containing "root" by default,
+# which causes "Permission denied" even with the correct password.
+if [[ -f /etc/cockpit/disallowed-users ]]; then
+    sed -i '/^root$/d' /etc/cockpit/disallowed-users
+    info "Cockpit: root login enabled (removed from disallowed-users)."
 fi
 
 # ── Optional: Cockpit behind Nginx HTTPS proxy ────────────────────────────────

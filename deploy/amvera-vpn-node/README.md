@@ -67,9 +67,11 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
   | tee /etc/apt/sources.list.d/caddy-stable.list
 apt update && apt install -y caddy
 
-# Получить файлы
-git clone https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
-cd /opt/vpn-node/deploy/amvera-vpn-node
+# Получить только нужную папку (sparse checkout — не тянет весь монорепо)
+git clone --filter=blob:none --sparse https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+cd /opt/vpn-node
+git sparse-checkout set deploy/amvera-vpn-node
+cd deploy/amvera-vpn-node
 
 # Создать .env
 cp .env.example .env
@@ -101,8 +103,11 @@ curl https://ВАШ_ДОМЕН/health   # {"status":"ok"}
 Используйте скрипт `setup-vps.sh` — он делает всё автоматически:
 
 ```bash
-git clone https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
-cd /opt/vpn-node/deploy/amvera-vpn-node
+# Sparse checkout: скачивается только deploy/amvera-vpn-node/, а не весь монорепо (~2 ГБ)
+git clone --filter=blob:none --sparse https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+cd /opt/vpn-node
+git sparse-checkout set deploy/amvera-vpn-node
+cd deploy/amvera-vpn-node
 chmod +x setup-vps.sh && sudo ./setup-vps.sh
 ```
 
@@ -142,9 +147,16 @@ chmod +x setup-vps.sh && sudo ./setup-vps.sh
 ```bash
 cd /opt/vpn-node
 git pull
+cd deploy/amvera-vpn-node
 docker compose build
 docker compose up -d
+
+# Удалить старые Docker-слои и build cache (освобождает 1–2 ГБ):
+docker system prune -af --volumes=false
 ```
+
+> **Sparse checkout** настраивается один раз при клонировании — `git pull` после этого
+> подтягивает только изменения в `deploy/amvera-vpn-node/`, не скачивая артефакты и библиотеки.
 
 Существующие ключи сохраняются — `render-config.sh` при каждом старте переносит
 список `clients` из persistent-тома `/etc/xray` в обновлённый конфиг.
