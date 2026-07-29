@@ -18,6 +18,8 @@ RUN curl -fsSL -o /tmp/xray.zip \
     && chmod +x /usr/local/bin/xray \
     && rm -rf /tmp/xray.zip
 
+RUN mkdir -p /var/log/supervisor
+
 WORKDIR /app
 
 COPY bot/requirements.txt ./bot/requirements.txt
