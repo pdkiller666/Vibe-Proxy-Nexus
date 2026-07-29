@@ -41,7 +41,6 @@ async function buildAll() {
       "xxhash-addon",
       "bufferutil",
       "utf-8-validate",
-      "ssh2",
       "cpu-features",
       "dtrace-provider",
       "isolated-vm",
