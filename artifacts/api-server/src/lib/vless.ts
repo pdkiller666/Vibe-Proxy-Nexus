@@ -36,7 +36,10 @@ const LOCATION_FLAG_RULES: Array<{ match: RegExp; flag: string }> = [
   // is a joined multi-word string ("nl 87.199.200.19 87.199.200.19"), so ^...$ anchors
   // never match when there are additional tokens in the string.
   { match: /poland|польш|warsaw|варшав|warszawa|\bwaw\d*\b|\bpl\b/i, flag: "🇵🇱" },
-  { match: /russia|россия|moscow|москв|\bmow\d*\b|vdsina|\bru\b/i,  flag: "🇷🇺" },
+  // Note: "vdsina" removed — VDSina is a multi-country hosting provider, not
+  // a Russia indicator. Use the node's `region` field (e.g. "ru") or its
+  // Amvera/technical hostname (e.g. "mow0.amvera.tech") to detect Russian nodes.
+  { match: /russia|россия|moscow|москв|\bmow\d*\b|\bru\b/i,  flag: "🇷🇺" },
   { match: /germany|германия|frankfurt|франкфурт|berlin|берлин|hetzner|\bde\b/i, flag: "🇩🇪" },
   { match: /netherlands|нидерланды|amsterdam|амстердам|\bnl\b/i,    flag: "🇳🇱" },
   { match: /finland|финляндия|helsinki|хельсинки|\bfi\b/i,          flag: "🇫🇮" },
