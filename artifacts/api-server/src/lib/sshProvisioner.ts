@@ -334,28 +334,39 @@ async function uploadTarDir(
 ): Promise<void> {
   const tarBuffer = await packTar(localDir);
   emitLog(job, `  → пакуем ${(tarBuffer.length / 1024).toFixed(0)} KB...`);
-  emitLog(job, "  → передаём архив на сервер...");
 
-  // Stream the archive to the remote via SSH exec stdin.
-  // rm -rf + mkdir ensures a clean slate for re-runs.
-  await new Promise<void>((resolve, reject) => {
-    conn.exec(
-      `rm -rf '${remoteDir}' && mkdir -p '${remoteDir}' && tar xzf - -C '${remoteDir}'`,
-      (err, stream) => {
-        if (err) { reject(err); return; }
-        let stderr = "";
-        stream.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
-        stream.once("close", (code: number) => {
-          if (code === 0) { emitLog(job, "  → файлы распакованы ✓"); resolve(); }
-          else reject(new Error(
-            `Remote tar extract failed (exit ${code}): ${stderr.slice(0, 300)}`,
-          ));
-        });
-        stream.write(tarBuffer);
-        stream.end();
-      },
-    );
-  });
+  // Transfer via base64-encoded printf — the same mechanism used by
+  // writeRemoteFileViaExec, which is proven to work.
+  //
+  // Piping the raw tar buffer into ssh2's exec-channel stdin is unreliable:
+  // if the remote's SSH receive-window is exhausted before the remote tar
+  // process starts reading, stream.write() returns false (backpressure).
+  // Calling stream.end() immediately after a false-return silently drops
+  // the data; the channel hangs indefinitely waiting for EOF that never
+  // comes. base64 + printf avoids stdin entirely.
+  //
+  // 12 KB tar → ~16 KB base64 — well within Linux ARG_MAX (~2 MB) and
+  // bash printf (builtin, not subject to ARG_MAX at all).
+  const b64 = tarBuffer.toString("base64");
+  const remoteTar = "/tmp/vpn-node-deploy.tar.gz";
+
+  emitLog(job, "  → передаём архив на сервер...");
+  await runCommand(
+    conn,
+    `printf '%s' '${b64}' | base64 -d > '${remoteTar}'`,
+    job,
+    { timeoutMs: 60_000 },
+  );
+
+  emitLog(job, "  → распаковываем файлы...");
+  await runCommand(
+    conn,
+    `rm -rf '${remoteDir}' && mkdir -p '${remoteDir}' && tar xzf '${remoteTar}' -C '${remoteDir}' && rm -f '${remoteTar}'`,
+    job,
+    { timeoutMs: 30_000 },
+  );
+
+  emitLog(job, "  → файлы распакованы ✓");
 }
 
 /**
