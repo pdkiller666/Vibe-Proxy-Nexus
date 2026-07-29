@@ -365,7 +365,6 @@ export default function Keys() {
   const visibleKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => isAdmin || !k.revokedAt);
   const canIssue = !!me?.hasActiveSubscription;
   const activeNodes = (nodes ?? []).filter((n: { isActive: boolean }) => n.isActive);
-  const defaultNodeId = activeNodes[0]?.id;
 
   const deviceSlots = me?.deviceSlots ?? 1;
   const activeKeyCount = me?.activeKeyCount ?? activeKeys.length;
