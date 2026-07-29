@@ -1513,6 +1513,22 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           Активен
         </label>
       </div>
+      {/* SSH hint for reading the MGMT secret from a remote node */}
+      {node && node.managementApiUrl && (() => {
+        const ipMatch = node.managementApiUrl.match(/https?:\/\/([\d.]+)/);
+        const ip = ipMatch?.[1];
+        if (!ip) return null;
+        const sshCmd = `ssh root@${ip} cat /opt/vpn-node/.env`;
+        return (
+          <div className="border border-muted bg-muted/20 p-3 space-y-1 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">🔑 Получить актуальный секрет с сервера:</p>
+            <code className="block bg-background border border-border px-2 py-1.5 font-mono select-all break-all">
+              {sshCmd}
+            </code>
+            <p>Скопируй значение <span className="font-mono">MGMT_API_SECRET=...</span> и вставь в поле выше.</p>
+          </div>
+        );
+      })()}
       {sniChanged && (
         <div className="border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-2 text-sm">
           <p className="font-semibold text-amber-800 dark:text-amber-300">

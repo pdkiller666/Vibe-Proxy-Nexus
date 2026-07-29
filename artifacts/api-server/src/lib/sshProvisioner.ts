@@ -552,17 +552,34 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     await runCommand(conn, "chmod +x /opt/vpn-node/render-config.sh", job);
     emitSuccess(job, "Файлы загружены ✓");
 
-    // ── Step 4: Create .env ────────────────────────────────────────────────
-    emitStep(job, "🔑 Генерация Management API Secret...");
-    const secretOutput = await runCommand(conn, "openssl rand -hex 32", job);
-    const mgmtSecret = secretOutput.trim().split("\n").pop()?.trim() ?? "";
-    if (!mgmtSecret || mgmtSecret.length < 32) {
-      throw new Error("Не удалось сгенерировать MGMT_API_SECRET (openssl rand failed)");
+    // ── Step 4: Create (or reuse) .env ────────────────────────────────────
+    // If /opt/vpn-node/.env already contains a valid MGMT_API_SECRET we reuse
+    // it instead of generating a new one. This prevents a desync where a
+    // re-run of the provisioner overwrites the secret on the server but the old
+    // DB entry still holds the previous value → HTTP 401 on the management API.
+    emitStep(job, "🔑 Подготовка Management API Secret...");
+    let mgmtSecret = "";
+    const existingEnvRaw = await runCommand(
+      conn,
+      "cat /opt/vpn-node/.env 2>/dev/null || true",
+      job,
+      { allowFailure: true },
+    );
+    const existingSecretMatch = existingEnvRaw.match(/MGMT_API_SECRET=([a-f0-9]{64})/);
+    if (existingSecretMatch) {
+      mgmtSecret = existingSecretMatch[1];
+      emitLog(job, "  ↻ Существующий MGMT_API_SECRET найден — переиспользуем (секрет не меняется)");
+    } else {
+      const secretOutput = await runCommand(conn, "openssl rand -hex 32", job);
+      mgmtSecret = secretOutput.trim().split("\n").pop()?.trim() ?? "";
+      if (!mgmtSecret || mgmtSecret.length < 32) {
+        throw new Error("Не удалось сгенерировать MGMT_API_SECRET (openssl rand failed)");
+      }
+      const envContent = `MGMT_API_SECRET=${mgmtSecret}\nPORT=8443\n`;
+      await writeRemoteFileViaExec(conn, "/opt/vpn-node/.env", envContent, job);
+      emitLog(job, "  ✎ Сгенерирован новый MGMT_API_SECRET");
     }
-
-    const envContent = `MGMT_API_SECRET=${mgmtSecret}\nPORT=8443\n`;
-    await writeRemoteFileViaExec(conn, "/opt/vpn-node/.env", envContent, job);
-    emitSuccess(job, "Файл .env создан ✓");
+    emitSuccess(job, "Файл .env готов ✓");
 
     // ── Step 5: Configure nginx (HTTP only, for certbot challenge) ─────────
     emitStep(job, "⚙️  Настройка Nginx...");
@@ -720,24 +737,53 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     }
     emitSuccess(job, `http://localhost:8443/health → ok ✓${selfSignedCert ? " (self-signed TLS)" : ""}`);
 
-    // ── Step 11: Register node in DB ───────────────────────────────────────
+    // ── Step 11: Register (or update) node in DB ──────────────────────────
+    // Use upsert semantics: if a node with the same managementApiUrl already
+    // exists (e.g. from a previous provisioning attempt), update its secret and
+    // metadata instead of inserting a duplicate. This eliminates the desync
+    // where the server's .env gets a new secret but the old DB row still holds
+    // the previous one → HTTP 401 on subsequent management API calls.
     emitStep(job, "💾 Регистрация узла в базе данных...");
-    const [node] = await db
-      .insert(vpnNodesTable)
-      .values({
-        name: nodeName,
-        region: nodeRegion,
-        host: domain,
-        port: 443,
-        sni: domain,
-        managementApiUrl: `http://${sshHost}:8443`,
-        managementApiSecret: mgmtSecret,
-        certSha256: null,
-        isActive: true,
-      })
-      .returning();
+    const mgmtApiUrl = `http://${sshHost}:8443`;
+    const [existing] = await db
+      .select({ id: vpnNodesTable.id, name: vpnNodesTable.name })
+      .from(vpnNodesTable)
+      .where(eq(vpnNodesTable.managementApiUrl, mgmtApiUrl))
+      .limit(1);
 
-    if (!node) throw new Error("DB insert вернул пустой результат");
+    let node;
+    if (existing) {
+      [node] = await db
+        .update(vpnNodesTable)
+        .set({
+          name: nodeName,
+          region: nodeRegion,
+          host: domain,
+          sni: domain,
+          managementApiSecret: mgmtSecret,
+          isActive: true,
+        })
+        .where(eq(vpnNodesTable.id, existing.id))
+        .returning();
+      emitLog(job, `  ↻ Существующий узел (id=${existing.id}) обновлён`);
+    } else {
+      [node] = await db
+        .insert(vpnNodesTable)
+        .values({
+          name: nodeName,
+          region: nodeRegion,
+          host: domain,
+          port: 443,
+          sni: domain,
+          managementApiUrl: mgmtApiUrl,
+          managementApiSecret: mgmtSecret,
+          certSha256: null,
+          isActive: true,
+        })
+        .returning();
+    }
+
+    if (!node) throw new Error("DB insert/update вернул пустой результат");
 
     emitSuccess(job, `Узел «${nodeName}» зарегистрирован (id=${node.id}) ✓`);
 
