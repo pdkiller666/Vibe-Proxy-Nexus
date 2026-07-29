@@ -249,7 +249,7 @@ export async function issueKeyForUser(
           .set({ revokedAt: new Date(), revokedReason: "admin" })
           .where(eq(vpnKeysTable.id, key.id));
       } catch (dbErr) {
-        logger.error({ dbErr, uuid }, "issueKeyForUser: DB revoke also failed — orphaned key in DB");
+        logger.error({ err: dbErr, uuid }, "issueKeyForUser: DB revoke also failed — orphaned key in DB");
       }
       return { ok: false, status: 502, error: "Failed to provision VPN key on the node" };
     }
@@ -348,7 +348,7 @@ export async function ensureActiveKeyForUser(userId: number): Promise<void> {
       );
     } else {
       logger.warn(
-        { userId, error: result.error },
+        { userId, err: result.error },
         "Could not auto-issue VPN key after subscription activation",
       );
     }

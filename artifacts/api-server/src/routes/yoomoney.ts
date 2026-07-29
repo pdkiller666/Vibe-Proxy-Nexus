@@ -234,7 +234,7 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
       res.status(200).send("OK");
       return;
     }
-    logger.error({ error: result.error, paymentId: payment.id }, "YooMoney webhook: confirm failed");
+    logger.error({ err: result.error, paymentId: payment.id }, "YooMoney webhook: confirm failed");
     // Non-200 → YooMoney retries (10 min, then 1 h) — gives transient DB
     // errors a chance to heal.
     res.status(500).send(result.error);

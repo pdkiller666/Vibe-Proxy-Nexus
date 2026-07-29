@@ -114,12 +114,9 @@ async function readConfig(): Promise<Record<string, any>> {
       void reloadXray();
       return freshConfig;
     }
-    // For EACCES or any other error, surface the code and message clearly
-    // so Amvera's log viewer shows a human-readable string rather than a
-    // collapsed JSON object.
     logger.error(
-      { code: nodeErr.code, message: nodeErr.message, configPath: CONFIG_PATH },
-      `xray: readConfig failed — ${nodeErr.code ?? "ERR"}: ${nodeErr.message}`,
+      { err, configPath: CONFIG_PATH },
+      "xray: readConfig failed",
     );
     throw err;
   }
@@ -130,20 +127,18 @@ async function writeConfig(config: Record<string, any>): Promise<void> {
   try {
     await fs.writeFile(tmp, JSON.stringify(config, null, 2), "utf-8");
   } catch (err) {
-    const nodeErr = err as NodeJS.ErrnoException;
     logger.error(
-      { code: nodeErr.code, message: nodeErr.message, tmpPath: tmp },
-      `xray: writeConfig failed writing .tmp file — ${nodeErr.code ?? "ERR"}: ${nodeErr.message}`,
+      { err, tmpPath: tmp },
+      "xray: writeConfig failed writing .tmp file",
     );
     throw err;
   }
   try {
     await fs.rename(tmp, CONFIG_PATH!);
   } catch (err) {
-    const nodeErr = err as NodeJS.ErrnoException;
     logger.error(
-      { code: nodeErr.code, message: nodeErr.message, tmpPath: tmp, configPath: CONFIG_PATH },
-      `xray: writeConfig failed renaming .tmp → config — ${nodeErr.code ?? "ERR"}: ${nodeErr.message}`,
+      { err, tmpPath: tmp, configPath: CONFIG_PATH },
+      "xray: writeConfig failed renaming .tmp → config",
     );
     throw err;
   }

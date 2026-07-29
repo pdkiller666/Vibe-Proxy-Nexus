@@ -201,7 +201,7 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
           if (keyResult.ok) {
             logger.info({ userId: user.id, keyId: keyResult.key.id }, "Auto VPN key issued on registration");
           } else {
-            logger.warn({ userId: user.id, error: keyResult.error }, "Auto VPN key skipped on registration");
+            logger.warn({ userId: user.id, err: keyResult.error }, "Auto VPN key skipped on registration");
           }
         } catch (err) {
           logger.error({ err, userId: user.id }, "Failed to auto-issue VPN key on registration");
