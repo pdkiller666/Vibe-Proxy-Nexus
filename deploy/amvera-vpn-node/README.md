@@ -17,9 +17,9 @@
 |---|---|---|
 | **xray** | `127.0.0.1:10000` | VLESS+WebSocket, слушает только loopback |
 | **mgmt-api** | `0.0.0.0:$PORT` (дефолт 8443) | HTTP REST API для управления ключами из основного сервера |
-| **telegram-bot** | — | Опциональный бот для проверки статуса ноды из Telegram; **не запускается автоматически** |
+| **telegram-bot** | — | Опциональный бот для проверки статуса ноды; **не запускается автоматически** |
 
-TLS-терминацию выполняет **Nginx на хосте** — Xray работает в plain-WS, наружу торчит только Nginx.
+TLS-терминацию выполняет **Nginx/Caddy на хосте** — Xray работает в plain-WS, наружу торчит только прокси.
 
 ---
 
@@ -27,7 +27,7 @@ TLS-терминацию выполняет **Nginx на хосте** — Xray �
 
 | Переменная | Обязательна | Назначение |
 |---|---|---|
-| `MGMT_API_SECRET` | ✅ | Shared-секрет. Основной сервер посылает его в заголовке `X-Management-Secret` на каждый вызов API. Генерация: `openssl rand -hex 32` |
+| `MGMT_API_SECRET` | ✅ | Shared-секрет. Передаётся в заголовке `X-Management-Secret` на каждый вызов API. Генерация: `openssl rand -hex 32` |
 | `PORT` | — | Порт management API внутри контейнера (дефолт `8443`) |
 | `TELEGRAM_BOT_TOKEN` | — | Токен бота; если не задан — telegram-bot не запускается |
 | `TELEGRAM_ADMIN_CHAT_ID` | — | Ограничивает бот одним чатом администратора |
@@ -48,39 +48,76 @@ TLS-терминацию выполняет **Nginx на хосте** — Xray �
 | `DELETE` | `/clients/{uuid}` | Удалить клиента (404 — идемпотентно) |
 | `GET` | `/clients` | Список активных клиентов (диагностика) |
 | `GET` | `/stats` | Трафик по UUID (абсолютные счётчики, `reset=false`) |
+| `GET` | `/system/status` | CPU, RAM, uptime контейнера |
+| `GET` | `/system/logs` | Последние строки логов supervisord |
+| `POST` | `/system/restart-xray` | Перезапустить Xray внутри контейнера |
 
 ---
 
-## Быстрый старт на VPS (Ubuntu 22.04 / 24.04)
+## Пошаговый план: подключение нового сервера
 
-### Если есть домен → Caddy (проще)
+### Шаг 0. Подготовка
 
-Caddy сам получает Let's Encrypt сертификат — никаких ручных действий с TLS:
+Убедитесь, что у VPS:
+- ОС: **Ubuntu 22.04 или 24.04**
+- Открыты порты: **80, 443** (для TLS) и **9090** (Cockpit, если нужен снаружи)
+- Доступ: SSH от root или пользователя с `sudo`
+
+Определитесь с вариантом:
+
+| Вариант | Когда использовать |
+|---|---|
+| **A — Caddy + домен** | Есть домен, A-запись направлена на IP этого VPS. Let's Encrypt автоматически. |
+| **B — Nginx + bare IP** | Нет домена, `setup-vps.sh` делает всё сам включая самоподписанный сертификат. |
+
+---
+
+### Вариант A: Caddy + домен
+
+**1. Установить Docker и Caddy:**
 
 ```bash
-# Установить Docker и Caddy
 curl -fsSL https://get.docker.com | sh
-apt install -y debian-keyring debian-archive-keyring apt-transport-https
+apt install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
   | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
   | tee /etc/apt/sources.list.d/caddy-stable.list
 apt update && apt install -y caddy
+```
 
-# Получить только нужную папку (sparse checkout — не тянет весь монорепо)
-git clone --filter=blob:none --sparse https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+**2. Скачать только нужную папку (sparse checkout — не тянет весь монорепо):**
+
+```bash
+git clone --filter=blob:none --sparse \
+  https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
 cd /opt/vpn-node
 git sparse-checkout set deploy/amvera-vpn-node
 cd deploy/amvera-vpn-node
+```
 
-# Создать .env
+> Замените `TOKEN` на GitHub Personal Access Token с правом `repo:read`.
+
+**3. Создать `.env`:**
+
+```bash
 cp .env.example .env
-# Открыть .env и вставить MGMT_API_SECRET=$(openssl rand -hex 32)
+# Записать секрет в .env:
+sed -i "s/^MGMT_API_SECRET=.*/MGMT_API_SECRET=$(openssl rand -hex 32)/" .env
+cat .env   # убедиться, что секрет проставлен
+```
 
-# Запустить контейнер (host-сеть: Xray на 127.0.0.1:10000, mgmt на 0.0.0.0:8443)
+**4. Собрать и запустить контейнер:**
+
+```bash
 docker compose up -d --build
+# Удалить сборочный кэш (освобождает ~1 ГБ, образ уже запущен):
+docker builder prune -af --filter "until=1h"
+```
 
-# Caddyfile
+**5. Настроить Caddy:**
+
+```bash
 cat > /etc/caddy/Caddyfile << 'EOF'
 node.example.com {
     handle /vpnws* {
@@ -91,36 +128,55 @@ node.example.com {
     }
 }
 EOF
+# Заменить домен:
 sed -i 's/node.example.com/ВАШ_ДОМЕН/g' /etc/caddy/Caddyfile
 systemctl reload caddy
-
-# Проверка
-curl https://ВАШ_ДОМЕН/health   # {"status":"ok"}
 ```
 
-### Если нет домена (bare IP) → Nginx + самоподписанный сертификат
-
-Используйте скрипт `setup-vps.sh` — он делает всё автоматически:
+**6. Проверка:**
 
 ```bash
-# Sparse checkout: скачивается только deploy/amvera-vpn-node/, а не весь монорепо (~2 ГБ)
-git clone --filter=blob:none --sparse https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+curl https://ВАШ_ДОМЕН/health   # → {"status":"ok"}
+```
+
+**7. Зарегистрировать ноду** — см. раздел [«Регистрация ноды в админ-панели»](#регистрация-ноды-в-админ-панели) ниже.
+
+---
+
+### Вариант B: Nginx + bare IP (рекомендуется, если домена нет)
+
+`setup-vps.sh` делает шаги 1–6 полностью автоматически:
+
+**1. Скачать только нужную папку (sparse checkout):**
+
+```bash
+git clone --filter=blob:none --sparse \
+  https://TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
 cd /opt/vpn-node
 git sparse-checkout set deploy/amvera-vpn-node
 cd deploy/amvera-vpn-node
+```
+
+> Замените `TOKEN` на GitHub Personal Access Token с правом `repo:read`.
+
+**2. Запустить скрипт:**
+
+```bash
 chmod +x setup-vps.sh && sudo ./setup-vps.sh
 ```
 
-Скрипт сам: установит Docker и Nginx, сгенерирует секрет и `.env`, соберёт образ,
-создаст самоподписанный сертификат, настроит Nginx и выведет все данные для регистрации ноды.
+Скрипт автоматически:
+- ✅ Устанавливает Docker и Nginx
+- ✅ Генерирует `MGMT_API_SECRET` и создаёт `.env`
+- ✅ Собирает Docker-образ и запускает контейнер
+- ✅ Удаляет сборочный кэш (`docker builder prune`) — экономит ~1 ГБ
+- ✅ Генерирует самоподписанный TLS-сертификат
+- ✅ Настраивает Nginx (WS-прокси на Xray + HTTPS на mgmt-API)
+- ✅ Устанавливает Cockpit и **разрешает root-логин** (убирает `/etc/cockpit/disallowed-users`)
+- ✅ Закрывает порт 9090 снаружи через UFW (Cockpit — только через SSH-туннель)
+- ✅ Выводит все данные для регистрации ноды
 
-> **Почему Nginx, а не Caddy без домена:**
-> Caddy умеет автоматически получать Let's Encrypt только для **доменных имён** — для
-> голых IP это недоступно по условиям CA/Browser Forum. Без домена Caddy пришлось бы
-> конфигурировать руками точно так же как Nginx (вручную указывать пути к сертификату),
-> теряя свой главный плюс. Nginx — более стандартный выбор для ручного TLS;
-> его конфигурация для этого сценария хорошо известна и задокументирована.
-> Если позже появится домен — переход на Caddy займёт 10 минут.
+**3. Зарегистрировать ноду** — см. раздел [«Регистрация ноды в админ-панели»](#регистрация-ноды-в-админ-панели) ниже.
 
 ---
 
@@ -140,6 +196,14 @@ chmod +x setup-vps.sh && sudo ./setup-vps.sh
 | Public Key / Short ID | Оставить пустыми (не используются для VLESS+WS) |
 | Cert SHA256 | SHA-256 fingerprint самоподписанного сертификата — только для bare-IP нод без домена; домены с Let's Encrypt оставьте пустым |
 
+> **Cert SHA256** для bare-IP выводится в конце `setup-vps.sh`. Вручную:
+> ```bash
+> openssl x509 -noout -fingerprint -sha256 -in /etc/nginx/ssl/vpn-node.crt \
+>   | sed 's/sha256 Fingerprint=//I;s/://g' | tr '[:upper:]' '[:lower:]'
+> ```
+
+После сохранения нода появится в списке. Кнопка **«Проверить соединение»** подтверждает доступность Management API.
+
 ---
 
 ## Обновление ноды
@@ -150,7 +214,6 @@ git pull
 cd deploy/amvera-vpn-node
 docker compose build
 docker compose up -d
-
 # Удалить старые Docker-слои и build cache (освобождает 1–2 ГБ):
 docker system prune -af --volumes=false
 ```
@@ -175,51 +238,58 @@ curl http://localhost:8443/health
 # Проверить список клиентов в Xray
 curl -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
   http://localhost:8443/clients
+
+# CPU / RAM / uptime контейнера
+curl -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
+  http://localhost:8443/system/status
+
+# Последние логи Xray внутри контейнера
+curl -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
+  "http://localhost:8443/system/logs?program=xray&lines=50"
 ```
 
 ---
 
 ## Аварийный доступ (Cockpit)
 
-**Cockpit** — лёгкий системный веб-интерфейс (порт 9090): браузерный терминал, мониторинг ресурсов, управление сервисами и Docker-контейнерами. Нужен как резервный инструмент, когда SSH-клиента нет под рукой (телефон, чужой компьютер).
+**Cockpit** — браузерный терминал + мониторинг ресурсов (порт 9090). Нужен как резервный инструмент, когда SSH-клиента нет под рукой.
 
-### Установка
-
-`setup-vps.sh` автоматически устанавливает Cockpit и закрывает порт 9090 через UFW. При ручной установке:
+`setup-vps.sh` устанавливает Cockpit автоматически. При ручной установке:
 
 ```bash
-apt install -y cockpit cockpit-docker   # cockpit-docker — опционально, для управления контейнерами
+apt install -y cockpit
 systemctl enable --now cockpit.socket
 
-# Заблокировать прямой доступ к порту (только SSH-туннель):
+# Разрешить root-логин (Ubuntu 24.04 блокирует его по умолчанию):
+sed -i '/^root$/d' /etc/cockpit/disallowed-users
+systemctl restart cockpit.socket
+
+# Закрыть прямой доступ к порту (только SSH-туннель):
 ufw deny 9090
 ```
 
-> `cockpit-docker` может отсутствовать в стандартных репозиториях старых Ubuntu — если пакет не найден, `setup-vps.sh` установит только базовый `cockpit`.
-
 ### Доступ через SSH-туннель (рекомендуется)
 
-Порт 9090 закрыт снаружи. Для доступа пробросьте порт через SSH:
-
 ```bash
-ssh -L 9090:localhost:9090 user@87.199.200.19
+ssh -L 9090:localhost:9090 root@<IP_VPS>
 # или с ключом:
-ssh -i ~/.ssh/id_rsa -L 9090:localhost:9090 root@87.199.200.19
+ssh -i ~/.ssh/id_rsa -L 9090:localhost:9090 root@<IP_VPS>
 ```
 
-После этого откройте **http://localhost:9090** в браузере. Войдите под системным пользователем VPS (например, `root`).
+После этого откройте **http://localhost:9090** в браузере и войдите под `root`.
 
-На Android/iOS используйте любой SSH-клиент с поддержкой туннелей (Termius, JuiceSSH, Blink).
+На Android/iOS: Termius, JuiceSSH, Blink — любой SSH-клиент с поддержкой туннелей.
 
 ### Доступ через Nginx-прокси (альтернатива)
 
-Если SSH-туннель неудобен, можно проксировать Cockpit за HTTPS + HTTP Basic Auth. Готовый блок с инструкциями находится в `nginx-vps.conf` в виде закомментированного `server`-блока — раскомментируйте и настройте нужный домен.
+Если SSH-туннель неудобен, можно проксировать Cockpit за HTTPS + HTTP Basic Auth.
+Готовый блок находится в `nginx-vps.conf` в виде закомментированного `server`-блока.
 
 ---
 
 ## Производительность Xray: DNS и стратегия исходящих
 
-По умолчанию Xray наследует системный DNS (VPS-провайдера), что даёт заметную задержку
+По умолчанию Xray наследует системный DNS VPS-провайдера, что даёт задержку
 при проксировании. Рекомендуется добавить в `config.json` секцию `dns` и стратегию
 `UseIPv4` на `freedom`-аутбаунде:
 
