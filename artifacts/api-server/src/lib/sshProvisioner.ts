@@ -357,16 +357,19 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
       "apt-get update -qq",
       // Install prerequisites
       "apt-get install -y --no-install-recommends curl gnupg ca-certificates lsb-release",
-      // Docker official repo
+      // Docker official repo — idempotent so re-runs on the same VPS don't fail.
+      // Remove stale keyring first: if a previous attempt left the file, gpg
+      // refuses to overwrite it even with --batch ("dearmoring failed: File exists").
       "install -m 0755 -d /etc/apt/keyrings",
-      // --batch suppresses the /dev/tty open that gpg triggers in non-interactive
-      // (no-PTY) SSH sessions even for key material that needs no passphrase.
-      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --dearmor -o /etc/apt/keyrings/docker.gpg",
+      "rm -f /etc/apt/keyrings/docker.gpg",
+      // --batch + --yes: suppress /dev/tty open in non-PTY SSH sessions AND allow
+      // overwrite in case rm -f above raced with a concurrent process.
+      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg",
       "chmod a+r /etc/apt/keyrings/docker.gpg",
-      // shellcheck: the ARCH/DISTRIB vars come from the upstream docker install doc
+      // Use > (not tee) so re-runs overwrite instead of appending duplicates
       `echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] ` +
         `https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \\"$VERSION_CODENAME\\") stable" ` +
-        `| tee /etc/apt/sources.list.d/docker.list > /dev/null`,
+        `> /etc/apt/sources.list.d/docker.list`,
       "apt-get update -qq",
       "apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-compose-plugin",
       // Enable Docker at boot; start it with retries — on some fresh VPS providers
