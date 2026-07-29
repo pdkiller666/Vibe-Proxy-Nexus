@@ -57,6 +57,7 @@ import {
   useListAdminSystemEvents,
   useAcknowledgeAdminSystemEvent,
   getListAdminSystemEventsQueryKey,
+  useProvisionVpnNode,
   useGetVpnNodeSystemStatus,
   useGetVpnNodeSystemLogs,
   useRestartVpnNodeXray,
@@ -71,7 +72,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw, Zap, Server } from "lucide-react";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -1101,6 +1102,303 @@ function PlansManagement() {
   );
 }
 
+// ─── VPN Node Auto-Provisioning Wizard ───────────────────────────────────────
+
+type ProvisionLogLevel = "info" | "step" | "success" | "error";
+
+interface ProvisionLog {
+  ts: number;
+  text: string;
+  level: ProvisionLogLevel;
+}
+
+function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Step 1 — SSH access
+  const [sshHost, setSshHost] = useState("");
+  const [sshUser, setSshUser] = useState("root");
+  const [sshPassword, setSshPassword] = useState("");
+
+  // Step 2 — node metadata
+  const [domain, setDomain] = useState("");
+  const [nodeName, setNodeName] = useState("");
+  const [nodeRegion, setNodeRegion] = useState("");
+
+  // Step 3 — provisioning progress
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<ProvisionLog[]>([]);
+  const [jobStatus, setJobStatus] = useState<"running" | "done" | "error" | null>(null);
+  const [newNodeId, setNewNodeId] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const { mutate: startProvision, isPending: starting } = useProvisionVpnNode();
+  const { toast } = useToast();
+
+  // Auto-scroll to latest log entry
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  // SSE — connect once we have a jobId
+  useEffect(() => {
+    if (!jobId) return;
+
+    const es = new EventSource(`/api/admin/vpn-nodes/provision/${jobId}/logs`);
+
+    es.onmessage = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as Record<string, unknown>;
+        if (data["type"] === "log") {
+          setLogs(prev => [...prev, data as unknown as ProvisionLog]);
+        } else if (data["type"] === "done") {
+          setJobStatus("done");
+          setNewNodeId(data["nodeId"] as number);
+          queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
+          es.close();
+        } else if (data["type"] === "error") {
+          setJobStatus("error");
+          setErrorMessage((data["message"] as string) ?? "Неизвестная ошибка");
+          es.close();
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    es.onerror = () => {
+      if (jobStatus !== "done" && jobStatus !== "error") {
+        setJobStatus("error");
+        setErrorMessage("Соединение с сервером прервано");
+      }
+      es.close();
+    };
+
+    return () => es.close();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
+
+  function doStart(opts: { sshHost: string; sshUser: string; sshPassword: string; domain: string; nodeName: string; nodeRegion: string }) {
+    startProvision(
+      { data: opts },
+      {
+        onSuccess: (res) => {
+          setJobId(res.jobId);
+          setJobStatus("running");
+          setStep(3);
+        },
+        onError: () => {
+          toast({ title: "Не удалось запустить развертывание", variant: "destructive" });
+        },
+      },
+    );
+  }
+
+  function handleStep2Submit() {
+    setLogs([]);
+    setJobStatus(null);
+    setErrorMessage("");
+    setNewNodeId(null);
+    doStart({ sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion });
+  }
+
+  function handleRetry() {
+    setLogs([]);
+    setJobId(null);
+    setJobStatus("running");
+    setErrorMessage("");
+    setNewNodeId(null);
+    // Small delay so useEffect cleanup runs before new jobId is set
+    setTimeout(() => {
+      doStart({ sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion });
+    }, 50);
+  }
+
+  const logLevelClass: Record<ProvisionLogLevel, string> = {
+    info: "text-muted-foreground",
+    step: "text-blue-600 font-semibold",
+    success: "text-green-600 font-semibold",
+    error: "text-red-600 font-semibold",
+  };
+
+  const step1Valid = sshHost.trim() && sshUser.trim() && sshPassword.trim();
+  const step2Valid = domain.trim() && nodeName.trim() && nodeRegion.trim();
+
+  return (
+    <div className="bg-muted/30 border border-border p-4 space-y-4">
+      {/* Header + step indicator */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 font-bold text-sm">
+          <Zap className="w-4 h-4 text-primary" />
+          Авто-развертывание узла
+        </div>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          {([1, 2, 3] as const).map((s) => (
+            <span
+              key={s}
+              className={`w-5 h-5 rounded-full flex items-center justify-center border text-[10px] font-bold transition-colors ${
+                step === s
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : step > s
+                  ? "bg-green-600 text-white border-green-600"
+                  : "border-border text-muted-foreground"
+              }`}
+            >
+              {step > s ? "✓" : s}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Step 1: SSH access ─────────────────────────────────────────── */}
+      {step === 1 && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Введите данные для подключения к новому VPS-серверу по SSH.
+          </p>
+          <div className="grid md:grid-cols-2 gap-3">
+            <Input
+              placeholder="IP-адрес VPS (например: 87.199.200.19)"
+              value={sshHost}
+              onChange={(e) => setSshHost(e.target.value.trim())}
+              className="rounded-none col-span-2"
+            />
+            <Input
+              placeholder="SSH-пользователь"
+              value={sshUser}
+              onChange={(e) => setSshUser(e.target.value.trim())}
+              className="rounded-none"
+            />
+            <Input
+              type="password"
+              placeholder="SSH-пароль"
+              value={sshPassword}
+              onChange={(e) => setSshPassword(e.target.value)}
+              className="rounded-none"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStep(2)}
+              disabled={!step1Valid}
+              className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+            >
+              Далее →
+            </button>
+            <button onClick={onDone} className="border border-border px-4 py-2 text-sm">
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 2: Node metadata ──────────────────────────────────────── */}
+      {step === 2 && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Укажите домен VPS (технический, выданный провайдером) и имя узла.
+          </p>
+          <div className="grid md:grid-cols-2 gap-3">
+            <Input
+              placeholder="Домен VPS (напр. v917715.hosted-by-vdsina.com)"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value.trim())}
+              className="rounded-none col-span-2"
+            />
+            <Input
+              placeholder="Название узла (напр. Netherlands (VDSina))"
+              value={nodeName}
+              onChange={(e) => setNodeName(e.target.value)}
+              className="rounded-none"
+            />
+            <Input
+              placeholder="Регион (напр. nl, de, us)"
+              value={nodeRegion}
+              onChange={(e) => setNodeRegion(e.target.value.trim())}
+              className="rounded-none"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleStep2Submit}
+              disabled={!step2Valid || starting}
+              className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+            >
+              {starting ? "Запуск..." : "Развернуть →"}
+            </button>
+            <button onClick={() => setStep(1)} className="border border-border px-4 py-2 text-sm">
+              ← Назад
+            </button>
+            <button onClick={onDone} className="border border-border px-4 py-2 text-sm ml-auto">
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 3: Live provisioning log ─────────────────────────────── */}
+      {step === 3 && (
+        <div className="space-y-3">
+          {/* Status badge */}
+          <div className="flex items-center gap-2 text-sm font-medium">
+            {jobStatus === "running" && (
+              <span className="flex items-center gap-1.5 text-blue-600">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Развертывание...
+              </span>
+            )}
+            {jobStatus === "done" && (
+              <span className="flex items-center gap-1.5 text-green-600">
+                <Check className="w-3.5 h-3.5" /> Готово! Узел подключён
+                {newNodeId && <span className="text-muted-foreground font-normal">(id={newNodeId})</span>}
+              </span>
+            )}
+            {jobStatus === "error" && (
+              <span className="flex items-center gap-1.5 text-red-600">
+                <AlertTriangle className="w-3.5 h-3.5" /> Ошибка: {errorMessage}
+              </span>
+            )}
+          </div>
+
+          {/* Log output */}
+          <div className="bg-background border border-border font-mono text-xs p-3 h-72 overflow-y-auto space-y-0.5">
+            {logs.length === 0 && jobStatus === "running" && (
+              <span className="text-muted-foreground">Подключение к серверу...</span>
+            )}
+            {logs.map((log, i) => (
+              <div key={i} className={logLevelClass[log.level]}>
+                {log.text}
+              </div>
+            ))}
+            <div ref={logsEndRef} />
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            {jobStatus === "error" && (
+              <button
+                onClick={handleRetry}
+                disabled={starting}
+                className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5 inline mr-1" />
+                Повторить
+              </button>
+            )}
+            <button
+              onClick={onDone}
+              disabled={jobStatus === "running"}
+              className="border border-border px-4 py-2 text-sm disabled:opacity-40"
+            >
+              {jobStatus === "done" ? "Закрыть" : jobStatus === "error" ? "Отмена" : "Закрыть"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   const { mutate: createNode, isPending: creating } = useCreateVpnNode();
   const { mutate: updateNode, isPending: updating } = useUpdateVpnNode();
@@ -1221,6 +1519,7 @@ function NodesManagement() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
   const [managingId, setManagingId] = useState<number | null>(null);
+  const [newNodeMode, setNewNodeMode] = useState<null | "provision" | "manual">(null);
   const [regionFilter, setRegionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [sort, setSort] = useState<"default" | "clients_desc" | "name">("default");
@@ -1348,10 +1647,49 @@ function NodesManagement() {
         ),
       )}
       {editingId === "new" ? (
-        <NodeForm onDone={() => setEditingId(null)} />
+        newNodeMode === "provision" ? (
+          <NodeProvisioningWizard onDone={() => { setEditingId(null); setNewNodeMode(null); }} />
+        ) : newNodeMode === "manual" ? (
+          <NodeForm onDone={() => { setEditingId(null); setNewNodeMode(null); }} />
+        ) : (
+          /* Mode selection */
+          <div className="border border-dashed border-border p-4 space-y-3">
+            <p className="text-sm text-muted-foreground text-center">Как добавить узел?</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => setNewNodeMode("provision")}
+                className="flex flex-col items-center gap-2 border border-border p-4 text-sm hover:border-primary hover:text-primary transition-colors group"
+              >
+                <Zap className="w-5 h-5 text-primary" />
+                <span className="font-bold">Авто-развертывание</span>
+                <span className="text-xs text-muted-foreground text-center group-hover:text-primary/70">
+                  Введите IP и пароль VPS — всё остальное автоматически
+                </span>
+              </button>
+              <button
+                onClick={() => setNewNodeMode("manual")}
+                className="flex flex-col items-center gap-2 border border-border p-4 text-sm hover:border-primary hover:text-primary transition-colors group"
+              >
+                <Server className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
+                <span className="font-bold">Вручную</span>
+                <span className="text-xs text-muted-foreground text-center group-hover:text-primary/70">
+                  Сервер уже настроен — введите параметры подключения
+                </span>
+              </button>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={() => setEditingId(null)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        )
       ) : (
         <button
-          onClick={() => setEditingId("new")}
+          onClick={() => { setEditingId("new"); setNewNodeMode(null); }}
           className="flex items-center gap-2 border border-dashed border-border px-4 py-3 text-sm font-medium text-muted-foreground hover:text-primary hover:border-primary transition-colors w-full justify-center"
         >
           <Plus className="w-4 h-4" /> Новый узел

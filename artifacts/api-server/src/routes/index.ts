@@ -16,6 +16,7 @@ import balanceTopupOrderRouter from "./balanceTopupOrder";
 import supportRouter from "./support";
 import adminRouter from "./admin";
 import yooMoneyRouter from "./yoomoney";
+import vpnNodeProvisioningRouter from "./admin/vpnNodeProvisioning";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(balanceTopupOrderRouter);
 router.use(supportRouter);
 router.use(adminRouter);
 router.use(yooMoneyRouter);
+router.use(vpnNodeProvisioningRouter);
 
 export default router;

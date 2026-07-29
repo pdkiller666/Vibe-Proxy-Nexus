@@ -125,6 +125,14 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     path.resolve(distDir, "xray-proto"),
     { recursive: true },
   );
+
+  // VPN node deploy files — uploaded to new VPS nodes via SFTP during
+  // auto-provisioning (sshProvisioner.ts resolves __dirname/vpn-node-deploy).
+  await cp(
+    path.resolve(artifactDir, "../../deploy/amvera-vpn-node"),
+    path.resolve(distDir, "vpn-node-deploy"),
+    { recursive: true },
+  );
 }
 
 buildAll().catch((err) => {

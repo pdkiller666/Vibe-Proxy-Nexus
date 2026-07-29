@@ -98,6 +98,8 @@ export * from './vpnKeyRenameInput';
 export * from './vpnNode';
 export * from './vpnNodeHealthResult';
 export * from './vpnNodeInput';
+export * from './vpnNodeProvisionInput';
+export * from './vpnNodeProvisionStarted';
 export * from './vpnNodeRestartXrayResult';
 export * from './vpnNodeSystemLogs';
 export * from './vpnNodeSystemStatus';

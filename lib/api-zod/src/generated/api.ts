@@ -1088,6 +1088,27 @@ export const RejectPaymentResponse = zod.object({
 
 
 /**
+ * @summary Start automated SSH provisioning of a new VPN node
+ */
+
+
+
+
+export const ProvisionVpnNodeBody = zod.object({
+  "sshHost": zod.string().describe('IP address of the VPS'),
+  "sshUser": zod.string().describe('SSH username (usually root)'),
+  "sshPassword": zod.string().describe('SSH password (used once, never stored)'),
+  "domain": zod.string().describe('Technical domain pointing to the VPS IP'),
+  "nodeName": zod.string().min(1),
+  "nodeRegion": zod.string().min(1)
+})
+
+export const ProvisionVpnNodeResponse = zod.object({
+  "jobId": zod.string().uuid()
+})
+
+
+/**
  * @summary Register a VPN node
  */
 

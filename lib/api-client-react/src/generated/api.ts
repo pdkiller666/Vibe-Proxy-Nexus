@@ -93,6 +93,8 @@ import type {
   VpnNode,
   VpnNodeHealthResult,
   VpnNodeInput,
+  VpnNodeProvisionInput,
+  VpnNodeProvisionStarted,
   VpnNodeRestartXrayResult,
   VpnNodeSystemLogs,
   VpnNodeSystemStatus,
@@ -3398,6 +3400,76 @@ export const useRejectPayment = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRejectPaymentMutationOptions(options));
+    }
+
+export const getProvisionVpnNodeUrl = () => {
+
+
+
+
+  return `/api/admin/vpn-nodes/provision`
+}
+
+/**
+ * @summary Start automated SSH provisioning of a new VPN node
+ */
+export const provisionVpnNode = async (vpnNodeProvisionInput: VpnNodeProvisionInput, options?: RequestInit): Promise<VpnNodeProvisionStarted> => {
+
+  return customFetch<VpnNodeProvisionStarted>(getProvisionVpnNodeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vpnNodeProvisionInput)
+  }
+);}
+
+
+
+
+export const getProvisionVpnNodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof provisionVpnNode>>, TError,{data: BodyType<VpnNodeProvisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof provisionVpnNode>>, TError,{data: BodyType<VpnNodeProvisionInput>}, TContext> => {
+
+const mutationKey = ['provisionVpnNode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof provisionVpnNode>>, {data: BodyType<VpnNodeProvisionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  provisionVpnNode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProvisionVpnNodeMutationResult = NonNullable<Awaited<ReturnType<typeof provisionVpnNode>>>
+    export type ProvisionVpnNodeMutationBody = BodyType<VpnNodeProvisionInput>
+    export type ProvisionVpnNodeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start automated SSH provisioning of a new VPN node
+ */
+export const useProvisionVpnNode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof provisionVpnNode>>, TError,{data: BodyType<VpnNodeProvisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof provisionVpnNode>>,
+        TError,
+        {data: BodyType<VpnNodeProvisionInput>},
+        TContext
+      > => {
+      return useMutation(getProvisionVpnNodeMutationOptions(options));
     }
 
 export const getCreateVpnNodeUrl = () => {

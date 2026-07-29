@@ -440,6 +440,25 @@ export interface VpnNodeInput {
   certSha256?: string;
 }
 
+export interface VpnNodeProvisionInput {
+  /** IP address of the VPS */
+  sshHost: string;
+  /** SSH username (usually root) */
+  sshUser: string;
+  /** SSH password (used once, never stored) */
+  sshPassword: string;
+  /** Technical domain pointing to the VPS IP */
+  domain: string;
+  /** @minLength 1 */
+  nodeName: string;
+  /** @minLength 1 */
+  nodeRegion: string;
+}
+
+export interface VpnNodeProvisionStarted {
+  jobId: string;
+}
+
 export interface VpnNodeUpdate {
   /** @minLength 1 */
   name?: string;
