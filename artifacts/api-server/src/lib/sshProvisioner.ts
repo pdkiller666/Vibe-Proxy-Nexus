@@ -10,11 +10,10 @@
  * table so logs survive server restarts and Amvera redeploys.
  */
 
-import { Client, type SFTPWrapper } from "ssh2";
+import { Client } from "ssh2";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { db, vpnNodesTable, provisioningJobsTable } from "@workspace/db";
 import type { ProvisionLogLine } from "@workspace/db";
@@ -239,6 +238,11 @@ function connectSSH(opts: ProvisioningOpts): Promise<Client> {
       // host key has never been verified before.
       hostVerifier: () => true,
       readyTimeout: 30_000,
+      // Send keepalives every 10 s so the connection survives the multi-minute
+      // apt-get / docker-build steps without being killed by the server's idle
+      // timeout.
+      keepaliveInterval: 10_000,
+      keepaliveCountMax: 6,
     });
   });
 }
@@ -290,94 +294,77 @@ function runCommand(
   });
 }
 
-/** Get an SFTP subsystem handle. */
-function getSFTP(conn: Client): Promise<SFTPWrapper> {
-  return new Promise((resolve, reject) => {
-    conn.sftp((err, sftp) => {
-      if (err) reject(err);
-      else resolve(sftp);
-    });
-  });
-}
-
-/** Create a remote directory, ignoring already-exists errors. */
-function mkdirRemote(sftp: SFTPWrapper, remotePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.mkdir(remotePath, (err) => {
-      if (!err) { resolve(); return; }
-      const code = (err as NodeJS.ErrnoException & { code: string | number }).code;
-      // ssh2 SFTP uses numeric status codes (SSH_FX_FILE_ALREADY_EXISTS = 11).
-      // Node fs uses the string "EEXIST". Accept both so re-runs on the same
-      // host don't fail with a generic "Failure" when the dir already exists.
-      if (code === "EEXIST" || code === 11) resolve();
-      else reject(err);
-    });
-  });
-}
-
-/** Upload a single local file to a remote path. */
-function uploadFile(sftp: SFTPWrapper, localPath: string, remotePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.fastPut(localPath, remotePath, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-
 /**
- * Recursively upload a local directory to a remote directory.
- * Creates intermediate directories as needed.
+ * Upload a local directory to the remote host by packing it into a tar.gz
+ * with the local `tar` binary, then piping the archive into a remote
+ * `tar xzf -` command over the SSH exec channel.
+ *
+ * This completely avoids the SFTP subsystem (which was returning generic
+ * "Failure" errors on certain VPS configurations) and relies only on the
+ * standard exec channel that is already used for shell commands.
  */
-async function uploadDir(
-  sftp: SFTPWrapper,
+function uploadTarDir(
+  conn: Client,
   localDir: string,
   remoteDir: string,
   job: ProvisioningJob,
 ): Promise<void> {
-  await mkdirRemote(sftp, remoteDir);
-
-  const entries = await readdir(localDir, { withFileTypes: true });
-  for (const entry of entries) {
-    const localPath = path.join(localDir, entry.name);
-    const remotePath = `${remoteDir}/${entry.name}`;
-
-    if (entry.isDirectory()) {
-      await uploadDir(sftp, localPath, remotePath, job);
-    } else if (entry.isFile()) {
-      const size = (await stat(localPath)).size;
-      emitLog(job, `  ↑ ${entry.name} (${(size / 1024).toFixed(1)} KB)`);
-      await uploadFile(sftp, localPath, remotePath);
+  return new Promise((resolve, reject) => {
+    // Pack the local directory into a tar.gz buffer synchronously on the
+    // api-server container — files are small (configs, scripts, <5 MB total).
+    const tarResult = spawnSync("tar", ["czf", "-", "-C", localDir, "."], {
+      maxBuffer: 50 * 1024 * 1024, // 50 MB safety cap
+    });
+    if (tarResult.error) { reject(tarResult.error); return; }
+    if (tarResult.status !== 0) {
+      reject(new Error(
+        `Local tar failed (exit ${tarResult.status}): ${(tarResult.stderr as Buffer).toString().slice(0, 200)}`,
+      ));
+      return;
     }
-  }
-}
+    const tarBuffer = tarResult.stdout as Buffer;
+    emitLog(job, `  → пакуем ${(tarBuffer.length / 1024).toFixed(0)} KB...`);
 
-/** Write a string as a remote file via SFTP. */
-function writeRemoteFile(sftp: SFTPWrapper, remotePath: string, content: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const handle = sftp.open(remotePath, "w", 0o644, (err, h) => {
-      if (err) { reject(err); return; }
-      const buf = Buffer.from(content, "utf8");
-      sftp.write(h, buf, 0, buf.length, 0, (writeErr) => {
-        sftp.close(h, () => {
-          if (writeErr) reject(writeErr);
-          else resolve();
+    // Stream the archive to the remote via SSH exec stdin.
+    // rm -rf + mkdir ensures a clean slate for re-runs.
+    conn.exec(
+      `rm -rf '${remoteDir}' && mkdir -p '${remoteDir}' && tar xzf - -C '${remoteDir}'`,
+      (err, stream) => {
+        if (err) { reject(err); return; }
+        let stderr = "";
+        stream.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+        stream.once("close", (code: number) => {
+          if (code === 0) resolve();
+          else reject(new Error(
+            `Remote tar extract failed (exit ${code}): ${stderr.slice(0, 300)}`,
+          ));
         });
-      });
-    });
-    void handle;
+        stream.write(tarBuffer);
+        stream.end();
+      },
+    );
   });
 }
 
-/** Read a remote file as a string. */
-function readRemoteFile(sftp: SFTPWrapper, remotePath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    sftp.readFile(remotePath, (err, data) => {
-      if (err) reject(err);
-      // data is a Buffer when no encoding argument is supplied
-      else resolve(Buffer.isBuffer(data) ? (data as Buffer).toString("utf8") : String(data));
-    });
-  });
+/**
+ * Write a string as a remote file via SSH exec (no SFTP).
+ * Uses base64 encoding so arbitrary content is safe across all shells.
+ */
+function writeRemoteFileViaExec(
+  conn: Client,
+  remotePath: string,
+  content: string,
+  job: ProvisioningJob,
+): Promise<void> {
+  // base64 the content locally, then decode it on the remote side.
+  // printf avoids the trailing newline that `echo` would add.
+  const b64 = Buffer.from(content, "utf8").toString("base64");
+  return runCommand(
+    conn,
+    `printf '%s' '${b64}' | base64 -d > '${remotePath}'`,
+    job,
+    { timeoutMs: 30_000 },
+  ).then(() => undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -476,12 +463,11 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
 
     emitSuccess(job, "Docker, Nginx, certbot установлены ✓");
 
-    // ── Step 3: Upload deploy files via SFTP ───────────────────────────────
+    // ── Step 3: Upload deploy files (tar via SSH exec, no SFTP) ───────────
     emitStep(job, "📁 Загрузка файлов на сервер...");
-    // Wipe any partial upload from previous attempts so re-runs start clean.
-    await runCommand(conn, "rm -rf /opt/vpn-node && mkdir -p /opt/vpn-node", job);
-    const sftp = await getSFTP(conn);
-    await uploadDir(sftp, VPN_NODE_DEPLOY_DIR, "/opt/vpn-node", job);
+    // uploadTarDir does its own rm -rf / mkdir -p internally, so previous
+    // partial uploads are always wiped before extraction starts.
+    await uploadTarDir(conn, VPN_NODE_DEPLOY_DIR, "/opt/vpn-node", job);
     // Make shell scripts executable
     await runCommand(conn, "chmod +x /opt/vpn-node/render-config.sh", job);
     emitSuccess(job, "Файлы загружены ✓");
@@ -495,13 +481,13 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     }
 
     const envContent = `MGMT_API_SECRET=${mgmtSecret}\nPORT=8443\n`;
-    await writeRemoteFile(sftp, "/opt/vpn-node/.env", envContent);
+    await writeRemoteFileViaExec(conn, "/opt/vpn-node/.env", envContent, job);
     emitSuccess(job, "Файл .env создан ✓");
 
     // ── Step 5: Configure nginx (HTTP only, for certbot challenge) ─────────
     emitStep(job, "⚙️  Настройка Nginx...");
     const nginxConfig = makeNginxHttpConfig(domain);
-    await writeRemoteFile(sftp, "/tmp/vpn-node-nginx.conf", nginxConfig);
+    await writeRemoteFileViaExec(conn, "/tmp/vpn-node-nginx.conf", nginxConfig, job);
     const nginxSetup = [
       "cp /tmp/vpn-node-nginx.conf /etc/nginx/sites-available/vpn-node",
       "ln -sf /etc/nginx/sites-available/vpn-node /etc/nginx/sites-enabled/vpn-node",

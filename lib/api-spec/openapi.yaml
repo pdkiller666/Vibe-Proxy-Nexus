@@ -464,6 +464,41 @@ paths:
         "204":
           description: Revoked
 
+  /vpn-keys/{keyId}/relocate:
+    post:
+      operationId: relocateVpnKey
+      tags: [vpn-keys]
+      summary: >-
+        Move a VPN key to a different node. Revokes the old key and issues a
+        new one on the target node (same label/description). Returns the new key.
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VpnKeyRelocateInput"
+      responses:
+        "200":
+          description: New VPN key issued on the target node (old key revoked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnKey"
+        "400":
+          description: Bad request (e.g. same node)
+        "403":
+          description: No active subscription or traffic limit exceeded
+        "404":
+          description: Key or target node not found
+        "409":
+          description: Target node at capacity
+
   /vpn-keys/subscription-url:
     get:
       operationId: getSubscriptionUrl
@@ -2133,6 +2168,12 @@ components:
       properties:
         label: { type: string, minLength: 1 }
         description: { type: string }
+
+    VpnKeyRelocateInput:
+      type: object
+      required: [nodeId]
+      properties:
+        nodeId: { type: integer }
 
     SubscriptionUrl:
       type: object

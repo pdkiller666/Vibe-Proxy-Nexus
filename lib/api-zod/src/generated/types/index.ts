@@ -94,6 +94,7 @@ export * from './userRole';
 export * from './userRoleUpdate';
 export * from './vpnKey';
 export * from './vpnKeyInput';
+export * from './vpnKeyRelocateInput';
 export * from './vpnKeyRenameInput';
 export * from './vpnNode';
 export * from './vpnNodeHealthResult';

@@ -622,6 +622,39 @@ export const RevokeVpnKeyResponse = zod.void()
 
 
 /**
+ * @summary Move a VPN key to a different node. Revokes the old key and issues a new one on the target node (same label/description). Returns the new key.
+ */
+export const RelocateVpnKeyParams = zod.object({
+  "keyId": zod.coerce.number()
+})
+
+export const RelocateVpnKeyBody = zod.object({
+  "nodeId": zod.number()
+})
+
+export const RelocateVpnKeyResponse = zod.object({
+  "id": zod.number(),
+  "nodeId": zod.number(),
+  "nodeName": zod.string(),
+  "label": zod.string(),
+  "description": zod.string().nullish(),
+  "vlessLink": zod.string(),
+  "deepLink": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "revokedReason": zod.union([zod.enum(['user', 'admin', 'expired', 'billing', 'traffic_limit']),zod.null()]).optional(),
+  "userId": zod.number(),
+  "userEmail": zod.string().optional(),
+  "trafficUpBytes": zod.number(),
+  "trafficDownBytes": zod.number(),
+  "periodUpBytes": zod.number(),
+  "periodDownBytes": zod.number(),
+  "periodStartedAt": zod.coerce.date(),
+  "lastTrafficAt": zod.coerce.date().nullish()
+})
+
+
+/**
  * @summary Get the current user's stable subscription URL (a self-updating link that aggregates all of the user's active VPN keys — add it once in the client app instead of pasting individual vless links).
  */
 export const GetSubscriptionUrlResponse = zod.object({

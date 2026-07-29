@@ -528,6 +528,10 @@ export interface VpnKeyRenameInput {
   description?: string;
 }
 
+export interface VpnKeyRelocateInput {
+  nodeId: number;
+}
+
 export interface SubscriptionUrl {
   url: string;
 }

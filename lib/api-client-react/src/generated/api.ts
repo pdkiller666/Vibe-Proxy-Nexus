@@ -89,6 +89,7 @@ import type {
   UserRoleUpdate,
   VpnKey,
   VpnKeyInput,
+  VpnKeyRelocateInput,
   VpnKeyRenameInput,
   VpnNode,
   VpnNodeHealthResult,
@@ -1885,6 +1886,77 @@ export const useRevokeVpnKey = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRevokeVpnKeyMutationOptions(options));
+    }
+
+export const getRelocateVpnKeyUrl = (keyId: number,) => {
+
+
+
+
+  return `/api/vpn-keys/${keyId}/relocate`
+}
+
+/**
+ * @summary Move a VPN key to a different node. Revokes the old key and issues a new one on the target node (same label/description). Returns the new key.
+ */
+export const relocateVpnKey = async (keyId: number,
+    vpnKeyRelocateInput: VpnKeyRelocateInput, options?: RequestInit): Promise<VpnKey> => {
+
+  return customFetch<VpnKey>(getRelocateVpnKeyUrl(keyId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vpnKeyRelocateInput)
+  }
+);}
+
+
+
+
+export const getRelocateVpnKeyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof relocateVpnKey>>, TError,{keyId: number;data: BodyType<VpnKeyRelocateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof relocateVpnKey>>, TError,{keyId: number;data: BodyType<VpnKeyRelocateInput>}, TContext> => {
+
+const mutationKey = ['relocateVpnKey'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof relocateVpnKey>>, {keyId: number;data: BodyType<VpnKeyRelocateInput>}> = (props) => {
+          const {keyId,data} = props ?? {};
+
+          return  relocateVpnKey(keyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RelocateVpnKeyMutationResult = NonNullable<Awaited<ReturnType<typeof relocateVpnKey>>>
+    export type RelocateVpnKeyMutationBody = BodyType<VpnKeyRelocateInput>
+    export type RelocateVpnKeyMutationError = ErrorType<void>
+
+    /**
+ * @summary Move a VPN key to a different node. Revokes the old key and issues a new one on the target node (same label/description). Returns the new key.
+ */
+export const useRelocateVpnKey = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof relocateVpnKey>>, TError,{keyId: number;data: BodyType<VpnKeyRelocateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof relocateVpnKey>>,
+        TError,
+        {keyId: number;data: BodyType<VpnKeyRelocateInput>},
+        TContext
+      > => {
+      return useMutation(getRelocateVpnKeyMutationOptions(options));
     }
 
 export const getGetSubscriptionUrlUrl = () => {

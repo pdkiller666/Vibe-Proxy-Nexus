@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { z } from "zod";
 import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import {
   CreateVpnKeyBody,
@@ -17,6 +18,7 @@ import { removeRemoteXrayClient } from "../lib/remoteNode";
 import { buildSubscriptionUrl } from "../lib/subscription";
 import { buildServingVlessLink } from "../lib/vless";
 import { isTrafficLimitBlocked, issueKeyForUser, resolveTotalSlots } from "../lib/keyIssuance";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -223,6 +225,113 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
   }
 
   res.sendStatus(204);
+});
+
+// Inline Zod schemas — avoid api-zod composite-tsconfig resolution issues for
+// the new schemas that haven't been codegen'd into api-zod yet.
+const RelocateVpnKeyParams = z.object({ keyId: z.coerce.number().int().positive() });
+const RelocateVpnKeyBody = z.object({ nodeId: z.number().int().positive() });
+
+/**
+ * POST /vpn-keys/:keyId/relocate
+ *
+ * Move a key to a different node: issues a new key on the target node
+ * (preserving label/description), then revokes the old key.
+ *
+ * Order — new key first, old key revoked after:
+ *  - Per-node slot check in issueKeyForUser counts keys on the TARGET node.
+ *    Since the user has 0 keys there, the check passes even if they're at
+ *    their total slot limit.
+ *  - Revoking after guarantees the user always has at least one working key
+ *    during the swap. If the revoke fails the old key becomes a supernumerary
+ *    that the admin can clean up, but the user is never left key-less.
+ */
+router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<void> => {
+  const user = req.appUser!;
+  const params = RelocateVpnKeyParams.safeParse(req.params);
+  const body = RelocateVpnKeyBody.safeParse(req.body);
+
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: (params.error ?? body.error)!.message });
+    return;
+  }
+
+  const { keyId } = params.data;
+  const { nodeId: targetNodeId } = body.data;
+
+  // Load the existing key + its current node.
+  const [existing] = await db
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(and(eq(vpnKeysTable.id, keyId), eq(vpnKeysTable.userId, user.id)));
+
+  if (!existing) {
+    res.status(404).json({ error: "VPN key not found" });
+    return;
+  }
+  if (existing.key.revokedAt) {
+    res.status(409).json({ error: "Cannot relocate a revoked key" });
+    return;
+  }
+  if (existing.key.nodeId === targetNodeId) {
+    res.status(409).json({ error: "Ключ уже находится на этом сервере" });
+    return;
+  }
+
+  // Require an active subscription (same guard as POST /vpn-keys).
+  const totalSlots = await resolveTotalSlots(user.id);
+  if (totalSlots === null) {
+    res.status(403).json({ error: "An active subscription is required" });
+    return;
+  }
+  if (await isTrafficLimitBlocked(user.id)) {
+    res.status(403).json({
+      error: "Лимит трафика исчерпан. Докупите трафик или дождитесь продления подписки.",
+    });
+    return;
+  }
+
+  // Issue the new key first — old key stays active so the user is never left
+  // without a working connection during the swap.
+  const result = await issueKeyForUser(
+    user.id,
+    totalSlots,
+    targetNodeId,
+    existing.key.label,
+    existing.key.description ?? undefined,
+  );
+
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+
+  // Revoke the old key: DB-first (source of truth), then Xray (non-fatal).
+  try {
+    await db
+      .update(vpnKeysTable)
+      .set({ revokedAt: new Date(), revokedReason: "user" })
+      .where(and(eq(vpnKeysTable.id, existing.key.id), eq(vpnKeysTable.userId, user.id)));
+  } catch (err) {
+    logger.error({ err, oldKeyId: existing.key.id, newKeyId: result.key.id },
+      "relocate: new key issued but old key DB revoke failed — old key left active for cleanup");
+  }
+
+  if (existing.node.managementApiUrl) {
+    try { await removeRemoteXrayClient(existing.node, existing.key.uuid); } catch (err) {
+      logger.warn({ err, uuid: existing.key.uuid }, "relocate: old remote Xray client removal failed (ignored)");
+    }
+  } else if (isLocalXrayEnabled()) {
+    try { await removeXrayClient(existing.key.uuid); } catch (err) {
+      logger.warn({ err, uuid: existing.key.uuid }, "relocate: old local Xray client removal failed (ignored)");
+    }
+  }
+
+  logger.info({ userId: user.id, oldKeyId: existing.key.id, newKeyId: result.key.id, targetNodeId },
+    "VPN key relocated");
+
+  res.json(CreateVpnKeyResponse.parse({ ...result.key, nodeName: result.nodeName }));
 });
 
 export default router;

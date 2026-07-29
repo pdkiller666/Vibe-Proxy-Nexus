@@ -1,0 +1,101 @@
+🔌 Подключение к 194.60.133.58 по SSH...
+SSH-соединение установлено ✓
+📦 Обновление системы и установка Docker, Nginx, certbot...
+Это может занять 2–3 минуты...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+curl is already the newest version (8.5.0-2ubuntu10.11).
+gnupg is already the newest version (2.4.4-2ubuntu17.4).
+ca-certificates is already the newest version (20260601~24.04.1).
+lsb-release is already the newest version (12.0-2).
+The following packages were automatically installed and are no longer required:
+bridge-utils dns-root-data dnsmasq-base ubuntu-fan
+Use 'apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 129 not upgraded.
+Reading package lists...
+Building dependency tree...
+Reading state information...
+docker-ce is already the newest version (5:29.6.2-1~ubuntu.24.04~noble).
+docker-ce-cli is already the newest version (5:29.6.2-1~ubuntu.24.04~noble).
+containerd.io is already the newest version (2.2.6-1~ubuntu.24.04~noble).
+docker-compose-plugin is already the newest version (5.3.1-1~ubuntu.24.04~noble).
+The following packages were automatically installed and are no longer required:
+bridge-utils dns-root-data dnsmasq-base ubuntu-fan
+Use 'apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 129 not upgraded.
+Synchronizing state of docker.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable docker
+Reading package lists...
+Building dependency tree...
+Reading state information...
+nginx is already the newest version (1.24.0-2ubuntu7.15).
+certbot is already the newest version (2.9.0-1).
+python3-certbot-nginx is already the newest version (2.9.0-1).
+The following packages were automatically installed and are no longer required:
+bridge-utils dns-root-data dnsmasq-base ubuntu-fan
+Use 'apt autoremove' to remove them.
+0 upgraded, 0 newly installed, 0 to remove and 129 not upgraded.
+Synchronizing state of nginx.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable nginx
+Проверка доступности Docker daemon...
+Client: Docker Engine - Community
+Version: 29.6.2
+Context: default
+Debug Mode: false
+Plugins:
+compose: Docker Compose (Docker Inc.)
+Version: v5.3.1
+Path: /usr/libexec/docker/cli-plugins/docker-compose
+Server:
+Containers: 0
+Running: 0
+Paused: 0
+Stopped: 0
+Images: 0
+Server Version: 29.6.2
+Storage Driver: overlayfs
+driver-type: io.containerd.snapshotter.v1
+Logging Driver: json-file
+Cgroup Driver: systemd
+Cgroup Version: 2
+Plugins:
+Volume: local
+Network: bridge host ipvlan macvlan null overlay
+Log: awslogs fluentd gcplogs gelf journald json-file local splunk syslog
+CDI spec directories:
+/etc/cdi
+/var/run/cdi
+Swarm: inactive
+Runtimes: io.containerd.runc.v2 runc
+Default Runtime: runc
+Init Binary: docker-init
+containerd version: 11ce9d5f3c68c941867e82890e93e815c1304f1b
+runc version: v1.3.6-0-g491b69ba
+init version: de40ad0
+Security Options:
+apparmor
+seccomp
+Profile: builtin
+cgroupns
+Kernel Version: 6.8.0-110-generic
+Operating System: Ubuntu 24.04.4 LTS
+OSType: linux
+Architecture: x86_64
+CPUs: 1
+Total Memory: 1.922GiB
+Name: v917955.hosted-by-vdsina.com
+ID: 4b5ae8e8-3737-4f48-af27-5c453d65be91
+Docker Root Dir: /var/lib/docker
+Debug Mode: false
+Experimental: false
+Insecure Registries:
+::1/128
+127.0.0.0/8
+Live Restore Enabled: false
+Firewall Backend: iptables
+EnableUserlandProxy: true
+UserlandProxyPath: /usr/bin/docker-proxy
+Docker, Nginx, certbot установлены ✓
+📁 Загрузка файлов на сервер...
+❌ Failure

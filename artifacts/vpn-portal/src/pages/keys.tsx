@@ -6,6 +6,7 @@ import {
   useCreateVpnKey,
   useRevokeVpnKey,
   useUpdateVpnKey,
+  useRelocateVpnKey,
   useGetSubscriptionUrl,
   useGetPaymentSettings,
   useCreateExtraSlotOrder,
@@ -20,63 +21,161 @@ import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X,
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
 
+type NodeOption = {
+  id: number;
+  name: string;
+  flagEmoji?: string | null;
+  activeUserCount?: number;
+  maxUsers?: number | null;
+};
+
 function EditKeyForm({
   keyId,
   initialLabel,
   initialDescription,
+  currentNodeId,
+  nodes,
   onClose,
 }: {
   keyId: number;
   initialLabel: string;
   initialDescription: string;
+  /** nodeId of the node this key currently lives on */
+  currentNodeId: number;
+  /** All active nodes the user can relocate to (pass [] to hide node picker) */
+  nodes: NodeOption[];
   onClose: () => void;
 }) {
   const [label, setLabel] = useState(initialLabel);
   const [description, setDescription] = useState(initialDescription);
-  const { mutate: updateKey, isPending } = useUpdateVpnKey();
+  const [selectedNodeId, setSelectedNodeId] = useState(currentNodeId);
+  const { mutate: updateKey, isPending: updatingKey } = useUpdateVpnKey();
+  const { mutate: relocateKey, isPending: relocating } = useRelocateVpnKey();
   const { toast } = useToast();
+
+  const isPending = updatingKey || relocating;
+  const nodeChanged = selectedNodeId !== currentNodeId;
 
   function handleSave() {
     const trimmed = label.trim();
     if (!trimmed) return;
-    updateKey(
-      { keyId, data: { label: trimmed, description: description.trim() } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
-          toast({ title: "Название обновлено" });
-          onClose();
+
+    if (nodeChanged) {
+      // Relocate: issue a new key on the selected node, revoke the old one.
+      relocateKey(
+        { keyId, data: { nodeId: selectedNodeId } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+            toast({ title: "Ключ перемещён", description: "Новый ключ выпущен на выбранном сервере." });
+            onClose();
+          },
+          onError: (err: unknown) => {
+            const msg = err instanceof Error ? err.message : undefined;
+            toast({ title: msg ?? "Не удалось переместить ключ", variant: "destructive" });
+          },
         },
-        onError: (err: unknown) => {
-          const msg = err instanceof Error ? err.message : undefined;
-          toast({ title: msg ?? "Не удалось обновить название", variant: "destructive" });
+      );
+    } else {
+      updateKey(
+        { keyId, data: { label: trimmed, description: description.trim() } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+            toast({ title: "Название обновлено" });
+            onClose();
+          },
+          onError: (err: unknown) => {
+            const msg = err instanceof Error ? err.message : undefined;
+            toast({ title: msg ?? "Не удалось обновить название", variant: "destructive" });
+          },
         },
-      },
-    );
+      );
+    }
   }
 
+  const showNodePicker = nodes.length > 1;
+
   return (
-    <div className="mt-3 space-y-2">
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      {/* Label */}
       <Input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         placeholder="Название устройства"
         className="rounded-none"
-        autoFocus
+        autoFocus={!showNodePicker}
+        disabled={nodeChanged}
       />
+      {/* Description */}
       <Input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Описание (необязательно)"
         className="rounded-none"
+        disabled={nodeChanged}
       />
+
+      {/* Node picker — only visible when there are multiple active nodes */}
+      {showNodePicker && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+            Сервер
+          </p>
+          <div className="grid gap-1.5">
+            {nodes.map((node) => {
+              const isCurrent = node.id === currentNodeId;
+              const isFull =
+                !isCurrent &&
+                node.maxUsers != null &&
+                (node.activeUserCount ?? 0) >= node.maxUsers;
+              const isSelected = selectedNodeId === node.id;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  disabled={isFull}
+                  onClick={() => setSelectedNodeId(node.id)}
+                  className={`w-full text-left px-3 py-2 text-sm border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    isSelected
+                      ? "border-primary bg-primary/5 font-semibold"
+                      : "border-border hover:bg-muted/50"
+                  }`}
+                >
+                  <span className="font-mono">{node.flagEmoji ?? "🌐"}</span>{" "}
+                  <span>{node.name}</span>
+                  {isCurrent && (
+                    <span className="text-xs text-muted-foreground ml-1">(текущий)</span>
+                  )}
+                  {isFull && (
+                    <span className="text-xs text-muted-foreground ml-1">(заполнен)</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {nodeChanged && (
+            <p className="text-xs text-amber-600">
+              Старый ключ будет отозван, новый выпущен на «{nodes.find((n) => n.id === selectedNodeId)?.name}».
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
           onClick={handleSave}
-          disabled={isPending || !label.trim()}
+          disabled={isPending || (!label.trim() && !nodeChanged)}
           className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
         >
-          {isPending ? "Сохраняем..." : "Сохранить"}
+          {relocating
+            ? "Перемещаем..."
+            : updatingKey
+              ? "Сохраняем..."
+              : nodeChanged
+                ? "Переместить на этот сервер"
+                : "Сохранить"}
         </button>
         <button
           onClick={onClose}
@@ -591,6 +690,8 @@ export default function Keys() {
                   keyId={key.id}
                   initialLabel={key.label}
                   initialDescription={key.description ?? ""}
+                  currentNodeId={key.nodeId}
+                  nodes={activeNodes}
                   onClose={() => setEditingKeyId(null)}
                 />
               )}
