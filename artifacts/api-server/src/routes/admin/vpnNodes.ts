@@ -126,11 +126,28 @@ router.get("/admin/vpn-nodes/:nodeId/health", requireAuth, requireAdmin, async (
 // ─── System management endpoints ──────────────────────────────────────────────
 
 /** Read local system status from /proc files and os module. */
+/** Sample /proc/stat twice ~200 ms apart to get real CPU utilisation. */
+async function getCpuPercent(): Promise<number> {
+  const readStat = async () => {
+    const text = await fs.readFile("/proc/stat", "utf8").catch(() => "");
+    const line = text.split("\n")[0] ?? "";
+    const nums = line.replace(/^cpu\s+/, "").split(/\s+/).map(Number).filter(n => !isNaN(n));
+    // Fields: user nice system idle iowait irq softirq steal guest guest_nice
+    const idle = (nums[3] ?? 0) + (nums[4] ?? 0); // idle + iowait
+    const total = nums.reduce((a, b) => a + b, 0);
+    return { idle, total };
+  };
+  const before = await readStat();
+  await new Promise<void>(resolve => setTimeout(resolve, 200));
+  const after = await readStat();
+  const totalDelta = after.total - before.total;
+  const idleDelta = after.idle - before.idle;
+  if (totalDelta <= 0) return 0;
+  return Math.min(100, Math.round((1 - idleDelta / totalDelta) * 1000) / 10);
+}
+
 async function getLocalSystemStatus() {
-  // CPU: use 1-minute load average normalised by CPU count
-  const loadAvg1m = os.loadavg()[0];
-  const cpuCount = os.cpus().length;
-  const cpuPercent = Math.min(100, Math.round((loadAvg1m / cpuCount) * 1000) / 10);
+  const cpuPercent = await getCpuPercent();
 
   // RAM: /proc/meminfo (MemTotal / MemAvailable, kB → bytes)
   const memInfo = await fs.readFile("/proc/meminfo", "utf8").catch(() => "");

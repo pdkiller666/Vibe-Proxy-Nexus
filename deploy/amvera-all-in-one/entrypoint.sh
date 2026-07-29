@@ -97,4 +97,6 @@ fi
 chown -R node "$(dirname "$XRAY_CONFIG_PATH")" || true
 chmod -R u+rwX "$(dirname "$XRAY_CONFIG_PATH")"
 
+mkdir -p /var/log/supervisor
+
 exec supervisord -c /app/supervisord.conf
