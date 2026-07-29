@@ -42,8 +42,8 @@ Express-бэкенд + сам Xray-core живут в одном контейн�
 │   └── api-client-react/   # Сгенерированный React Query клиент (хуки для фронта)
 ├── deploy/
 │   ├── amvera-all-in-one/  # Реальный деплой: Dockerfile-компаньоны, README, entrypoint
-│   └── amvera-vpn-node/    # ОТДЕЛЬНЫЙ пакет для будущей мульти-региональной схемы
-│                           # (Xray + защищённый management API) — сейчас НЕ используется
+│   └── amvera-vpn-node/    # Пакет для дополнительных VPN-нод (Xray + management API)
+│                           # Разворачивается на отдельных VPS; бэкенд полностью подключён
 ├── scripts/                # Служебные скрипты монорепо (deploy.mjs, post-merge.sh)
 ├── .agents/memory/         # Долгосрочная память агентов (нетривиальные уроки/решения)
 ├── attached_assets/        # Загруженные пользователем файлы/скриншоты/логи
@@ -277,8 +277,9 @@ DROP COLUMN), которые drizzle-kit push не может выполнить
 - **`deploy/amvera-all-in-one/`** — актуальная схема продакшена: один Docker-контейнер,
   `supervisord` управляет Xray-core (`127.0.0.1:10000`) и Node.js (порт `8080`).
   README описывает все секреты и порядок настройки.
-- **`deploy/amvera-vpn-node/`** — задел на будущее (мульти-региональная схема,
-  отдельные VPN-ноды с management API, `X-Management-Secret`). **Не используется.**
+- **`deploy/amvera-vpn-node/`** — пакет для дополнительных VPN-нод на отдельных VPS
+  (Xray + management API, `X-Management-Secret`). Бэкенд полностью подключён (`remoteNode.ts`,
+  `keyIssuance.ts`). Инструкция по развёртыванию — `docs/add-vpn-node.md`.
 
 Требуемые переменные в проде:
 `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `PORT` (дефолт 8080),

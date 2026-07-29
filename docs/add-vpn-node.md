@@ -2,7 +2,9 @@
 
 ### Что происходит в двух словах
 
-Сейчас у вас один сервер на Amvera — он делает всё: сайт, API и VPN в одном контейнере. Когда хочется добавить второй сервер (например, в другой стране) — его запускают отдельно. Наш основной бэкенд умеет с ним общаться через защищённый REST API: выдавать ключи, отзывать, собирать статистику трафика.
+Основной сервер на Amvera умеет управлять несколькими VPN-нодами через защищённый REST API:
+выдавать ключи, отзывать их, собирать статистику трафика. Новую ноду можно поднять
+на любом VPS с поддержкой Docker — в любой стране.
 
 ---
 
@@ -17,167 +19,182 @@
 | **Contabo** | от €5/мес | Много трафика |
 | **VDSina** | от 200₽/мес | Россия |
 
-Минимальные требования: **1 CPU, 512 МБ RAM, Ubuntu 22.04**.
+Минимальные требования: **1 CPU, 512 МБ RAM, Ubuntu 22.04+**.
 
 ---
 
-## Шаг 2. Поставить Docker и Caddy на VPS
+## Шаг 2. Определить сценарий: домен или bare IP?
 
-Подключитесь к серверу по SSH и выполните:
+Выбор влияет на то, чем терминировать TLS.
+
+| | Домен | Только IP |
+|---|---|---|
+| **TLS-сертификат** | Let's Encrypt (бесплатно, авто) | Самоподписанный |
+| **Инструмент** | Caddy (автоматический TLS) | Nginx (ручной TLS) |
+| **Клиенты** | Доверяют сертификату по умолчанию | Нужен `allowInsecure=1` в ссылке |
+| **Рекомендация** | Предпочтительно | Работает, но менее надёжно для пользователей |
+
+> **Почему Caddy с доменом, а Nginx без?**
+> Caddy умеет автоматически получать Let's Encrypt, но **только для доменных имён** —
+> для голых IP это недоступно по условиям CA/Browser Forum. Без домена Caddy теряет
+> свой главный плюс и его пришлось бы настраивать точно как Nginx. Поэтому:
+> с доменом → Caddy (меньше мороки), без домена → Nginx (стандарт для ручного TLS).
+
+---
+
+## Вариант A: с доменом (Caddy + Let's Encrypt)
+
+### Шаг A1. Установить Docker и Caddy на VPS
 
 ```bash
 # Docker
 curl -fsSL https://get.docker.com | sh
+systemctl enable --now docker
 
-# Caddy (он сам получит сертификат Let's Encrypt)
+# Caddy
 apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update && apt install caddy
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | tee /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install -y caddy
 ```
 
----
+### Шаг A2. Настроить домен
 
-## Шаг 3. Настроить домен для новой ноды
-
-В DNS вашего домена добавьте A-запись на IP нового VPS. Например:
-
+В DNS вашего домена добавьте A-запись на IP нового VPS:
 ```
-node2.vpnexus.pro → 1.2.3.4  (IP вашего нового VPS)
+node2.vpnexus.pro → 1.2.3.4
 ```
 
----
-
-## Шаг 4. Сгенерировать секрет для management API
-
-На VPS выполните:
+### Шаг A3. Получить файлы и запустить контейнер
 
 ```bash
-openssl rand -hex 32
+# GITHUB_TOKEN — токен вашего GitHub-аккаунта (репозиторий приватный)
+git clone https://GITHUB_TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+cd /opt/vpn-node/deploy/amvera-vpn-node
+
+# Создать .env с секретом
+cp .env.example .env
+sed -i "s/^MGMT_API_SECRET=.*/MGMT_API_SECRET=$(openssl rand -hex 32)/" .env
+
+# Собрать и запустить (host-сеть: Xray на 127.0.0.1:10000, mgmt на 0.0.0.0:8443)
+docker compose up -d --build
 ```
 
-Скопируйте результат — это будет `MGMT_API_SECRET`. Он защищает API управления нодой от посторонних.
+### Шаг A4. Настроить Caddy
 
----
-
-## Шаг 5. Скопировать файлы ноды на VPS
-
-На VPS:
-
-```bash
-git clone https://github.com/pdkiller666/Vibe-Proxy-Nexus.git
-cd Vibe-Proxy-Nexus/deploy/amvera-vpn-node
-```
-
----
-
-## Шаг 6. Запустить контейнер
-
-```bash
-docker build -t vpn-node .
-
-docker run -d \
-  --name vpn-node \
-  --restart unless-stopped \
-  -p 10000:10000 \
-  -p 8443:8443 \
-  -e MGMT_API_SECRET="вставьте_секрет_из_шага_4" \
-  -e PORT=8443 \
-  vpn-node
-```
-
-Проверка что запустилось:
-
-```bash
-curl http://localhost:8443/health
-# Должно вернуть: {"status":"ok"}
-```
-
----
-
-## Шаг 7. Настроить Caddy (HTTPS + проксирование)
-
-Создайте файл `/etc/caddy/Caddyfile`:
+Создайте `/etc/caddy/Caddyfile`:
 
 ```
 node2.vpnexus.pro {
-    # VPN-трафик (WebSocket от клиентов)
+    # VPN-трафик — WebSocket от клиентов
     handle /vpnws* {
         reverse_proxy localhost:10000
     }
-
-    # Management API (наш бэкенд)
+    # Management API — запросы от основного сервера
     handle {
         reverse_proxy localhost:8443
     }
 }
 ```
 
-Перезапустите Caddy:
-
 ```bash
 systemctl reload caddy
+
+# Проверка (Caddy сам получит сертификат Let's Encrypt)
+curl https://node2.vpnexus.pro/health   # {"status":"ok"}
 ```
 
-Caddy автоматически получит SSL-сертификат. Проверка:
+### Шаг A5. Добавить ноду в админке
+
+Откройте `/admin` → **VPN Nodes** → **Добавить ноду**:
+
+| Поле | Значение |
+|---|---|
+| Название | Например: `Германия (Hetzner)` |
+| Регион | Например: `de` |
+| Host | `node2.vpnexus.pro` |
+| Port | `443` |
+| SNI | `node2.vpnexus.pro` |
+| Management API URL | `https://node2.vpnexus.pro` |
+| Management API Secret | значение из `.env` |
+
+---
+
+## Вариант B: без домена, только IP (Nginx + самоподписанный сертификат)
+
+Используйте готовый скрипт `setup-vps.sh` — он автоматически делает всё:
 
 ```bash
-curl https://node2.vpnexus.pro/health
-# Должно вернуть: {"status":"ok"}
+# GITHUB_TOKEN — токен вашего GitHub-аккаунта (репозиторий приватный)
+git clone https://GITHUB_TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+cd /opt/vpn-node/deploy/amvera-vpn-node
+chmod +x setup-vps.sh && sudo ./setup-vps.sh
 ```
 
----
+Скрипт сам: установит Docker и Nginx, сгенерирует секрет, соберёт образ,
+создаст самоподписанный сертификат на 10 лет, настроит Nginx и выведет данные
+для регистрации ноды.
 
-## Шаг 8. Добавить ноду в админке
+> **Важно:** клиентские VLESS-ссылки для IP-ноды автоматически получают параметр
+> `allowInsecure=1` — иначе клиенты откажут самоподписанному сертификату.
+> Сервер определяет это автоматически по тому, что `host`/`sni` — это IP-адрес.
 
-Откройте `https://vpnexus.pro/admin` → раздел **Узлы** → кнопка **Добавить ноду**.
+После выполнения скрипт напечатает:
+```
+Host:               1.2.3.4
+Port:               443
+Management API URL: http://1.2.3.4:8443
+Management Secret:  abc123...
+```
 
-Заполните:
-
-| Поле | Что вводить |
-|---|---|
-| **Название** | Например: `Германия (Hetzner)` |
-| **Регион** | Например: `de` |
-| **Host** | `node2.vpnexus.pro` |
-| **Port** | `443` |
-| **SNI** | `node2.vpnexus.pro` |
-| **Management API URL** | `https://node2.vpnexus.pro` |
-| **Management API Secret** | секрет из шага 4 |
-| **Лимит пользователей** | оставьте пустым = без лимита |
-
-Поля `publicKey` и `shortId` оставьте пустыми — они используются только для Reality, у нас VLESS+WS.
-
-Сохраните.
+Добавьте ноду в `/admin` → **VPN Nodes** с этими значениями.
 
 ---
 
-## Шаг 9. Проверить
+## Шаг 3. Проверить выдачу ключей
 
-После сохранения ноды:
-
-1. Перейдите в **Ключи** в личном кабинете (или в **Ключи** в разделе Пользователей в админке).
-2. Выдайте новый ключ — при создании появится выбор ноды. Выберите новую.
-3. Ключ должен создаться и появиться в подписке.
-4. Импортируйте ссылку-подписку в Happ/v2rayNG — новый сервер появится в списке.
+1. В админке выдайте ключ любому тестовому пользователю.
+2. В логах ноды (`docker compose logs -f`) должен появиться `POST /clients` и перезапуск Xray.
+3. Пользователь импортирует ссылку-подписку — новый сервер появится в списке.
 
 ---
 
-## Что происходит «под капотом»
+## Что происходит под капотом
 
-Когда выдаётся ключ на удалённую ноду, наш бэкенд:
+При выдаче ключа основной сервер:
 1. Генерирует UUID
-2. Зовёт `POST https://node2.vpnexus.pro/clients` с заголовком `X-Management-Secret`
-3. Нода добавляет клиента в Xray и перезагружает конфиг
+2. Вызывает `POST http(s)://нода/clients` с заголовком `X-Management-Secret`
+3. Нода добавляет клиента в конфиг Xray и перезапускает его
 4. Пользователь сразу может подключиться
 
-Трафик опрашивается каждые 60 секунд через `GET /stats` — так же, как и с локальной нодой.
+Трафик опрашивается каждые 60 секунд через `GET /stats`.
+
+---
+
+## Обновление ноды
+
+```bash
+cd /opt/vpn-node
+git pull
+docker compose build
+docker compose up -d
+```
+
+Существующие ключи сохраняются — `render-config.sh` при каждом старте переносит
+список клиентов из persistent-тома в обновлённый конфиг.
 
 ---
 
 ## Возможные проблемы
 
-**Ключ создался, но не подключается** → проверьте, что Caddy проксирует WebSocket: заголовок `upgrade` должен пробрасываться. По умолчанию Caddy это делает автоматически.
+**Ключ создался, но не подключается** → проверьте, что Nginx/Caddy пробрасывает WebSocket-заголовки
+(`Upgrade` и `Connection`). В конфиге Nginx это уже настроено.
 
-**`/health` не отвечает** → контейнер не запустился. Посмотрите логи: `docker logs vpn-node`.
+**`/health` не отвечает** → контейнер не запустился. Смотрите: `docker compose logs`.
 
-**Ошибка 401 при выдаче ключа** → `MGMT_API_SECRET` в контейнере и в админке не совпадают.
+**Ошибка 401 при выдаче ключа** → `MGMT_API_SECRET` в `.env` и в поле Management API Secret в админке не совпадают.
+
+**Клиент не подключается (TLS error)** → для IP-ноды убедитесь, что в записи ноды указан реальный IP
+(не домен), тогда сервер автоматически добавит `allowInsecure=1` в ссылку.
