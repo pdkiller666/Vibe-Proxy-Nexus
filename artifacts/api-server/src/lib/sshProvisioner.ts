@@ -13,7 +13,7 @@
 import { Client } from "ssh2";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { db, vpnNodesTable, provisioningJobsTable } from "@workspace/db";
 import type { ProvisionLogLine } from "@workspace/db";
@@ -303,30 +303,42 @@ function runCommand(
  * "Failure" errors on certain VPS configurations) and relies only on the
  * standard exec channel that is already used for shell commands.
  */
-function uploadTarDir(
+/**
+ * Pack `localDir` into a gzip tar archive asynchronously (non-blocking).
+ *
+ * Using `spawn` (async) instead of `spawnSync` is critical: `spawnSync`
+ * freezes the Node.js event loop, which prevents ssh2 from processing
+ * keepalive responses and prevents the SSE stream from being flushed to
+ * the browser — both of which can cause the connection to appear dead.
+ */
+function packTar(localDir: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("tar", ["czf", "-", "-C", localDir, "."]);
+    const chunks: Buffer[] = [];
+    let stderrOut = "";
+    proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    proc.stderr.on("data", (d: Buffer) => { stderrOut += d.toString(); });
+    proc.on("error", reject);
+    proc.on("close", (code: number | null) => {
+      if (code === 0) resolve(Buffer.concat(chunks));
+      else reject(new Error(`Local tar failed (exit ${code}): ${stderrOut.slice(0, 200)}`));
+    });
+  });
+}
+
+async function uploadTarDir(
   conn: Client,
   localDir: string,
   remoteDir: string,
   job: ProvisioningJob,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Pack the local directory into a tar.gz buffer synchronously on the
-    // api-server container — files are small (configs, scripts, <5 MB total).
-    const tarResult = spawnSync("tar", ["czf", "-", "-C", localDir, "."], {
-      maxBuffer: 50 * 1024 * 1024, // 50 MB safety cap
-    });
-    if (tarResult.error) { reject(tarResult.error); return; }
-    if (tarResult.status !== 0) {
-      reject(new Error(
-        `Local tar failed (exit ${tarResult.status}): ${(tarResult.stderr as Buffer).toString().slice(0, 200)}`,
-      ));
-      return;
-    }
-    const tarBuffer = tarResult.stdout as Buffer;
-    emitLog(job, `  → пакуем ${(tarBuffer.length / 1024).toFixed(0)} KB...`);
+  const tarBuffer = await packTar(localDir);
+  emitLog(job, `  → пакуем ${(tarBuffer.length / 1024).toFixed(0)} KB...`);
+  emitLog(job, "  → передаём архив на сервер...");
 
-    // Stream the archive to the remote via SSH exec stdin.
-    // rm -rf + mkdir ensures a clean slate for re-runs.
+  // Stream the archive to the remote via SSH exec stdin.
+  // rm -rf + mkdir ensures a clean slate for re-runs.
+  await new Promise<void>((resolve, reject) => {
     conn.exec(
       `rm -rf '${remoteDir}' && mkdir -p '${remoteDir}' && tar xzf - -C '${remoteDir}'`,
       (err, stream) => {
@@ -334,7 +346,7 @@ function uploadTarDir(
         let stderr = "";
         stream.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
         stream.once("close", (code: number) => {
-          if (code === 0) resolve();
+          if (code === 0) { emitLog(job, "  → файлы распакованы ✓"); resolve(); }
           else reject(new Error(
             `Remote tar extract failed (exit ${code}): ${stderr.slice(0, 300)}`,
           ));
@@ -412,6 +424,13 @@ const VPN_NODE_DEPLOY_DIR = path.resolve(__dirname, "vpn-node-deploy");
 async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Promise<void> {
   const { sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion } = opts;
   let conn: Client | null = null;
+
+  // Amvera's nginx reverse-proxy closes SSE connections that are idle for
+  // more than ~60 s. Send a keepalive log every 25 s so the proxy sees
+  // data even during long silent steps (docker build, certbot, tar extract).
+  // The browser ignores "⏳ ..." lines visually (they're just whitespace in
+  // the log); their only purpose is to keep the TCP connection alive.
+  const heartbeat = setInterval(() => emitLog(job, "  ⏳ ..."), 25_000);
 
   try {
     // ── Step 1: Connect ────────────────────────────────────────────────────
@@ -626,6 +645,7 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     job.emitter.emit("error", msg);
     logger.error({ err, sshHost: opts.sshHost }, "Node provisioning failed");
   } finally {
+    clearInterval(heartbeat);
     if (conn) {
       try { conn.end(); } catch { /* ignore */ }
     }
