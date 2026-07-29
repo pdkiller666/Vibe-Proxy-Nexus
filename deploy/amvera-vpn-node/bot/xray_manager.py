@@ -37,7 +37,7 @@ def _reload_xray() -> None:
     subprocess.run(["supervisorctl", "restart", "xray"], check=False)
 
 
-def add_client(uuid: str, label: str) -> None:
+def add_client(uuid: str, label: str, limit_ip: int | None = None) -> None:
     with _lock:
         config = _load_config()
         clients = config["inbounds"][0]["settings"]["clients"]
@@ -48,7 +48,15 @@ def add_client(uuid: str, label: str) -> None:
         # WebSocket transport does not use XTLS flow — the "flow" field is
         # only required for VLESS + XTLS-Reality/Vision (raw TCP). Omitting
         # it here keeps the config valid for the WS inbound.
-        clients.append({"id": uuid, "email": label})
+        #
+        # limitIp (when > 0) restricts the number of simultaneous source IPs
+        # that can use this client UUID — enforces the "one device" policy at
+        # the Xray level so a leaked key can't be shared across multiple
+        # clients simultaneously.
+        client: dict = {"id": uuid, "email": label}
+        if limit_ip is not None and limit_ip > 0:
+            client["limitIp"] = limit_ip
+        clients.append(client)
         _save_config(config)
         _reload_xray()
 

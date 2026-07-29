@@ -36,6 +36,7 @@ def _check_secret(x_management_secret: str | None) -> None:
 class CreateClientBody(BaseModel):
     uuid: str
     label: str
+    limitIp: int | None = None
 
 
 class TrafficStat(BaseModel):
@@ -55,7 +56,7 @@ def create_client(
     x_management_secret: str | None = Header(default=None),
 ) -> dict:
     _check_secret(x_management_secret)
-    xray_manager.add_client(body.uuid, body.label)
+    xray_manager.add_client(body.uuid, body.label, body.limitIp)
     return {"uuid": body.uuid, "label": body.label}
 
 
