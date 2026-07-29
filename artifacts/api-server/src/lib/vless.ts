@@ -123,10 +123,21 @@ export async function buildServingVlessLink(
   uuid: string,
   label: string,
 ): Promise<string> {
-  const address = await resolvePublicAddress({
-    host: node.host || node.sni,
-    sni: node.sni,
-  });
+  // Domain failover (vpnexus.pro ↔ technical Amvera domain) is only meaningful
+  // for the LOCAL Amvera node — both domains resolve to the same Amvera edge.
+  //
+  // Remote VPS nodes have their own IP/host and must NEVER be redirected to
+  // vpnexus.pro: that would send the client to the Amvera server instead of
+  // the VPS, and Amvera's Xray doesn't know the UUID → traffic silently drops
+  // while the client shows "connected".
+  //
+  // Local node = managementApiUrl IS NULL (no external management API).
+  const isLocalNode = !node.managementApiUrl;
+
+  const address = isLocalNode
+    ? await resolvePublicAddress({ host: node.host || node.sni, sni: node.sni })
+    : { host: node.host || node.sni, sni: node.sni };
+
   // Detect the location flag from the node's real technical host/SNI
   // (e.g. "waw0.amvera.tech") BEFORE swapping in the branded public domain
   // below — otherwise the flag lookup would only ever see "vpnexus.pro",
