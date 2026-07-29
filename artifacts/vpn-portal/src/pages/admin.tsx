@@ -54,6 +54,9 @@ import {
   useDeleteAdminInviteLink,
   getListAdminInviteLinksQueryKey,
   useGetAdminInviteLinkUsers,
+  useListAdminSystemEvents,
+  useAcknowledgeAdminSystemEvent,
+  getListAdminSystemEventsQueryKey,
 } from "@workspace/api-client-react";
 import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
@@ -221,6 +224,66 @@ function TrafficPollingWarningBanner() {
         <X className="w-4 h-4" />
       </button>
     </div>
+  );
+}
+
+/**
+ * Surfaces a dismissible warning whenever an Xray config volume remount event
+ * is recorded (i.e. readConfig() hit ENOENT and rebuilt from template + DB).
+ * Each unacknowledged event gets its own card so admins can track repeated
+ * remounts that might indicate an infrastructure problem.
+ */
+function XrayConfigRemountBanner() {
+  const { data: events, isLoading } = useListAdminSystemEvents({
+    query: { queryKey: getListAdminSystemEventsQueryKey(), refetchInterval: 60_000 },
+  });
+  const { mutate: acknowledge } = useAcknowledgeAdminSystemEvent({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAdminSystemEventsQueryKey() });
+      },
+    },
+  });
+
+  const remountEvents = (events ?? []).filter((e) => e.eventType === "xray_config_remount");
+
+  if (isLoading || remountEvents.length === 0) return null;
+
+  return (
+    <>
+      {remountEvents.map((event) => {
+        const meta = event.metadata as { restoredKeyCount?: number; configPath?: string } | undefined;
+        const restoredCount = meta?.restoredKeyCount ?? 0;
+        const ts = new Date(event.createdAt).toLocaleString("ru-RU", {
+          dateStyle: "short",
+          timeStyle: "medium",
+        });
+
+        return (
+          <div key={event.id} className="flex items-start gap-3 bg-orange-50 border border-orange-400 p-4">
+            <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-mono uppercase font-bold text-orange-700">Обнаружен пересмонтаж конфига Xray</div>
+              <div className="text-sm text-orange-800 mt-0.5">
+                Файл конфигурации Xray не был найден на PVC и был восстановлен из шаблона и БД.
+                {" "}Восстановлено ключей: <strong>{restoredCount}</strong>.
+                {" "}Время события: {ts}.
+              </div>
+              <div className="text-xs text-orange-600 mt-1">
+                Если это повторяется — проверьте стабильность PVC и логи инфраструктуры.
+              </div>
+            </div>
+            <button
+              onClick={() => acknowledge({ eventId: event.id })}
+              className="text-orange-600 hover:text-orange-800 shrink-0"
+              aria-label="Закрыть"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -3909,6 +3972,7 @@ export default function Admin() {
       </div>
 
       <TrafficPollingWarningBanner />
+      <XrayConfigRemountBanner />
 
       <SummarySection />
 

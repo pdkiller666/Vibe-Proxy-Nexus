@@ -5,13 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { NodePollingHealth } from './nodePollingHealth';
 
-export interface TrafficPollingHealth {
+export interface NodePollingHealth {
+  nodeName: string;
   /** @nullable */
   lastSuccessAt: Date | null;
   consecutiveFailures: number;
   /** @nullable */
   lastError: string | null;
-  nodes: NodePollingHealth[];
 }

@@ -718,6 +718,50 @@ try {
   `);
   console.log("heal-schema: M-21 payments.webhook_event_id + backfill from ym_operation_id + unique index");
 
+  // ── M-22: system_events table ─────────────────────────────────────────────
+  // Persistent in-app events written by background processes (e.g. Xray ENOENT
+  // recovery). Admins dismiss them from the dashboard; acknowledged events are
+  // filtered out by GET /admin/system-events.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS system_events (
+      id               serial        PRIMARY KEY,
+      event_type       text          NOT NULL,
+      metadata         jsonb,
+      acknowledged_at  timestamptz,
+      created_at       timestamptz   NOT NULL DEFAULT now()
+    )
+  `);
+  console.log("heal-schema: M-22 system_events table");
+
+  // ── M-23: drop retired payments.ym_operation_id column + its index ──────────
+  // M-21 backfilled all values into webhook_event_id and no code path writes
+  // ym_operation_id any more. The unique index must be dropped first (it
+  // depends on the column); then the column itself can be dropped. Both steps
+  // are guarded so repeated runs are no-ops.
+  await client.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'payments_ym_operation_id_unique_idx'
+      ) THEN
+        DROP INDEX payments_ym_operation_id_unique_idx;
+      END IF;
+    END $$;
+  `);
+  await client.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'payments' AND column_name = 'ym_operation_id'
+      ) THEN
+        ALTER TABLE payments DROP COLUMN ym_operation_id;
+      END IF;
+    END $$;
+  `);
+  console.log("heal-schema: M-23 dropped payments.ym_operation_id index + column");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

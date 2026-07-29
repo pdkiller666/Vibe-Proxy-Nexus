@@ -33,6 +33,7 @@ describe("applyTrafficDeltas", () => {
       .values({
         email: `traffic-polling-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(6).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;
@@ -316,6 +317,7 @@ describe("enforceTrafficLimits", () => {
       .values({
         email: `enforce-limits-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(6).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;

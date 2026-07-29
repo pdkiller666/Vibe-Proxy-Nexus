@@ -12,6 +12,7 @@ import supportRouter from "./support";
 import referralsRouter from "./referrals";
 import inviteLinksRouter from "./inviteLinks";
 import notificationsRouter from "./notifications";
+import systemEventsRouter from "./systemEvents";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(supportRouter);
 router.use(referralsRouter);
 router.use(inviteLinksRouter);
 router.use(notificationsRouter);
+router.use(systemEventsRouter);
 
 export default router;

@@ -20,7 +20,7 @@ import { promises as fs } from "fs";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { and, eq, isNull } from "drizzle-orm";
-import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
+import { db, vpnKeysTable, vpnNodesTable, systemEventsTable } from "@workspace/db";
 import { logger } from "./logger";
 
 const execAsync = promisify(exec);
@@ -109,6 +109,23 @@ async function readConfig(): Promise<Record<string, any>> {
       }
 
       await writeConfig(freshConfig);
+
+      // Persist a system event so the admin dashboard can surface a banner
+      // ("VPN config was lost and restored at <time>") with the key count.
+      // Fire-and-forget: failure to write the event must not break recovery.
+      const restoredKeyCount = freshConfig?.["inbounds"]?.[0]?.["settings"]?.["clients"]?.length ?? 0;
+      db.insert(systemEventsTable)
+        .values({
+          eventType: "xray_config_remount",
+          metadata: {
+            restoredKeyCount,
+            configPath: CONFIG_PATH,
+          },
+        })
+        .catch((err) =>
+          logger.error({ err }, "xray: failed to write xray_config_remount system event"),
+        );
+
       // Restart Xray immediately so the restored clients become active right
       // away, without waiting for the next container restart.
       void reloadXray();

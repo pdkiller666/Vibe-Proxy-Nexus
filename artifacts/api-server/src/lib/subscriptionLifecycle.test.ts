@@ -27,6 +27,7 @@ describe("expireOverdueSubscriptions", () => {
       .values({
         email: `lifecycle-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(6).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;
@@ -165,6 +166,7 @@ describe("revokeKeysPastGracePeriod", () => {
       .values({
         email: `lifecycle-grace-test-${randomBytes(6).toString("hex")}@example.com`,
         passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(6).toString("hex"),
       })
       .returning({ id: usersTable.id });
     userId = user.id;

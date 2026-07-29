@@ -54,10 +54,6 @@ export const paymentsTable = pgTable(
     // (partial, WHERE NOT NULL) so no two payments can be credited by the
     // same event even under a misconfigured label.
     webhookEventId: text("webhook_event_id"),
-    // DEPRECATED — superseded by webhookEventId (M-21). Kept in schema so
-    // Drizzle does not attempt to drop the column non-interactively. Existing
-    // rows already have their value backfilled into webhook_event_id.
-    ymOperationId: text("ym_operation_id"),
   },
   (table) => [
     index("payments_user_id_idx").on(table.userId),
@@ -76,10 +72,6 @@ export const paymentsTable = pgTable(
     uniqueIndex("payments_webhook_event_id_unique_idx")
       .on(table.webhookEventId)
       .where(sql`webhook_event_id IS NOT NULL`),
-    // Legacy: YooMoney-specific dedup index kept until the column is dropped.
-    uniqueIndex("payments_ym_operation_id_unique_idx")
-      .on(table.ymOperationId)
-      .where(sql`ym_operation_id IS NOT NULL`),
   ],
 );
 

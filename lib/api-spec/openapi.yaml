@@ -1327,6 +1327,40 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdminBalanceTransaction"
 
+  /admin/system-events:
+    get:
+      operationId: listAdminSystemEvents
+      tags: [admin]
+      summary: List unacknowledged system events (e.g. Xray config remounts)
+      responses:
+        "200":
+          description: List of unacknowledged system events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemEventList"
+
+  /admin/system-events/{eventId}/acknowledge:
+    post:
+      operationId: acknowledgeAdminSystemEvent
+      tags: [admin]
+      summary: Acknowledge (dismiss) a system event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Event acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemEventAcknowledgeResult"
+        "404":
+          description: Event not found
+
   /admin/health/traffic-polling:
     get:
       operationId: getAdminTrafficPollingHealth
@@ -2478,3 +2512,23 @@ components:
         trialDays: { type: ["integer", "null"] }
         maxUses: { type: ["integer", "null"] }
         expiresAt: { type: ["string", "null"], format: date-time }
+
+    SystemEvent:
+      type: object
+      required: [id, eventType, metadata, createdAt]
+      properties:
+        id: { type: integer }
+        eventType: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    SystemEventList:
+      type: array
+      items:
+        $ref: "#/components/schemas/SystemEvent"
+
+    SystemEventAcknowledgeResult:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }

@@ -900,6 +900,21 @@ export interface AdminInviteLinkUpdateInput {
   expiresAt?: string | null;
 }
 
+export type SystemEventMetadata = { [key: string]: unknown };
+
+export interface SystemEvent {
+  id: number;
+  eventType: string;
+  metadata: SystemEventMetadata;
+  createdAt: string;
+}
+
+export type SystemEventList = SystemEvent[];
+
+export interface SystemEventAcknowledgeResult {
+  id: number;
+}
+
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
 };

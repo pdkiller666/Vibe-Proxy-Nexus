@@ -1751,20 +1751,42 @@ export const ListAdminUserBalanceTransactionsResponse = zod.array(ListAdminUserB
 
 
 /**
- * @summary Get traffic polling health status (last success time + consecutive failure count)
+ * @summary List unacknowledged system events (e.g. Xray config remounts)
  */
-export const GetAdminTrafficPollingHealthResponseNodesItem = zod.object({
-  "nodeName": zod.string(),
-  "lastSuccessAt": zod.coerce.date().nullable(),
-  "consecutiveFailures": zod.number(),
-  "lastError": zod.string().nullable()
+export const ListAdminSystemEventsResponseItem = zod.object({
+  "id": zod.number(),
+  "eventType": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdminSystemEventsResponse = zod.array(ListAdminSystemEventsResponseItem)
+
+
+/**
+ * @summary Acknowledge (dismiss) a system event
+ */
+export const AcknowledgeAdminSystemEventParams = zod.object({
+  "eventId": zod.coerce.number()
 })
 
+export const AcknowledgeAdminSystemEventResponse = zod.object({
+  "id": zod.number()
+})
+
+
+/**
+ * @summary Get traffic polling health status (last success time + consecutive failure count)
+ */
 export const GetAdminTrafficPollingHealthResponse = zod.object({
   "lastSuccessAt": zod.coerce.date().nullable(),
   "consecutiveFailures": zod.number(),
   "lastError": zod.string().nullable(),
-  "nodes": zod.array(GetAdminTrafficPollingHealthResponseNodesItem)
+  "nodes": zod.array(zod.object({
+  "nodeName": zod.string(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "consecutiveFailures": zod.number(),
+  "lastError": zod.string().nullable()
+}))
 })
 
 

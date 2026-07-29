@@ -80,6 +80,8 @@ import type {
   SupportTicketBase,
   SupportTicketCreateInput,
   SupportTicketDetail,
+  SystemEventAcknowledgeResult,
+  SystemEventList,
   TicketStatusUpdate,
   TrafficPollingHealth,
   UpdateMeInput,
@@ -5278,6 +5280,153 @@ export function useListAdminUserBalanceTransactions<TData = Awaited<ReturnType<t
 
 
 
+
+export const getListAdminSystemEventsUrl = () => {
+
+
+
+
+  return `/api/admin/system-events`
+}
+
+/**
+ * @summary List unacknowledged system events (e.g. Xray config remounts)
+ */
+export const listAdminSystemEvents = async ( options?: RequestInit): Promise<SystemEventList> => {
+
+  return customFetch<SystemEventList>(getListAdminSystemEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminSystemEventsQueryKey = () => {
+    return [
+    `/api/admin/system-events`
+    ] as const;
+    }
+
+
+export const getListAdminSystemEventsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminSystemEvents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminSystemEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminSystemEventsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminSystemEvents>>> = ({ signal }) => listAdminSystemEvents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminSystemEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminSystemEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminSystemEvents>>>
+export type ListAdminSystemEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List unacknowledged system events (e.g. Xray config remounts)
+ */
+
+export function useListAdminSystemEvents<TData = Awaited<ReturnType<typeof listAdminSystemEvents>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminSystemEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminSystemEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAcknowledgeAdminSystemEventUrl = (eventId: number,) => {
+
+
+
+
+  return `/api/admin/system-events/${eventId}/acknowledge`
+}
+
+/**
+ * @summary Acknowledge (dismiss) a system event
+ */
+export const acknowledgeAdminSystemEvent = async (eventId: number, options?: RequestInit): Promise<SystemEventAcknowledgeResult> => {
+
+  return customFetch<SystemEventAcknowledgeResult>(getAcknowledgeAdminSystemEventUrl(eventId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAcknowledgeAdminSystemEventMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeAdminSystemEvent>>, TError,{eventId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acknowledgeAdminSystemEvent>>, TError,{eventId: number}, TContext> => {
+
+const mutationKey = ['acknowledgeAdminSystemEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acknowledgeAdminSystemEvent>>, {eventId: number}> = (props) => {
+          const {eventId} = props ?? {};
+
+          return  acknowledgeAdminSystemEvent(eventId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcknowledgeAdminSystemEventMutationResult = NonNullable<Awaited<ReturnType<typeof acknowledgeAdminSystemEvent>>>
+
+    export type AcknowledgeAdminSystemEventMutationError = ErrorType<void>
+
+    /**
+ * @summary Acknowledge (dismiss) a system event
+ */
+export const useAcknowledgeAdminSystemEvent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeAdminSystemEvent>>, TError,{eventId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acknowledgeAdminSystemEvent>>,
+        TError,
+        {eventId: number},
+        TContext
+      > => {
+      return useMutation(getAcknowledgeAdminSystemEventMutationOptions(options));
+    }
 
 export const getGetAdminTrafficPollingHealthUrl = () => {
 
