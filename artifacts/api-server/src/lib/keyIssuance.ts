@@ -106,7 +106,9 @@ export async function issueKeyForUser(
       .from(vpnNodesTable)
       .leftJoin(activeCounts, eq(activeCounts.nodeId, vpnNodesTable.id))
       .where(and(eq(vpnNodesTable.isActive, true), nodeHasCapacity))
-      .orderBy(asc(vpnNodesTable.id))
+      // Least-loaded node first: pick the one with fewest active keys overall.
+      // coalesce handles nodes that have never had a key (count IS NULL → 0).
+      .orderBy(asc(sql`coalesce(${activeCounts.count}, 0)`))
       .then((rows) => rows.map((r) => r.node));
 
     if (candidateNodes.length === 0) {

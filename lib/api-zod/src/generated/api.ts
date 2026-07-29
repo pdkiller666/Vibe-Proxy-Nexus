@@ -319,6 +319,7 @@ export const ListVpnNodesResponseItem = zod.object({
   "isActive": zod.boolean(),
   "maxUsers": zod.number().nullish(),
   "activeUserCount": zod.number().optional(),
+  "flagEmoji": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 export const ListVpnNodesResponse = zod.array(ListVpnNodesResponseItem)
@@ -1119,6 +1120,7 @@ export const CreateVpnNodeResponse = zod.object({
   "isActive": zod.boolean(),
   "maxUsers": zod.number().nullish(),
   "activeUserCount": zod.number().optional(),
+  "flagEmoji": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 
@@ -1161,6 +1163,7 @@ export const UpdateVpnNodeResponse = zod.object({
   "isActive": zod.boolean(),
   "maxUsers": zod.number().nullish(),
   "activeUserCount": zod.number().optional(),
+  "flagEmoji": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 

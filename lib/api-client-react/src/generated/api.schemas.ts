@@ -411,6 +411,8 @@ export interface VpnNode {
   /** @nullable */
   maxUsers?: number | null;
   activeUserCount?: number;
+  /** @nullable */
+  flagEmoji?: string | null;
   createdAt?: string;
 }
 

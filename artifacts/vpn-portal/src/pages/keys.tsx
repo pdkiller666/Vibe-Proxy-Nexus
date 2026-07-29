@@ -115,13 +115,16 @@ function AddDeviceModal({
   onClose,
   onSubmit,
   submitting,
+  nodes,
 }: {
   onClose: () => void;
-  onSubmit: (label: string, description: string) => void;
+  onSubmit: (label: string, description: string, nodeId: number | undefined) => void;
   submitting: boolean;
+  nodes: Array<{ id: number; name: string; flagEmoji?: string | null; activeUserCount?: number; maxUsers?: number | null }>;
 }) {
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedNodeId, setSelectedNodeId] = useState<number | "auto">("auto");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -148,6 +151,48 @@ function AddDeviceModal({
               className="w-full border border-border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
+          {nodes.length > 1 && (
+            <div className="space-y-1">
+              <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+                Сервер
+              </label>
+              <div className="grid gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedNodeId("auto")}
+                  className={`w-full text-left px-3 py-2 text-sm border transition-colors ${
+                    selectedNodeId === "auto"
+                      ? "border-primary bg-primary/5 font-semibold"
+                      : "border-border hover:bg-muted/50"
+                  }`}
+                >
+                  <span className="font-mono">🌐</span>{" "}
+                  <span>Автоматически</span>
+                  <span className="text-xs text-muted-foreground ml-1">(наименее загруженный)</span>
+                </button>
+                {nodes.map((node) => {
+                  const isFull = node.maxUsers != null && (node.activeUserCount ?? 0) >= node.maxUsers;
+                  return (
+                    <button
+                      key={node.id}
+                      type="button"
+                      disabled={isFull}
+                      onClick={() => setSelectedNodeId(node.id)}
+                      className={`w-full text-left px-3 py-2 text-sm border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                        selectedNodeId === node.id
+                          ? "border-primary bg-primary/5 font-semibold"
+                          : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="font-mono">{node.flagEmoji ?? "🌐"}</span>{" "}
+                      <span>{node.name}</span>
+                      {isFull && <span className="text-xs text-muted-foreground ml-1">(заполнен)</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="space-y-1">
             <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
               Описание (необязательно)
@@ -162,7 +207,11 @@ function AddDeviceModal({
           </div>
         </div>
         <button
-          onClick={() => onSubmit(label.trim(), description.trim())}
+          onClick={() => onSubmit(
+            label.trim(),
+            description.trim(),
+            selectedNodeId === "auto" ? undefined : selectedNodeId,
+          )}
           disabled={submitting}
           className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
         >
@@ -325,9 +374,9 @@ export default function Keys() {
   const allowFreeSlot = paymentSettings?.allowFreeExtraDeviceSlot ?? false;
   const slotButtonDisabled = slotPrice <= 0 && !allowFreeSlot;
 
-  function handleCreate(label: string, description: string) {
+  function handleCreate(label: string, description: string, nodeId: number | undefined) {
     createKey(
-      { data: { nodeId: defaultNodeId, label: label || undefined, description: description || undefined } },
+      { data: { nodeId, label: label || undefined, description: description || undefined } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
@@ -374,6 +423,7 @@ export default function Keys() {
           onClose={() => setShowAddDeviceModal(false)}
           onSubmit={handleCreate}
           submitting={creating}
+          nodes={activeNodes}
         />
       )}
 

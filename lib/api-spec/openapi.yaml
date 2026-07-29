@@ -1921,6 +1921,7 @@ components:
         isActive: { type: boolean }
         maxUsers: { type: ["integer", "null"] }
         activeUserCount: { type: integer }
+        flagEmoji: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
 
     VpnNodeInput:

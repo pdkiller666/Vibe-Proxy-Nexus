@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { asc, eq, isNull } from "drizzle-orm";
 import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { ListVpnNodesResponse } from "@workspace/api-zod";
+import { flagEmojiForNode } from "../lib/vless.js";
 
 const router: IRouter = Router();
 
@@ -23,7 +24,11 @@ router.get("/vpn-nodes", async (_req, res): Promise<void> => {
 
   res.json(
     ListVpnNodesResponse.parse(
-      nodes.map((node) => ({ ...node, activeUserCount: countsByNode.get(node.id) ?? 0 })),
+      nodes.map((node) => ({
+        ...node,
+        activeUserCount: countsByNode.get(node.id) ?? 0,
+        flagEmoji: flagEmojiForNode(node) ?? null,
+      })),
     ),
   );
 });
