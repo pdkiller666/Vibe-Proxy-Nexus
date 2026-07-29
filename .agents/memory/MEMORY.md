@@ -40,6 +40,7 @@
 - [YooMoney integration](yoomoney-integration.md) — replaced FreeKassa 2026-07-17; quickpay + HMAC webhook, kopeck-integer amount checks, `freekassa` stays a legacy enum value. Env: YOOMONEY_NOTIFICATION_SECRET, YOOMONEY_RECEIVER.
 - [FreeKassa integration quirks](freekassa-integration.md) — REMOVED from code 2026-07-17 (merchant needed 50k ₽ turnover for acquiring); kept for history; Amvera swallows any 5xx.
 - [supervisord user=node permissions](supervisord-user-node-permissions.md) — dropping web to user=node needs chown of xray config dir + supervisor.sock group access, else key ops fail with EACCES.
+- [Xray config PVC permissions](xray-config-pvc-permissions.md) — chown alone not enough after pod reschedule; need chmod -R u+rwX too; ENOENT recovery from template added to readConfig().
 - [Remaining infra hardening gaps](infra-hardening-gaps.md) — HEALTHCHECK + USER node added 2026-07-16 (vpn-node uses port 443 → root required there); resource limits, log rotation, Postgres backup still unfixed.
 - [Payment method toggles](payment-method-toggles.md) — yookassaEnabled+sbpEnabled control tile visibility; `!== false` pattern safe for loading state; M-12 backfills yookassaEnabled.
 - [Trial plan monthly-only](trial-plan-monthly-only.md) — trial picker must filter billingType=monthly or hourly plans (priceRub=0) win the sort and new users get useless zero-balance trial.

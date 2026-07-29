@@ -19,6 +19,8 @@
 import { promises as fs } from "fs";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { and, eq, isNull } from "drizzle-orm";
+import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { logger } from "./logger";
 
 const execAsync = promisify(exec);
@@ -61,17 +63,55 @@ async function readConfig(): Promise<Record<string, any>> {
       // Config file has gone missing — most likely the persistent volume was
       // re-attached empty after a pod reschedule while Xray was still running
       // from its previously loaded in-memory config. Re-initialize from the
-      // bundled template (empty clients list) so subsequent key issuance works.
-      // Existing Xray clients will stop connecting until the next container
-      // restart, which re-populates the config from the DB via entrypoint.sh.
-      logger.error(
+      // bundled template, but immediately re-populate clients from the DB so
+      // users whose keys are active in the DB see no interruption (at most a
+      // ~2 s reconnect delay while Xray restarts with the restored config).
+      logger.warn(
         { configPath: CONFIG_PATH, templatePath: TEMPLATE_PATH },
-        "xray: config.json not found on persistent volume — re-initializing from template. " +
-          "Existing Xray clients will be inactive until the next container restart.",
+        "xray: config.json not found on persistent volume — re-initializing from template and restoring active keys from DB",
       );
       const templateRaw = await fs.readFile(TEMPLATE_PATH, "utf-8");
       const freshConfig = JSON.parse(templateRaw) as Record<string, any>;
+
+      // Query all active (non-revoked) VPN keys for the local Xray node
+      // (identified by managementApiUrl IS NULL — remote nodes use a REST API).
+      // If the DB is unreachable we fall back to an empty clients list so
+      // subsequent key issuance still works; the error is logged clearly.
+      try {
+        const activeKeys = await db
+          .select({ uuid: vpnKeysTable.uuid })
+          .from(vpnKeysTable)
+          .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+          .where(and(
+            isNull(vpnKeysTable.revokedAt),
+            isNull(vpnNodesTable.managementApiUrl),
+          ));
+
+        const clients: XrayClient[] = activeKeys.map(({ uuid }) => ({
+          id: uuid,
+          email: uuid,
+          limitIp: 1,
+        }));
+
+        if (Array.isArray(freshConfig?.["inbounds"]?.[0]?.["settings"]?.["clients"])) {
+          freshConfig["inbounds"][0]["settings"]["clients"] = clients;
+        }
+
+        logger.info(
+          { count: clients.length },
+          "xray: restored active clients from DB into fresh config",
+        );
+      } catch (dbErr) {
+        logger.error(
+          { err: dbErr },
+          "xray: failed to query DB for active keys during ENOENT recovery — starting with empty clients list",
+        );
+      }
+
       await writeConfig(freshConfig);
+      // Restart Xray immediately so the restored clients become active right
+      // away, without waiting for the next container restart.
+      void reloadXray();
       return freshConfig;
     }
     // For EACCES or any other error, surface the code and message clearly
