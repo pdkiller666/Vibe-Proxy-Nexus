@@ -654,6 +654,70 @@ try {
   `);
   console.log("heal-schema: M-19 users.invite_link_id FK → invite_links");
 
+  // ── M-20: payments.ym_operation_id — YooMoney webhook deduplication ─────────
+  // YooMoney retries webhook delivery (10 min, 1 h) on non-200 responses.
+  // Storing the operation_id lets the handler return 200 immediately on a
+  // retry without re-running confirmPaymentById. The partial unique index
+  // (WHERE ym_operation_id IS NOT NULL) ensures a given transfer can never
+  // credit two different payment rows even under a misconfigured label.
+  await client.query(`
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS ym_operation_id text;
+  `);
+  await client.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'payments_ym_operation_id_unique_idx'
+      ) THEN
+        CREATE UNIQUE INDEX payments_ym_operation_id_unique_idx
+          ON payments(ym_operation_id)
+          WHERE ym_operation_id IS NOT NULL;
+      END IF;
+    END $$;
+  `);
+  console.log("heal-schema: M-20 payments.ym_operation_id + unique index");
+
+  // ── M-21: payments.webhook_event_id — generic provider-agnostic dedup key ──
+  // Generalises the YooMoney ym_operation_id pattern so any future webhook
+  // provider (SBP via Tinkoff, YooKassa SBP, etc.) can record its event id in
+  // one place. The YooMoney handler now writes here instead of ym_operation_id.
+  //
+  // Migration steps:
+  //   1. Add the column (idempotent).
+  //   2. Backfill from ym_operation_id so existing confirmed YooMoney payments
+  //      already carry the correct dedup key in the new column.
+  //   3. Add the partial unique index (WHERE NOT NULL) — same semantics as the
+  //      legacy ym_operation_id index: no two payments can be credited by the
+  //      same provider event even under a misconfigured label.
+  //
+  // ym_operation_id is intentionally left in place (column + index kept) so
+  // Drizzle does not need to drop it non-interactively. It will remain NULL on
+  // all new payments going forward.
+  await client.query(`
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS webhook_event_id text;
+  `);
+  await client.query(`
+    UPDATE payments
+       SET webhook_event_id = ym_operation_id
+     WHERE ym_operation_id IS NOT NULL
+       AND webhook_event_id IS NULL;
+  `);
+  await client.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'payments_webhook_event_id_unique_idx'
+      ) THEN
+        CREATE UNIQUE INDEX payments_webhook_event_id_unique_idx
+          ON payments(webhook_event_id)
+          WHERE webhook_event_id IS NOT NULL;
+      END IF;
+    END $$;
+  `);
+  console.log("heal-schema: M-21 payments.webhook_event_id + backfill from ym_operation_id + unique index");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
@@ -661,4 +725,3 @@ try {
 } finally {
   await client.end();
 }
-// Appended lines are not valid here — need to insert before final lines

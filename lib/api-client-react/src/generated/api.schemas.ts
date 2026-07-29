@@ -650,6 +650,24 @@ export interface AdminUserNoteUpdate {
   note: string | null;
 }
 
+export interface NodePollingHealth {
+  nodeName: string;
+  /** @nullable */
+  lastSuccessAt: string | null;
+  consecutiveFailures: number;
+  /** @nullable */
+  lastError: string | null;
+}
+
+export interface TrafficPollingHealth {
+  /** @nullable */
+  lastSuccessAt: string | null;
+  consecutiveFailures: number;
+  /** @nullable */
+  lastError: string | null;
+  nodes: NodePollingHealth[];
+}
+
 export interface VpnNodeHealthResult {
   ok: boolean;
   /** @nullable */
@@ -829,6 +847,14 @@ export interface TicketStatusUpdate {
   status: TicketStatus;
 }
 
+export interface AdminInviteLinkUser {
+  id: number;
+  email: string;
+  /** @nullable */
+  name?: string | null;
+  createdAt: string;
+}
+
 export interface AdminInviteLink {
   id: number;
   code: string;
@@ -873,18 +899,6 @@ export interface AdminInviteLinkUpdateInput {
   /** @nullable */
   expiresAt?: string | null;
 }
-
-export interface AdminInviteLinkUser {
-  id: number;
-  email: string;
-  /** @nullable */
-  name: string | null;
-  createdAt: string;
-}
-
-export type GetAdminInviteLinkUsersParams = {
-  linkId: number;
-};
 
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;

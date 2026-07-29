@@ -8,7 +8,7 @@
  * environment without XRAY_CONFIG_PATH set) — pollUserTrafficDeltas()
  * already short-circuits to an empty map in that case.
  */
-import { and, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { jobsDb, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { pollUserTrafficCounters } from "./xrayStats";
 import { isLocalXrayEnabled, removeXrayClient } from "./xray";
@@ -16,6 +16,18 @@ import { pollRemoteNodeStats, removeRemoteXrayClient } from "./remoteNode";
 import { logger } from "./logger";
 
 const TRAFFIC_POLL_INTERVAL_MS = 60 * 1000; // 1 minute
+
+/**
+ * Process-level health state for the traffic polling job. Tracked in memory
+ * (not DB) — this is about the liveness of the background job itself, not
+ * user data. Reset on every process restart. Exported for the admin health
+ * endpoint (GET /admin/health/traffic-polling).
+ */
+export const trafficPollingHealth = {
+  lastSuccessAt: null as Date | null,
+  consecutiveFailures: 0,
+  lastError: null as string | null,
+};
 
 /**
  * Applies queried *absolute* uplink/downlink counter reads (keyed by VPN key
@@ -56,6 +68,48 @@ export async function applyTrafficDeltas(
 ): Promise<void> {
   const entries = [...counters].filter(([, c]) => c.uplinkBytes !== 0 || c.downlinkBytes !== 0);
   if (entries.length === 0) return;
+
+  // Detect Xray counter resets before the UPDATE so we can emit WARN logs.
+  // A reset occurs when the current reading is less than what was last seen,
+  // meaning Xray restarted and its in-memory counters were zeroed. We fetch
+  // the stored baselines here (one query for the whole batch) and compare
+  // in JS; the UPDATE below still handles it correctly with its CASE branch,
+  // but without this check the reset would be applied silently.
+  const uuids = entries.map(([uuid]) => uuid);
+  const lastSeenRows = await jobsDb
+    .select({
+      uuid: vpnKeysTable.uuid,
+      lastSeenUpBytes: vpnKeysTable.lastSeenUpBytes,
+      lastSeenDownBytes: vpnKeysTable.lastSeenDownBytes,
+    })
+    .from(vpnKeysTable)
+    .where(inArray(vpnKeysTable.uuid, uuids));
+
+  const lastSeenByUuid = new Map(lastSeenRows.map((r) => [r.uuid, r]));
+  for (const [uuid, { uplinkBytes, downlinkBytes }] of entries) {
+    const stored = lastSeenByUuid.get(uuid);
+    if (!stored) continue;
+    const upReset = uplinkBytes < stored.lastSeenUpBytes;
+    const downReset = downlinkBytes < stored.lastSeenDownBytes;
+    if (upReset || downReset) {
+      // The inferred reset delta is exactly `current` (what Xray accumulated
+      // since its restart), consistent with the CASE branch in the UPDATE.
+      const resetDeltaUpBytes = upReset ? uplinkBytes : 0;
+      const resetDeltaDownBytes = downReset ? downlinkBytes : 0;
+      logger.warn(
+        {
+          uuid,
+          resetDeltaUpBytes,
+          resetDeltaDownBytes,
+          lastSeenUpBytes: stored.lastSeenUpBytes,
+          lastSeenDownBytes: stored.lastSeenDownBytes,
+          currentUpBytes: uplinkBytes,
+          currentDownBytes: downlinkBytes,
+        },
+        "Xray counter reset detected for key (likely Xray restart): attributing current reading as delta",
+      );
+    }
+  }
 
   const values = sql.join(
     entries.map(
@@ -219,9 +273,14 @@ export async function enforceTrafficLimits(): Promise<number> {
 // real process restart in between.
 let flushQueue: Promise<void> = Promise.resolve();
 
-async function doFlushTrafficDeltas(): Promise<void> {
+async function doFlushTrafficDeltas(): Promise<{ polledNodes: string[] }> {
+  const polledNodes: string[] = [];
+
   // Poll local Xray (if running on this container).
   const allCounters = await pollUserTrafficCounters();
+  if (isLocalXrayEnabled()) {
+    polledNodes.push("local");
+  }
 
   // Poll all active remote nodes in parallel. Their UUIDs are globally unique
   // and disjoint from local keys, so maps can be merged without collisions.
@@ -237,13 +296,15 @@ async function doFlushTrafficDeltas(): Promise<void> {
   const remoteResults = await Promise.all(
     remoteNodes.map((node) => pollRemoteNodeStats(node)),
   );
-  for (const nodeCounters of remoteResults) {
-    for (const [uuid, counts] of nodeCounters) {
+  for (let i = 0; i < remoteResults.length; i++) {
+    for (const [uuid, counts] of remoteResults[i]) {
       allCounters.set(uuid, counts);
     }
+    polledNodes.push(remoteNodes[i].name);
   }
 
   await applyTrafficDeltas(allCounters);
+  return { polledNodes };
 }
 
 /**
@@ -259,20 +320,52 @@ async function doFlushTrafficDeltas(): Promise<void> {
  * Queued behind any flush already in progress — see flushQueue above for
  * why strict ordering (not just mutual exclusion) matters here.
  */
-export function flushTrafficDeltas(): Promise<void> {
+export function flushTrafficDeltas(): Promise<{ polledNodes: string[] }> {
   const run = flushQueue.then(doFlushTrafficDeltas, doFlushTrafficDeltas);
   // Swallow so one failed flush doesn't permanently wedge the queue for
   // every flush queued behind it; each caller still observes its own
   // rejection via the returned `run` promise.
-  flushQueue = run.catch(() => undefined);
+  flushQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
   return run;
 }
 
 export function startTrafficPollingJob(): NodeJS.Timeout {
   const run = () => {
     flushTrafficDeltas()
-      .then(() => enforceTrafficLimits())
+      .then(({ polledNodes }) => enforceTrafficLimits().then((revokedUsers) => ({ polledNodes, revokedUsers })))
+      .then(({ polledNodes }) => {
+        const now = new Date();
+        const prevFailures = trafficPollingHealth.consecutiveFailures;
+        const prevLastSuccessAt = trafficPollingHealth.lastSuccessAt;
+
+        trafficPollingHealth.lastSuccessAt = now;
+        trafficPollingHealth.consecutiveFailures = 0;
+        trafficPollingHealth.lastError = null;
+
+        // Log a structured INFO event whenever polling recovers after one or
+        // more consecutive failures — this creates an audit trail of how long
+        // traffic data was potentially untracked and which nodes came back.
+        if (prevFailures > 0) {
+          const gapMs = prevLastSuccessAt ? now.getTime() - prevLastSuccessAt.getTime() : null;
+          logger.info(
+            {
+              consecutiveFailuresRecovered: prevFailures,
+              gapMs,
+              gapSeconds: gapMs != null ? Math.round(gapMs / 1000) : null,
+              lastSuccessAt: prevLastSuccessAt,
+              recoveredAt: now,
+              polledNodes,
+            },
+            "Traffic polling recovered after gap: consecutive failures cleared",
+          );
+        }
+      })
       .catch((err) => {
+        trafficPollingHealth.consecutiveFailures += 1;
+        trafficPollingHealth.lastError = err instanceof Error ? err.message : String(err);
         logger.error({ err }, "Traffic polling job failed");
       });
   };

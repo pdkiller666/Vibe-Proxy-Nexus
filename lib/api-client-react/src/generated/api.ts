@@ -81,6 +81,7 @@ import type {
   SupportTicketCreateInput,
   SupportTicketDetail,
   TicketStatusUpdate,
+  TrafficPollingHealth,
   UpdateMeInput,
   UserRoleUpdate,
   VpnKey,
@@ -3828,6 +3829,83 @@ export const useCreateAdminInviteLink = <TError = ErrorType<unknown>,
       return useMutation(getCreateAdminInviteLinkMutationOptions(options));
     }
 
+export const getGetAdminInviteLinkUsersUrl = (linkId: number,) => {
+
+
+
+
+  return `/api/admin/invite-links/${linkId}/users`
+}
+
+/**
+ * @summary List users who registered via an admin invite link
+ */
+export const getAdminInviteLinkUsers = async (linkId: number, options?: RequestInit): Promise<AdminInviteLinkUser[]> => {
+
+  return customFetch<AdminInviteLinkUser[]>(getGetAdminInviteLinkUsersUrl(linkId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminInviteLinkUsersQueryKey = (linkId: number,) => {
+    return [
+    `/api/admin/invite-links/${linkId}/users`
+    ] as const;
+    }
+
+
+export const getGetAdminInviteLinkUsersQueryOptions = <TData = Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError = ErrorType<unknown>>(linkId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminInviteLinkUsersQueryKey(linkId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>> = ({ signal }) => getAdminInviteLinkUsers(linkId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: linkId !== null && linkId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminInviteLinkUsersQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>>
+export type GetAdminInviteLinkUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List users who registered via an admin invite link
+ */
+
+export function useGetAdminInviteLinkUsers<TData = Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError = ErrorType<unknown>>(
+ linkId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminInviteLinkUsersQueryOptions(linkId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getUpdateAdminInviteLinkUrl = (linkId: number,) => {
 
 
@@ -3968,47 +4046,6 @@ export const useDeleteAdminInviteLink = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteAdminInviteLinkMutationOptions(options));
     }
-
-export const getGetAdminInviteLinkUsersUrl = (linkId: number) => {
-  return `/api/admin/invite-links/${linkId}/users`
-}
-
-/**
- * @summary List users who registered via an admin invite link
- */
-export const getAdminInviteLinkUsers = async (linkId: number, options?: RequestInit): Promise<AdminInviteLinkUser[]> => {
-  return customFetch<AdminInviteLinkUser[]>(getGetAdminInviteLinkUsersUrl(linkId), {
-    ...options,
-    method: 'GET',
-  });
-}
-
-export const getGetAdminInviteLinkUsersQueryKey = (linkId: number) => {
-  return [`/api/admin/invite-links/${linkId}/users`] as const;
-}
-
-export const getGetAdminInviteLinkUsersQueryOptions = <TData = Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError = ErrorType<unknown>>(linkId: number, options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch> }) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetAdminInviteLinkUsersQueryKey(linkId);
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>> = ({ signal }) => getAdminInviteLinkUsers(linkId, { signal, ...requestOptions });
-  return { queryKey, queryFn, enabled: !!linkId, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetAdminInviteLinkUsersQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>>
-export type GetAdminInviteLinkUsersQueryError = ErrorType<unknown>
-
-/**
- * @summary List users who registered via an admin invite link
- */
-export function useGetAdminInviteLinkUsers<TData = Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError = ErrorType<unknown>>(
-  linkId: number,
-  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getAdminInviteLinkUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch> }
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetAdminInviteLinkUsersQueryOptions(linkId, options)
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  query.queryKey = queryOptions.queryKey;
-  return query;
-}
 
 export const getGetAdminNotificationsUrl = (params?: GetAdminNotificationsParams,) => {
   const normalizedParams = new URLSearchParams();
@@ -5230,6 +5267,83 @@ export function useListAdminUserBalanceTransactions<TData = Awaited<ReturnType<t
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAdminUserBalanceTransactionsQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminTrafficPollingHealthUrl = () => {
+
+
+
+
+  return `/api/admin/health/traffic-polling`
+}
+
+/**
+ * @summary Get traffic polling health status (last success time + consecutive failure count)
+ */
+export const getAdminTrafficPollingHealth = async ( options?: RequestInit): Promise<TrafficPollingHealth> => {
+
+  return customFetch<TrafficPollingHealth>(getGetAdminTrafficPollingHealthUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminTrafficPollingHealthQueryKey = () => {
+    return [
+    `/api/admin/health/traffic-polling`
+    ] as const;
+    }
+
+
+export const getGetAdminTrafficPollingHealthQueryOptions = <TData = Awaited<ReturnType<typeof getAdminTrafficPollingHealth>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminTrafficPollingHealth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminTrafficPollingHealthQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminTrafficPollingHealth>>> = ({ signal }) => getAdminTrafficPollingHealth({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminTrafficPollingHealth>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminTrafficPollingHealthQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminTrafficPollingHealth>>>
+export type GetAdminTrafficPollingHealthQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get traffic polling health status (last success time + consecutive failure count)
+ */
+
+export function useGetAdminTrafficPollingHealth<TData = Awaited<ReturnType<typeof getAdminTrafficPollingHealth>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminTrafficPollingHealth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminTrafficPollingHealthQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

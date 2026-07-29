@@ -1,14 +1,34 @@
 import { Router, type IRouter } from "express";
 import { and, count, eq, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
 import { db, balanceTransactionsTable, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
-import { GetAdminDashboardSummaryResponse } from "@workspace/api-zod";
+import { GetAdminDashboardSummaryResponse, GetAdminTrafficPollingHealthResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
+import { trafficPollingHealth } from "../../lib/trafficPolling";
+import { remoteNodePollingHealth } from "../../lib/remoteNode";
 
 // Mirror the same threshold used in admin/users.ts for the per-user status badge.
 const VPN_ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
 
 const router: IRouter = Router();
+
+router.get("/admin/health/traffic-polling", requireAuth, requireAdmin, (_req, res): void => {
+  const nodes = [...remoteNodePollingHealth.values()].map((n) => ({
+    nodeName: n.nodeName,
+    lastSuccessAt: n.lastSuccessAt?.toISOString() ?? null,
+    consecutiveFailures: n.consecutiveFailures,
+    lastError: n.lastError,
+  }));
+
+  res.json(
+    GetAdminTrafficPollingHealthResponse.parse({
+      lastSuccessAt: trafficPollingHealth.lastSuccessAt?.toISOString() ?? null,
+      consecutiveFailures: trafficPollingHealth.consecutiveFailures,
+      lastError: trafficPollingHealth.lastError,
+      nodes,
+    }),
+  );
+});
 
 router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   // Calendar-month boundary in UTC — consistent regardless of server locale.

@@ -45,6 +45,8 @@ import {
   useAdminSetUserNote,
   useGetVpnNodeHealth,
   getGetVpnNodeHealthQueryKey,
+  useGetAdminTrafficPollingHealth,
+  getGetAdminTrafficPollingHealthQueryKey,
   useListAdminReferrals,
   useListAdminInviteLinks,
   useCreateAdminInviteLink,
@@ -162,6 +164,64 @@ function useNotificationPoller(): AdminNotification[] {
   }, [toast]);
 
   return recent;
+}
+
+const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+function TrafficPollingWarningBanner() {
+  const { data } = useGetAdminTrafficPollingHealth({
+    query: { queryKey: getGetAdminTrafficPollingHealthQueryKey(), refetchInterval: 60_000 },
+  });
+  const [dismissed, setDismissed] = useState(false);
+
+  // Reset dismissal whenever a new failure epoch starts (count increases or
+  // stale-success condition appears), so the banner re-appears after each
+  // new detected problem rather than staying permanently hidden.
+  const failureCount = data?.consecutiveFailures ?? 0;
+  const lastSuccessAt = data?.lastSuccessAt ? new Date(data.lastSuccessAt) : null;
+  const isStale = lastSuccessAt !== null && Date.now() - lastSuccessAt.getTime() > STALE_THRESHOLD_MS;
+  const isDegraded = failureCount > 0 || isStale;
+
+  // Re-show the banner whenever the failure count increases (a new failure
+  // was observed after the user had dismissed a previous count).
+  const prevFailureCountRef = useRef(0);
+  useEffect(() => {
+    if (failureCount > prevFailureCountRef.current) {
+      setDismissed(false);
+    }
+    prevFailureCountRef.current = failureCount;
+  }, [failureCount]);
+
+  if (!isDegraded || dismissed) return null;
+
+  const lastSuccessLabel = lastSuccessAt
+    ? lastSuccessAt.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "medium" })
+    : "никогда";
+
+  return (
+    <div className="flex items-start gap-3 bg-yellow-50 border border-yellow-400 p-4">
+      <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-mono uppercase font-bold text-yellow-700">Опрос трафика нарушен</div>
+        <div className="text-sm text-yellow-800 mt-0.5">
+          {failureCount > 0
+            ? `${failureCount} сбоев подряд. Последний успех: ${lastSuccessLabel}.`
+            : `Последний успешный опрос: ${lastSuccessLabel}.`}
+          {" "}Учёт трафика может быть неточным — проверьте логи.
+        </div>
+        {data?.lastError && (
+          <div className="text-xs font-mono text-yellow-700 mt-1 truncate">{data.lastError}</div>
+        )}
+      </div>
+      <button
+        onClick={() => setDismissed(true)}
+        className="text-yellow-600 hover:text-yellow-800 shrink-0"
+        aria-label="Закрыть"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
 }
 
 function SummarySection() {
@@ -1057,9 +1117,11 @@ function NodesManagement() {
         ) : (
           <div key={node.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4 flex-wrap">
             <div className="min-w-0 break-words">
-              <div className="font-bold">
-                {node.name} <span className="text-muted-foreground font-normal">· {node.region}</span>
-                {!node.isActive && <span className="text-muted-foreground font-normal"> (неактивен)</span>}
+              <div className="font-bold flex items-center gap-2 flex-wrap">
+                <span>{node.name}</span>
+                <span className="text-muted-foreground font-normal">· {node.region}</span>
+                {!node.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
+                {node.managementApiUrl && <NodePollingHealthIndicator nodeName={node.name} />}
               </div>
               <div className="text-sm text-muted-foreground font-mono break-all">
                 {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
@@ -1481,6 +1543,51 @@ function AdminNoteEditor({ userId, initialNote }: { userId: number; initialNote:
         Сохранить заметку
       </button>
     </div>
+  );
+}
+
+const NODE_POLL_STALE_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Shows the last background traffic-poll result for a specific remote node.
+ * Uses the same polling-health query as the global banner so there's no extra
+ * network request — React Query serves from cache.
+ */
+function NodePollingHealthIndicator({ nodeName }: { nodeName: string }) {
+  const { data } = useGetAdminTrafficPollingHealth({
+    query: { queryKey: getGetAdminTrafficPollingHealthQueryKey(), refetchInterval: 60_000 },
+  });
+
+  const nodeHealth = data?.nodes?.find((n) => n.nodeName === nodeName);
+  if (!nodeHealth) return null;
+
+  const lastSuccess = nodeHealth.lastSuccessAt ? new Date(nodeHealth.lastSuccessAt) : null;
+  const isStale = lastSuccess !== null && Date.now() - lastSuccess.getTime() > NODE_POLL_STALE_MS;
+  const failures = nodeHealth.consecutiveFailures;
+
+  let dotColor: string;
+  let label: string;
+  if (failures === 0 && lastSuccess !== null && !isStale) {
+    dotColor = "bg-green-500";
+    label = `Опрос OK · ${lastSuccess.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`;
+  } else if (failures > 0) {
+    dotColor = failures >= 3 ? "bg-red-500" : "bg-yellow-500";
+    label = `${failures} сбоев опроса${nodeHealth.lastError ? ` · ${nodeHealth.lastError}` : ""}`;
+  } else if (isStale) {
+    dotColor = "bg-yellow-500";
+    label = `Опрос устарел · ${lastSuccess ? lastSuccess.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "никогда"}`;
+  } else {
+    // No data yet for this node
+    dotColor = "bg-gray-400";
+    label = "Опрос ещё не выполнялся";
+  }
+
+  return (
+    <span
+      className={`inline-block w-2 h-2 rounded-full shrink-0 ${dotColor}`}
+      title={label}
+      aria-label={label}
+    />
   );
 }
 
@@ -3800,6 +3907,8 @@ export default function Admin() {
         </div>
         <NotificationBell />
       </div>
+
+      <TrafficPollingWarningBanner />
 
       <SummarySection />
 

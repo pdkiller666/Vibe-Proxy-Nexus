@@ -1327,6 +1327,19 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdminBalanceTransaction"
 
+  /admin/health/traffic-polling:
+    get:
+      operationId: getAdminTrafficPollingHealth
+      tags: [admin]
+      summary: Get traffic polling health status (last success time + consecutive failure count)
+      responses:
+        "200":
+          description: Traffic polling health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficPollingHealth"
+
   /admin/vpn-nodes/{nodeId}/health:
     get:
       operationId: getVpnNodeHealth
@@ -2172,6 +2185,27 @@ components:
       required: [note]
       properties:
         note: { type: ["string", "null"] }
+
+    NodePollingHealth:
+      type: object
+      required: [nodeName, lastSuccessAt, consecutiveFailures, lastError]
+      properties:
+        nodeName: { type: string }
+        lastSuccessAt: { type: ["string", "null"], format: date-time }
+        consecutiveFailures: { type: integer }
+        lastError: { type: ["string", "null"] }
+
+    TrafficPollingHealth:
+      type: object
+      required: [lastSuccessAt, consecutiveFailures, lastError, nodes]
+      properties:
+        lastSuccessAt: { type: ["string", "null"], format: date-time }
+        consecutiveFailures: { type: integer }
+        lastError: { type: ["string", "null"] }
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodePollingHealth"
 
     VpnNodeHealthResult:
       type: object

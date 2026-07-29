@@ -1241,6 +1241,22 @@ export const CreateAdminInviteLinkResponse = zod.object({
 
 
 /**
+ * @summary List users who registered via an admin invite link
+ */
+export const GetAdminInviteLinkUsersParams = zod.object({
+  "linkId": zod.coerce.number()
+})
+
+export const GetAdminInviteLinkUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const GetAdminInviteLinkUsersResponse = zod.array(GetAdminInviteLinkUsersResponseItem)
+
+
+/**
  * @summary Update an admin invite link (note, isActive, planId, trialDays, maxUses, expiresAt)
  */
 export const UpdateAdminInviteLinkParams = zod.object({
@@ -1280,22 +1296,6 @@ export const DeleteAdminInviteLinkParams = zod.object({
 })
 
 export const DeleteAdminInviteLinkResponse = zod.void()
-
-
-/**
- * @summary List users who registered via an admin invite link
- */
-export const GetAdminInviteLinkUsersParams = zod.object({
-  "linkId": zod.coerce.number()
-})
-
-export const GetAdminInviteLinkUsersResponseItem = zod.object({
-  "id": zod.number(),
-  "email": zod.string(),
-  "name": zod.string().nullable(),
-  "createdAt": zod.coerce.date()
-})
-export const GetAdminInviteLinkUsersResponse = zod.array(GetAdminInviteLinkUsersResponseItem)
 
 
 /**
@@ -1748,6 +1748,24 @@ export const ListAdminUserBalanceTransactionsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListAdminUserBalanceTransactionsResponse = zod.array(ListAdminUserBalanceTransactionsResponseItem)
+
+
+/**
+ * @summary Get traffic polling health status (last success time + consecutive failure count)
+ */
+export const GetAdminTrafficPollingHealthResponseNodesItem = zod.object({
+  "nodeName": zod.string(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "consecutiveFailures": zod.number(),
+  "lastError": zod.string().nullable()
+})
+
+export const GetAdminTrafficPollingHealthResponse = zod.object({
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "consecutiveFailures": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nodes": zod.array(GetAdminTrafficPollingHealthResponseNodesItem)
+})
 
 
 /**

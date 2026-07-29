@@ -11,6 +11,21 @@
 import type { VpnNode } from "@workspace/db";
 import { logger } from "./logger";
 
+export interface RemoteNodePollHealth {
+  nodeName: string;
+  lastSuccessAt: Date | null;
+  consecutiveFailures: number;
+  lastError: string | null;
+}
+
+/**
+ * Per-node polling health state, keyed by node name. Tracked in memory (not DB)
+ * for the same reason as the global trafficPollingHealth — this is about the
+ * liveness of the background job, not user data. Exported for the admin health
+ * endpoint (GET /admin/health/traffic-polling).
+ */
+export const remoteNodePollingHealth = new Map<string, RemoteNodePollHealth>();
+
 export type RemoteNodeRef = Pick<VpnNode, "managementApiUrl" | "managementApiSecret" | "name">;
 
 async function remoteNodeFetch(
@@ -81,11 +96,25 @@ export async function pollRemoteNodeStats(
   node: RemoteNodeRef,
 ): Promise<Map<string, { uplinkBytes: number; downlinkBytes: number }>> {
   const counters = new Map<string, { uplinkBytes: number; downlinkBytes: number }>();
+
+  // Ensure a health entry exists for this node before the attempt.
+  if (!remoteNodePollingHealth.has(node.name)) {
+    remoteNodePollingHealth.set(node.name, {
+      nodeName: node.name,
+      lastSuccessAt: null,
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+  }
+  const health = remoteNodePollingHealth.get(node.name)!;
+
   try {
     const res = await remoteNodeFetch(node, "/stats", { method: "GET" });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       logger.warn({ nodeName: node.name, status: res.status, text }, "pollRemoteNodeStats: HTTP error");
+      health.consecutiveFailures += 1;
+      health.lastError = `HTTP ${res.status}: ${text.slice(0, 200)}`;
       return counters;
     }
     const raw = (await res.json()) as Array<{
@@ -100,8 +129,15 @@ export async function pollRemoteNodeStats(
         downlinkBytes: Number(entry.downlinkBytes) || 0,
       });
     }
+    // Success — reset failure counters.
+    health.lastSuccessAt = new Date();
+    health.consecutiveFailures = 0;
+    health.lastError = null;
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err, nodeName: node.name }, "pollRemoteNodeStats: failed to fetch /stats");
+    health.consecutiveFailures += 1;
+    health.lastError = msg.slice(0, 200);
   }
   return counters;
 }

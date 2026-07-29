@@ -1,5 +1,8 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+// NOTE: unique indexes on nullable columns are declared in the table's index
+// block below (not via .unique() on the column) to avoid drizzle-kit
+// interactive prompts on schema push (see heal-schema.mjs).
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -42,6 +45,19 @@ export const paymentsTable = pgTable(
     rejectionReason: text("rejection_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    // Generic webhook dedup key — set by any payment-provider webhook handler
+    // (currently YooMoney; ready for SBP/Tinkoff/YooKassa callbacks).
+    // The provider stores its event/operation id here before confirming, so a
+    // retry of the same event is a no-op and a second distinct event on an
+    // already-settled payment surfaces as a double-charge warning.
+    // Nullable (only set when the provider supplies an event id).  Unique
+    // (partial, WHERE NOT NULL) so no two payments can be credited by the
+    // same event even under a misconfigured label.
+    webhookEventId: text("webhook_event_id"),
+    // DEPRECATED — superseded by webhookEventId (M-21). Kept in schema so
+    // Drizzle does not attempt to drop the column non-interactively. Existing
+    // rows already have their value backfilled into webhook_event_id.
+    ymOperationId: text("ym_operation_id"),
   },
   (table) => [
     index("payments_user_id_idx").on(table.userId),
@@ -56,6 +72,14 @@ export const paymentsTable = pgTable(
     uniqueIndex("payments_one_pending_per_user_type_idx")
       .on(table.userId, table.type)
       .where(sql`status = 'pending'`),
+    // Ensures no two payments can be credited by the same provider event id.
+    uniqueIndex("payments_webhook_event_id_unique_idx")
+      .on(table.webhookEventId)
+      .where(sql`webhook_event_id IS NOT NULL`),
+    // Legacy: YooMoney-specific dedup index kept until the column is dropped.
+    uniqueIndex("payments_ym_operation_id_unique_idx")
+      .on(table.ymOperationId)
+      .where(sql`ym_operation_id IS NOT NULL`),
   ],
 );
 
