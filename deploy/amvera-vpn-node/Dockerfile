@@ -9,6 +9,7 @@ RUN apt-get update \
         gettext-base \
         ca-certificates \
         supervisor \
+        nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL -o /tmp/xray.zip \

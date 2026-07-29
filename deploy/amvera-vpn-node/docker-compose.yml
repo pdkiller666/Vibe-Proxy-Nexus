@@ -1,0 +1,16 @@
+services:
+  vpn-node:
+    build: .
+    # Host networking lets Nginx on the VPS reach Xray on 127.0.0.1:10000
+    # and exposes the management API directly on VPS port 8443.
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      XRAY_CONFIG_PATH: /etc/xray/config.json
+    volumes:
+      # Persistent Xray config so keys survive container restarts/rebuilds.
+      - xray-config:/etc/xray
+
+volumes:
+  xray-config:

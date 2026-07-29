@@ -69,6 +69,11 @@ export function generatePaymentReference(subscriptionId: number): string {
  * sni=<web domain> + type=ws + path=<VPN_WS_PATH> and speak VLESS over that
  * standard HTTPS/WebSocket tunnel.
  */
+/** Returns true for bare IPv4 addresses (e.g. "1.2.3.4"). */
+function isIpAddress(value: string): boolean {
+  return /^(\d{1,3}\.){3}\d{1,3}$/.test(value);
+}
+
 export function buildVlessLink(
   node: VpnNode,
   uuid: string,
@@ -76,6 +81,14 @@ export function buildVlessLink(
 ): string {
   const host = node.host || node.sni;
   const port = node.port ?? 443;
+
+  // Self-signed certificates are used when the node has no real domain (bare
+  // IP). TLS clients reject them by default, so we must include allowInsecure=1
+  // in the URI. We detect this by checking whether the host/SNI is a raw IP
+  // address — proper domain nodes always use a CA-signed cert (e.g. Amvera
+  // with Let's Encrypt), so they must NOT carry allowInsecure.
+  const needsAllowInsecure = isIpAddress(host) || isIpAddress(node.sni);
+
   const params = new URLSearchParams({
     type: "ws",
     security: "tls",
@@ -84,6 +97,7 @@ export function buildVlessLink(
     host: node.sni,
     path: VPN_WS_PATH,
     encryption: "none",
+    ...(needsAllowInsecure ? { allowInsecure: "1" } : {}),
   });
 
   const flag = flagEmojiForNode(node);
