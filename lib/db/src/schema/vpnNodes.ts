@@ -30,6 +30,13 @@ export const vpnNodesTable = pgTable(
     // Optional cap on concurrently-active VPN keys this node will serve. Null
     // means unlimited. Enforced at key-issuance time in vpnKeys.ts.
     maxUsers: integer("max_users"),
+    // SHA-256 fingerprint of the node's TLS certificate, base64-encoded.
+    // Required for bare-IP nodes so modern VPN clients (Happ 2.17+, Xray 26+)
+    // can pin the self-signed cert instead of using the removed `allowInsecure`.
+    // Obtain with:
+    //   echo | openssl s_client -connect <IP>:443 2>/dev/null \
+    //     | openssl x509 -outform DER | openssl dgst -sha256 -binary | base64
+    certSha256: text("cert_sha256"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   // keyIssuance.ts filters to active nodes with capacity on every key issuance.

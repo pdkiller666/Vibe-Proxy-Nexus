@@ -32,11 +32,14 @@ export function generateKeyUuid(): string {
  * Extend this list as nodes are added in new countries.
  */
 const LOCATION_FLAG_RULES: Array<{ match: RegExp; flag: string }> = [
-  { match: /poland|польш|warsaw|варшав|warszawa|\bwaw\d*\b|^pl$/i, flag: "🇵🇱" },
-  { match: /russia|россия|moscow|москв|\bmow\d*\b|vdsina|^ru$/i,  flag: "🇷🇺" },
-  { match: /germany|германия|frankfurt|франкфурт|berlin|берлин|hetzner|^de$/i, flag: "🇩🇪" },
-  { match: /netherlands|нидерланды|amsterdam|амстердам|^nl$/i,    flag: "🇳🇱" },
-  { match: /finland|финляндия|helsinki|хельсинки|^fi$/i,          flag: "🇫🇮" },
+  // Note: use \bXX\b (word boundary) NOT ^XX$ for two-letter codes — the haystack
+  // is a joined multi-word string ("nl 87.199.200.19 87.199.200.19"), so ^...$ anchors
+  // never match when there are additional tokens in the string.
+  { match: /poland|польш|warsaw|варшав|warszawa|\bwaw\d*\b|\bpl\b/i, flag: "🇵🇱" },
+  { match: /russia|россия|moscow|москв|\bmow\d*\b|vdsina|\bru\b/i,  flag: "🇷🇺" },
+  { match: /germany|германия|frankfurt|франкфурт|berlin|берлин|hetzner|\bde\b/i, flag: "🇩🇪" },
+  { match: /netherlands|нидерланды|amsterdam|амстердам|\bnl\b/i,    flag: "🇳🇱" },
+  { match: /finland|финляндия|helsinki|хельсинки|\bfi\b/i,          flag: "🇫🇮" },
 ];
 
 export function flagEmojiForNode(
@@ -86,12 +89,17 @@ export function buildVlessLink(
   const host = node.host || node.sni;
   const port = node.port ?? 443;
 
-  // Self-signed certificates are used when the node has no real domain (bare
-  // IP). TLS clients reject them by default, so we must include allowInsecure=1
-  // in the URI. We detect this by checking whether the host/SNI is a raw IP
-  // address — proper domain nodes always use a CA-signed cert (e.g. Amvera
-  // with Let's Encrypt), so they must NOT carry allowInsecure.
-  const needsAllowInsecure = isIpAddress(host) || isIpAddress(node.sni);
+  // Self-signed certificates are used when the node has no real domain (bare IP).
+  // Older Xray cores used `allowInsecure=1`; newer cores (Xray 26+, used by Happ
+  // 2.17+) removed that parameter and require `pinnedPeerCertSha256` (SHA256 of
+  // the server's DER-encoded TLS certificate, in base64) instead.
+  //
+  // When the node has a `certSha256` stored (admin-entered after running
+  // `openssl s_client … | openssl x509 -outform DER | openssl dgst -sha256 -binary | base64`),
+  // we emit `pinnedPeerCertSha256`. If that field is absent we fall back to
+  // `allowInsecure=1` so older clients and non-Happ apps keep working.
+  const isIpNode = isIpAddress(host) || isIpAddress(node.sni);
+  const certSha256 = "certSha256" in node ? (node as { certSha256: string | null }).certSha256 : null;
 
   const params = new URLSearchParams({
     type: "ws",
@@ -101,7 +109,8 @@ export function buildVlessLink(
     host: node.sni,
     path: VPN_WS_PATH,
     encryption: "none",
-    ...(needsAllowInsecure ? { allowInsecure: "1" } : {}),
+    ...(isIpNode && certSha256 ? { pinnedPeerCertSha256: certSha256 } : {}),
+    ...(isIpNode && !certSha256 ? { allowInsecure: "1" } : {}),
   });
 
   const flag = flagEmojiForNode(node);

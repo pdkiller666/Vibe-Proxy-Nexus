@@ -762,6 +762,15 @@ try {
   `);
   console.log("heal-schema: M-23 dropped payments.ym_operation_id index + column");
 
+  // ── M-24: vpn_nodes.cert_sha256 — TLS cert fingerprint for bare-IP nodes ──
+  // Modern Xray cores (26+) removed `allowInsecure`; bare-IP VPS nodes must now
+  // supply `pinnedPeerCertSha256` (SHA256 of the DER cert, base64) in VLESS links.
+  await client.query(`
+    ALTER TABLE vpn_nodes
+      ADD COLUMN IF NOT EXISTS cert_sha256 text
+  `);
+  console.log("heal-schema: M-24 vpn_nodes.cert_sha256");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

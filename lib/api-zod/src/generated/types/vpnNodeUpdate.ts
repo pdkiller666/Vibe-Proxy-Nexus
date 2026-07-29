@@ -25,4 +25,5 @@ export interface VpnNodeUpdate {
      * @nullable
      */
   maxUsers?: number | null;
+  certSha256?: string;
 }

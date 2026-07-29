@@ -22,5 +22,7 @@ export interface VpnNode {
   activeUserCount?: number;
   /** @nullable */
   flagEmoji?: string | null;
+  /** @nullable */
+  certSha256?: string | null;
   createdAt?: Date;
 }

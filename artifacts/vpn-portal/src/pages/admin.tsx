@@ -1008,6 +1008,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   // managementApiSecret is intentionally NOT returned from the API for security.
   // The form always starts empty; leave blank to keep the existing secret unchanged.
   const [managementApiSecret, setManagementApiSecret] = useState("");
+  const [certSha256, setCertSha256] = useState(node?.certSha256 ?? "");
   const [isActive, setIsActive] = useState(node?.isActive ?? true);
   const [maxUsers, setMaxUsers] = useState(node?.maxUsers != null ? String(node.maxUsers) : "");
 
@@ -1022,6 +1023,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       shortId: shortId || undefined,
       managementApiUrl: managementApiUrl || undefined,
       managementApiSecret: managementApiSecret || undefined,
+      certSha256: certSha256 || undefined,
       isActive,
       maxUsers: maxUsers ? Number(maxUsers) : null,
     };
@@ -1076,6 +1078,12 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           placeholder="Management API Secret (X-Management-Secret)"
           value={managementApiSecret}
           onChange={(e) => setManagementApiSecret(e.target.value)}
+          className="rounded-none col-span-2"
+        />
+        <Input
+          placeholder="Cert SHA256 (base64, для IP-нод без домена — вместо allowInsecure)"
+          value={certSha256}
+          onChange={(e) => setCertSha256(e.target.value)}
           className="rounded-none col-span-2"
         />
         <label className="flex items-center gap-2 text-sm">

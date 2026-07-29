@@ -25,4 +25,5 @@ export interface VpnNodeInput {
      * @nullable
      */
   maxUsers?: number | null;
+  certSha256?: string;
 }

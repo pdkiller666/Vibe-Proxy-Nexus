@@ -320,6 +320,7 @@ export const ListVpnNodesResponseItem = zod.object({
   "maxUsers": zod.number().nullish(),
   "activeUserCount": zod.number().optional(),
   "flagEmoji": zod.string().nullish(),
+  "certSha256": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 export const ListVpnNodesResponse = zod.array(ListVpnNodesResponseItem)
@@ -1106,7 +1107,8 @@ export const CreateVpnNodeBody = zod.object({
   "shortId": zod.string().optional(),
   "sni": zod.string().min(1),
   "isActive": zod.boolean().optional(),
-  "maxUsers": zod.number().min(1).nullish()
+  "maxUsers": zod.number().min(1).nullish(),
+  "certSha256": zod.string().optional()
 })
 
 export const CreateVpnNodeResponse = zod.object({
@@ -1121,6 +1123,7 @@ export const CreateVpnNodeResponse = zod.object({
   "maxUsers": zod.number().nullish(),
   "activeUserCount": zod.number().optional(),
   "flagEmoji": zod.string().nullish(),
+  "certSha256": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 
@@ -1149,7 +1152,8 @@ export const UpdateVpnNodeBody = zod.object({
   "shortId": zod.string().optional(),
   "sni": zod.string().min(1).optional(),
   "isActive": zod.boolean().optional(),
-  "maxUsers": zod.number().min(1).nullish()
+  "maxUsers": zod.number().min(1).nullish(),
+  "certSha256": zod.string().optional()
 })
 
 export const UpdateVpnNodeResponse = zod.object({
@@ -1164,6 +1168,7 @@ export const UpdateVpnNodeResponse = zod.object({
   "maxUsers": zod.number().nullish(),
   "activeUserCount": zod.number().optional(),
   "flagEmoji": zod.string().nullish(),
+  "certSha256": zod.string().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 

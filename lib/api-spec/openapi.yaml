@@ -1922,6 +1922,9 @@ components:
         maxUsers: { type: ["integer", "null"] }
         activeUserCount: { type: integer }
         flagEmoji: { type: ["string", "null"] }
+        # SHA-256 of the node's TLS cert (DER, base64). Required for bare-IP nodes
+        # with self-signed certs; modern Xray cores use this instead of allowInsecure.
+        certSha256: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
 
     VpnNodeInput:
@@ -1939,6 +1942,7 @@ components:
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
         maxUsers: { type: ["integer", "null"], minimum: 1 }
+        certSha256: { type: string }
 
     VpnNodeUpdate:
       type: object
@@ -1954,6 +1958,7 @@ components:
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
         maxUsers: { type: ["integer", "null"], minimum: 1 }
+        certSha256: { type: string }
 
     RevokedReason:
       type: string

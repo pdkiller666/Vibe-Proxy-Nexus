@@ -413,6 +413,8 @@ export interface VpnNode {
   activeUserCount?: number;
   /** @nullable */
   flagEmoji?: string | null;
+  /** @nullable */
+  certSha256?: string | null;
   createdAt?: string;
 }
 
@@ -435,6 +437,7 @@ export interface VpnNodeInput {
      * @nullable
      */
   maxUsers?: number | null;
+  certSha256?: string;
 }
 
 export interface VpnNodeUpdate {
@@ -456,6 +459,7 @@ export interface VpnNodeUpdate {
      * @nullable
      */
   maxUsers?: number | null;
+  certSha256?: string;
 }
 
 export type RevokedReason = typeof RevokedReason[keyof typeof RevokedReason];
