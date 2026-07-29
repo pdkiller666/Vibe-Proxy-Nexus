@@ -52,7 +52,7 @@ curl -fsSL https://get.docker.com | sh
 systemctl enable --now docker
 
 # Caddy
-apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+apt install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
   | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
@@ -70,9 +70,13 @@ node2.vpnexus.pro → 1.2.3.4
 ### Шаг A3. Получить файлы и запустить контейнер
 
 ```bash
-# GITHUB_TOKEN — токен вашего GitHub-аккаунта (репозиторий приватный)
-git clone https://GITHUB_TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
-cd /opt/vpn-node/deploy/amvera-vpn-node
+# Sparse checkout — скачивается только deploy/amvera-vpn-node/ (~55 МБ вместо ~2 ГБ монорепо)
+# GITHUB_TOKEN — токен вашего GitHub-аккаунта с правом repo:read
+git clone --filter=blob:none --sparse \
+  https://GITHUB_TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+cd /opt/vpn-node
+git sparse-checkout set deploy/amvera-vpn-node
+cd deploy/amvera-vpn-node
 
 # Создать .env с секретом
 cp .env.example .env
@@ -80,6 +84,9 @@ sed -i "s/^MGMT_API_SECRET=.*/MGMT_API_SECRET=$(openssl rand -hex 32)/" .env
 
 # Собрать и запустить (host-сеть: Xray на 127.0.0.1:10000, mgmt на 0.0.0.0:8443)
 docker compose up -d --build
+
+# Удалить сборочный кэш (освобождает ~1 ГБ — образ уже запущен, кэш больше не нужен)
+docker builder prune -af --filter "until=1h"
 ```
 
 ### Шаг A4. Настроить Caddy
@@ -127,38 +134,58 @@ curl https://node2.vpnexus.pro/health   # {"status":"ok"}
 
 Используйте готовый скрипт `setup-vps.sh` — он автоматически делает всё:
 
+### Шаг B1. Получить файлы
+
 ```bash
-# GITHUB_TOKEN — токен вашего GitHub-аккаунта (репозиторий приватный)
-git clone https://GITHUB_TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
-cd /opt/vpn-node/deploy/amvera-vpn-node
+# Sparse checkout — скачивается только deploy/amvera-vpn-node/ (~55 МБ вместо ~2 ГБ монорепо)
+# GITHUB_TOKEN — токен вашего GitHub-аккаунта с правом repo:read
+git clone --filter=blob:none --sparse \
+  https://GITHUB_TOKEN@github.com/pdkiller666/Vibe-Proxy-Nexus.git /opt/vpn-node
+cd /opt/vpn-node
+git sparse-checkout set deploy/amvera-vpn-node
+cd deploy/amvera-vpn-node
+```
+
+### Шаг B2. Запустить скрипт
+
+```bash
 chmod +x setup-vps.sh && sudo ./setup-vps.sh
 ```
 
-Скрипт сам: установит Docker и Nginx, сгенерирует секрет, соберёт образ,
-создаст самоподписанный сертификат на 10 лет, настроит Nginx и выведет данные
-для регистрации ноды.
+Скрипт автоматически:
+- ✅ Устанавливает Docker и Nginx
+- ✅ Генерирует `MGMT_API_SECRET` и создаёт `.env`
+- ✅ Собирает Docker-образ и запускает контейнер
+- ✅ Удаляет сборочный кэш (`docker builder prune`) — экономит ~1 ГБ
+- ✅ Генерирует самоподписанный TLS-сертификат (10 лет)
+- ✅ Настраивает Nginx (WS-прокси на Xray + HTTPS на mgmt-API)
+- ✅ Устанавливает Cockpit и **разрешает root-логин** (убирает `/etc/cockpit/disallowed-users`)
+- ✅ Закрывает порт 9090 снаружи через UFW (Cockpit — только через SSH-туннель)
+- ✅ Выводит все данные для регистрации ноды
 
-> **Важно (bare-IP нода):** у самоподписанного сертификата нет доверенного CA.
-> Для Xray 26+ / Happ 2.17+ укажите **Cert SHA256** в настройках ноды — сервер
-> подставит `pinnedPeerCertSha256` в VLESS-ссылки и клиент верифицирует сертификат
-> по отпечатку. Для старых клиентов без поддержки `pinnedPeerCertSha256` поле
-> оставьте пустым — сервер подставит `allowInsecure=1` автоматически.
->
-> Получить SHA256-отпечаток самоподписанного сертификата:
-> ```bash
-> openssl x509 -in /etc/nginx/ssl/self-signed.crt -noout -fingerprint -sha256 \
->   | sed 's/.*=//;s/://g' | tr 'A-F' 'a-f'
-> ```
+### Шаг B3. Добавить ноду в админке
 
-После выполнения скрипт напечатает:
+В конце скрипт выведет:
 ```
 Host:               1.2.3.4
 Port:               443
 Management API URL: http://1.2.3.4:8443
 Management Secret:  abc123...
+Cert SHA256:        a1b2c3...
 ```
 
-Добавьте ноду в `/admin` → **VPN Nodes** с этими значениями.
+Откройте `/admin` → **VPN Nodes** → **Добавить ноду** и заполните эти значения.
+
+> **Важно (bare-IP нода):** укажите **Cert SHA256** в поле настроек ноды — сервер
+> автоматически подставит `pinnedPeerCertSha256` в VLESS-ссылки (Xray 26+ / Happ 2.17+).
+> Для старых клиентов без поддержки `pinnedPeerCertSha256` поле оставьте пустым —
+> сервер подставит `allowInsecure=1` автоматически.
+>
+> Получить SHA256 вручную, если понадобится:
+> ```bash
+> openssl x509 -in /etc/nginx/ssl/self-signed.crt -noout -fingerprint -sha256 \
+>   | sed 's/.*=//;s/://g' | tr 'A-F' 'a-f'
+> ```
 
 ---
 
@@ -187,12 +214,46 @@ Management Secret:  abc123...
 ```bash
 cd /opt/vpn-node
 git pull
+cd deploy/amvera-vpn-node
 docker compose build
 docker compose up -d
+# Удалить старые Docker-слои и build cache (освобождает 1–2 ГБ):
+docker system prune -af --volumes=false
 ```
 
+> **Sparse checkout** настраивается один раз при клонировании — `git pull` после этого
+> подтягивает только изменения в `deploy/amvera-vpn-node/`, не скачивая артефакты и библиотеки.
+
 Существующие ключи сохраняются — `render-config.sh` при каждом старте переносит
-список клиентов из persistent-тома в обновлённый конфиг.
+список клиентов из persistent-тома `/etc/xray` в обновлённый конфиг.
+
+---
+
+## Диагностика
+
+```bash
+# Логи всех процессов
+docker compose logs -f
+
+# Проверить доступность ноды
+curl http://localhost:8443/health   # {"status":"ok"}
+
+# Список активных клиентов в Xray
+curl -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
+  http://localhost:8443/clients
+
+# CPU / RAM / uptime контейнера
+curl -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
+  http://localhost:8443/system/status
+
+# Последние логи Xray внутри контейнера
+curl -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
+  "http://localhost:8443/system/logs?program=xray&lines=50"
+
+# Перезапустить Xray внутри контейнера (без пересборки)
+curl -X POST -H "X-Management-Secret: $(grep MGMT_API_SECRET .env | cut -d= -f2)" \
+  http://localhost:8443/system/restart-xray
+```
 
 ---
 
@@ -207,3 +268,9 @@ docker compose up -d
 
 **Клиент не подключается (TLS error)** → для IP-ноды убедитесь, что в записи ноды указан реальный IP
 (не домен), тогда сервер автоматически добавит `allowInsecure=1` в ссылку.
+
+**Cockpit не пускает под root** → выполните в терминале VPS:
+```bash
+sed -i '/^root$/d' /etc/cockpit/disallowed-users && systemctl restart cockpit.socket
+```
+При использовании `setup-vps.sh` это выполняется автоматически.
