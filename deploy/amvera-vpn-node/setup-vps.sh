@@ -32,7 +32,7 @@ if [[ -z "$VPS_IP" ]]; then
 fi
 info "VPS public IP: $VPS_IP"
 
-# ── Install Docker ────────────────────────────────────────────────────────────
+# ── Install Docker + compose plugin ──────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
     info "Installing Docker..."
     curl -fsSL https://get.docker.com | sh
@@ -41,6 +41,21 @@ if ! command -v docker &>/dev/null; then
     info "Docker installed."
 else
     info "Docker already installed."
+fi
+
+# Ensure docker compose v2 plugin is available (Ubuntu apt ships Docker without it)
+if ! docker compose version &>/dev/null 2>&1; then
+    info "Installing docker-compose-plugin from Docker's official repo..."
+    apt-get install -y ca-certificates curl gnupg lsb-release -qq
+    install -m 0755 -d /usr/share/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+        | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
+https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+        > /etc/apt/sources.list.d/docker.list
+    apt-get update -qq
+    apt-get install -y docker-compose-plugin
+    info "docker compose $(docker compose version --short) installed."
 fi
 
 # ── Install Nginx ─────────────────────────────────────────────────────────────
