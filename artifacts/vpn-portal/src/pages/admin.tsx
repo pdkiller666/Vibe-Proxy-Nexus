@@ -308,6 +308,7 @@ function NodeAlertsBanner() {
 
   const nodeEvents = (events ?? []).filter((e) =>
     e.eventType === "node_unavailable" ||
+    e.eventType === "node_unreachable" ||
     e.eventType === "node_overloaded" ||
     e.eventType === "node_recovered"
   );
@@ -345,7 +346,11 @@ function NodeAlertsBanner() {
         let body = "";
         let hint = "";
 
-        if (event.eventType === "node_unavailable") {
+        if (event.eventType === "node_unreachable") {
+          label = `Узел «${nodeName}» автоматически отключён`;
+          body = `Нода не отвечала ${meta?.consecutiveFailures ?? 3} проверок подряд — она переведена в неактивный статус и ключи пользователей перенесены на другие серверы.${meta?.lastError ? ` Последняя ошибка: ${meta.lastError}.` : ""} Время события: ${ts}.`;
+          hint = "Нода восстановится автоматически после успешного ответа на healthcheck. Проверьте состояние VPS и Docker-контейнер с Xray.";
+        } else if (event.eventType === "node_unavailable") {
           label = `Узел «${nodeName}» недоступен`;
           body = `Нода не отвечала ${meta?.consecutiveFailures ?? 3} проверок подряд.${meta?.lastError ? ` Последняя ошибка: ${meta.lastError}.` : ""} Время события: ${ts}.`;
           hint = "Проверьте состояние VPS и убедитесь, что Docker-контейнер с Xray запущен.";
