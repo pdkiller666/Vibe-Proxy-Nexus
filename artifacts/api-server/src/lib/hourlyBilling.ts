@@ -100,7 +100,13 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
 
   for (const row of rows as HourlySubscriptionRow[]) {
     const rateKopecks = row.hourlyRateKopecks;
-    if (!rateKopecks || rateKopecks <= 0) continue; // misconfigured plan — skip rather than charge nothing meaningfully
+    if (!rateKopecks || rateKopecks <= 0) {
+      logger.warn(
+        { subscriptionId: row.subscriptionId, userId: row.userId, rateKopecks },
+        "Hourly billing: skipping subscription — plan hourlyRateKopecks is null/zero (misconfigured plan)",
+      );
+      continue;
+    }
 
     // The raw SQL aggregate (max(...)) comes back from the pg driver as a
     // string/Date depending on the column's parser, not necessarily a Date
@@ -119,7 +125,23 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
     const billUpToMs = isActiveNow ? now.getTime() : lastTrafficAt ? lastTrafficAt.getTime() : billFrom.getTime();
 
     const ticksElapsed = Math.floor((billUpToMs - billFrom.getTime()) / BILLING_TICK_MS);
-    if (ticksElapsed < 1) continue;
+    if (ticksElapsed < 1) {
+      logger.warn(
+        {
+          subscriptionId: row.subscriptionId,
+          userId: row.userId,
+          billFrom,
+          billUpToMs: new Date(billUpToMs),
+          lastBilledAt,
+          lastTrafficAt,
+          isActiveNow,
+          idleSinceMs: idleSince === Infinity ? null : idleSince,
+          ticksElapsed,
+        },
+        "Hourly billing: skipping subscription — ticksElapsed < 1 (lastBilledAt may be in the future, or user idle with traffic before billing timestamp)",
+      );
+      continue;
+    }
 
     const perTickKopecks = rateKopecks / 12;
     const affordableTicks = Math.min(ticksElapsed, Math.floor(row.balanceKopecks / perTickKopecks));
