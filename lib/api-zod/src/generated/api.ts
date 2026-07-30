@@ -1228,13 +1228,16 @@ export const UpdateVpnNodeResponse = zod.object({
 
 
 /**
- * @summary Delete a VPN node
+ * @summary Delete a VPN node and migrate its active keys to other nodes
  */
 export const DeleteVpnNodeParams = zod.object({
   "nodeId": zod.coerce.number()
 })
 
-export const DeleteVpnNodeResponse = zod.void()
+export const DeleteVpnNodeResponse = zod.object({
+  "migratedKeys": zod.number(),
+  "failedMigrations": zod.number()
+})
 
 
 /**

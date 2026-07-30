@@ -46,6 +46,7 @@ import type {
   ChangePasswordResult,
   CheckoutResult,
   DashboardSummary,
+  DeleteVpnNodeResult,
   DeviceSlotsUpdate,
   ErrorEnvelope,
   ExtraSlotOrderResult,
@@ -3694,11 +3695,11 @@ export const getDeleteVpnNodeUrl = (nodeId: number,) => {
 }
 
 /**
- * @summary Delete a VPN node
+ * @summary Delete a VPN node and migrate its active keys to other nodes
  */
-export const deleteVpnNode = async (nodeId: number, options?: RequestInit): Promise<void> => {
+export const deleteVpnNode = async (nodeId: number, options?: RequestInit): Promise<DeleteVpnNodeResult> => {
 
-  return customFetch<void>(getDeleteVpnNodeUrl(nodeId),
+  return customFetch<DeleteVpnNodeResult>(getDeleteVpnNodeUrl(nodeId),
   {
     ...options,
     method: 'DELETE'
@@ -3742,7 +3743,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeleteVpnNodeMutationError = ErrorType<unknown>
 
     /**
- * @summary Delete a VPN node
+ * @summary Delete a VPN node and migrate its active keys to other nodes
  */
 export const useDeleteVpnNode = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVpnNode>>, TError,{nodeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}

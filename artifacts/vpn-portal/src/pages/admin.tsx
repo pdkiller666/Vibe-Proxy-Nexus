@@ -1595,9 +1595,22 @@ function NodesManagement() {
     deleteNode(
       { nodeId },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
-          toast({ title: "Узел удалён" });
+          if (data.failedMigrations > 0) {
+            toast({
+              title: `Узел удалён (ключей перенесено: ${data.migratedKeys}, не удалось: ${data.failedMigrations})`,
+              description: "Пользователи с непереноситыми ключами остались без VPN. Проверьте логи.",
+              variant: "destructive",
+            });
+          } else if (data.migratedKeys > 0) {
+            toast({
+              title: `Узел удалён`,
+              description: `${data.migratedKeys} ${data.migratedKeys === 1 ? "ключ перенесён" : "ключей перенесено"} на другие серверы.`,
+            });
+          } else {
+            toast({ title: "Узел удалён" });
+          }
         },
         onError: (err: unknown) => {
           const msg =

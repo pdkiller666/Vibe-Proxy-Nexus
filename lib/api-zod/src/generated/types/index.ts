@@ -35,6 +35,7 @@ export * from './changePasswordInput';
 export * from './changePasswordResult';
 export * from './checkoutResult';
 export * from './dashboardSummary';
+export * from './deleteVpnNodeResult';
 export * from './deviceSlotsUpdate';
 export * from './errorEnvelope';
 export * from './extraSlotOrderResult';

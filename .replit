@@ -26,3 +26,7 @@ channel = "stable-25_05"
 [userenv.shared]
 ADMIN_EMAIL = "tiy247@mail.ru"
 NODE_ENV = "development"
+VPS_DE_HOST = "91.228.152.241"
+VPS_DE_USER = "root"
+VPS_NL1_HOST = "87.199.200.19"
+VPS_NL1_USER = "root"

@@ -934,7 +934,7 @@ paths:
     delete:
       operationId: deleteVpnNode
       tags: [admin]
-      summary: Delete a VPN node
+      summary: Delete a VPN node and migrate its active keys to other nodes
       parameters:
         - name: nodeId
           in: path
@@ -942,8 +942,12 @@ paths:
           schema:
             type: integer
       responses:
-        "204":
-          description: Deleted
+        "200":
+          description: Deleted; includes key migration summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteVpnNodeResult"
 
   /admin/referrals:
     get:
@@ -2432,6 +2436,13 @@ components:
         output: { type: string }
         status:
           $ref: "#/components/schemas/VpnNodeSystemStatus"
+
+    DeleteVpnNodeResult:
+      type: object
+      required: [migratedKeys, failedMigrations]
+      properties:
+        migratedKeys: { type: integer }
+        failedMigrations: { type: integer }
 
     TopTrafficUser:
       type: object

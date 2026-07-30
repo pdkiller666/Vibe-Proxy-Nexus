@@ -725,6 +725,11 @@ export interface VpnNodeRestartXrayResult {
   status: VpnNodeSystemStatus;
 }
 
+export interface DeleteVpnNodeResult {
+  migratedKeys: number;
+  failedMigrations: number;
+}
+
 export type AdminBalanceTransactionType = typeof AdminBalanceTransactionType[keyof typeof AdminBalanceTransactionType];
 
 

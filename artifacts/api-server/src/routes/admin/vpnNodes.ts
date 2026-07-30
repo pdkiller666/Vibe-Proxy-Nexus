@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, isNull, and, sql } from "drizzle-orm";
+import { asc, eq, isNull, and, ne, or, sql } from "drizzle-orm";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
@@ -9,6 +9,7 @@ import {
   CreateVpnNodeBody,
   CreateVpnNodeResponse,
   DeleteVpnNodeParams,
+  DeleteVpnNodeResponse,
   UpdateVpnNodeBody,
   UpdateVpnNodeParams,
   UpdateVpnNodeResponse,
@@ -16,6 +17,7 @@ import {
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { removeRemoteXrayClient } from "../../lib/remoteNode";
+import { issueKeyForUser, resolveTotalSlots } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
 
 const router: IRouter = Router();
@@ -81,7 +83,7 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
 
   const nodeId = params.data.nodeId;
 
-  // 1. Load the node first — need its managementApiUrl to clean up Xray.
+  // 1. Load the node — need its region and managementApiUrl for migration + Xray cleanup.
   const [node] = await db.select().from(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
   if (!node) {
     res.status(404).json({ error: "VPN node not found" });
@@ -97,21 +99,128 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
 
   const activeKeys = allKeys.filter((k) => !k.revokedAt);
 
-  // 3. Revoke active keys from Xray. Non-fatal — DB is the source of truth.
-  for (const key of activeKeys) {
-    if (node.managementApiUrl) {
-      try {
-        await removeRemoteXrayClient(node, key.uuid);
-      } catch (err) {
-        logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: remote Xray removal failed (ignored)");
-      }
-    } else if (isLocalXrayEnabled()) {
-      try {
-        await removeXrayClient(key.uuid);
-      } catch (err) {
-        logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: local Xray removal failed (ignored)");
-      }
-    }
+  // 3. Migrate active keys to other nodes before deleting them.
+  //    For each key: issue a replacement on the least-loaded same-region node
+  //    (falling back to globally least-loaded if no same-region capacity exists),
+  //    then revoke the old key. Failures are logged but don't abort the deletion
+  //    — the key will be removed along with the node regardless.
+  let migratedKeys = 0;
+  let failedMigrations = 0;
+
+  if (activeKeys.length > 0) {
+    // Pre-resolve slot limits for all affected users to avoid N+1 in the parallel loop.
+    const uniqueUserIds = [...new Set(activeKeys.map((k) => k.userId))];
+    const slotsEntries = await Promise.all(
+      uniqueUserIds.map(async (uid) => [uid, await resolveTotalSlots(uid)] as const),
+    );
+    const slotsMap = new Map<number, number | null>(slotsEntries);
+
+    // Subquery: active key count per node — used for both capacity checks and ordering.
+    const activeCounts = db
+      .select({ nodeId: vpnKeysTable.nodeId, cnt: sql<number>`count(*)::int`.as("cnt") })
+      .from(vpnKeysTable)
+      .where(isNull(vpnKeysTable.revokedAt))
+      .groupBy(vpnKeysTable.nodeId)
+      .as("active_counts");
+
+    const nodeHasCapacity = or(
+      isNull(vpnNodesTable.maxUsers),
+      sql`coalesce(${activeCounts.cnt}, 0) < ${vpnNodesTable.maxUsers}`,
+    );
+
+    await Promise.all(
+      activeKeys.map(async (key) => {
+        const totalSlots = slotsMap.get(key.userId) ?? null;
+
+        // No active subscription → key cannot be re-issued; it will be deleted with the node.
+        if (totalSlots === null) {
+          failedMigrations++;
+          logger.warn(
+            { userId: key.userId, keyId: key.id },
+            "delete node: no active subscription, key deleted without migration",
+          );
+          return;
+        }
+
+        // Find the least-loaded active node in the same region (excluding the node being deleted).
+        const [sameRegionNode] = await db
+          .select({ id: vpnNodesTable.id })
+          .from(vpnNodesTable)
+          .leftJoin(activeCounts, eq(activeCounts.nodeId, vpnNodesTable.id))
+          .where(
+            and(
+              eq(vpnNodesTable.isActive, true),
+              eq(vpnNodesTable.region, node.region),
+              ne(vpnNodesTable.id, nodeId),
+              nodeHasCapacity,
+            ),
+          )
+          .orderBy(asc(sql`coalesce(${activeCounts.cnt}, 0)`))
+          .limit(1);
+
+        // Attempt 1: same-region preferred node (or undefined → auto-select globally).
+        let result = await issueKeyForUser(
+          key.userId,
+          totalSlots,
+          sameRegionNode?.id,
+          key.label,
+          key.description ?? undefined,
+        );
+
+        // Attempt 2: same-region node failed (e.g. at capacity) → let auto-select pick globally.
+        if (!result.ok && sameRegionNode?.id !== undefined) {
+          result = await issueKeyForUser(
+            key.userId,
+            totalSlots,
+            undefined,
+            key.label,
+            key.description ?? undefined,
+          );
+        }
+
+        if (!result.ok) {
+          failedMigrations++;
+          logger.warn(
+            { userId: key.userId, keyId: key.id, error: result.error },
+            "delete node: no available node for key migration, key deleted without replacement",
+          );
+          return;
+        }
+
+        // Revoke old key: DB-first (source of truth), then Xray (non-fatal — node is being removed).
+        try {
+          await db
+            .update(vpnKeysTable)
+            .set({ revokedAt: new Date(), revokedReason: "admin" })
+            .where(eq(vpnKeysTable.id, key.id));
+        } catch (err) {
+          logger.error(
+            { err, oldKeyId: key.id, newKeyId: result.key.id },
+            "delete node: new key issued but old key DB revoke failed",
+          );
+        }
+
+        if (node.managementApiUrl) {
+          try {
+            await removeRemoteXrayClient(node, key.uuid);
+          } catch (err) {
+            logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: remote Xray removal of migrated key failed (ignored)");
+          }
+        } else if (isLocalXrayEnabled()) {
+          try {
+            await removeXrayClient(key.uuid);
+          } catch (err) {
+            logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: local Xray removal of migrated key failed (ignored)");
+          }
+        }
+
+        migratedKeys++;
+        logger.info(
+          { userId: key.userId, oldKeyId: key.id, newKeyId: result.key.id, newNodeId: result.key.nodeId, newNodeName: result.nodeName },
+          "delete node: key migrated to new node",
+        );
+      }),
+    );
   }
 
   // 4. Delete all keys for this node, then the node itself.
@@ -125,8 +234,11 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
     return;
   }
 
-  logger.info({ nodeId, name: node.name, deletedKeys: allKeys.length, revokedActive: activeKeys.length }, "VPN node deleted");
-  res.sendStatus(204);
+  logger.info(
+    { nodeId, name: node.name, deletedKeys: allKeys.length, migratedKeys, failedMigrations },
+    "VPN node deleted",
+  );
+  res.status(200).json(DeleteVpnNodeResponse.parse({ migratedKeys, failedMigrations }));
 });
 
 router.get("/admin/vpn-nodes/:nodeId/health", requireAuth, requireAdmin, async (req, res): Promise<void> => {
