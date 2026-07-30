@@ -783,6 +783,16 @@ try {
   `);
   console.log("heal-schema: M-25 vpn_nodes.consecutive_failures");
 
+  // ── M-26: system_events.user_id — user-scoped notification events ───────────
+  // Allows background jobs (node monitoring, admin node deletion) to emit
+  // user-facing notifications (e.g. "key_migrated"). NULL = admin-only event.
+  // FK to users(id) ON DELETE CASCADE so orphan rows are auto-cleaned.
+  await client.query(`
+    ALTER TABLE system_events
+      ADD COLUMN IF NOT EXISTS user_id integer REFERENCES users(id) ON DELETE CASCADE
+  `);
+  console.log("heal-schema: M-26 system_events.user_id");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
