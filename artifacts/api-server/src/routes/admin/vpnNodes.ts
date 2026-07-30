@@ -4,7 +4,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
 import os from "node:os";
-import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
+import { db, vpnKeysTable, vpnNodesTable, systemEventsTable } from "@workspace/db";
 import {
   CreateVpnNodeBody,
   CreateVpnNodeResponse,
@@ -219,6 +219,24 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
           { userId: key.userId, oldKeyId: key.id, newKeyId: result.key.id, newNodeId: result.key.nodeId, newNodeName: result.nodeName },
           "delete node: key migrated to new node",
         );
+
+        // Emit a user-facing notification so the user sees the migration in their dashboard.
+        try {
+          await db.insert(systemEventsTable).values({
+            eventType: "key_migrated",
+            userId: key.userId,
+            metadata: {
+              oldNodeName: node.name,
+              oldNodeId: node.id,
+              newNodeName: result.nodeName,
+              newNodeId: result.key.nodeId,
+              oldKeyId: key.id,
+              newKeyId: result.key.id,
+            },
+          });
+        } catch (err) {
+          logger.warn({ err, userId: key.userId }, "delete node: failed to emit key_migrated notification (ignored)");
+        }
       }),
     );
   }

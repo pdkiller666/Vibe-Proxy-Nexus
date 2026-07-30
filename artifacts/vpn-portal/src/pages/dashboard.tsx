@@ -5,13 +5,14 @@ import {
   useListMyVpnKeys,
   useCreateExtraTrafficOrder,
   useGetPaymentSettings,
+  useListMyNotifications,
+  useAcknowledgeNotification,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/query-client";
-import { getGetMeQueryKey } from "@workspace/api-client-react";
+import { getGetMeQueryKey, getListMyNotificationsQueryKey } from "@workspace/api-client-react";
 import {
   Shield,
-  Key,
   CreditCard,
   ArrowRight,
   AlertTriangle,
@@ -24,6 +25,8 @@ import {
   Users,
   Copy,
   Check,
+  Server,
+  X,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OnboardingTip } from "@/components/onboarding-tip";
@@ -316,6 +319,70 @@ function ReferralSection() {
   );
 }
 
+/**
+ * Shows one dismissible banner per unacknowledged "key_migrated" notification.
+ * Each banner explains that the user's key was automatically moved to a new server.
+ */
+function ServerMigrationBanners() {
+  const { data: notifications } = useListMyNotifications();
+  const { mutate: acknowledge } = useAcknowledgeNotification({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
+      },
+    },
+  });
+
+  const migrationEvents = (notifications ?? []).filter(
+    (n) => n.eventType === "key_migrated",
+  );
+
+  if (migrationEvents.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {migrationEvents.map((n) => {
+        const meta = n.metadata as {
+          oldNodeName?: string;
+          newNodeName?: string;
+        };
+        return (
+          <div
+            key={n.id}
+            className="flex items-start gap-3 bg-blue-50 border border-blue-200 p-4 text-sm text-blue-800"
+          >
+            <Server className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
+            <div className="flex-1 min-w-0">
+              <span className="font-semibold">Ваш сервер изменился.</span>{" "}
+              {meta.oldNodeName && meta.newNodeName ? (
+                <>
+                  Сервер <strong>{meta.oldNodeName}</strong> был выведен из
+                  эксплуатации — ваш ключ VPN автоматически перенесён на{" "}
+                  <strong>{meta.newNodeName}</strong>. Обновите конфигурацию в
+                  приложении, чтобы подключиться.
+                </>
+              ) : (
+                <>
+                  Один из ваших ключей VPN автоматически перенесён на другой
+                  сервер. Обновите конфигурацию в приложении.
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="Закрыть уведомление"
+              onClick={() => acknowledge({ id: n.id })}
+              className="shrink-0 text-blue-500 hover:text-blue-800 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Collapsed by default on mobile (to avoid a long scroll before reaching
 // Тарифы/Ключи/Платежи) but expanded by default on desktop, where there's
 // plenty of room. Purely a display toggle — content stays mounted either way.
@@ -377,6 +444,9 @@ export default function Dashboard() {
           — первый ключ уже готов, подключитесь к интернету за минуту.
         </p>
       </OnboardingTip>
+
+      {/* Server migration notifications */}
+      <ServerMigrationBanners />
 
       {isExpiringSoon && !isExpired && (
         <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 text-sm text-orange-700">

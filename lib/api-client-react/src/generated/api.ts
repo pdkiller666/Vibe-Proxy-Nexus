@@ -87,6 +87,8 @@ import type {
   TicketStatusUpdate,
   TrafficPollingHealth,
   UpdateMeInput,
+  UserNotificationAcknowledgeResult,
+  UserNotificationList,
   UserRoleUpdate,
   VpnKey,
   VpnKeyInput,
@@ -2455,6 +2457,153 @@ export const useDeleteExtraTrafficOrder = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteExtraTrafficOrderMutationOptions(options));
+    }
+
+export const getListMyNotificationsUrl = () => {
+
+
+
+
+  return `/api/notifications`
+}
+
+/**
+ * @summary List current user's unacknowledged in-app notifications
+ */
+export const listMyNotifications = async ( options?: RequestInit): Promise<UserNotificationList> => {
+
+  return customFetch<UserNotificationList>(getListMyNotificationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyNotificationsQueryKey = () => {
+    return [
+    `/api/notifications`
+    ] as const;
+    }
+
+
+export const getListMyNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listMyNotifications>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyNotificationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyNotifications>>> = ({ signal }) => listMyNotifications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listMyNotifications>>>
+export type ListMyNotificationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List current user's unacknowledged in-app notifications
+ */
+
+export function useListMyNotifications<TData = Awaited<ReturnType<typeof listMyNotifications>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyNotificationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAcknowledgeNotificationUrl = (id: number,) => {
+
+
+
+
+  return `/api/notifications/${id}/acknowledge`
+}
+
+/**
+ * @summary Dismiss an in-app notification
+ */
+export const acknowledgeNotification = async (id: number, options?: RequestInit): Promise<UserNotificationAcknowledgeResult> => {
+
+  return customFetch<UserNotificationAcknowledgeResult>(getAcknowledgeNotificationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAcknowledgeNotificationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeNotification>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acknowledgeNotification>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['acknowledgeNotification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acknowledgeNotification>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  acknowledgeNotification(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcknowledgeNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof acknowledgeNotification>>>
+
+    export type AcknowledgeNotificationMutationError = ErrorType<void>
+
+    /**
+ * @summary Dismiss an in-app notification
+ */
+export const useAcknowledgeNotification = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeNotification>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acknowledgeNotification>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getAcknowledgeNotificationMutationOptions(options));
     }
 
 export const getListMyTicketsUrl = () => {

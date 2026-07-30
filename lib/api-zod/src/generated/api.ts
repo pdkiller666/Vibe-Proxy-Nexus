@@ -736,6 +736,30 @@ export const DeleteExtraTrafficOrderResponse = zod.object({
 
 
 /**
+ * @summary List current user's unacknowledged in-app notifications
+ */
+export const ListMyNotificationsResponseItem = zod.object({
+  "id": zod.number(),
+  "eventType": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date()
+})
+export const ListMyNotificationsResponse = zod.array(ListMyNotificationsResponseItem)
+
+
+/**
+ * @summary Dismiss an in-app notification
+ */
+export const AcknowledgeNotificationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AcknowledgeNotificationResponse = zod.object({
+  "id": zod.number()
+})
+
+
+/**
  * @summary List current user's support tickets
  */
 export const ListMyTicketsResponseItem = zod.object({

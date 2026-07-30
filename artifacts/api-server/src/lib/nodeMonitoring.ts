@@ -291,6 +291,24 @@ async function migrateKeysFromDeactivatedNode(node: {
         },
         "nodeMonitoring: key migrated to new node",
       );
+
+      // Emit a user-facing notification so the user sees the migration in their dashboard.
+      try {
+        await db.insert(systemEventsTable).values({
+          eventType: "key_migrated",
+          userId: key.userId,
+          metadata: {
+            oldNodeName: node.name,
+            oldNodeId: node.id,
+            newNodeName: result.nodeName,
+            newNodeId: result.key.nodeId,
+            oldKeyId: key.id,
+            newKeyId: result.key.id,
+          },
+        });
+      } catch (err) {
+        logger.warn({ err, userId: key.userId }, "nodeMonitoring: failed to emit key_migrated notification (ignored)");
+      }
     }),
   );
 

@@ -1,4 +1,5 @@
 import { integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
 
 /**
  * Persistent in-app system events written by background processes.
@@ -26,9 +27,19 @@ export const systemEventsTable = pgTable("system_events", {
   eventType: text("event_type").notNull(),
   /** Arbitrary JSON payload — shape is specific to each eventType. */
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-  /** Set to NOW() when an admin dismisses/acknowledges the event. */
+  /** Set to NOW() when an admin (or the user themselves) dismisses/acknowledges the event. */
   acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * When set, this event is a user-facing notification scoped to a specific user.
+   * NULL = admin-only system event (no user association).
+   *
+   * Current user event types:
+   *  - "key_migrated": emitted after a VPN key is automatically moved to another node
+   *    (either via admin node-deletion or automated node-monitoring failover).
+   *    metadata: { oldNodeName, oldNodeId, newNodeName, newNodeId, oldKeyId, newKeyId }
+   */
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
 });
 
 export type SystemEvent = typeof systemEventsTable.$inferSelect;

@@ -969,6 +969,21 @@ export interface SystemEventAcknowledgeResult {
   id: number;
 }
 
+export type UserNotificationMetadata = { [key: string]: unknown };
+
+export interface UserNotification {
+  id: number;
+  eventType: string;
+  metadata: UserNotificationMetadata;
+  createdAt: string;
+}
+
+export type UserNotificationList = UserNotification[];
+
+export interface UserNotificationAcknowledgeResult {
+  id: number;
+}
+
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
 };

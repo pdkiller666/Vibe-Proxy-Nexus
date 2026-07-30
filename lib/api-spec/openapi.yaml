@@ -26,6 +26,8 @@ tags:
     description: VPN nodes
   - name: support
     description: Support tickets
+  - name: notifications
+    description: User in-app notifications
   - name: admin
     description: Admin operations
 paths:
@@ -616,6 +618,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CancelExtraTrafficOrderResult"
+
+  /notifications:
+    get:
+      operationId: listMyNotifications
+      tags: [notifications]
+      summary: List current user's unacknowledged in-app notifications
+      responses:
+        "200":
+          description: List of unacknowledged notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserNotificationList"
+
+  /notifications/{id}/acknowledge:
+    post:
+      operationId: acknowledgeNotification
+      tags: [notifications]
+      summary: Dismiss an in-app notification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserNotificationAcknowledgeResult"
+        "404":
+          description: Notification not found
 
   /support-tickets:
     get:
@@ -2723,6 +2759,26 @@ components:
         $ref: "#/components/schemas/SystemEvent"
 
     SystemEventAcknowledgeResult:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
+
+    UserNotification:
+      type: object
+      required: [id, eventType, metadata, createdAt]
+      properties:
+        id: { type: integer }
+        eventType: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    UserNotificationList:
+      type: array
+      items:
+        $ref: "#/components/schemas/UserNotification"
+
+    UserNotificationAcknowledgeResult:
       type: object
       required: [id]
       properties:
