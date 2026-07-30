@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "python-3.12", "bash", "postgresql-16"]
+modules = ["nodejs-20", "bash", "web", "python-3.12", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -25,3 +25,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 ADMIN_EMAIL = "tiy247@mail.ru"
+NODE_ENV = "development"

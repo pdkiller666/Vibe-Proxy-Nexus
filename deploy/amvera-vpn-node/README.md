@@ -287,26 +287,42 @@ ssh -i ~/.ssh/id_rsa -L 9090:localhost:9090 root@<IP_VPS>
 
 ---
 
-## Производительность Xray: DNS и стратегия исходящих
+## Производительность Xray: DNS, sniffing и блокировка QUIC
 
-По умолчанию Xray наследует системный DNS VPS-провайдера, что даёт задержку
-при проксировании. Рекомендуется добавить в `config.json` секцию `dns` и стратегию
-`UseIPv4` на `freedom`-аутбаунде:
+Все настройки ниже уже включены в шаблон `xray/config.json.template`.
 
+**DNS — быстрые серверы первыми:**
 ```json
 "dns": {
-  "servers": ["1.1.1.1", "8.8.8.8", "localhost"]
-},
+  "servers": ["1.1.1.1", "8.8.8.8", "localhost"],
+  "queryStrategy": "UseIPv4"
+}
 ```
 
-и в outbound с тегом `freedom`:
+**`sniffing` — выключен** (`"enabled": false`).
+
+> Включение sniffing с `destOverride: ["quic"]` заставляет Xray туннелировать
+> UDP/QUIC-трафик через WebSocket (TCP). Это создаёт проблему "UDP over TCP":
+> два конкурирующих слоя управления потоком резко снижают скорость на сайтах,
+> активно использующих HTTP/3 (Gemini, Google Search, YouTube). Sniffing на
+> VLESS+WS без дополнительных routing-правил никакой пользы не даёт.
+
+**Блокировка QUIC (UDP port 443) — обязательно:**
 ```json
-"settings": { "domainStrategy": "UseIPv4" }
+"routing": {
+  "rules": [
+    {
+      "type": "field",
+      "network": "udp",
+      "port": "443",
+      "outboundTag": "blocked"
+    }
+  ]
+}
 ```
 
-Также включите `sniffing` на инбаунде для корректного определения целевых доменов:
-```json
-"sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
-```
+Когда QUIC заблокирован, браузер и VPN-клиент (Happ, v2rayNG) мгновенно
+переключаются на HTTP/2 (TCP) — работает стабильно и быстро через WS-туннель.
 
-Эти параметры уже включены в шаблон `xray/config.json.template` начиная с 29.07.2026.
+**`connIdle: 60`** в `policy.levels.0` — закрывает простаивающие соединения
+через 60 с, высвобождая ресурсы при большом числе пользователей.

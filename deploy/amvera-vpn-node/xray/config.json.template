@@ -4,9 +4,9 @@
   },
   "dns": {
     "servers": [
-      "localhost",
       "1.1.1.1",
-      "8.8.8.8"
+      "8.8.8.8",
+      "localhost"
     ],
     "queryStrategy": "UseIPv4"
   },
@@ -17,7 +17,7 @@
   "stats": {},
   "policy": {
     "levels": {
-      "0": { "statsUserUplink": true, "statsUserDownlink": true }
+      "0": { "statsUserUplink": true, "statsUserDownlink": true, "connIdle": 60 }
     },
     "system": {
       "statsOutboundUplink": true,
@@ -42,8 +42,7 @@
         }
       },
       "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
+        "enabled": false
       }
     },
     {
@@ -68,6 +67,12 @@
   ],
   "routing": {
     "rules": [
+      {
+        "type": "field",
+        "network": "udp",
+        "port": "443",
+        "outboundTag": "blocked"
+      },
       {
         "inboundTag": ["api"],
         "outboundTag": "api"
