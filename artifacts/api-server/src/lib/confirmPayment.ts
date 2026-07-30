@@ -247,13 +247,20 @@ export async function confirmPaymentById(
         .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
         .limit(1);
 
-      const startsAt =
-        currentActive?.endsAt && currentActive.endsAt > now
+      // For hourly (usage-based) plans, always start immediately — never queue
+      // behind a prior monthly subscription's endsAt. Queueing would place
+      // startsAt in the future, causing ticksElapsed to be negative every tick
+      // so billing silently skips forever until an admin manually fixes it.
+      // Hourly plans also have no fixed end date (billing controls expiry).
+      const isHourly = plan.billingType === "hourly";
+      const startsAt = isHourly
+        ? now
+        : currentActive?.endsAt && currentActive.endsAt > now
           ? currentActive.endsAt
           : now;
-      const endsAt = new Date(
-        startsAt.getTime() + plan.durationDays * 24 * 60 * 60 * 1000,
-      );
+      const endsAt = isHourly
+        ? null
+        : new Date(startsAt.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
       const [updatedSubscription] = await tx
         .update(subscriptionsTable)

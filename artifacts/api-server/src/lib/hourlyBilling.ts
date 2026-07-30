@@ -12,7 +12,7 @@
  * subscriptions, not a per-user round trip — see .agents/memory for the
  * load analysis (100-1000 concurrent hourly users) this was designed for.
  */
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   balanceTransactionsTable,
   jobsDb,
@@ -52,6 +52,50 @@ interface HourlySubscriptionRow {
  */
 export async function runHourlyBillingTick(): Promise<{ billed: number; expired: number }> {
   const now = new Date();
+
+  // ── Self-healing: fix any active hourly subscription whose startsAt is in
+  // the future (the symptom of the confirmPayment queuing bug where a new
+  // hourly sub inherited startsAt = prior monthly sub's endsAt).
+  // With confirmPayment.ts now fixed this should never happen for new
+  // activations, but existing rows and any edge cases are healed here
+  // automatically rather than requiring manual admin intervention.
+  const frozenSubs = await jobsDb
+    .select({ id: subscriptionsTable.id, userId: subscriptionsTable.userId, startsAt: subscriptionsTable.startsAt })
+    .from(subscriptionsTable)
+    .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
+    .where(
+      and(
+        eq(subscriptionsTable.status, "active"),
+        eq(plansTable.billingType, "hourly"),
+        gt(subscriptionsTable.startsAt, now),
+      ),
+    );
+
+  if (frozenSubs.length > 0) {
+    await jobsDb
+      .update(subscriptionsTable)
+      .set({ startsAt: now, lastBilledAt: null })
+      .where(
+        and(
+          inArray(
+            subscriptionsTable.id,
+            frozenSubs.map((s) => s.id),
+          ),
+          gt(subscriptionsTable.startsAt, now),
+        ),
+      );
+    logger.warn(
+      {
+        count: frozenSubs.length,
+        subscriptions: frozenSubs.map((s) => ({
+          id: s.id,
+          userId: s.userId,
+          previousStartsAt: s.startsAt,
+        })),
+      },
+      "Hourly billing self-heal: reset future startsAt to now for frozen subscriptions",
+    );
+  }
 
   const rows = await jobsDb
     .select({
