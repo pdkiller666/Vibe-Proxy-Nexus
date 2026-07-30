@@ -610,6 +610,9 @@ export interface AdminUser {
   /** @nullable */
   subscriptionEndsAt?: string | null;
   /** @nullable */
+  subscriptionStartsAt?: string | null;
+  subscriptionBillingType?: PlanBillingType | null;
+  /** @nullable */
   adminNote?: string | null;
   isBanned: boolean;
 }

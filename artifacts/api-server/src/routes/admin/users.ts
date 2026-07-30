@@ -168,7 +168,9 @@ async function enrichUsersWithTraffic(users: User[]) {
       userId: subscriptionsTable.userId,
       planId: subscriptionsTable.planId,
       planName: plansTable.name,
+      billingType: plansTable.billingType,
       status: subscriptionsTable.status,
+      startsAt: subscriptionsTable.startsAt,
       endsAt: subscriptionsTable.endsAt,
     })
     .from(subscriptionsTable)
@@ -231,7 +233,9 @@ async function enrichUsersWithTraffic(users: User[]) {
       planId: current?.planId ?? null,
       planName: current?.planName ?? null,
       subscriptionStatus: current?.status ?? null,
+      subscriptionStartsAt: current?.startsAt ?? null,
       subscriptionEndsAt: current?.endsAt ?? null,
+      subscriptionBillingType: current?.billingType ?? null,
     };
   });
 }

@@ -2331,6 +2331,16 @@ components:
             - $ref: "#/components/schemas/SubscriptionStatus"
             - type: "null"
         subscriptionEndsAt: { type: ["string", "null"], format: date-time }
+        # startsAt of the user's most recent subscription — used in the admin
+        # panel to detect hourly subscriptions whose start date is in the future
+        # (a billing bug where the subscription was queued to start at the end
+        # of a prior monthly sub, so billing never fires because billFrom > now).
+        subscriptionStartsAt: { type: ["string", "null"], format: date-time }
+        # billingType of the user's most recently started subscription.
+        subscriptionBillingType:
+          oneOf:
+            - $ref: "#/components/schemas/PlanBillingType"
+            - type: "null"
         # Private admin-only memo (never exposed in user-facing endpoints).
         adminNote: { type: ["string", "null"] }
         # true while the account is administratively blocked.

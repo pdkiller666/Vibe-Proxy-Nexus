@@ -1830,11 +1830,49 @@ function UserSubscriptionEditor({ user }: { user: AdminUser }) {
   const { data: plans } = useListPlans();
   const { mutate: updateSubscription, isPending } = useUpdateUserSubscription();
   const { toast } = useToast();
+  const [fixingBilling, setFixingBilling] = useState(false);
   // Default to the genuinely active plan (not a cancelled/pending one).
   const [planId, setPlanId] = useState<string>(
     user.activePlanId ? String(user.activePlanId) : user.planId ? String(user.planId) : "",
   );
   const [durationDays, setDurationDays] = useState("");
+
+  // Detect hourly subscriptions whose startsAt is in the future — this causes
+  // ticksElapsed to be negative and billing to silently skip forever.
+  const billingStartInFuture =
+    user.subscriptionBillingType === "hourly" &&
+    user.subscriptionStatus === "active" &&
+    user.activeSubscriptionId != null &&
+    user.subscriptionStartsAt != null &&
+    new Date(user.subscriptionStartsAt) > new Date();
+
+  async function handleFixBillingStart() {
+    if (!user.activeSubscriptionId) return;
+    setFixingBilling(true);
+    try {
+      const res = await fetch(`/api/admin/debug/billing/fix/${user.activeSubscriptionId}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}), // reset to now
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast({ title: `Ошибка сброса биллинга: ${body.error ?? res.status}`, variant: "destructive" });
+        return;
+      }
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+      toast({
+        title: "Биллинг сброшен ✓",
+        description: `starts_at сброшен с ${data.previousStartsAt ? new Date(data.previousStartsAt).toLocaleString("ru") : "—"} на текущее время. Списание начнётся в течение 5 минут.`,
+      });
+    } catch {
+      toast({ title: "Ошибка сброса биллинга", variant: "destructive" });
+    } finally {
+      setFixingBilling(false);
+    }
+  }
 
   function handleAssign() {
     if (!planId) return;
@@ -1894,6 +1932,21 @@ function UserSubscriptionEditor({ user }: { user: AdminUser }) {
           ) : (
             <span>Подписок нет</span>
           )}
+        </div>
+      )}
+      {billingStartInFuture && (
+        <div className="flex items-center gap-2 flex-wrap rounded border border-yellow-500/50 bg-yellow-500/10 px-3 py-2">
+          <span className="text-xs text-yellow-700 dark:text-yellow-400 flex-1">
+            ⚠ Биллинг заморожен: <code>starts_at</code> в будущем (
+            {new Date(user.subscriptionStartsAt!).toLocaleString("ru")}). Нажмите для сброса.
+          </span>
+          <button
+            onClick={handleFixBillingStart}
+            disabled={fixingBilling}
+            className="bg-yellow-500 text-white font-bold px-3 py-1 text-xs hover:bg-yellow-600 transition-colors disabled:opacity-50"
+          >
+            {fixingBilling ? "Сброс…" : "Исправить биллинг"}
+          </button>
         </div>
       )}
       <div className="flex items-center gap-2 flex-wrap">

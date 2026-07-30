@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminUserActivityStatus } from './adminUserActivityStatus';
+import type { PlanBillingType } from './planBillingType';
 import type { SubscriptionStatus } from './subscriptionStatus';
 import type { UserRole } from './userRole';
 
@@ -54,6 +55,9 @@ export interface AdminUser {
   subscriptionStatus?: SubscriptionStatus | null;
   /** @nullable */
   subscriptionEndsAt?: Date | null;
+  /** @nullable */
+  subscriptionStartsAt?: Date | null;
+  subscriptionBillingType?: PlanBillingType | null;
   /** @nullable */
   adminNote?: string | null;
   isBanned: boolean;
