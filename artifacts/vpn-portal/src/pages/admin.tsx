@@ -47,6 +47,8 @@ import {
   getGetVpnNodeHealthQueryKey,
   useGetAdminTrafficPollingHealth,
   getGetAdminTrafficPollingHealthQueryKey,
+  useListAdminPlans,
+  getListAdminPlansQueryKey,
   useListAdminReferrals,
   useListAdminInviteLinks,
   useCreateAdminInviteLink,
@@ -867,6 +869,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
   const [devicesIncluded, setDevicesIncluded] = useState(plan?.devicesIncluded?.toString() ?? "1");
   const [trafficLimitGb, setTrafficLimitGb] = useState(plan?.trafficLimitGb?.toString() ?? "");
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
+  const [isPromo, setIsPromo] = useState(plan?.isPromo ?? false);
   const [billingType, setBillingType] = useState<"monthly" | "hourly">(plan?.billingType ?? "monthly");
   const [hourlyRateRub, setHourlyRateRub] = useState(
     plan?.hourlyRateKopecks != null ? (plan.hourlyRateKopecks / 100).toString() : "",
@@ -881,10 +884,12 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
       devicesIncluded: devicesIncluded ? Number(devicesIncluded) : 1,
       trafficLimitGb: trafficLimitGb ? Number(trafficLimitGb) : null,
       isActive,
+      isPromo,
       billingType,
       hourlyRateKopecks: billingType === "hourly" ? Math.round(Number(hourlyRateRub) * 100) : null,
     };
     const onSuccess = () => {
+      queryClient.invalidateQueries({ queryKey: getListAdminPlansQueryKey() });
       queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
       toast({ title: plan ? "Тариф обновлён" : "Тариф создан" });
       onDone();
@@ -958,6 +963,10 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
           Активен
         </label>
+        <label className="flex items-center gap-2 text-sm" title="Промо-тарифы скрыты от пользователей и доступны только через инвайт-ссылки">
+          <input type="checkbox" checked={isPromo} onChange={(e) => setIsPromo(e.target.checked)} />
+          Промо <span className="text-[11px] text-muted-foreground">(только через инвайт)</span>
+        </label>
       </div>
       <Textarea
         placeholder="Описание"
@@ -987,12 +996,13 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
 }
 
 function PlansManagement() {
-  const { data: plans, isLoading } = useListPlans();
+  const { data: plans, isLoading } = useListAdminPlans();
   const { mutate: deletePlan } = useDeletePlan();
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
   const [billingFilter, setBillingFilter] = useState<"all" | "monthly" | "hourly">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [promoFilter, setPromoFilter] = useState<"all" | "promo" | "regular">("all");
   const [sort, setSort] = useState<"default" | "price_asc" | "price_desc" | "name">("default");
 
   function handleDelete(planId: number) {
@@ -1000,7 +1010,7 @@ function PlansManagement() {
       { planId },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListPlansQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAdminPlansQueryKey() });
           toast({ title: "Тариф деактивирован" });
         },
         onError: () => toast({ title: "Ошибка удаления тарифа", variant: "destructive" }),
@@ -1017,6 +1027,7 @@ function PlansManagement() {
   const filteredPlans = (plans ?? [])
     .filter((p) => billingFilter === "all" || p.billingType === billingFilter)
     .filter((p) => statusFilter === "all" || (statusFilter === "active" ? p.isActive : !p.isActive))
+    .filter((p) => promoFilter === "all" || (promoFilter === "promo" ? p.isPromo : !p.isPromo))
     .sort((a, b) => {
       switch (sort) {
         case "price_asc":
@@ -1053,6 +1064,15 @@ function PlansManagement() {
           <option value="inactive">Неактивные</option>
         </select>
         <select
+          value={promoFilter}
+          onChange={(e) => setPromoFilter(e.target.value as typeof promoFilter)}
+          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+        >
+          <option value="all">Все типы</option>
+          <option value="regular">Обычные</option>
+          <option value="promo">Промо</option>
+        </select>
+        <select
           value={sort}
           onChange={(e) => setSort(e.target.value as typeof sort)}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
@@ -1069,8 +1089,10 @@ function PlansManagement() {
         ) : (
           <div key={plan.id} className="bg-card border border-border p-4 flex items-center justify-between gap-4 flex-wrap">
             <div className="min-w-0 break-words">
-              <div className="font-bold">
-                {plan.name} {!plan.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
+              <div className="font-bold flex items-center gap-2 flex-wrap">
+                {plan.name}
+                {plan.isPromo && <span className="text-[10px] font-mono font-bold uppercase tracking-wide bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 px-1.5 py-0.5 rounded">Промо</span>}
+                {!plan.isActive && <span className="text-muted-foreground font-normal text-sm">(неактивен)</span>}
               </div>
               <div className="text-sm text-muted-foreground font-mono">
                 {plan.billingType === "hourly" ? (
@@ -1937,19 +1959,31 @@ function UserSubscriptionEditor({ user }: { user: AdminUser }) {
           )}
         </div>
       )}
-      {billingStartInFuture && (
-        <div className="flex items-center gap-2 flex-wrap rounded border border-yellow-500/50 bg-yellow-500/10 px-3 py-2">
-          <span className="text-xs text-yellow-700 dark:text-yellow-400 flex-1">
-            ⚠ Биллинг заморожен: <code>starts_at</code> в будущем (
-            {new Date(user.subscriptionStartsAt!).toLocaleString("ru")}). Нажмите для сброса.
+      {user.activeSubscriptionBillingType === "hourly" && user.activeSubscriptionId != null && (
+        <div className={`flex items-center gap-2 flex-wrap rounded border px-3 py-2 ${
+          billingStartInFuture
+            ? "border-yellow-500/50 bg-yellow-500/10"
+            : "border-border bg-muted/30"
+        }`}>
+          <span className={`text-xs flex-1 font-mono ${billingStartInFuture ? "text-yellow-700 dark:text-yellow-400" : "text-muted-foreground"}`}>
+            {billingStartInFuture ? (
+              <>⚠ Биллинг заморожен: <code>starts_at</code> в будущем ({new Date(user.activeSubscriptionStartsAt!).toLocaleString("ru")})</>
+            ) : (
+              <>✓ Почасовой биллинг активен{user.activeSubscriptionLastBilledAt
+                ? ` · последнее списание: ${new Date(user.activeSubscriptionLastBilledAt).toLocaleString("ru")}`
+                : " · ещё не списывалось"
+              }</>
+            )}
           </span>
-          <button
-            onClick={handleFixBillingStart}
-            disabled={fixingBilling}
-            className="bg-yellow-500 text-white font-bold px-3 py-1 text-xs hover:bg-yellow-600 transition-colors disabled:opacity-50"
-          >
-            {fixingBilling ? "Сброс…" : "Исправить биллинг"}
-          </button>
+          {billingStartInFuture && (
+            <button
+              onClick={handleFixBillingStart}
+              disabled={fixingBilling}
+              className="bg-yellow-500 text-white font-bold px-3 py-1 text-xs hover:bg-yellow-600 transition-colors disabled:opacity-50 shrink-0"
+            >
+              {fixingBilling ? "Сброс…" : "Исправить биллинг"}
+            </button>
+          )}
         </div>
       )}
       <div className="flex items-center gap-2 flex-wrap">
@@ -2581,6 +2615,10 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   );
 }
 
+const KEYS_PAGE_SIZE = 8;
+const PAYMENTS_PAGE_SIZE = 10;
+const TXS_PAGE_SIZE = 10;
+
 function UserKeysAndPayments({ userId }: { userId: number }) {
   const { data: keys } = useQuery<AdminVpnKey[]>({
     queryKey: ["admin", "vpn-keys"],
@@ -2593,6 +2631,9 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
   const { data: payments } = useListAdminPayments();
   const { data: balanceTxs } = useListAdminUserBalanceTransactions(userId);
   const { toast } = useToast();
+  const [showAllKeys, setShowAllKeys] = useState(false);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [showAllTxs, setShowAllTxs] = useState(false);
 
   const revokeMutation = useMutation({
     mutationFn: async (keyId: number) => {
@@ -2609,6 +2650,9 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
 
   const userKeys = (keys ?? []).filter((k) => k.userId === userId);
   const userPayments = (payments ?? []).filter((p) => p.userId === userId);
+  const visibleKeys = showAllKeys ? userKeys : userKeys.slice(0, KEYS_PAGE_SIZE);
+  const totalPaymentPages = Math.max(1, Math.ceil(userPayments.length / PAYMENTS_PAGE_SIZE));
+  const visiblePayments = userPayments.slice((paymentsPage - 1) * PAYMENTS_PAGE_SIZE, paymentsPage * PAYMENTS_PAGE_SIZE);
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -2619,7 +2663,7 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
         {userKeys.length === 0 ? (
           <p className="text-xs text-muted-foreground">Ключей нет.</p>
         ) : (
-          userKeys.map((key) => (
+          visibleKeys.map((key) => (
             <div key={key.id} className={`bg-muted/30 border border-border px-2 py-1.5 text-xs ${key.revokedAt ? "opacity-60" : ""}`}>
               <div className="flex items-center justify-between gap-2 min-w-0">
                 <div className={`min-w-0 truncate ${key.revokedAt ? "text-muted-foreground line-through font-medium" : "font-medium"}`}>
@@ -2666,6 +2710,14 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
             </div>
           ))
         )}
+        {userKeys.length > KEYS_PAGE_SIZE && (
+          <button
+            onClick={() => setShowAllKeys((v) => !v)}
+            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+          >
+            {showAllKeys ? "Скрыть" : `Показать все ${userKeys.length} ключей`}
+          </button>
+        )}
       </div>
       <div className="space-y-2">
         <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">
@@ -2674,36 +2726,53 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
         {userPayments.length === 0 ? (
           <p className="text-xs text-muted-foreground">Платежей нет.</p>
         ) : (
-          userPayments.map((p) => (
-            <div key={p.id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
-              <div className="min-w-0">
-                <div className="font-medium">
-                  {p.type === "extra_device_slot"
-                    ? "Доп. устройство"
-                    : p.type === "extra_traffic"
-                      ? `Доп. трафик${p.extraTrafficGb ? ` (+${p.extraTrafficGb} ГБ)` : ""}`
-                      : p.type === "balance_topup"
-                        ? "Пополнение баланса"
-                        : (p.planName ?? "Подписка")}
+          <>
+            {visiblePayments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
+                <div className="min-w-0">
+                  <div className="font-medium">
+                    {p.type === "extra_device_slot"
+                      ? "Доп. устройство"
+                      : p.type === "extra_traffic"
+                        ? `Доп. трафик${p.extraTrafficGb ? ` (+${p.extraTrafficGb} ГБ)` : ""}`
+                        : p.type === "balance_topup"
+                          ? "Пополнение баланса"
+                          : (p.planName ?? "Подписка")}
+                  </div>
+                  <div className="text-muted-foreground font-mono">{formatDate(p.createdAt)}</div>
                 </div>
-                <div className="text-muted-foreground font-mono">{formatDate(p.createdAt)}</div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="font-mono font-bold">{p.amountRub} ₽</div>
-                <div
-                  className={
-                    p.status === "confirmed"
-                      ? "text-green-600"
-                      : p.status === "rejected"
-                        ? "text-destructive"
-                        : "text-muted-foreground"
-                  }
-                >
-                  {p.status === "confirmed" ? "Оплачен" : p.status === "rejected" ? "Отклонён" : "Ожидает"}
+                <div className="text-right shrink-0">
+                  <div className="font-mono font-bold">{p.amountRub} ₽</div>
+                  <div
+                    className={
+                      p.status === "confirmed"
+                        ? "text-green-600"
+                        : p.status === "rejected"
+                          ? "text-destructive"
+                          : "text-muted-foreground"
+                    }
+                  >
+                    {p.status === "confirmed" ? "Оплачен" : p.status === "rejected" ? "Отклонён" : "Ожидает"}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+            {totalPaymentPages > 1 && (
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => setPaymentsPage((p) => Math.max(1, p - 1))}
+                  disabled={paymentsPage === 1}
+                  className="text-xs border border-border px-2 py-0.5 disabled:opacity-40 hover:bg-muted transition-colors"
+                >←</button>
+                <span className="text-xs text-muted-foreground">{paymentsPage} / {totalPaymentPages}</span>
+                <button
+                  onClick={() => setPaymentsPage((p) => Math.min(totalPaymentPages, p + 1))}
+                  disabled={paymentsPage === totalPaymentPages}
+                  className="text-xs border border-border px-2 py-0.5 disabled:opacity-40 hover:bg-muted transition-colors"
+                >→</button>
+              </div>
+            )}
+          </>
         )}
       </div>
       <div className="space-y-2">
@@ -2713,7 +2782,19 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
         {!balanceTxs || balanceTxs.length === 0 ? (
           <p className="text-xs text-muted-foreground">Транзакций нет.</p>
         ) : (
-          balanceTxs.map((tx) => <BalanceTransactionRow key={tx.id} tx={tx} />)
+          <>
+            {(showAllTxs ? balanceTxs : balanceTxs.slice(0, TXS_PAGE_SIZE)).map((tx) => (
+              <BalanceTransactionRow key={tx.id} tx={tx} />
+            ))}
+            {balanceTxs.length > TXS_PAGE_SIZE && (
+              <button
+                onClick={() => setShowAllTxs((v) => !v)}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+              >
+                {showAllTxs ? "Скрыть" : `Показать все ${balanceTxs.length} транзакций`}
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -3091,7 +3172,11 @@ function InviteLinksManagement() {
     });
   }
 
-  const monthlyPlans = plans?.filter((p) => p.isActive && p.billingType === "monthly") ?? [];
+  // Use admin plans so promo plans are visible in the invite dropdown too.
+  const { data: adminPlans } = useListAdminPlans();
+  // All active monthly plans (regular + promo) — promo plans are hidden from
+  // the public plan page but should be selectable when creating invite links.
+  const monthlyPlans = (adminPlans ?? plans ?? []).filter((p) => p.isActive && p.billingType === "monthly");
 
   return (
     <div className="space-y-4">

@@ -26,6 +26,11 @@ export const plansTable = pgTable(
       .default("monthly"),
     hourlyRateKopecks: integer("hourly_rate_kopecks"),
     isActive: boolean("is_active").notNull().default(true),
+    // Promo plans are hidden from the public plan listing and can only be
+    // assigned via admin invite links. Use them for referral campaigns,
+    // influencer codes, or limited-time offers without polluting the main
+    // plan-selection page that all users see.
+    isPromo: boolean("is_promo").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   // The plan-selection page filters to active plans on every load.

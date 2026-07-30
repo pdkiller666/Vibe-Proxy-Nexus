@@ -13,6 +13,11 @@ import { requireAdmin, requireAuth } from "../../lib/auth";
 
 const router: IRouter = Router();
 
+router.get("/admin/plans", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const plans = await db.select().from(plansTable).orderBy(plansTable.id);
+  res.json(plans);
+});
+
 router.post("/admin/plans", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const parsed = CreatePlanBody.safeParse(req.body);
 

@@ -793,6 +793,16 @@ try {
   `);
   console.log("heal-schema: M-26 system_events.user_id");
 
+  // ── M-27: plans.is_promo — promo plans hidden from public listing ────────────
+  // Promo plans are only assignable via admin invite links (referral campaigns,
+  // limited-time offers). is_promo=false is the default; public GET /plans
+  // filters these out so they never appear on the user-facing plan page.
+  await client.query(`
+    ALTER TABLE plans
+      ADD COLUMN IF NOT EXISTS is_promo boolean NOT NULL DEFAULT false
+  `);
+  console.log("heal-schema: M-27 plans.is_promo");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

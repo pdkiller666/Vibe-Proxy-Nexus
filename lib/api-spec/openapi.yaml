@@ -743,6 +743,19 @@ paths:
                 $ref: "#/components/schemas/DashboardSummary"
 
   /admin/plans:
+    get:
+      operationId: listAdminPlans
+      tags: [admin]
+      summary: List all plans including promo (admin only)
+      responses:
+        "200":
+          description: All plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
     post:
       operationId: createPlan
       tags: [admin]
@@ -1828,6 +1841,10 @@ components:
         # traffic. Null for monthly plans.
         hourlyRateKopecks: { type: ["integer", "null"] }
         isActive: { type: boolean }
+        # Promo plans are hidden from the public plan listing and can only be
+        # assigned via admin invite links. Use for referral campaigns or
+        # limited-time offers without polluting the public plan-selection page.
+        isPromo: { type: boolean }
         createdAt: { type: string, format: date-time }
 
     PlanInput:
@@ -1846,6 +1863,7 @@ components:
           $ref: "#/components/schemas/PlanBillingType"
         hourlyRateKopecks: { type: ["integer", "null"], minimum: 1 }
         isActive: { type: boolean }
+        isPromo: { type: boolean }
 
     PlanUpdate:
       type: object
@@ -1860,6 +1878,7 @@ components:
           $ref: "#/components/schemas/PlanBillingType"
         hourlyRateKopecks: { type: ["integer", "null"], minimum: 1 }
         isActive: { type: boolean }
+        isPromo: { type: boolean }
 
     SbpQrUpload:
       type: object
@@ -2348,6 +2367,7 @@ components:
         # Used to detect frozen billing: hourly + activeSubscriptionStartsAt in
         # the future → ticksElapsed < 0 → billing silently skips forever.
         activeSubscriptionStartsAt: { type: ["string", "null"], format: date-time }
+        activeSubscriptionLastBilledAt: { type: ["string", "null"], format: date-time }
         activeSubscriptionBillingType:
           oneOf:
             - $ref: "#/components/schemas/PlanBillingType"

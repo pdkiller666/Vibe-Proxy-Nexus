@@ -2978,6 +2978,83 @@ export function useGetAdminDashboardSummary<TData = Awaited<ReturnType<typeof ge
 
 
 
+export const getListAdminPlansUrl = () => {
+
+
+
+
+  return `/api/admin/plans`
+}
+
+/**
+ * @summary List all plans including promo (admin only)
+ */
+export const listAdminPlans = async ( options?: RequestInit): Promise<Plan[]> => {
+
+  return customFetch<Plan[]>(getListAdminPlansUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminPlansQueryKey = () => {
+    return [
+    `/api/admin/plans`
+    ] as const;
+    }
+
+
+export const getListAdminPlansQueryOptions = <TData = Awaited<ReturnType<typeof listAdminPlans>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPlans>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminPlansQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminPlans>>> = ({ signal }) => listAdminPlans({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminPlans>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminPlansQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminPlans>>>
+export type ListAdminPlansQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all plans including promo (admin only)
+ */
+
+export function useListAdminPlans<TData = Awaited<ReturnType<typeof listAdminPlans>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPlans>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminPlansQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getCreatePlanUrl = () => {
 
 

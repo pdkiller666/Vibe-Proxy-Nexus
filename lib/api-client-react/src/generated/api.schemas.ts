@@ -145,6 +145,7 @@ export interface Plan {
   /** @nullable */
   hourlyRateKopecks: number | null;
   isActive: boolean;
+  isPromo?: boolean;
   createdAt?: string;
 }
 
@@ -170,6 +171,7 @@ export interface PlanInput {
      */
   hourlyRateKopecks?: number | null;
   isActive?: boolean;
+  isPromo?: boolean;
 }
 
 export interface PlanUpdate {
@@ -194,6 +196,7 @@ export interface PlanUpdate {
      */
   hourlyRateKopecks?: number | null;
   isActive?: boolean;
+  isPromo?: boolean;
 }
 
 export interface SbpQrUpload {
@@ -614,6 +617,8 @@ export interface AdminUser {
   subscriptionBillingType?: PlanBillingType | null;
   /** @nullable */
   activeSubscriptionStartsAt?: string | null;
+  /** @nullable */
+  activeSubscriptionLastBilledAt?: string | null;
   activeSubscriptionBillingType?: PlanBillingType | null;
   /** @nullable */
   adminNote?: string | null;

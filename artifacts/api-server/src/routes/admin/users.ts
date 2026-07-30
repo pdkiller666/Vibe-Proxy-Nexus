@@ -113,6 +113,9 @@ async function enrichUsersWithTraffic(users: User[]) {
       planId: plansTable.id,
       trafficLimitGb: plansTable.trafficLimitGb,
       planName: plansTable.name,
+      billingType: plansTable.billingType,
+      startsAt: subscriptionsTable.startsAt,
+      lastBilledAt: subscriptionsTable.lastBilledAt,
       extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
       extraTrafficGb: subscriptionsTable.extraTrafficGb,
       trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
@@ -140,6 +143,9 @@ async function enrichUsersWithTraffic(users: User[]) {
   // any slots purchased under a since-expired/switched subscription do not
   // carry over.
   const activeSubscriptionIdByUser = new Map(activeRows.map((r) => [r.userId, r.subscriptionId]));
+  const activeSubscriptionBillingTypeByUser = new Map(activeRows.map((r) => [r.userId, r.billingType]));
+  const activeSubscriptionStartsAtByUser = new Map(activeRows.map((r) => [r.userId, r.startsAt]));
+  const activeSubscriptionLastBilledAtByUser = new Map(activeRows.map((r) => [r.userId, r.lastBilledAt]));
   const extraDeviceSlotsByUser = new Map(activeRows.map((r) => [r.userId, r.extraDeviceSlots]));
   const extraTrafficGbByUser = new Map(activeRows.map((r) => [r.userId, r.extraTrafficGb]));
   const trafficLimitExceededAtByUser = new Map(activeRows.map((r) => [r.userId, r.trafficLimitExceededAt]));
@@ -228,6 +234,9 @@ async function enrichUsersWithTraffic(users: User[]) {
       activePlanId: activePlanIdByUser.get(user.id) ?? null,
       extraDeviceSlots: extraDeviceSlotsByUser.get(user.id) ?? 0,
       activeSubscriptionId: activeSubscriptionIdByUser.get(user.id) ?? null,
+      activeSubscriptionBillingType: activeSubscriptionBillingTypeByUser.get(user.id) ?? null,
+      activeSubscriptionStartsAt: activeSubscriptionStartsAtByUser.get(user.id) ?? null,
+      activeSubscriptionLastBilledAt: activeSubscriptionLastBilledAtByUser.get(user.id) ?? null,
       referredByEmail: user.referredByUserId != null ? (referrerEmailById.get(user.referredByUserId) ?? null) : null,
       referredUserCount: referredCountByUser.get(user.id) ?? 0,
       planId: current?.planId ?? null,

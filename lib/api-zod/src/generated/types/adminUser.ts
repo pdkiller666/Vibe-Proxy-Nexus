@@ -60,6 +60,8 @@ export interface AdminUser {
   subscriptionBillingType?: PlanBillingType | null;
   /** @nullable */
   activeSubscriptionStartsAt?: Date | null;
+  /** @nullable */
+  activeSubscriptionLastBilledAt?: Date | null;
   activeSubscriptionBillingType?: PlanBillingType | null;
   /** @nullable */
   adminNote?: string | null;

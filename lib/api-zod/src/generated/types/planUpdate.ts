@@ -29,4 +29,5 @@ export interface PlanUpdate {
      */
   hourlyRateKopecks?: number | null;
   isActive?: boolean;
+  isPromo?: boolean;
 }
