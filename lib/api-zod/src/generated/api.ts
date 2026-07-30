@@ -1444,6 +1444,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "subscriptionStartsAt": zod.coerce.date().nullish(),
   "subscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "activeSubscriptionStartsAt": zod.coerce.date().nullish(),
+  "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
   "isBanned": zod.boolean()
 })
@@ -1544,6 +1546,8 @@ export const UpdateUserProfileResponse = zod.object({
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "subscriptionStartsAt": zod.coerce.date().nullish(),
   "subscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "activeSubscriptionStartsAt": zod.coerce.date().nullish(),
+  "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
   "isBanned": zod.boolean()
 })
@@ -1604,6 +1608,8 @@ export const UpdateUserRoleResponse = zod.object({
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "subscriptionStartsAt": zod.coerce.date().nullish(),
   "subscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "activeSubscriptionStartsAt": zod.coerce.date().nullish(),
+  "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
   "isBanned": zod.boolean()
 })
@@ -1658,6 +1664,8 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "subscriptionStartsAt": zod.coerce.date().nullish(),
   "subscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "activeSubscriptionStartsAt": zod.coerce.date().nullish(),
+  "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
   "isBanned": zod.boolean()
 })
@@ -1712,6 +1720,8 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "subscriptionStartsAt": zod.coerce.date().nullish(),
   "subscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "activeSubscriptionStartsAt": zod.coerce.date().nullish(),
+  "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
   "isBanned": zod.boolean()
 })
@@ -1766,6 +1776,8 @@ export const AdminSetUserBalanceResponse = zod.object({
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "subscriptionStartsAt": zod.coerce.date().nullish(),
   "subscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "activeSubscriptionStartsAt": zod.coerce.date().nullish(),
+  "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
   "isBanned": zod.boolean()
 })

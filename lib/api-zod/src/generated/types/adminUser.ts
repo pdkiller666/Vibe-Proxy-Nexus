@@ -59,6 +59,9 @@ export interface AdminUser {
   subscriptionStartsAt?: Date | null;
   subscriptionBillingType?: PlanBillingType | null;
   /** @nullable */
+  activeSubscriptionStartsAt?: Date | null;
+  activeSubscriptionBillingType?: PlanBillingType | null;
+  /** @nullable */
   adminNote?: string | null;
   isBanned: boolean;
 }

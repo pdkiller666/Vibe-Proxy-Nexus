@@ -1839,12 +1839,15 @@ function UserSubscriptionEditor({ user }: { user: AdminUser }) {
 
   // Detect hourly subscriptions whose startsAt is in the future — this causes
   // ticksElapsed to be negative and billing to silently skip forever.
+  // Use activeSubscription* fields (sourced from the status=active row) rather
+  // than subscriptionStartsAt/BillingType (sourced from the most-recently-
+  // CREATED subscription regardless of status), because a cancelled pending
+  // row with startsAt=null sorts first in DESC and masks the real active one.
   const billingStartInFuture =
-    user.subscriptionBillingType === "hourly" &&
-    user.subscriptionStatus === "active" &&
+    user.activeSubscriptionBillingType === "hourly" &&
     user.activeSubscriptionId != null &&
-    user.subscriptionStartsAt != null &&
-    new Date(user.subscriptionStartsAt) > new Date();
+    user.activeSubscriptionStartsAt != null &&
+    new Date(user.activeSubscriptionStartsAt) > new Date();
 
   async function handleFixBillingStart() {
     if (!user.activeSubscriptionId) return;

@@ -2336,8 +2336,19 @@ components:
         # (a billing bug where the subscription was queued to start at the end
         # of a prior monthly sub, so billing never fires because billFrom > now).
         subscriptionStartsAt: { type: ["string", "null"], format: date-time }
-        # billingType of the user's most recently started subscription.
         subscriptionBillingType:
+          oneOf:
+            - $ref: "#/components/schemas/PlanBillingType"
+            - type: "null"
+        # startsAt and billingType from the user's currently ACTIVE subscription.
+        # Unlike subscriptionStartsAt (sourced from the most-recently-created
+        # subscription regardless of status — a cancelled/pending row with
+        # startsAt=null sorts first in DESC and can mask the real active one),
+        # these always reflect the subscription the billing job processes.
+        # Used to detect frozen billing: hourly + activeSubscriptionStartsAt in
+        # the future → ticksElapsed < 0 → billing silently skips forever.
+        activeSubscriptionStartsAt: { type: ["string", "null"], format: date-time }
+        activeSubscriptionBillingType:
           oneOf:
             - $ref: "#/components/schemas/PlanBillingType"
             - type: "null"
