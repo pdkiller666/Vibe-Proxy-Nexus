@@ -771,6 +771,18 @@ try {
   `);
   console.log("heal-schema: M-24 vpn_nodes.cert_sha256");
 
+  // ── M-25: vpn_nodes.consecutive_failures — auto-deactivation counter ─────────
+  // Tracks how many back-to-back health-check failures a node has accumulated.
+  // When the background monitor reaches the threshold (3) it sets isActive=false
+  // and migrates active keys to other nodes. Reset to 0 on any successful poll.
+  // Nodes with consecutiveFailures > 0 and isActive=false were auto-deactivated
+  // (not manually disabled), so the monitor continues probing them for recovery.
+  await client.query(`
+    ALTER TABLE vpn_nodes
+      ADD COLUMN IF NOT EXISTS consecutive_failures integer NOT NULL DEFAULT 0
+  `);
+  console.log("heal-schema: M-25 vpn_nodes.consecutive_failures");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

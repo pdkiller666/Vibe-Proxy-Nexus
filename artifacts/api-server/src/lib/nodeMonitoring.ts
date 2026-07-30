@@ -2,23 +2,36 @@
  * Background job that periodically checks the health and resource usage of all
  * active VPN nodes and writes SystemEvents when something is wrong.
  *
- * Two alert types are emitted:
+ * Alert / action types:
  *  - "node_overloaded"   — CPU > 90% or RAM > 90% on a single poll
- *  - "node_unavailable"  — node failed to respond 3 polls in a row
+ *  - "node_unreachable"  — node failed to respond 3 polls in a row
+ *                          → isActive is set to false and all active keys on
+ *                            that node are migrated to other nodes automatically
+ *  - "node_recovered"    — a previously auto-deactivated node came back up
+ *                          → isActive is restored to true
  *
- * Both are deduplicated: a new event is only inserted when there is no
- * existing unacknowledged event of the same type for the same node, so the
- * notification bell doesn't flood after the first alert.
+ * "node_overloaded" is deduplicated: a new event is only inserted when there is
+ * no existing unacknowledged event of the same type for the same node.
  *
- * Recovery: once a node comes back up after being "unavailable", a
- * "node_recovered" event is written so the admin knows it resolved itself.
+ * "node_unreachable" is emitted once on deactivation. Because the node is then
+ * set to isActive=false it drops out of the active-node query on the next cycle,
+ * so no redundant events are produced. Inactive nodes with consecutiveFailures > 0
+ * (auto-deactivated, not manually disabled) are still probed every cycle so we
+ * can detect recovery.
+ *
+ * Recovery: once a node responds successfully after being auto-deactivated, a
+ * "node_recovered" event is written and isActive is restored to true. The
+ * consecutiveFailures counter is reset to 0 on any successful poll.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import os from "node:os";
 import { promises as fs } from "node:fs";
-import { jobsDb, systemEventsTable, vpnNodesTable } from "@workspace/db";
+import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { logger } from "./logger";
+import { issueKeyForUser, resolveTotalSlots } from "./keyIssuance";
+import { removeXrayClient, isLocalXrayEnabled } from "./xray";
+import { removeRemoteXrayClient } from "./remoteNode";
 
 const NODE_MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -31,14 +44,6 @@ interface SystemStatus {
   ramUsedBytes: number;
   ramTotalBytes: number;
 }
-
-// Per-node in-memory state. Reset on process restart (intentional — a
-// restarted process re-probes from scratch; old "unavailable" counters are
-// stale anyway since we don't know what happened while we were down).
-const consecutiveFailures = new Map<number, number>();
-// Track which nodes we most recently reported as "unavailable", so we know
-// when to emit a "node_recovered" event on the next successful poll.
-const reportedUnavailable = new Set<number>();
 
 // ─── Status fetchers ──────────────────────────────────────────────────────────
 
@@ -132,11 +137,177 @@ async function emitEvent(
   logger.info({ eventType, nodeId, nodeName, ...extra }, `nodeMonitoring: emitted ${eventType}`);
 }
 
+// ─── Key migration ────────────────────────────────────────────────────────────
+
+/**
+ * When a node is auto-deactivated, migrate all its active VPN keys to other
+ * healthy nodes so affected users regain connectivity without admin intervention.
+ *
+ * Strategy mirrors the manual node-deletion flow in admin/vpnNodes.ts:
+ *   1. Issue a replacement key on the least-loaded same-region node (or global
+ *      fallback if no same-region capacity exists).
+ *   2. Revoke the old key in the DB first, then remove from Xray (non-fatal if
+ *      Xray on the dead node is unreachable — it's down anyway).
+ */
+async function migrateKeysFromDeactivatedNode(node: {
+  id: number;
+  name: string;
+  region: string;
+  managementApiUrl: string | null;
+  managementApiSecret: string | null;
+}): Promise<void> {
+  const activeKeys = await db
+    .select()
+    .from(vpnKeysTable)
+    .where(and(eq(vpnKeysTable.nodeId, node.id), isNull(vpnKeysTable.revokedAt)));
+
+  if (activeKeys.length === 0) {
+    logger.info({ nodeId: node.id, nodeName: node.name }, "nodeMonitoring: no active keys to migrate");
+    return;
+  }
+
+  logger.info(
+    { nodeId: node.id, nodeName: node.name, keyCount: activeKeys.length },
+    "nodeMonitoring: migrating active keys from deactivated node",
+  );
+
+  // Pre-resolve slot limits for all affected users to avoid N+1 in the loop.
+  const uniqueUserIds = [...new Set(activeKeys.map((k) => k.userId))];
+  const slotsEntries = await Promise.all(
+    uniqueUserIds.map(async (uid) => [uid, await resolveTotalSlots(uid)] as const),
+  );
+  const slotsMap = new Map<number, number | null>(slotsEntries);
+
+  // Subquery: active key count per node — used for capacity checks and ordering.
+  const activeCounts = db
+    .select({ nodeId: vpnKeysTable.nodeId, cnt: sql<number>`count(*)::int`.as("cnt") })
+    .from(vpnKeysTable)
+    .where(isNull(vpnKeysTable.revokedAt))
+    .groupBy(vpnKeysTable.nodeId)
+    .as("active_counts");
+
+  const nodeHasCapacity = or(
+    isNull(vpnNodesTable.maxUsers),
+    sql`coalesce(${activeCounts.cnt}, 0) < ${vpnNodesTable.maxUsers}`,
+  );
+
+  let migratedKeys = 0;
+  let failedMigrations = 0;
+
+  await Promise.all(
+    activeKeys.map(async (key) => {
+      const totalSlots = slotsMap.get(key.userId) ?? null;
+
+      if (totalSlots === null) {
+        failedMigrations++;
+        logger.warn(
+          { userId: key.userId, keyId: key.id },
+          "nodeMonitoring: no active subscription, key left without migration",
+        );
+        return;
+      }
+
+      // Prefer the least-loaded active node in the same region (excluding this node).
+      const [sameRegionNode] = await db
+        .select({ id: vpnNodesTable.id })
+        .from(vpnNodesTable)
+        .leftJoin(activeCounts, eq(activeCounts.nodeId, vpnNodesTable.id))
+        .where(
+          and(
+            eq(vpnNodesTable.isActive, true),
+            eq(vpnNodesTable.region, node.region),
+            ne(vpnNodesTable.id, node.id),
+            nodeHasCapacity,
+          ),
+        )
+        .orderBy(asc(sql`coalesce(${activeCounts.cnt}, 0)`))
+        .limit(1);
+
+      // Attempt 1: same-region preferred node.
+      let result = await issueKeyForUser(
+        key.userId,
+        totalSlots,
+        sameRegionNode?.id,
+        key.label,
+        key.description ?? undefined,
+      );
+
+      // Attempt 2: same-region failed → let auto-select pick globally.
+      if (!result.ok && sameRegionNode?.id !== undefined) {
+        result = await issueKeyForUser(
+          key.userId,
+          totalSlots,
+          undefined,
+          key.label,
+          key.description ?? undefined,
+        );
+      }
+
+      if (!result.ok) {
+        failedMigrations++;
+        logger.warn(
+          { userId: key.userId, keyId: key.id, error: result.error },
+          "nodeMonitoring: no available node for key migration",
+        );
+        return;
+      }
+
+      // Revoke old key: DB-first (source of truth), then Xray (non-fatal — node is down).
+      try {
+        await db
+          .update(vpnKeysTable)
+          .set({ revokedAt: new Date(), revokedReason: "admin" })
+          .where(eq(vpnKeysTable.id, key.id));
+      } catch (err) {
+        logger.error(
+          { err, oldKeyId: key.id, newKeyId: result.key.id },
+          "nodeMonitoring: new key issued but old key DB revoke failed",
+        );
+      }
+
+      // Best-effort Xray cleanup (node may be down — that's fine).
+      if (node.managementApiUrl) {
+        try {
+          await removeRemoteXrayClient(node, key.uuid);
+        } catch (err) {
+          logger.warn({ err, uuid: key.uuid, nodeId: node.id }, "nodeMonitoring: remote Xray removal failed (ignored, node is down)");
+        }
+      } else if (isLocalXrayEnabled()) {
+        try {
+          await removeXrayClient(key.uuid);
+        } catch (err) {
+          logger.warn({ err, uuid: key.uuid, nodeId: node.id }, "nodeMonitoring: local Xray removal failed (ignored)");
+        }
+      }
+
+      migratedKeys++;
+      logger.info(
+        {
+          userId: key.userId,
+          oldKeyId: key.id,
+          newKeyId: result.key.id,
+          newNodeId: result.key.nodeId,
+          newNodeName: result.nodeName,
+        },
+        "nodeMonitoring: key migrated to new node",
+      );
+    }),
+  );
+
+  logger.info(
+    { nodeId: node.id, nodeName: node.name, migratedKeys, failedMigrations },
+    "nodeMonitoring: key migration complete",
+  );
+}
+
 // ─── Per-node poll logic ──────────────────────────────────────────────────────
 
 async function pollNode(node: {
   id: number;
   name: string;
+  region: string;
+  isActive: boolean;
+  consecutiveFailures: number;
   managementApiUrl: string | null;
   managementApiSecret: string | null;
 }): Promise<void> {
@@ -149,35 +320,81 @@ async function pollNode(node: {
       status = await getLocalSystemStatus();
     }
   } catch (err) {
-    const failures = (consecutiveFailures.get(node.id) ?? 0) + 1;
-    consecutiveFailures.set(node.id, failures);
     const msg = err instanceof Error ? err.message : String(err);
-    logger.warn({ nodeId: node.id, nodeName: node.name, failures, err: msg }, "nodeMonitoring: node poll failed");
 
-    if (failures >= FAILURE_ALERT_THRESHOLD) {
-      const alreadyReported = await hasUnacknowledgedEvent("node_unavailable", node.id);
-      if (!alreadyReported) {
-        await emitEvent("node_unavailable", node.id, node.name, { consecutiveFailures: failures, lastError: msg });
-        reportedUnavailable.add(node.id);
-      }
+    // Persist the incremented counter to DB and read back the new value.
+    const [updated] = await jobsDb
+      .update(vpnNodesTable)
+      .set({ consecutiveFailures: sql`${vpnNodesTable.consecutiveFailures} + 1` })
+      .where(eq(vpnNodesTable.id, node.id))
+      .returning({ consecutiveFailures: vpnNodesTable.consecutiveFailures });
+
+    const failures = updated?.consecutiveFailures ?? node.consecutiveFailures + 1;
+
+    logger.warn(
+      { nodeId: node.id, nodeName: node.name, failures, err: msg },
+      "nodeMonitoring: node poll failed",
+    );
+
+    // Only act on active nodes that just crossed the threshold.
+    if (failures >= FAILURE_ALERT_THRESHOLD && node.isActive) {
+      // Deactivate the node in the DB.
+      await jobsDb
+        .update(vpnNodesTable)
+        .set({ isActive: false })
+        .where(eq(vpnNodesTable.id, node.id));
+
+      logger.warn(
+        { nodeId: node.id, nodeName: node.name, failures },
+        "nodeMonitoring: node auto-deactivated after consecutive failures",
+      );
+
+      // Emit the unreachable event (deduplication not needed — once deactivated
+      // the node leaves the active-node query, so this fires at most once per
+      // outage cycle until the node recovers and fails again).
+      await emitEvent("node_unreachable", node.id, node.name, {
+        consecutiveFailures: failures,
+        lastError: msg,
+      });
+
+      // Migrate all active keys to healthy nodes so users regain connectivity.
+      await migrateKeysFromDeactivatedNode(node);
     }
+
     return;
   }
 
-  // Successful poll — reset failure counter.
-  const prevFailures = consecutiveFailures.get(node.id) ?? 0;
-  consecutiveFailures.set(node.id, 0);
+  // ── Successful poll ────────────────────────────────────────────────────────
 
-  // If this node was previously reported as unavailable, emit a recovery event.
-  if (reportedUnavailable.has(node.id)) {
-    reportedUnavailable.delete(node.id);
+  // Reset the persistent failure counter.
+  await jobsDb
+    .update(vpnNodesTable)
+    .set({ consecutiveFailures: 0 })
+    .where(eq(vpnNodesTable.id, node.id));
+
+  // If the node was previously auto-deactivated, bring it back.
+  if (!node.isActive) {
+    await jobsDb
+      .update(vpnNodesTable)
+      .set({ isActive: true })
+      .where(eq(vpnNodesTable.id, node.id));
+
     await emitEvent("node_recovered", node.id, node.name, {
-      prevConsecutiveFailures: prevFailures,
       cpuPercent: status.cpuPercent,
     });
+
+    logger.info(
+      { nodeId: node.id, nodeName: node.name },
+      "nodeMonitoring: node auto-reactivated after recovery",
+    );
+
+    // Skip resource checks on the first successful poll after recovery — one
+    // clean response is not enough to call a node "overloaded".
+    return;
   }
 
-  // Check resource thresholds.
+  // ── Resource threshold checks (active nodes only) ──────────────────────────
+
   const ramPercent =
     status.ramTotalBytes > 0
       ? Math.round((status.ramUsedBytes / status.ramTotalBytes) * 1000) / 10
@@ -202,18 +419,27 @@ async function pollNode(node: {
 // ─── Job entry point ──────────────────────────────────────────────────────────
 
 async function runNodeMonitoringCycle(): Promise<void> {
-  // Only remote nodes need monitoring via management API; local node is
-  // queried directly. Include the local node (managementApiUrl IS NULL) too
-  // so admins get CPU/RAM alerts even on all-in-one deployments.
+  // Probe all active nodes + any inactive nodes that were auto-deactivated
+  // (consecutiveFailures > 0) so we can detect recovery.
+  // Nodes that an admin manually set to isActive=false have consecutiveFailures=0
+  // and are correctly excluded — we don't attempt to auto-reactivate them.
   const nodes = await jobsDb
     .select({
       id: vpnNodesTable.id,
       name: vpnNodesTable.name,
+      region: vpnNodesTable.region,
+      isActive: vpnNodesTable.isActive,
+      consecutiveFailures: vpnNodesTable.consecutiveFailures,
       managementApiUrl: vpnNodesTable.managementApiUrl,
       managementApiSecret: vpnNodesTable.managementApiSecret,
     })
     .from(vpnNodesTable)
-    .where(eq(vpnNodesTable.isActive, true));
+    .where(
+      or(
+        eq(vpnNodesTable.isActive, true),
+        gt(vpnNodesTable.consecutiveFailures, 0),
+      ),
+    );
 
   if (nodes.length === 0) return;
 

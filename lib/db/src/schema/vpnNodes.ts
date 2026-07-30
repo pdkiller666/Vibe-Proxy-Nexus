@@ -27,6 +27,13 @@ export const vpnNodesTable = pgTable(
     shortId: text("short_id"),
     sni: text("sni").notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    // Counts how many times in a row the background health-monitor failed to
+    // reach this node. Reset to 0 on any successful poll. When it reaches
+    // FAILURE_ALERT_THRESHOLD (3) the monitor sets isActive=false and migrates
+    // active keys to other nodes. A value > 0 on an inactive node means it was
+    // auto-deactivated (not manually disabled), so the monitor will keep probing
+    // and auto-reactivate when the node comes back.
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
     // Optional cap on concurrently-active VPN keys this node will serve. Null
     // means unlimited. Enforced at key-issuance time in vpnKeys.ts.
     maxUsers: integer("max_users"),
