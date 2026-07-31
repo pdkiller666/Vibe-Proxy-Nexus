@@ -3034,7 +3034,7 @@ function InviteLinkEditRow({
                 <option value="">По умолчанию (глобальная настройка)</option>
                 {monthlyPlans.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} — {p.priceRub} ₽/мес
+                    {p.name} — {p.priceRub} ₽/мес{p.isPromo ? " · Промо" : ""}
                   </option>
                 ))}
               </select>
@@ -3245,7 +3245,7 @@ function InviteLinksManagement() {
                 <option value="">По умолчанию (глобальная настройка)</option>
                 {monthlyPlans.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} — {p.priceRub} ₽/мес
+                    {p.name} — {p.priceRub} ₽/мес{p.isPromo ? " · Промо" : ""}
                   </option>
                 ))}
               </select>
