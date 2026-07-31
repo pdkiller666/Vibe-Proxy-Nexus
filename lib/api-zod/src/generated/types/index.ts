@@ -48,6 +48,7 @@ export * from './getVpnNodeSystemLogsProcess';
 export * from './healthStatus';
 export * from './listAdminPaymentsParams';
 export * from './listAdminTicketsParams';
+export * from './listAdminVpnKeysParams';
 export * from './loginInput';
 export * from './me';
 export * from './nodePollingHealth';

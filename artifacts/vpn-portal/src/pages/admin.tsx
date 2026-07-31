@@ -49,6 +49,8 @@ import {
   getGetAdminTrafficPollingHealthQueryKey,
   useListAdminPlans,
   getListAdminPlansQueryKey,
+  useListAdminVpnKeys,
+  getListAdminVpnKeysQueryKey,
   useListAdminReferrals,
   useListAdminInviteLinks,
   useCreateAdminInviteLink,
@@ -2620,15 +2622,8 @@ const PAYMENTS_PAGE_SIZE = 10;
 const TXS_PAGE_SIZE = 10;
 
 function UserKeysAndPayments({ userId }: { userId: number }) {
-  const { data: keys } = useQuery<AdminVpnKey[]>({
-    queryKey: ["admin", "vpn-keys"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/vpn-keys", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch");
-      return res.json();
-    },
-  });
-  const { data: payments } = useListAdminPayments();
+  const { data: keys } = useListAdminVpnKeys({ userId });
+  const { data: payments } = useListAdminPayments({ userId });
   const { data: balanceTxs } = useListAdminUserBalanceTransactions(userId);
   const { toast } = useToast();
   const [showAllKeys, setShowAllKeys] = useState(false);
@@ -2642,14 +2637,14 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
     },
     onSuccess: () => {
       toast({ title: "Ключ отозван" });
-      queryClient.invalidateQueries({ queryKey: ["admin", "vpn-keys"] });
+      queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey({ userId }) });
       queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
     },
     onError: () => toast({ title: "Ошибка отзыва ключа", variant: "destructive" }),
   });
 
-  const userKeys = (keys ?? []).filter((k) => k.userId === userId);
-  const userPayments = (payments ?? []).filter((p) => p.userId === userId);
+  const userKeys = keys ?? [];
+  const userPayments = payments ?? [];
   const visibleKeys = showAllKeys ? userKeys : userKeys.slice(0, KEYS_PAGE_SIZE);
   const totalPaymentPages = Math.max(1, Math.ceil(userPayments.length / PAYMENTS_PAGE_SIZE));
   const visiblePayments = userPayments.slice((paymentsPage - 1) * PAYMENTS_PAGE_SIZE, paymentsPage * PAYMENTS_PAGE_SIZE);
@@ -2701,7 +2696,7 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
                     <span className="ml-1 px-1 bg-muted rounded">
                       {key.revokedReason === "admin" ? "вручную" :
                        key.revokedReason === "traffic_limit" ? "лимит трафика" :
-                       key.revokedReason === "subscription_expired" ? "подписка истекла" :
+                       key.revokedReason === "expired" ? "подписка истекла" :
                        key.revokedReason}
                     </span>
                   )}
@@ -4616,7 +4611,7 @@ function VpnKeysManagement() {
                         <span className="ml-1 px-1 bg-muted text-muted-foreground rounded text-[10px]">
                           {key.revokedReason === "admin" ? "вручную" :
                            key.revokedReason === "traffic_limit" ? "лимит трафика" :
-                           key.revokedReason === "subscription_expired" ? "подписка истекла" :
+                           key.revokedReason === "expired" ? "подписка истекла" :
                            key.revokedReason}
                         </span>
                       )}

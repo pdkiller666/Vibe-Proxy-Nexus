@@ -5,9 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PaymentStatus } from './paymentStatus';
 
-export type ListAdminPaymentsParams = {
-status?: PaymentStatus;
+export type ListAdminVpnKeysParams = {
 userId?: number;
 };

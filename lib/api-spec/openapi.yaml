@@ -857,13 +857,18 @@ paths:
     get:
       operationId: listAdminPayments
       tags: [admin]
-      summary: List payments (optionally filtered by status)
+      summary: List payments (optionally filtered by status and/or userId)
       parameters:
         - name: status
           in: query
           required: false
           schema:
             $ref: "#/components/schemas/PaymentStatus"
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
           description: List of payments
@@ -1143,7 +1148,13 @@ paths:
     get:
       operationId: listAdminVpnKeys
       tags: [admin]
-      summary: List all VPN keys, with per-key traffic counters
+      summary: List VPN keys (optionally filtered by userId)
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
           description: List of VPN keys

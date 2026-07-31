@@ -73,9 +73,10 @@ router.get(
       )
       .leftJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
       .where(
-        query.data.status
-          ? eq(paymentsTable.status, query.data.status)
-          : undefined,
+        and(
+          query.data.status ? eq(paymentsTable.status, query.data.status) : undefined,
+          query.data.userId ? eq(paymentsTable.userId, query.data.userId) : undefined,
+        ),
       )
       .orderBy(desc(paymentsTable.createdAt));
 

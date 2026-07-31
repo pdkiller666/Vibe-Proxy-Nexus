@@ -1092,10 +1092,11 @@ export const UpdatePaymentSettingsResponse = zod.object({
 
 
 /**
- * @summary List payments (optionally filtered by status)
+ * @summary List payments (optionally filtered by status and/or userId)
  */
 export const ListAdminPaymentsQueryParams = zod.object({
-  "status": zod.enum(['pending', 'confirmed', 'rejected']).optional()
+  "status": zod.enum(['pending', 'confirmed', 'rejected']).optional(),
+  "userId": zod.coerce.number().optional()
 })
 
 export const ListAdminPaymentsResponseItem = zod.object({
@@ -1481,8 +1482,12 @@ export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
 
 /**
- * @summary List all VPN keys, with per-key traffic counters
+ * @summary List VPN keys (optionally filtered by userId)
  */
+export const ListAdminVpnKeysQueryParams = zod.object({
+  "userId": zod.coerce.number().optional()
+})
+
 export const ListAdminVpnKeysResponseItem = zod.object({
   "id": zod.number(),
   "nodeId": zod.number(),

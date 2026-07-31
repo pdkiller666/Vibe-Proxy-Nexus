@@ -33,7 +33,13 @@ function withUserIssueLock<T>(userId: number, fn: () => Promise<T>): Promise<T> 
   return run;
 }
 
-router.get("/admin/vpn-keys", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+const ListVpnKeysQuerySchema = z.object({ userId: z.coerce.number().int().positive().optional() });
+
+router.get("/admin/vpn-keys", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const parsed = ListVpnKeysQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { userId } = parsed.data;
+
   const rows = await db
     .select({
       key: vpnKeysTable,
@@ -43,6 +49,7 @@ router.get("/admin/vpn-keys", requireAuth, requireAdmin, async (_req, res): Prom
     .from(vpnKeysTable)
     .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
     .innerJoin(usersTable, eq(vpnKeysTable.userId, usersTable.id))
+    .where(userId != null ? eq(vpnKeysTable.userId, userId) : undefined)
     .orderBy(desc(vpnKeysTable.createdAt));
 
   res.json(rows.map(({ key, nodeName, userEmail }) => ({ ...key, nodeName, userEmail })));

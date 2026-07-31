@@ -58,6 +58,7 @@ import type {
   HealthStatus,
   ListAdminPaymentsParams,
   ListAdminTicketsParams,
+  ListAdminVpnKeysParams,
   LoginInput,
   Me,
   Payment,
@@ -3492,7 +3493,7 @@ export const getListAdminPaymentsUrl = (params?: ListAdminPaymentsParams,) => {
 }
 
 /**
- * @summary List payments (optionally filtered by status)
+ * @summary List payments (optionally filtered by status and/or userId)
  */
 export const listAdminPayments = async (params?: ListAdminPaymentsParams, options?: RequestInit): Promise<AdminPayment[]> => {
 
@@ -3539,7 +3540,7 @@ export type ListAdminPaymentsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List payments (optionally filtered by status)
+ * @summary List payments (optionally filtered by status and/or userId)
  */
 
 export function useListAdminPayments<TData = Awaited<ReturnType<typeof listAdminPayments>>, TError = ErrorType<unknown>>(
@@ -4585,20 +4586,27 @@ export function useListAdminUsers<TData = Awaited<ReturnType<typeof listAdminUse
 
 
 
-export const getListAdminVpnKeysUrl = () => {
+export const getListAdminVpnKeysUrl = (params?: ListAdminVpnKeysParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/admin/vpn-keys`
+  return stringifiedParams.length > 0 ? `/api/admin/vpn-keys?${stringifiedParams}` : `/api/admin/vpn-keys`
 }
 
 /**
- * @summary List all VPN keys, with per-key traffic counters
+ * @summary List VPN keys (optionally filtered by userId)
  */
-export const listAdminVpnKeys = async ( options?: RequestInit): Promise<VpnKey[]> => {
+export const listAdminVpnKeys = async (params?: ListAdminVpnKeysParams, options?: RequestInit): Promise<VpnKey[]> => {
 
-  return customFetch<VpnKey[]>(getListAdminVpnKeysUrl(),
+  return customFetch<VpnKey[]>(getListAdminVpnKeysUrl(params),
   {
     ...options,
     method: 'GET'
@@ -4611,23 +4619,23 @@ export const listAdminVpnKeys = async ( options?: RequestInit): Promise<VpnKey[]
 
 
 
-export const getListAdminVpnKeysQueryKey = () => {
+export const getListAdminVpnKeysQueryKey = (params?: ListAdminVpnKeysParams,) => {
     return [
-    `/api/admin/vpn-keys`
+    `/api/admin/vpn-keys`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListAdminVpnKeysQueryOptions = <TData = Awaited<ReturnType<typeof listAdminVpnKeys>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminVpnKeys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListAdminVpnKeysQueryOptions = <TData = Awaited<ReturnType<typeof listAdminVpnKeys>>, TError = ErrorType<unknown>>(params?: ListAdminVpnKeysParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminVpnKeys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListAdminVpnKeysQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListAdminVpnKeysQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminVpnKeys>>> = ({ signal }) => listAdminVpnKeys({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminVpnKeys>>> = ({ signal }) => listAdminVpnKeys(params, { signal, ...requestOptions });
 
 
 
@@ -4641,15 +4649,15 @@ export type ListAdminVpnKeysQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all VPN keys, with per-key traffic counters
+ * @summary List VPN keys (optionally filtered by userId)
  */
 
 export function useListAdminVpnKeys<TData = Awaited<ReturnType<typeof listAdminVpnKeys>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminVpnKeys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListAdminVpnKeysParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminVpnKeys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListAdminVpnKeysQueryOptions(options)
+  const queryOptions = getListAdminVpnKeysQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

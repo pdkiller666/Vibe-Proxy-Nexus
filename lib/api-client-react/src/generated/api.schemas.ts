@@ -997,10 +997,15 @@ export interface UserNotificationAcknowledgeResult {
 
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
+userId?: number;
 };
 
 export type GetAdminNotificationsParams = {
 since?: string;
+};
+
+export type ListAdminVpnKeysParams = {
+userId?: number;
 };
 
 export type GetVpnNodeSystemLogsParams = {
