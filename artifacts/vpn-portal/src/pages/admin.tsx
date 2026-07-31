@@ -1464,7 +1464,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   }
 
   function handleSubmit() {
-    const body = {
+    const commonFields = {
       name,
       region,
       host: host || undefined,
@@ -1474,7 +1474,6 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       shortId: shortId || undefined,
       managementApiUrl: managementApiUrl || undefined,
       managementApiSecret: managementApiSecret || undefined,
-      certSha256: certSha256 || undefined,
       isActive,
       maxUsers: maxUsers ? Number(maxUsers) : null,
     };
@@ -1486,9 +1485,12 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
     const onError = () => toast({ title: "Ошибка сохранения узла", variant: "destructive" });
 
     if (node) {
-      updateNode({ nodeId: node.id, data: body }, { onSuccess, onError });
+      // On update: empty string → null to explicitly clear the pinned cert.
+      // undefined would be omitted by JSON.stringify and the server would keep the old value.
+      updateNode({ nodeId: node.id, data: { ...commonFields, certSha256: certSha256 === "" ? null : certSha256 } }, { onSuccess, onError });
     } else {
-      createNode({ data: body }, { onSuccess, onError });
+      // On create: a new node never has an existing cert to clear, so undefined is fine.
+      createNode({ data: { ...commonFields, certSha256: certSha256 || undefined } }, { onSuccess, onError });
     }
   }
 

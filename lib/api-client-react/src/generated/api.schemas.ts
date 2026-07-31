@@ -481,7 +481,8 @@ export interface VpnNodeUpdate {
      * @nullable
      */
   maxUsers?: number | null;
-  certSha256?: string;
+  /** @nullable */
+  certSha256?: string | null;
 }
 
 export type RevokedReason = typeof RevokedReason[keyof typeof RevokedReason];

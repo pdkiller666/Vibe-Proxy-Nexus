@@ -1259,7 +1259,7 @@ export const UpdateVpnNodeBody = zod.object({
   "sni": zod.string().min(1).optional(),
   "isActive": zod.boolean().optional(),
   "maxUsers": zod.number().min(1).nullish(),
-  "certSha256": zod.string().optional()
+  "certSha256": zod.string().nullish()
 })
 
 export const UpdateVpnNodeResponse = zod.object({
