@@ -136,10 +136,15 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
     // (e.g. a VIP campaign), those settings must fire even when the global
     // trial toggle is off. A link with both fields null has no override intent
     // and falls through to the global flag like any regular registration.
-    const hasInviteLinkTrialOverride =
-      inviteLink != null && (inviteLink.planId != null || inviteLink.trialDays != null);
+    // trialDays=0 on an invite link signals "promo-only mode": the user is
+    // entitled to purchase a promo plan directly — no free trial is granted.
+    // The promo plan entitlement is recorded implicitly via users.inviteLinkId.
+    const skipTrial = inviteLink?.trialDays === 0;
 
-    if (settings?.trialEnabled || hasInviteLinkTrialOverride) {
+    const hasInviteLinkTrialOverride =
+      !skipTrial && inviteLink != null && (inviteLink.planId != null || inviteLink.trialDays != null);
+
+    if (!skipTrial && (settings?.trialEnabled || hasInviteLinkTrialOverride)) {
       // Resolve the trial plan: admin-selected first, auto-select as fallback.
       // Auto-select only considers monthly plans — hourly plans have priceRub=0
       // and would always win the sort, but an hourly trial is meaningless since

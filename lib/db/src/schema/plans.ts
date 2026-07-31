@@ -31,6 +31,10 @@ export const plansTable = pgTable(
     // influencer codes, or limited-time offers without polluting the main
     // plan-selection page that all users see.
     isPromo: boolean("is_promo").notNull().default(false),
+    // Maximum number of times a single user may purchase this plan.
+    // null = unlimited. Primary use-case: promo plans that are one-time-use
+    // (e.g. a 150₽/month intro offer valid for 1 purchase per user).
+    maxUses: integer("max_uses"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   // The plan-selection page filters to active plans on every load.

@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Check, CreditCard, Zap, Wallet, CheckCircle2 } from "lucide-react";
+import { Check, CreditCard, Zap, Wallet, CheckCircle2, Sparkles, X } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,12 @@ export default function Plans() {
   const programmaticScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activePlans = plans?.filter((p) => p.isActive) ?? [];
+
+  // Promo plan entitlement: the server appends the user's promo plan (if any)
+  // only when they have a qualifying invite link. It won't appear for regular users.
+  const promoPlan = activePlans.find((p) => p.isPromo);
+  const hasUnusedPromo = promoPlan != null && (promoPlan.userUsedCount ?? 0) === 0;
+  const [promoBannerDismissed, setPromoBannerDismissed] = useState(false);
 
   useEffect(() => {
     if (!selectedPlanId && activePlans.length > 0) {
@@ -200,6 +206,35 @@ export default function Plans() {
         </p>
       </OnboardingTip>
 
+      {/* Promo banner — shown only to users with an unclaimed promo plan */}
+      {hasUnusedPromo && !promoBannerDismissed && promoPlan && (
+        <div className="relative flex items-start gap-3 rounded-none border border-orange-400 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/40 dark:to-amber-950/40 p-4 pr-10 animate-in fade-in slide-in-from-top-2 duration-500">
+          <Sparkles className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-bold text-orange-800 dark:text-orange-300 text-sm">
+              Для вас доступно эксклюзивное предложение!
+            </p>
+            <p className="text-sm text-orange-700 dark:text-orange-400">
+              Тариф <strong>«{promoPlan.name}»</strong> доступен вам по специальной цене{" "}
+              <strong>{promoPlan.priceRub} ₽</strong>
+              {promoPlan.durationDays > 0 ? ` на ${promoPlan.durationDays} дней` : ""}.
+              {promoPlan.maxUses === 1
+                ? " Предложение одноразовое — воспользуйтесь им сейчас."
+                : promoPlan.maxUses != null
+                  ? ` Доступно ещё ${promoPlan.maxUses - (promoPlan.userUsedCount ?? 0)} раз(а).`
+                  : " Оформите его прямо сейчас."}
+            </p>
+          </div>
+          <button
+            onClick={() => setPromoBannerDismissed(true)}
+            className="absolute right-3 top-3 text-orange-400 hover:text-orange-600 transition-colors"
+            aria-label="Закрыть"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid md:grid-cols-3 gap-6">
           <Skeleton className="h-72 w-full" />
@@ -234,9 +269,13 @@ export default function Plans() {
                     "transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2",
                     isCurrentPlan
                       ? "border-green-500 ring-2 ring-green-500/30 shadow-lg"
-                      : isSelected
-                        ? "border-primary ring-2 ring-primary/40 shadow-lg"
-                        : "border-border hover:border-primary/40",
+                      : plan.isPromo
+                        ? isSelected
+                          ? "border-orange-400 ring-2 ring-orange-400/40 shadow-lg"
+                          : "border-orange-300 hover:border-orange-400 dark:border-orange-700 dark:hover:border-orange-500"
+                        : isSelected
+                          ? "border-primary ring-2 ring-primary/40 shadow-lg"
+                          : "border-border hover:border-primary/40",
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -244,6 +283,11 @@ export default function Plans() {
                     {isCurrentPlan && (
                       <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                         <CheckCircle2 className="w-3 h-3" /> Активный
+                      </span>
+                    )}
+                    {plan.isPromo && (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
+                        <Sparkles className="w-3 h-3" /> Промо
                       </span>
                     )}
                     {plan.billingType === "hourly" && (

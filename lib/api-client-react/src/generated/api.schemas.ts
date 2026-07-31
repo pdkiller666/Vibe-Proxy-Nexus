@@ -146,6 +146,10 @@ export interface Plan {
   hourlyRateKopecks: number | null;
   isActive: boolean;
   isPromo?: boolean;
+  /** @nullable */
+  maxUses?: number | null;
+  /** @nullable */
+  userUsedCount?: number | null;
   createdAt?: string;
 }
 
@@ -172,6 +176,11 @@ export interface PlanInput {
   hourlyRateKopecks?: number | null;
   isActive?: boolean;
   isPromo?: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxUses?: number | null;
 }
 
 export interface PlanUpdate {
@@ -197,6 +206,11 @@ export interface PlanUpdate {
   hourlyRateKopecks?: number | null;
   isActive?: boolean;
   isPromo?: boolean;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxUses?: number | null;
 }
 
 export interface SbpQrUpload {

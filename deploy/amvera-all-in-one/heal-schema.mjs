@@ -803,6 +803,15 @@ try {
   `);
   console.log("heal-schema: M-27 plans.is_promo");
 
+  // ── M-28: plans.max_uses — per-user purchase limit ────────────────────────
+  // Nullable integer. null = unlimited purchases. Primary use-case: promo plans
+  // that should only be purchasable once per user (e.g. intro-price offers).
+  await client.query(`
+    ALTER TABLE plans
+      ADD COLUMN IF NOT EXISTS max_uses integer
+  `);
+  console.log("heal-schema: M-28 plans.max_uses");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

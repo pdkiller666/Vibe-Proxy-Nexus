@@ -274,6 +274,8 @@ export const ListPlansResponseItem = zod.object({
   "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().nullish(),
+  "userUsedCount": zod.number().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 export const ListPlansResponse = zod.array(ListPlansResponseItem)
@@ -345,6 +347,8 @@ export const ListMySubscriptionsResponseItem = zod.object({
   "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().nullish(),
+  "userUsedCount": zod.number().nullish(),
   "createdAt": zod.coerce.date().optional()
 }),
   "status": zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),
@@ -380,6 +384,8 @@ export const CreateSubscriptionResponse = zod.object({
   "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().nullish(),
+  "userUsedCount": zod.number().nullish(),
   "createdAt": zod.coerce.date().optional()
 }),
   "status": zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),
@@ -908,6 +914,8 @@ export const ListAdminPlansResponseItem = zod.object({
   "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().nullish(),
+  "userUsedCount": zod.number().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 export const ListAdminPlansResponse = zod.array(ListAdminPlansResponseItem)
@@ -926,6 +934,7 @@ export const createPlanBodyDurationDaysMin = 0;
 
 
 
+
 export const CreatePlanBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string().optional(),
@@ -936,7 +945,8 @@ export const CreatePlanBody = zod.object({
   "billingType": zod.enum(['monthly', 'hourly']).optional(),
   "hourlyRateKopecks": zod.number().min(1).nullish(),
   "isActive": zod.boolean().optional(),
-  "isPromo": zod.boolean().optional()
+  "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().min(1).nullish()
 })
 
 export const CreatePlanResponse = zod.object({
@@ -951,6 +961,8 @@ export const CreatePlanResponse = zod.object({
   "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().nullish(),
+  "userUsedCount": zod.number().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 
@@ -972,6 +984,7 @@ export const updatePlanBodyDurationDaysMin = 0;
 
 
 
+
 export const UpdatePlanBody = zod.object({
   "name": zod.string().min(1).optional(),
   "description": zod.string().optional(),
@@ -982,7 +995,8 @@ export const UpdatePlanBody = zod.object({
   "billingType": zod.enum(['monthly', 'hourly']).optional(),
   "hourlyRateKopecks": zod.number().min(1).nullish(),
   "isActive": zod.boolean().optional(),
-  "isPromo": zod.boolean().optional()
+  "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().min(1).nullish()
 })
 
 export const UpdatePlanResponse = zod.object({
@@ -997,6 +1011,8 @@ export const UpdatePlanResponse = zod.object({
   "hourlyRateKopecks": zod.number().nullable(),
   "isActive": zod.boolean(),
   "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().nullish(),
+  "userUsedCount": zod.number().nullish(),
   "createdAt": zod.coerce.date().optional()
 })
 

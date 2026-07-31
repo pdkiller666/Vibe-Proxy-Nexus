@@ -1856,6 +1856,12 @@ components:
         # assigned via admin invite links. Use for referral campaigns or
         # limited-time offers without polluting the public plan-selection page.
         isPromo: { type: boolean }
+        # Maximum times a single user may purchase this plan (null = unlimited).
+        maxUses: { type: ["integer", "null"] }
+        # How many times the currently authenticated user has already activated
+        # this plan (counts confirmed subscriptions). null when unauthenticated
+        # or not applicable (non-promo public plans).
+        userUsedCount: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
 
     PlanInput:
@@ -1875,6 +1881,8 @@ components:
         hourlyRateKopecks: { type: ["integer", "null"], minimum: 1 }
         isActive: { type: boolean }
         isPromo: { type: boolean }
+        # null clears the limit (unlimited). Minimum 1 when set.
+        maxUses: { type: ["integer", "null"], minimum: 1 }
 
     PlanUpdate:
       type: object
@@ -1890,6 +1898,7 @@ components:
         hourlyRateKopecks: { type: ["integer", "null"], minimum: 1 }
         isActive: { type: boolean }
         isPromo: { type: boolean }
+        maxUses: { type: ["integer", "null"], minimum: 1 }
 
     SbpQrUpload:
       type: object

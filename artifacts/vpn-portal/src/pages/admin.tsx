@@ -872,6 +872,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
   const [trafficLimitGb, setTrafficLimitGb] = useState(plan?.trafficLimitGb?.toString() ?? "");
   const [isActive, setIsActive] = useState(plan?.isActive ?? true);
   const [isPromo, setIsPromo] = useState(plan?.isPromo ?? false);
+  const [maxUses, setMaxUses] = useState(plan?.maxUses?.toString() ?? "");
   const [billingType, setBillingType] = useState<"monthly" | "hourly">(plan?.billingType ?? "monthly");
   const [hourlyRateRub, setHourlyRateRub] = useState(
     plan?.hourlyRateKopecks != null ? (plan.hourlyRateKopecks / 100).toString() : "",
@@ -887,6 +888,7 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
       trafficLimitGb: trafficLimitGb ? Number(trafficLimitGb) : null,
       isActive,
       isPromo,
+      maxUses: maxUses ? Number(maxUses) : null,
       billingType,
       hourlyRateKopecks: billingType === "hourly" ? Math.round(Number(hourlyRateRub) * 100) : null,
     };
@@ -969,6 +971,15 @@ function PlanForm({ plan, onDone }: { plan?: Plan; onDone: () => void }) {
           <input type="checkbox" checked={isPromo} onChange={(e) => setIsPromo(e.target.checked)} />
           Промо <span className="text-[11px] text-muted-foreground">(только через инвайт)</span>
         </label>
+        <Input
+          type="number"
+          placeholder="Лимит покупок на пользователя (пусто = без лимита)"
+          min={1}
+          value={maxUses}
+          onChange={(e) => setMaxUses(e.target.value.replace(/[^0-9]/g, ""))}
+          className="rounded-none md:col-span-2"
+          title="Сколько раз один пользователь может купить этот тариф. Актуально для промо-тарифов."
+        />
       </div>
       <Textarea
         placeholder="Описание"

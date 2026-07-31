@@ -22,5 +22,9 @@ export interface Plan {
   hourlyRateKopecks: number | null;
   isActive: boolean;
   isPromo?: boolean;
+  /** @nullable */
+  maxUses?: number | null;
+  /** @nullable */
+  userUsedCount?: number | null;
   createdAt?: Date;
 }
