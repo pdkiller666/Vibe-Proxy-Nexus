@@ -7,6 +7,7 @@ import {
   useGetPaymentSettings,
   useListMyNotifications,
   useAcknowledgeNotification,
+  useListPlans,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/query-client";
@@ -407,6 +408,7 @@ function CollapsibleOnMobile({ title, children }: { title: string; children: Rea
 export default function Dashboard() {
   const { data: me, isLoading: meLoading } = useGetMe();
   const { data: keys, isLoading: keysLoading } = useListMyVpnKeys();
+  const { data: plans } = useListPlans();
   const { toast } = useToast();
 
   const activeKeys = keys?.filter((k) => !k.revokedAt) ?? [];
@@ -423,6 +425,11 @@ export default function Dashboard() {
   const isBalanceCritical = hoursLeft !== null && hoursLeft < 3;
   const isBalanceLow     = hoursLeft !== null && hoursLeft >= 3 && hoursLeft < 24;
 
+  // Promo plan — backend prepends it first when user's invite link has one.
+  // Only show the promo CTA when the user has no active subscription yet.
+  const promoPlan = !me?.hasActiveSubscription && plans?.[0]?.isPromo ? plans[0] : null;
+  const hasUnusedPromo = promoPlan != null && (promoPlan.userUsedCount ?? 0) === 0;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
@@ -432,17 +439,26 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Onboarding tip — adapts text to whether the user already has a subscription */}
       <OnboardingTip
         id="dashboard-welcome"
         icon={<Sparkles className="w-4 h-4" />}
         title="Добро пожаловать в VPNexus!"
       >
         <p>Здесь — статус вашей подписки и быстрый доступ ко всем разделам.</p>
-        <p>
-          <strong>Следующий шаг:</strong> откройте раздел{" "}
-          <Link href="/keys" className="underline font-semibold">Ключи VPN</Link>{" "}
-          — первый ключ уже готов, подключитесь к интернету за минуту.
-        </p>
+        {me?.hasActiveSubscription ? (
+          <p>
+            <strong>Следующий шаг:</strong> откройте раздел{" "}
+            <Link href="/keys" className="underline font-semibold">Ключи VPN</Link>{" "}
+            — первый ключ уже готов, подключитесь к интернету за минуту.
+          </p>
+        ) : (
+          <p>
+            <strong>Следующий шаг:</strong> перейдите в раздел{" "}
+            <Link href="/plans" className="underline font-semibold">Тарифы</Link>{" "}
+            — выберите подходящий план и получите доступ к VPN.
+          </p>
+        )}
       </OnboardingTip>
 
       {/* Server migration notifications */}
@@ -570,6 +586,52 @@ export default function Dashboard() {
               className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
             >
               Продлить / сменить
+            </Link>
+          </div>
+        </div>
+      ) : hasUnusedPromo && promoPlan ? (
+        /* ── Promo offer hero — shown instead of plain "no subscription" ── */
+        <div className="overflow-hidden border-2 border-orange-400 bg-gradient-to-br from-orange-50 to-amber-50">
+          {/* top accent bar */}
+          <div className="h-1.5 w-full bg-gradient-to-r from-orange-400 to-amber-400" />
+          <div className="p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
+            {/* icon */}
+            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center shrink-0 border-2 border-orange-300">
+              <Sparkles className="w-8 h-8 text-orange-500" />
+            </div>
+            {/* text */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-orange-600">
+                  Специальное предложение
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-orange-500 text-white rounded-full">
+                  ✨ Промо
+                </span>
+              </div>
+              <div className="text-2xl font-black tracking-tight text-foreground">
+                {promoPlan.name}
+              </div>
+              <p className="text-sm text-orange-700 mt-1">
+                Доступно по приглашению — всего{" "}
+                <strong>{promoPlan.priceRub} ₽</strong>
+                {promoPlan.durationDays > 0
+                  ? ` на ${promoPlan.durationDays} дн.`
+                  : ""}
+                {promoPlan.maxUses === 1
+                  ? " — одноразовое предложение"
+                  : promoPlan.maxUses != null
+                  ? `, лимит ${promoPlan.maxUses} пользователей`
+                  : ""}
+                . Оформите сейчас — предложение ограничено.
+              </p>
+            </div>
+            {/* CTA */}
+            <Link
+              href="/plans"
+              className="shrink-0 inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 font-bold hover:bg-orange-600 transition-colors whitespace-nowrap"
+            >
+              Получить доступ <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
