@@ -43,8 +43,11 @@ router.get("/plans", async (req, res): Promise<void> => {
           .limit(1);
 
         if (promoPlan) {
-          // Count confirmed subscriptions (active/expired/cancelled) for this
-          // plan+user pair. pending_payment and rejected rows don't count as a use.
+          // A "use" = a subscription the user actually paid for and activated.
+          // Only "active" (currently running) and "expired" (completed period) count.
+          // "cancelled" and "rejected" mean the payment attempt failed or was
+          // abandoned — the promo plan must remain visible so the user can retry.
+          // "pending_payment" (checkout in progress) is also excluded intentionally.
           const [{ usedCount }] = await db
             .select({ usedCount: sql<number>`count(*)::int` })
             .from(subscriptionsTable)
@@ -52,7 +55,7 @@ router.get("/plans", async (req, res): Promise<void> => {
               and(
                 eq(subscriptionsTable.userId, user.id),
                 eq(subscriptionsTable.planId, promoPlan.id),
-                inArray(subscriptionsTable.status, ["active", "expired", "cancelled"]),
+                inArray(subscriptionsTable.status, ["active", "expired"]),
               ),
             );
 
@@ -66,10 +69,11 @@ router.get("/plans", async (req, res): Promise<void> => {
     }
   }
 
-  // Merge: public plans get userUsedCount=null, promo plan (if any) appended last.
+  // Promo plan (if any) goes FIRST so the user sees it immediately at the start
+  // of the carousel — not buried at the end after all public plans.
   const allPlans = [
-    ...publicPlans.map((p) => ({ ...p, userUsedCount: null })),
     ...(promoEntry ? [promoEntry] : []),
+    ...publicPlans.map((p) => ({ ...p, userUsedCount: null })),
   ];
 
   res.json(ListPlansResponse.parse(allPlans));
