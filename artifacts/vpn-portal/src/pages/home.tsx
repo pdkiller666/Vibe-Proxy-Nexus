@@ -16,13 +16,13 @@ function formatKopecks(kopecks: number): string {
 
 const TESTIMONIALS = [
   {
-    text: "Работаю удалённо из разных мест. Пробовал несколько VPN — этот единственный, который не отваливается в середине рабочего дня. Уже полгода стабильно.",
+    text: "Работаю удалённо из разных мест. Пробовал несколько сервисов — этот единственный, который не отваливается в середине рабочего дня. Уже полгода стабильно.",
     name: "Алексей",
     meta: "Фрилансер",
     rating: 5,
   },
   {
-    text: "Нужен был чтобы открыть Instagram. Зарегистрировалась, за пять минут настроила по инструкции — всё работает. Скорость не отличить от прямого подключения.",
+    text: "Нужен был доступ к ChatGPT и Midjourney для работы. Зарегистрировалась, за пять минут настроила по инструкции — всё работает. Скорость не отличить от прямого подключения.",
     name: "Мария",
     meta: "Дизайнер",
     rating: 5,
@@ -510,7 +510,7 @@ export default function Home() {
         <div className="animate-fade-up relative inline-flex items-center gap-2 bg-orange-50 border border-orange-200
                         rounded-full px-4 py-1.5 mb-8 text-xs font-semibold text-orange-700 tracking-wide uppercase">
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-          Персональный VPN · Приватная инфраструктура
+          Персональный VLESS · Приватная инфраструктура
         </div>
 
         <h1 className="animate-fade-up-1 relative text-5xl md:text-7xl lg:text-[88px] font-black
@@ -522,7 +522,7 @@ export default function Home() {
 
         <p className="animate-fade-up-2 relative text-lg md:text-xl text-gray-500 max-w-xl mb-10 leading-relaxed font-light">
           Ваш трафик не видит никто — для провайдера это белый шум.<br className="hidden md:block" />
-          Не массовый VPN, а персональная защита.
+          Не массовый сервис, а персональная защита.
         </p>
 
         <div className="animate-fade-up-3 relative flex flex-col sm:flex-row gap-3 items-center">
