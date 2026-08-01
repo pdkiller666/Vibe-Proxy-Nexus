@@ -13,9 +13,14 @@ import {
   SUBSCRIPTION_UPDATE_INTERVAL_HOURS,
   verifySubscriptionToken,
 } from "../lib/subscription";
-import { buildServingVlessLink } from "../lib/vless";
+import { buildServingVlessLink, flagEmojiForNode } from "../lib/vless";
 import { resolvePublicAddress } from "../lib/domain";
 import { subscriptionRateLimit } from "../lib/rateLimit";
+import {
+  buildXrayClientConfig,
+  isIpAddress,
+  type XrayOutboundParams,
+} from "../lib/xrayClientConfig";
 
 const router: IRouter = Router();
 
@@ -26,6 +31,13 @@ const router: IRouter = Router();
 // this is what actually protects the config, not "encryption" of the link
 // itself (VLESS already runs over TLS). Rate-limited since it has no session
 // auth by design — see subscriptionRateLimit for the reasoning.
+//
+// Supported response formats via ?format= query param:
+//   (default) – Base64-encoded list of VLESS URIs (SIP008-style). Works with
+//               all VLESS-compatible clients (Happ, v2rayNG, v2rayN, …).
+//   "xray"    – Full Xray client JSON config with Russian-bypass routing rules.
+//               Import once in Happ / v2rayN via "Import config from URL" to
+//               get automatic split-tunneling for domestic Russian services.
 router.get(
   "/sub/:token",
   subscriptionRateLimit,
@@ -74,14 +86,7 @@ router.get(
 
     const keys = keyRows.map((row) => row.key);
 
-    // Regenerate each link per-request so already-issued keys transparently
-    // start using the primary public domain (or fall back to the technical
-    // one) without needing to be re-issued.
-    const vlessLinks = await Promise.all(
-      keyRows.map(({ key, node }) =>
-        buildServingVlessLink(node, key.uuid, key.label),
-      ),
-    );
+    // ── Shared metadata (used by both response formats) ───────────────────────
 
     // Resolve the public domain once, used for the Profile-Web-Page-Url header.
     const requestHost = req.get("host") ?? "";
@@ -89,8 +94,6 @@ router.get(
       host: requestHost,
       sni: requestHost,
     });
-
-    const body = Buffer.from(vlessLinks.join("\n"), "utf8").toString("base64");
 
     // Show the user's actual plan name in the client's subscription group title
     // (falls back to the bare brand name if there's no active plan/subscription)
@@ -144,7 +147,8 @@ router.get(
       }
     }
 
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    // ── Common response headers (for both formats) ────────────────────────────
+
     res.setHeader(
       "Profile-Title",
       `base64:${Buffer.from(profileTitle, "utf8").toString("base64")}`,
@@ -204,6 +208,64 @@ router.get(
       }
       res.setHeader("Subscription-Userinfo", parts.join("; "));
     }
+
+    // ── Format branch ─────────────────────────────────────────────────────────
+
+    const format =
+      typeof req.query.format === "string" ? req.query.format : null;
+
+    if (format === "xray") {
+      // Build Xray client JSON config with Russian-bypass routing rules.
+      // Each active key becomes a separate VLESS outbound; the first is
+      // tagged "proxy" (the catch-all target), additional ones "proxy-2" etc.
+      // We apply the same domain-failover logic as for plain VLESS links so
+      // the primary public domain is preferred where available.
+      const outboundParams: XrayOutboundParams[] = await Promise.all(
+        keyRows.map(async ({ key, node }) => {
+          const isLocalNode = !node.managementApiUrl;
+          const resolved = isLocalNode
+            ? await resolvePublicAddress({
+                host: node.host || node.sni,
+                sni: node.sni,
+              })
+            : { host: node.host || node.sni, sni: node.sni };
+
+          const flag = flagEmojiForNode(node);
+          const label = flag ? `${flag} ${key.label}` : key.label;
+
+          return {
+            uuid:      key.uuid,
+            label,
+            address:   resolved.host,
+            sni:       resolved.sni || resolved.host,
+            port:      node.port ?? 443,
+            isIpNode:
+              isIpAddress(resolved.host) || isIpAddress(node.sni),
+            certSha256: node.certSha256 ?? null,
+          };
+        }),
+      );
+
+      const config = buildXrayClientConfig(outboundParams);
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.json(config);
+      return;
+    }
+
+    // ── Default: Base64-encoded VLESS URI list (SIP008 style) ─────────────────
+
+    // Regenerate each link per-request so already-issued keys transparently
+    // start using the primary public domain (or fall back to the technical
+    // one) without needing to be re-issued.
+    const vlessLinks = await Promise.all(
+      keyRows.map(({ key, node }) =>
+        buildServingVlessLink(node, key.uuid, key.label),
+      ),
+    );
+
+    const body = Buffer.from(vlessLinks.join("\n"), "utf8").toString("base64");
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.send(body);
   },
 );
