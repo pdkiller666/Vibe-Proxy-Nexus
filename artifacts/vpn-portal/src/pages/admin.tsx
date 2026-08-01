@@ -3053,7 +3053,7 @@ function InviteLinkEditRow({
               </label>
               <Input
                 type="number"
-                min={1}
+                min={0}
                 max={365}
                 placeholder="Стандарт (из настроек)"
                 value={trialDays}
@@ -3264,7 +3264,7 @@ function InviteLinksManagement() {
               </label>
               <Input
                 type="number"
-                min={1}
+                min={0}
                 max={365}
                 placeholder="Стандарт (из настроек)"
                 value={trialDays}
