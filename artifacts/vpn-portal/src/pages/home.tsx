@@ -214,8 +214,8 @@ const BENEFITS = [
   {
     icon: <Lock className="w-5 h-5 text-orange-600" />,
     title: "Работает везде и всегда",
-    desc: "Блокировки обходятся на уровне протокола — маскировка под легальный трафик крупных сервисов. DPI не справляется.",
-    tag: "Не блокируется DPI",
+    desc: "Связь без обрывов и замедлений. Защита маршрутизации от DPI-анализа — трафик неотличим от обычного HTTPS.",
+    tag: "Защита от DPI-анализа",
   },
 ];
 
@@ -517,11 +517,11 @@ export default function Home() {
                        tracking-tighter leading-[0.92] mb-6 max-w-4xl">
           Интернет<br />
           <span className="gradient-text">без слежки</span><br />
-          и блокировок
+          и ограничений
         </h1>
 
         <p className="animate-fade-up-2 relative text-lg md:text-xl text-gray-500 max-w-xl mb-10 leading-relaxed font-light">
-          Ваш трафик не видит никто — ни провайдер, ни государство.<br className="hidden md:block" />
+          Ваш трафик не видит никто — для провайдера это белый шум.<br className="hidden md:block" />
           Не массовый VPN, а персональная защита.
         </p>
 
@@ -602,7 +602,7 @@ export default function Home() {
               },
               {
                 n: "02",
-                title: "Получите VPN-ключ",
+                title: "Получите VLESS-ключ доступа",
                 desc: "В личном кабинете нажмите «Добавить устройство». Ключ создаётся мгновенно — скопируйте ссылку или отсканируйте QR.",
               },
               {
@@ -733,7 +733,7 @@ export default function Home() {
                           plan.trafficLimitGb != null
                             ? `${plan.trafficLimitGb} ГБ трафика`
                             : "Без ограничения трафика",
-                          "VPN-ключи в личном кабинете",
+                          "Ключи шифрования в личном кабинете",
                           "Техподдержка",
                         ].map((feat) => (
                           <li key={feat} className="flex items-center gap-2.5 text-sm text-gray-600">
@@ -833,8 +833,8 @@ export default function Home() {
           </div>
           <div className="bg-white border border-gray-100 divide-y divide-gray-100 shadow-sm shadow-orange-50">
             <FaqItem
-              q="Мой провайдер увидит, что я использую VPN?"
-              a="Нет. Технология маскировки VPNexus скрывает трафик под обычный HTTPS. Для провайдера это выглядит как обращение к обычному сайту."
+              q="Увидит ли провайдер, какие сайты я посещаю?"
+              a="Нет. Технология маскировки VPNexus шифрует весь трафик и скрывает его под обычный HTTPS. Для провайдера это белый шум — никакой истории посещений."
             />
             <FaqItem
               q="Что будет после окончания пробного периода?"
