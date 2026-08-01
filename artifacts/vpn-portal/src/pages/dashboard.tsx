@@ -591,30 +591,30 @@ export default function Dashboard() {
         </div>
       ) : hasUnusedPromo && promoPlan ? (
         /* ── Promo offer hero — shown instead of plain "no subscription" ── */
-        <div className="overflow-hidden border-2 border-orange-400 bg-gradient-to-br from-orange-50 to-amber-50">
+        <div className="overflow-hidden border border-violet-300 bg-gradient-to-br from-violet-700 to-indigo-800 shadow-lg shadow-violet-300/20">
           {/* top accent bar */}
-          <div className="h-1.5 w-full bg-gradient-to-r from-orange-400 to-amber-400" />
+          <div className="h-1 w-full bg-gradient-to-r from-violet-400 to-indigo-400 opacity-60" />
           <div className="p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
             {/* icon */}
-            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center shrink-0 border-2 border-orange-300">
-              <Sparkles className="w-8 h-8 text-orange-500" />
+            <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center shrink-0 border border-white/20">
+              <Sparkles className="w-8 h-8 text-violet-200" />
             </div>
             {/* text */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-orange-600">
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-violet-200">
                   Специальное предложение
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-orange-500 text-white rounded-full">
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-white/15 text-white rounded-full border border-white/20">
                   ✨ Промо
                 </span>
               </div>
-              <div className="text-2xl font-black tracking-tight text-foreground">
+              <div className="text-2xl font-black tracking-tight text-white">
                 {promoPlan.name}
               </div>
-              <p className="text-sm text-orange-700 mt-1">
+              <p className="text-sm text-violet-200 mt-1">
                 Доступно по приглашению — всего{" "}
-                <strong>{promoPlan.priceRub} ₽</strong>
+                <strong className="text-white">{promoPlan.priceRub} ₽</strong>
                 {promoPlan.durationDays > 0
                   ? ` на ${promoPlan.durationDays} дн.`
                   : ""}
@@ -629,7 +629,7 @@ export default function Dashboard() {
             {/* CTA */}
             <Link
               href="/plans"
-              className="shrink-0 inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 font-bold hover:bg-orange-600 transition-colors whitespace-nowrap"
+              className="shrink-0 inline-flex items-center gap-2 bg-white text-violet-700 px-6 py-3 font-bold hover:bg-violet-50 transition-colors whitespace-nowrap"
             >
               Получить доступ <ArrowRight className="w-4 h-4" />
             </Link>

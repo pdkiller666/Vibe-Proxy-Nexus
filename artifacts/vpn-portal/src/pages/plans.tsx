@@ -268,7 +268,7 @@ export default function Plans() {
                     "snap-center shrink-0 w-[78%] xs:w-[70%] sm:w-[300px] md:w-[320px] border flex flex-col cursor-pointer select-none overflow-hidden",
                     "transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2",
                     plan.isPromo
-                      ? "bg-gradient-to-b from-orange-500 to-orange-600 border-orange-500 shadow-xl shadow-orange-300/40 scale-[1.03] ring-2 ring-orange-400"
+                      ? "bg-gradient-to-b from-violet-700 to-indigo-800 border-violet-600 shadow-xl shadow-violet-400/30 scale-[1.03] ring-2 ring-violet-500/60"
                       : isCurrentPlan
                         ? "bg-card border-green-500 ring-2 ring-green-500/30 shadow-lg"
                         : isSelected
@@ -278,7 +278,7 @@ export default function Plans() {
                 >
                   {/* Promo top ribbon */}
                   {plan.isPromo && (
-                    <div className="bg-orange-400/60 text-white text-xs font-black uppercase tracking-widest text-center py-1.5 px-3 flex items-center justify-center gap-1.5">
+                    <div className="bg-white/10 text-violet-100 text-xs font-black uppercase tracking-widest text-center py-1.5 px-3 flex items-center justify-center gap-1.5 border-b border-white/10">
                       <Sparkles className="w-3 h-3" /> Только для вас <Sparkles className="w-3 h-3" />
                     </div>
                   )}
@@ -292,7 +292,7 @@ export default function Plans() {
                       </span>
                     )}
                     {plan.isPromo && (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/20 text-white">
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-violet-400/30 text-violet-100 border border-violet-400/40">
                         ✨ Промо
                       </span>
                     )}
@@ -398,7 +398,7 @@ export default function Plans() {
                         className={cn(
                           "w-full font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2",
                           plan.isPromo
-                            ? "bg-white text-orange-600 hover:bg-orange-50"
+                            ? "bg-white text-violet-700 hover:bg-violet-50"
                             : "bg-primary text-primary-foreground",
                         )}
                       >
