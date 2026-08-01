@@ -2792,7 +2792,8 @@ components:
       properties:
         note: { type: string }
         planId: { type: integer }
-        trialDays: { type: integer, minimum: 1 }
+        # 0 = promo-only mode: no free trial, user purchases promo plan directly.
+        trialDays: { type: integer, minimum: 0 }
         maxUses: { type: integer, minimum: 1 }
         expiresAt: { type: string, format: date-time }
 

@@ -9,7 +9,7 @@
 export interface AdminInviteLinkCreateInput {
   note?: string;
   planId?: number;
-  /** @minimum 1 */
+  /** @minimum 0 */
   trialDays?: number;
   /** @minimum 1 */
   maxUses?: number;

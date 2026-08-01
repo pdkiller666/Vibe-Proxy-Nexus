@@ -1345,6 +1345,7 @@ export const ListAdminInviteLinksResponse = zod.array(ListAdminInviteLinksRespon
 /**
  * @summary Create an admin invite link
  */
+export const createAdminInviteLinkBodyTrialDaysMin = 0;
 
 
 
@@ -1352,7 +1353,7 @@ export const ListAdminInviteLinksResponse = zod.array(ListAdminInviteLinksRespon
 export const CreateAdminInviteLinkBody = zod.object({
   "note": zod.string().optional(),
   "planId": zod.number().optional(),
-  "trialDays": zod.number().min(1).optional(),
+  "trialDays": zod.number().min(createAdminInviteLinkBodyTrialDaysMin).optional(),
   "maxUses": zod.number().min(1).optional(),
   "expiresAt": zod.coerce.date().optional()
 })

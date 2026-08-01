@@ -3111,7 +3111,8 @@ function InviteLinkEditRow({
 function InviteLinksManagement() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const { data: links, isLoading } = useListAdminInviteLinks();
-  const { data: plans } = useListPlans();
+  // Must use admin plans so promo plans appear in the edit-link dropdown too.
+  const { data: plans } = useListAdminPlans();
   const { data: paymentSettings } = useGetPaymentSettings();
   const { toast } = useToast();
   const trialDisabled = paymentSettings !== undefined && !paymentSettings.trialEnabled;
