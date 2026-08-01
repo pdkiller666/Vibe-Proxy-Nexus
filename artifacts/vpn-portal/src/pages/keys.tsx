@@ -657,17 +657,32 @@ export default function Keys() {
           </div>
           <p className="text-sm text-muted-foreground">
             Российские сервисы (Сбербанк, Госуслуги, Яндекс) пойдут напрямую — без VPN.
-            Зарубежные ресурсы — через туннель как обычно.{" "}
-            <strong>Как добавить:</strong> скопируйте ссылку ниже и вставьте в Happ через «Добавить сервер → Конфиг по URL»
-            или в v2rayN через «Subscriptions → Remote config URL».
+            Зарубежные ресурсы — через туннель как обычно.
           </p>
           <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
             <span className="truncate flex-1">{subscription.url}?format=xray</span>
             <CopyButton text={`${subscription.url}?format=xray`} />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Используйте <em>вместо</em> обычной ссылки подписки — не добавляйте обе одновременно.
-          </p>
+          <div className="space-y-2 text-xs text-muted-foreground bg-muted/30 border border-border p-3">
+            <p className="font-semibold text-foreground">Как добавить в Happ (Android / iOS):</p>
+            <p>
+              <strong>Способ 1 — через подписку</strong> (конфиг обновляется автоматически):<br />
+              Скопируйте ссылку → в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+            </p>
+            <p>
+              <strong>Способ 2 — вставить JSON</strong> (разовый импорт):<br />
+              Откройте ссылку в браузере → выделите и скопируйте весь текст →
+              в Happ нажмите <strong>«+»</strong> → <strong>«Вставить JSON»</strong>.
+            </p>
+            <p className="font-semibold text-foreground">v2rayN (Windows):</p>
+            <p>
+              Скопируйте ссылку → в v2rayN откройте <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> →
+              добавьте новую подписку, вставьте ссылку.
+            </p>
+            <p className="text-muted-foreground/70">
+              Используйте <em>вместо</em> обычной ссылки подписки, не одновременно с ней.
+            </p>
+          </div>
         </div>
       )}
 
