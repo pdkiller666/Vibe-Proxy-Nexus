@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap, Pencil } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap, Pencil, Route } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
 
@@ -423,6 +423,16 @@ function ConnectionGuide({ subscriptionUrl, isAdmin }: { subscriptionUrl?: strin
               </p>
             )}
           </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
+              <Route className="w-3.5 h-3.5 text-green-500" /> Хотите автообход российских сайтов?
+            </div>
+            <p className="text-muted-foreground">
+              Используйте <strong>«Xray-конфиг с автообходом РФ»</strong> (ссылка чуть ниже) вместо обычной подписки.
+              Сбербанк, Госуслуги, Яндекс и другие российские ресурсы будут идти напрямую — VPN только для зарубежных сайтов.
+              Поддерживается в <strong>Happ</strong> (iOS/Android) и <strong>v2rayN</strong> (Windows).
+            </p>
+          </div>
           {isAdmin && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
@@ -635,6 +645,29 @@ export default function Keys() {
             </button>
             <CopyButton text={subscription.url} />
           </div>
+        </div>
+      )}
+
+      {subscription?.url && activeKeys.length > 0 && (
+        <div className="bg-card border border-border p-5 space-y-3">
+          <div className="flex items-center gap-2 font-bold">
+            <Route className="w-4 h-4 text-green-500" />
+            Xray-конфиг с автообходом РФ
+            <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">Happ · v2rayN</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Российские сервисы (Сбербанк, Госуслуги, Яндекс) пойдут напрямую — без VPN.
+            Зарубежные ресурсы — через туннель как обычно.{" "}
+            <strong>Как добавить:</strong> скопируйте ссылку ниже и вставьте в Happ через «Добавить сервер → Конфиг по URL»
+            или в v2rayN через «Subscriptions → Remote config URL».
+          </p>
+          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+            <span className="truncate flex-1">{subscription.url}?format=xray</span>
+            <CopyButton text={`${subscription.url}?format=xray`} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Используйте <em>вместо</em> обычной ссылки подписки — не добавляйте обе одновременно.
+          </p>
         </div>
       )}
 
