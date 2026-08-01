@@ -103,13 +103,24 @@ export function buildXrayClientConfig(
           ip:          ["geoip:ru"],
           outboundTag: XRAY_TAG_DIRECT,
         },
-        // 3. Russian domains — direct
-        //    geosite:ru  covers .ru/.рф TLDs and major domestic services.
-        //    geosite:yandex and geosite:mailru add popular platforms that
-        //    serve content from non-.ru domains (e.g. yandex.com, vk.com).
+        // 3. Russian domains — direct (no geosite.dat required)
+        //    regexp:\\.ru$       catches all .ru TLD (Сбербанк, Госуслуги, …)
+        //    regexp:\\.xn--p1ai$ catches .рф TLD (punycode form Xray expects)
+        //    Explicit domain: entries cover major Russian services that operate
+        //    on international domains (yandex.com, vk.com) not in .ru TLD.
+        //
+        //    geosite:ru/yandex/mailru intentionally removed — Happ 3.26.x ships
+        //    a geosite.dat without the RU category, causing a hard start error.
         {
-          type:        "field",
-          domain:      ["geosite:ru", "geosite:yandex", "geosite:mailru"],
+          type:   "field",
+          domain: [
+            "regexp:\\.ru$",
+            "regexp:\\.xn--p1ai$",
+            "domain:yandex.com",
+            "domain:yandex.net",
+            "domain:vk.com",
+            "domain:vk.me",
+          ],
           outboundTag: XRAY_TAG_DIRECT,
         },
         // 4. Everything else → tunnel

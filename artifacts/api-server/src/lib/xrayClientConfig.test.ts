@@ -121,22 +121,48 @@ describe("buildXrayClientConfig — routing rules", () => {
     expect(rule?.outboundTag).toBe(XRAY_TAG_DIRECT);
   });
 
-  it("contains a rule that sends geosite:ru direct", () => {
+  it("contains a rule that sends .ru TLD direct via regexp", () => {
     const { routing } = buildXrayClientConfig([DOMAIN_OUTBOUND]) as {
       routing: { rules: Array<{ domain?: string[]; outboundTag: string }> };
     };
-    const rule = routing.rules.find((r) => r.domain?.includes("geosite:ru"));
+    const rule = routing.rules.find((r) => r.domain?.includes("regexp:\\.ru$"));
     expect(rule).toBeDefined();
     expect(rule?.outboundTag).toBe(XRAY_TAG_DIRECT);
   });
 
-  it("contains a rule that sends geosite:yandex direct", () => {
+  it("contains a rule that sends .рф TLD (punycode) direct via regexp", () => {
     const { routing } = buildXrayClientConfig([DOMAIN_OUTBOUND]) as {
       routing: { rules: Array<{ domain?: string[]; outboundTag: string }> };
     };
-    const rule = routing.rules.find((r) => r.domain?.includes("geosite:yandex"));
+    const rule = routing.rules.find((r) => r.domain?.includes("regexp:\\.xn--p1ai$"));
     expect(rule).toBeDefined();
     expect(rule?.outboundTag).toBe(XRAY_TAG_DIRECT);
+  });
+
+  it("contains a rule that sends yandex.com direct", () => {
+    const { routing } = buildXrayClientConfig([DOMAIN_OUTBOUND]) as {
+      routing: { rules: Array<{ domain?: string[]; outboundTag: string }> };
+    };
+    const rule = routing.rules.find((r) => r.domain?.includes("domain:yandex.com"));
+    expect(rule).toBeDefined();
+    expect(rule?.outboundTag).toBe(XRAY_TAG_DIRECT);
+  });
+
+  it("contains a rule that sends vk.com direct", () => {
+    const { routing } = buildXrayClientConfig([DOMAIN_OUTBOUND]) as {
+      routing: { rules: Array<{ domain?: string[]; outboundTag: string }> };
+    };
+    const rule = routing.rules.find((r) => r.domain?.includes("domain:vk.com"));
+    expect(rule).toBeDefined();
+    expect(rule?.outboundTag).toBe(XRAY_TAG_DIRECT);
+  });
+
+  it("does NOT use geosite: tags (incompatible with Happ 3.26.x geosite.dat)", () => {
+    const { routing } = buildXrayClientConfig([DOMAIN_OUTBOUND]) as {
+      routing: { rules: Array<{ domain?: string[] }> };
+    };
+    const allDomains = routing.rules.flatMap((r) => r.domain ?? []);
+    expect(allDomains.some((d) => d.startsWith("geosite:"))).toBe(false);
   });
 
   it("contains a catch-all rule pointing to proxy when outbounds present", () => {
