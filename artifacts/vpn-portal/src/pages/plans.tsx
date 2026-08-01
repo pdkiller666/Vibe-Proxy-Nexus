@@ -265,29 +265,35 @@ export default function Plans() {
                   }}
                   style={{ animationDelay: `${i * 80}ms` }}
                   className={cn(
-                    "snap-center shrink-0 w-[78%] xs:w-[70%] sm:w-[300px] md:w-[320px] bg-card border p-6 flex flex-col cursor-pointer select-none",
+                    "snap-center shrink-0 w-[78%] xs:w-[70%] sm:w-[300px] md:w-[320px] border flex flex-col cursor-pointer select-none overflow-hidden",
                     "transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2",
-                    isCurrentPlan
-                      ? "border-green-500 ring-2 ring-green-500/30 shadow-lg"
-                      : plan.isPromo
-                        ? isSelected
-                          ? "border-orange-400 ring-2 ring-orange-400/40 shadow-lg"
-                          : "border-orange-300 hover:border-orange-400 dark:border-orange-700 dark:hover:border-orange-500"
+                    plan.isPromo
+                      ? "bg-gradient-to-b from-orange-500 to-orange-600 border-orange-500 shadow-xl shadow-orange-300/40 scale-[1.03] ring-2 ring-orange-400"
+                      : isCurrentPlan
+                        ? "bg-card border-green-500 ring-2 ring-green-500/30 shadow-lg"
                         : isSelected
-                          ? "border-primary ring-2 ring-primary/40 shadow-lg"
-                          : "border-border hover:border-primary/40",
+                          ? "bg-card border-primary ring-2 ring-primary/40 shadow-lg"
+                          : "bg-card border-border hover:border-primary/40",
                   )}
                 >
+                  {/* Promo top ribbon */}
+                  {plan.isPromo && (
+                    <div className="bg-orange-400/60 text-white text-xs font-black uppercase tracking-widest text-center py-1.5 px-3 flex items-center justify-center gap-1.5">
+                      <Sparkles className="w-3 h-3" /> Только для вас <Sparkles className="w-3 h-3" />
+                    </div>
+                  )}
+
+                  <div className={cn("flex flex-col flex-1", plan.isPromo ? "p-6" : "p-6")}>
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h3 className="font-bold text-xl">{plan.name}</h3>
+                    <h3 className={cn("font-bold text-xl", plan.isPromo && "text-white")}>{plan.name}</h3>
                     {isCurrentPlan && (
                       <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                         <CheckCircle2 className="w-3 h-3" /> Активный
                       </span>
                     )}
                     {plan.isPromo && (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
-                        <Sparkles className="w-3 h-3" /> Промо
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/20 text-white">
+                        ✨ Промо
                       </span>
                     )}
                     {plan.billingType === "hourly" && (
@@ -298,27 +304,27 @@ export default function Plans() {
                   </div>
                   {plan.billingType === "hourly" ? (
                     <>
-                      <div className="text-3xl font-bold mb-1">
+                      <div className={cn("text-3xl font-bold mb-1", plan.isPromo && "text-white")}>
                         {formatKopecks(plan.hourlyRateKopecks ?? 0)}
                       </div>
-                      <div className="text-sm text-muted-foreground font-mono mb-6">
+                      <div className={cn("text-sm font-mono mb-6", plan.isPromo ? "text-orange-100" : "text-muted-foreground")}>
                         за час, списывается с баланса
                       </div>
                     </>
                   ) : (
                     <>
-                      <div className="text-3xl font-bold mb-1">
+                      <div className={cn("text-4xl font-black mb-1", plan.isPromo && "text-white")}>
                         {plan.priceRub} ₽
                       </div>
-                      <div className="text-sm text-muted-foreground font-mono mb-6">
+                      <div className={cn("text-sm font-mono mb-6", plan.isPromo ? "text-orange-100" : "text-muted-foreground")}>
                         на {plan.durationDays} дней
                       </div>
                     </>
                   )}
                   {plan.description && (
-                    <p className="text-sm text-muted-foreground mb-4 flex-1">{plan.description}</p>
+                    <p className={cn("text-sm mb-4 flex-1", plan.isPromo ? "text-orange-100" : "text-muted-foreground")}>{plan.description}</p>
                   )}
-                  <ul className="space-y-1.5 mb-6 text-sm text-muted-foreground">
+                  <ul className="space-y-1.5 mb-6 text-sm">
                     {[
                       `${plan.devicesIncluded} ${
                         plan.devicesIncluded === 1 ? "устройство"
@@ -329,8 +335,8 @@ export default function Plans() {
                         ? `${plan.trafficLimitGb} ГБ трафика`
                         : "Без ограничения трафика",
                     ].map((feat) => (
-                      <li key={feat} className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <li key={feat} className={cn("flex items-center gap-2", plan.isPromo ? "text-white" : "text-muted-foreground")}>
+                        <Check className={cn("w-3.5 h-3.5 shrink-0", plan.isPromo ? "text-orange-200" : "text-primary")} />
                         {feat}
                       </li>
                     ))}
@@ -389,7 +395,12 @@ export default function Plans() {
                           handleSelect(plan.id, plan.billingType);
                         }}
                         disabled={isPending}
-                        className="w-full bg-primary text-primary-foreground font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                        className={cn(
+                          "w-full font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2",
+                          plan.isPromo
+                            ? "bg-white text-orange-600 hover:bg-orange-50"
+                            : "bg-primary text-primary-foreground",
+                        )}
                       >
                         {loadingPlanId === plan.id ? (
                           "Оформляем..."
@@ -401,6 +412,7 @@ export default function Plans() {
                       </button>
                     );
                   })()}
+                  </div>{/* end inner promo wrapper */}
                 </div>
               );
             })}
