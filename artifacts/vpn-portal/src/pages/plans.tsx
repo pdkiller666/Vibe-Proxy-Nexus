@@ -268,7 +268,7 @@ export default function Plans() {
                     "snap-center shrink-0 w-[78%] xs:w-[70%] sm:w-[300px] md:w-[320px] border flex flex-col cursor-pointer select-none overflow-hidden",
                     "transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2",
                     plan.isPromo
-                      ? "bg-gradient-to-b from-violet-700 to-indigo-800 border-violet-600 shadow-xl shadow-violet-400/30 scale-[1.03] ring-2 ring-violet-500/60"
+                      ? "bg-card border-green-300 shadow-lg shadow-green-200/60 scale-[1.03] ring-2 ring-green-300/50"
                       : isCurrentPlan
                         ? "bg-card border-green-500 ring-2 ring-green-500/30 shadow-lg"
                         : isSelected
@@ -278,21 +278,21 @@ export default function Plans() {
                 >
                   {/* Promo top ribbon */}
                   {plan.isPromo && (
-                    <div className="bg-white/10 text-violet-100 text-xs font-black uppercase tracking-widest text-center py-1.5 px-3 flex items-center justify-center gap-1.5 border-b border-white/10">
+                    <div className="bg-green-100 text-green-700 text-xs font-black uppercase tracking-widest text-center py-1.5 px-3 flex items-center justify-center gap-1.5 border-b border-green-200">
                       <Sparkles className="w-3 h-3" /> Только для вас <Sparkles className="w-3 h-3" />
                     </div>
                   )}
 
-                  <div className={cn("flex flex-col flex-1", plan.isPromo ? "p-6" : "p-6")}>
+                  <div className="flex flex-col flex-1 p-6">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h3 className={cn("font-bold text-xl", plan.isPromo && "text-white")}>{plan.name}</h3>
+                    <h3 className="font-bold text-xl">{plan.name}</h3>
                     {isCurrentPlan && (
                       <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                         <CheckCircle2 className="w-3 h-3" /> Активный
                       </span>
                     )}
                     {plan.isPromo && (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-violet-400/30 text-violet-100 border border-violet-400/40">
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
                         ✨ Промо
                       </span>
                     )}
@@ -304,25 +304,25 @@ export default function Plans() {
                   </div>
                   {plan.billingType === "hourly" ? (
                     <>
-                      <div className={cn("text-3xl font-bold mb-1", plan.isPromo && "text-white")}>
+                      <div className="text-3xl font-bold mb-1">
                         {formatKopecks(plan.hourlyRateKopecks ?? 0)}
                       </div>
-                      <div className={cn("text-sm font-mono mb-6", plan.isPromo ? "text-orange-100" : "text-muted-foreground")}>
+                      <div className="text-sm font-mono mb-6 text-muted-foreground">
                         за час, списывается с баланса
                       </div>
                     </>
                   ) : (
                     <>
-                      <div className={cn("text-4xl font-black mb-1", plan.isPromo && "text-white")}>
+                      <div className="text-4xl font-black mb-1">
                         {plan.priceRub} ₽
                       </div>
-                      <div className={cn("text-sm font-mono mb-6", plan.isPromo ? "text-orange-100" : "text-muted-foreground")}>
+                      <div className="text-sm font-mono mb-6 text-muted-foreground">
                         на {plan.durationDays} дней
                       </div>
                     </>
                   )}
                   {plan.description && (
-                    <p className={cn("text-sm mb-4 flex-1", plan.isPromo ? "text-orange-100" : "text-muted-foreground")}>{plan.description}</p>
+                    <p className="text-sm mb-4 flex-1 text-muted-foreground">{plan.description}</p>
                   )}
                   <ul className="space-y-1.5 mb-6 text-sm">
                     {[
@@ -335,8 +335,8 @@ export default function Plans() {
                         ? `${plan.trafficLimitGb} ГБ трафика`
                         : "Без ограничения трафика",
                     ].map((feat) => (
-                      <li key={feat} className={cn("flex items-center gap-2", plan.isPromo ? "text-white" : "text-muted-foreground")}>
-                        <Check className={cn("w-3.5 h-3.5 shrink-0", plan.isPromo ? "text-orange-200" : "text-primary")} />
+                      <li key={feat} className="flex items-center gap-2 text-muted-foreground">
+                        <Check className="w-3.5 h-3.5 shrink-0 text-primary" />
                         {feat}
                       </li>
                     ))}
@@ -397,9 +397,7 @@ export default function Plans() {
                         disabled={isPending}
                         className={cn(
                           "w-full font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2",
-                          plan.isPromo
-                            ? "bg-white text-violet-700 hover:bg-violet-50"
-                            : "bg-primary text-primary-foreground",
+                          "bg-primary text-primary-foreground",
                         )}
                       >
                         {loadingPlanId === plan.id ? (
