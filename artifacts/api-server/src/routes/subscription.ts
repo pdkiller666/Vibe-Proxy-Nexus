@@ -21,6 +21,7 @@ import {
   isIpAddress,
   type XrayOutboundParams,
 } from "../lib/xrayClientConfig";
+import { buildSingboxClientConfig } from "../lib/singboxClientConfig";
 
 const router: IRouter = Router();
 
@@ -316,6 +317,41 @@ router.get(
       }
 
       const config = buildXrayClientConfig(outboundParams, { remarks: xrayRemarks });
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.json(config);
+      return;
+    }
+
+    // ── EXPERIMENTAL: Sing-box JSON with selector outbound ───────────────────
+    // Test format to check whether Happ renders the `selector` outbound as an
+    // interactive device-picker UI.  Not yet deployed to production.
+    // Usage: ?format=singbox
+    if (format === "singbox") {
+      const outboundParams: XrayOutboundParams[] = await Promise.all(
+        keyRows.map(async ({ key, node }) => {
+          const isLocalNode = !node.managementApiUrl;
+          const resolved = isLocalNode
+            ? await resolvePublicAddress({ host: node.host || node.sni, sni: node.sni })
+            : { host: node.host || node.sni, sni: node.sni };
+
+          const flag = flagEmojiForNode(node);
+          const label = flag ? `${flag} ${key.label}` : key.label;
+
+          return {
+            uuid:       key.uuid,
+            label,
+            address:    resolved.host,
+            sni:        resolved.sni || resolved.host,
+            port:       node.port ?? 443,
+            isIpNode:   isIpAddress(resolved.host) || isIpAddress(node.sni),
+            certSha256: node.certSha256 ?? null,
+          };
+        }),
+      );
+
+      const config = buildSingboxClientConfig(outboundParams, {
+        remarks: profileTitle,
+      });
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.json(config);
       return;
