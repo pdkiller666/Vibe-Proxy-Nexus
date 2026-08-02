@@ -682,6 +682,15 @@ export default function Keys() {
             <p className="text-muted-foreground/70">
               Используйте <em>вместо</em> обычной ссылки подписки, не одновременно с ней.
             </p>
+            <div className="mt-2 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 rounded p-2.5 space-y-1.5">
+              <p className="font-semibold text-amber-800 dark:text-amber-300">⚠️ Важно для работы HApp:</p>
+              <p className="text-amber-700 dark:text-amber-400">
+                Зайдите в <strong>Настройки → Дополнительно</strong> и убедитесь, что выбрано <strong>Ядро Xray (Xray core)</strong>.
+              </p>
+              <p className="text-amber-700 dark:text-amber-400">
+                Убедитесь, что главный тумблер <strong>«Маршрутизация» (Routing) ВЫКЛЮЧЕН</strong>. Умный конфиг уже содержит все правила — включение локальной маршрутизации сломает обход!
+              </p>
+            </div>
           </div>
         </div>
       )}

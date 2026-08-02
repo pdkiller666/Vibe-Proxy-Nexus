@@ -42,7 +42,12 @@ export default function Plans() {
   const programmaticScrollRef = useRef(false);
   const programmaticScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activePlans = plans?.filter((p) => p.isActive) ?? [];
+  const activePlans = (plans?.filter((p) => p.isActive) ?? []).sort((a, b) => {
+    // Promo plan always first so it's the hero card in the carousel
+    if (a.isPromo && !b.isPromo) return -1;
+    if (!a.isPromo && b.isPromo) return 1;
+    return 0;
+  });
 
   // Promo plan entitlement: the server appends the user's promo plan (if any)
   // only when they have a qualifying invite link. It won't appear for regular users.
