@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, Smartphone, Monitor, ExternalLink, Zap, Pencil, Route } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, ExternalLink, Zap, Pencil, Route, AlertTriangle } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
 
@@ -366,92 +366,12 @@ const revokedReasonLabel: Record<string, string> = {
 };
 
 const CLIENTS = [
-  { name: "Android: v2rayNG", url: "https://play.google.com/store/apps/details?id=com.v2ray.ang" },
-  { name: "Android/iOS: Happ", url: "https://apps.apple.com/app/happ-proxy-utility/id6504287215" },
-  { name: "iOS: Streisand", url: "https://apps.apple.com/app/streisand/id6450534064" },
-  { name: "Windows: v2rayN", url: "https://github.com/2dust/v2rayN/releases/latest" },
-  { name: "macOS: V2Box", url: "https://apps.apple.com/app/v2box-v2ray-client/id6446814690" },
+  { name: "Happ (Android / iOS)", url: "https://apps.apple.com/app/happ-proxy-utility/id6504287215" },
+  { name: "v2rayNG (Android)", url: "https://play.google.com/store/apps/details?id=com.v2ray.ang" },
+  { name: "Streisand (iOS)", url: "https://apps.apple.com/app/streisand/id6450534064" },
+  { name: "v2rayN (Windows)", url: "https://github.com/2dust/v2rayN/releases/latest" },
+  { name: "V2Box (macOS)", url: "https://apps.apple.com/app/v2box-v2ray-client/id6446814690" },
 ];
-
-function ConnectionGuide({ subscriptionUrl, isAdmin }: { subscriptionUrl?: string; isAdmin?: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="bg-card border border-border">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between p-5 text-left"
-      >
-        <div className="flex items-center gap-2 font-bold">
-          <Smartphone className="w-4 h-4 text-primary" />
-          Как подключиться?
-        </div>
-        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="border-t border-border p-5 space-y-4 text-sm">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
-              <Monitor className="w-3.5 h-3.5" /> Шаг 1 — Установите приложение
-            </div>
-            <ul className="space-y-1.5 ml-1">
-              {CLIENTS.map((c) => (
-                <li key={c.name}>
-                  <a
-                    href={c.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-primary hover:underline"
-                  >
-                    {c.name} <ExternalLink className="w-3 h-3" />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
-              <RefreshCw className="w-3.5 h-3.5" /> Шаг 2 — Добавьте подписку (рекомендуется)
-            </div>
-            <p className="text-muted-foreground">
-              Скопируйте <strong>ссылку подписки</strong> выше и вставьте в приложение через
-              пункт <strong>«Добавить подписку»</strong> / <strong>«Add subscription»</strong>.
-              Ключи будут обновляться автоматически.
-            </p>
-            {subscriptionUrl && (
-              <p className="text-muted-foreground text-xs">
-                Или отсканируйте QR-код — нажмите иконку <QrCode className="inline w-3 h-3" /> рядом со ссылкой.
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
-              <Route className="w-3.5 h-3.5 text-green-500" /> Хотите автообход российских сайтов?
-            </div>
-            <p className="text-muted-foreground">
-              Используйте <strong>«Xray-конфиг с автообходом РФ»</strong> (ссылка чуть ниже) вместо обычной подписки.
-              Сбербанк, Госуслуги, Яндекс и другие российские ресурсы будут идти напрямую — VPN только для зарубежных сайтов.
-              Поддерживается в <strong>Happ</strong> (iOS/Android) и <strong>v2rayN</strong> (Windows).
-            </p>
-          </div>
-          {isAdmin && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 font-semibold text-muted-foreground uppercase text-xs font-mono tracking-wide">
-                <KeyRound className="w-3.5 h-3.5" /> Альтернатива — импорт отдельного ключа (админ)
-              </div>
-              <p className="text-muted-foreground">
-                Скопируйте <strong>vless://...</strong> ссылку и вставьте в приложение через
-                «Импорт из буфера обмена» / «Import from clipboard».
-              </p>
-            </div>
-          )}
-          <div className="bg-muted/40 border border-border p-3 text-xs text-muted-foreground">
-            После добавления нажмите кнопку подключения в приложении. Если VPN не работает — обратитесь в поддержку.
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function Keys() {
   const { data: me } = useGetMe();
@@ -466,6 +386,7 @@ export default function Keys() {
   const [, setLocation] = useLocation();
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [showQR, setShowQR] = useState(false);
+  const [xrayQRUrl, setXrayQRUrl] = useState<string | null>(null);
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null);
 
@@ -524,6 +445,9 @@ export default function Keys() {
     <div className="space-y-8 animate-in fade-in duration-500">
       {showQR && subscription?.url && (
         <QRModal url={subscription.url} onClose={() => setShowQR(false)} />
+      )}
+      {xrayQRUrl && (
+        <QRModal url={xrayQRUrl} onClose={() => setXrayQRUrl(null)} />
       )}
 
       {showAddDeviceModal && (
@@ -601,16 +525,22 @@ export default function Keys() {
       <OnboardingTip
         id="keys-intro"
         icon={<Zap className="w-4 h-4" />}
-        title="Как подключиться за 2 минуты"
+        title="Быстрый старт"
       >
         <p>
-          <strong>1.</strong> Установите приложение: <strong>Happ</strong> (iOS/Android), <strong>v2rayNG</strong> (Android) или <strong>v2rayN</strong> (Windows).
+          <strong>1.</strong> Установите приложение:{" "}
+          {CLIENTS.map((c, i) => (
+            <span key={c.name}>
+              <a href={c.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">{c.name}</a>
+              {i < CLIENTS.length - 1 ? ", " : "."}
+            </span>
+          ))}
         </p>
         <p>
-          <strong>2.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже и добавьте её в приложение через «Добавить подписку».
+          <strong>2.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже → в приложении нажмите <strong>«Добавить подписку»</strong> → вставьте. Готово, ключи обновляются сами.
         </p>
         <p>
-          <strong>3.</strong> Нажмите подключение — готово. Ключи обновляются автоматически.
+          <strong>3.</strong> Хотите, чтобы российские сайты работали без VPN? Используйте <strong>Xray-конфиг с автообходом РФ</strong> — ссылки ниже, отдельно для каждого устройства.
         </p>
       </OnboardingTip>
 
@@ -620,19 +550,19 @@ export default function Keys() {
         </p>
       )}
 
-      <ConnectionGuide subscriptionUrl={subscription?.url} isAdmin={isAdmin} />
-
+      {/* ── Универсальная ссылка подписки ──────────────────────────────────── */}
       {subscription?.url && activeKeys.length > 0 && (
         <div className="bg-card border border-border p-5 space-y-3">
           <div className="flex items-center gap-2 font-bold">
             <RefreshCw className="w-4 h-4 text-primary" />
             Ссылка подписки
+            <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
+              все приложения
+            </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Рекомендуемый способ: добавьте эту ссылку один раз в приложение (Happ, v2rayNG, v2rayN — пункт «Добавить
-            подписку» / «Add subscription»). Приложение само подтягивает актуальные ключи при обновлении, поэтому
-            вручную ничего менять не нужно — и любые правки конфигурации внутри приложения будут перезаписаны при
-            следующем обновлении.
+            Добавьте один раз — приложение само подтягивает актуальные ключи.
+            Подходит для <strong>Happ</strong>, <strong>v2rayNG</strong>, <strong>v2rayN</strong>, <strong>Streisand</strong> и любого другого VLESS-клиента.
           </p>
           <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
             <span className="truncate flex-1">{subscription.url}</span>
@@ -645,65 +575,78 @@ export default function Keys() {
             </button>
             <CopyButton text={subscription.url} />
           </div>
+          <p className="text-xs text-muted-foreground">
+            В приложении: нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+            Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
+          </p>
         </div>
       )}
 
+      {/* ── Xray-конфиг с автообходом РФ ───────────────────────────────────── */}
       {subscription?.url && activeKeys.length > 0 && (
-        <div className="bg-card border border-border p-5 space-y-3">
+        <div className="bg-card border border-border p-5 space-y-4">
           <div className="flex items-center gap-2 font-bold">
             <Route className="w-4 h-4 text-green-500" />
             Xray-конфиг с автообходом РФ
-            <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">Happ · v2rayN</span>
+            <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
+              Happ · v2rayN
+            </span>
           </div>
           <p className="text-sm text-muted-foreground">
-            Российские сервисы (Сбербанк, Госуслуги, Яндекс) пойдут напрямую — без VPN.
-            Зарубежные ресурсы — через туннель как обычно.
-            Добавьте ссылку своего устройства в Happ <em>вместо</em> обычной ссылки подписки.
+            Российские сервисы (Сбербанк, Госуслуги, Яндекс, ВКонтакте) идут напрямую — без VPN.
+            Всё остальное — через туннель. Для каждого устройства своя ссылка.
           </p>
 
-          {/* Per-device xray subscription URLs — each has its own Profile-Title
-              so Happ labels the group with the device name automatically. */}
-          <div className="space-y-2">
-            {activeKeys.map((key) => (
-              <div key={key.id} className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">{key.label}</p>
-                <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                  <span className="truncate flex-1">{subscription.url}?format=xray&amp;key={key.id}</span>
-                  <CopyButton text={`${subscription.url}?format=xray&key=${key.id}`} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-2 text-xs text-muted-foreground bg-muted/30 border border-border p-3">
-            <p className="font-semibold text-foreground">Как добавить в Happ (Android / iOS):</p>
-            <p>
-              <strong>Способ 1 — через подписку</strong> (конфиг обновляется автоматически):<br />
-              Скопируйте ссылку своего устройства → в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
-              В Happ подписка появится с именем устройства.
-            </p>
-            <p>
-              <strong>Способ 2 — вставить JSON</strong> (разовый импорт):<br />
-              Откройте ссылку в браузере → выделите и скопируйте весь текст →
-              в Happ нажмите <strong>«+»</strong> → <strong>«Вставить JSON»</strong>.
-            </p>
-            <p className="font-semibold text-foreground">v2rayN (Windows):</p>
-            <p>
-              Скопируйте ссылку → в v2rayN откройте <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> →
-              добавьте новую подписку, вставьте ссылку.
-            </p>
-            <p className="text-muted-foreground/70">
-              При смене локации ключа ссылка продолжит работать — обновление происходит автоматически.
-            </p>
-            <div className="mt-2 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 rounded p-2.5 space-y-1.5">
-              <p className="font-semibold text-amber-800 dark:text-amber-300">⚠️ Важно для работы HApp:</p>
-              <p className="text-amber-700 dark:text-amber-400">
-                Зайдите в <strong>Настройки → Дополнительно</strong> и убедитесь, что выбрано <strong>Ядро Xray (Xray core)</strong>.
-              </p>
-              <p className="text-amber-700 dark:text-amber-400">
-                Убедитесь, что главный тумблер <strong>«Маршрутизация» (Routing) ВЫКЛЮЧЕН</strong>. Умный конфиг уже содержит все правила — включение локальной маршрутизации сломает обход!
+          {/* Предупреждение идёт ПЕРЕД ссылками — пользователь видит его первым */}
+          <div className="flex gap-3 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 text-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-amber-800 dark:text-amber-300">
+              <p className="font-semibold">Перед добавлением в Happ</p>
+              <p className="text-amber-700 dark:text-amber-400 text-xs">
+                В настройках Happ убедитесь: ядро — <strong>Xray core</strong>, тумблер <strong>«Маршрутизация» (Routing) — ВЫКЛЮЧЕН</strong>.
+                Иначе встроенная маршрутизация Happ перекроет правила конфига и обход не заработает.
               </p>
             </div>
+          </div>
+
+          {/* Per-device xray subscription URLs */}
+          <div className="space-y-2">
+            {activeKeys.map((key) => {
+              const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
+              return (
+                <div key={key.id} className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground">{key.label}</p>
+                  <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                    <span className="truncate flex-1">{xrayUrl}</span>
+                    <button
+                      onClick={() => setXrayQRUrl(xrayUrl)}
+                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                      title="QR-код"
+                    >
+                      <QrCode className="w-4 h-4" />
+                    </button>
+                    <CopyButton text={xrayUrl} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Краткая инструкция */}
+          <div className="text-xs text-muted-foreground space-y-2 border-t border-border pt-3">
+            <p>
+              <strong className="text-foreground">Happ (Android / iOS):</strong>{" "}
+              скопируйте ссылку своего устройства (или отсканируйте QR) →
+              в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong>.
+              Подписка появится с именем вашего устройства и будет обновляться автоматически.
+            </p>
+            <p>
+              <strong className="text-foreground">v2rayN (Windows):</strong>{" "}
+              <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку.
+            </p>
+            <p className="text-muted-foreground/60">
+              При смене сервера ссылка не меняется — конфиг обновится автоматически при следующем обновлении подписки.
+            </p>
           </div>
         </div>
       )}
