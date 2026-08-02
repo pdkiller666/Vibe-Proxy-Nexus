@@ -214,14 +214,66 @@ router.get(
     const format =
       typeof req.query.format === "string" ? req.query.format : null;
 
+    // Optional per-device filter: ?key=<vpnKeyId>
+    // When supplied together with ?format=xray, the response contains only the
+    // Xray outbound for that specific key instead of all active keys. This lets
+    // each device have its own subscription URL with RF-bypass routing baked in,
+    // so users only need a single link per device instead of two.
+    //
+    // Relocation safety: if the requested key was revoked due to relocation
+    // (revokedReason='user'), we fall back to the newest active key with the
+    // same label — since relocation always preserves the label, the per-device
+    // URL keeps working seamlessly after the user relocates to a different node.
+    const keyIdParam =
+      typeof req.query.key === "string" ? parseInt(req.query.key, 10) : null;
+
     if (format === "xray") {
+      // Determine which keys to include in the Xray config.
+      let xrayKeyRows = keyRows;
+
+      if (keyIdParam !== null && !isNaN(keyIdParam)) {
+        // Fast path: requested key is already in the active keyRows set.
+        const directMatch = keyRows.find((r) => r.key.id === keyIdParam);
+
+        if (directMatch) {
+          xrayKeyRows = [directMatch];
+        } else {
+          // Slow path: key may have been relocated (revoked). Look it up by id
+          // (ownership-scoped) to get its label, then find the replacement.
+          const [relocatedKey] = await db
+            .select({ label: vpnKeysTable.label })
+            .from(vpnKeysTable)
+            .where(
+              and(
+                eq(vpnKeysTable.id, keyIdParam),
+                eq(vpnKeysTable.userId, userId),
+              ),
+            )
+            .limit(1);
+
+          if (relocatedKey) {
+            // Find the current active key with the same label (the one that
+            // replaced the relocated key). Returns empty if the user deleted
+            // the key entirely — correct: no proxy in that case.
+            const labelMatch = keyRows.find(
+              (r) => r.key.label === relocatedKey.label,
+            );
+            xrayKeyRows = labelMatch ? [labelMatch] : [];
+          } else {
+            // Key doesn't exist or belongs to a different user — return a
+            // config with no proxy so traffic goes direct (safe default).
+            xrayKeyRows = [];
+          }
+        }
+      }
+
       // Build Xray client JSON config with Russian-bypass routing rules.
-      // Each active key becomes a separate VLESS outbound; the first is
+      // Each selected key becomes a separate VLESS outbound; the first is
       // tagged "proxy" (the catch-all target), additional ones "proxy-2" etc.
       // We apply the same domain-failover logic as for plain VLESS links so
       // the primary public domain is preferred where available.
       const outboundParams: XrayOutboundParams[] = await Promise.all(
-        keyRows.map(async ({ key, node }) => {
+        xrayKeyRows.map(async ({ key, node }) => {
           const isLocalNode = !node.managementApiUrl;
           const resolved = isLocalNode
             ? await resolvePublicAddress({
@@ -234,11 +286,11 @@ router.get(
           const label = flag ? `${flag} ${key.label}` : key.label;
 
           return {
-            uuid:      key.uuid,
+            uuid:       key.uuid,
             label,
-            address:   resolved.host,
-            sni:       resolved.sni || resolved.host,
-            port:      node.port ?? 443,
+            address:    resolved.host,
+            sni:        resolved.sni || resolved.host,
+            port:       node.port ?? 443,
             isIpNode:
               isIpAddress(resolved.host) || isIpAddress(node.sni),
             certSha256: node.certSha256 ?? null,

@@ -657,17 +657,28 @@ export default function Keys() {
           </div>
           <p className="text-sm text-muted-foreground">
             Российские сервисы (Сбербанк, Госуслуги, Яндекс) пойдут напрямую — без VPN.
-            Зарубежные ресурсы — через туннель как обычно.
+            Зарубежные ресурсы — через туннель как обычно.{" "}
+            <span className="text-foreground/70">У каждого устройства своя ссылка — добавьте нужную в Happ <em>вместо</em> обычной ссылки подписки.</span>
           </p>
-          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-            <span className="truncate flex-1">{subscription.url}?format=xray</span>
-            <CopyButton text={`${subscription.url}?format=xray`} />
+
+          {/* Per-device xray subscription URLs */}
+          <div className="space-y-2">
+            {activeKeys.map((key) => (
+              <div key={key.id} className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">{key.label}</p>
+                <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                  <span className="truncate flex-1">{subscription.url}?format=xray&amp;key={key.id}</span>
+                  <CopyButton text={`${subscription.url}?format=xray&key=${key.id}`} />
+                </div>
+              </div>
+            ))}
           </div>
+
           <div className="space-y-2 text-xs text-muted-foreground bg-muted/30 border border-border p-3">
             <p className="font-semibold text-foreground">Как добавить в Happ (Android / iOS):</p>
             <p>
               <strong>Способ 1 — через подписку</strong> (конфиг обновляется автоматически):<br />
-              Скопируйте ссылку → в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+              Скопируйте ссылку своего устройства → в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
             </p>
             <p>
               <strong>Способ 2 — вставить JSON</strong> (разовый импорт):<br />
@@ -681,6 +692,7 @@ export default function Keys() {
             </p>
             <p className="text-muted-foreground/70">
               Используйте <em>вместо</em> обычной ссылки подписки, не одновременно с ней.
+              При смене локации ключа ссылка обновится автоматически.
             </p>
             <div className="mt-2 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 rounded p-2.5 space-y-1.5">
               <p className="font-semibold text-amber-800 dark:text-amber-300">⚠️ Важно для работы HApp:</p>
