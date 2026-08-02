@@ -66,9 +66,12 @@ export function isIpAddress(value: string): boolean {
  * @param outbounds - One entry per active VPN key. Passing an empty array
  *   returns a config with no proxy outbounds; the catch-all routing rule falls
  *   back to "direct" so the config remains valid (though useless as a proxy).
+ * @param options.remarks - Override the top-level `remarks` field shown as the
+ *   server/group name in Happ and v2rayN. Defaults to BRAND_NAME.
  */
 export function buildXrayClientConfig(
   outbounds: XrayOutboundParams[],
+  options?: { remarks?: string },
 ): Record<string, unknown> {
   const vlessOutbounds = outbounds.map((params, i) =>
     buildVlessOutbound(params, i === 0 ? XRAY_TAG_PROXY : `proxy-${i + 1}`),
@@ -80,7 +83,7 @@ export function buildXrayClientConfig(
 
   return {
     log:     { loglevel: "warning" },
-    remarks: BRAND_NAME,
+    remarks: options?.remarks ?? BRAND_NAME,
     outbounds: [
       ...vlessOutbounds,
       { protocol: "freedom",   tag: XRAY_TAG_DIRECT  },

@@ -298,7 +298,24 @@ router.get(
         }),
       );
 
-      const config = buildXrayClientConfig(outboundParams);
+      // When the response is scoped to a single key (?key=<id>), label the
+      // subscription group in Happ/v2rayN with the device name so the user
+      // can clearly tell which subscription belongs to which device.
+      let xrayRemarks: string | undefined;
+      if (keyIdParam !== null && !isNaN(keyIdParam) && xrayKeyRows.length === 1) {
+        const { key, node } = xrayKeyRows[0];
+        const flag = flagEmojiForNode(node);
+        const deviceLabel = flag ? `${flag} ${key.label}` : key.label;
+        xrayRemarks = deviceLabel;
+        // Override the Profile-Title header so the Happ subscription *group*
+        // is also named after the device (e.g. "VPNexus — Смартфон Pura 80").
+        res.setHeader(
+          "Profile-Title",
+          `base64:${Buffer.from(`${BRAND_NAME} — ${deviceLabel}`, "utf8").toString("base64")}`,
+        );
+      }
+
+      const config = buildXrayClientConfig(outboundParams, { remarks: xrayRemarks });
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.json(config);
       return;
