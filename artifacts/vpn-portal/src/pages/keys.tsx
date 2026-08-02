@@ -657,21 +657,12 @@ export default function Keys() {
           </div>
           <p className="text-sm text-muted-foreground">
             Российские сервисы (Сбербанк, Госуслуги, Яндекс) пойдут напрямую — без VPN.
-            Зарубежные ресурсы — через туннель как обычно.{" "}
-            <span className="text-foreground/70">У каждого устройства своя ссылка — добавьте нужную в Happ <em>вместо</em> обычной ссылки подписки.</span>
+            Зарубежные ресурсы — через туннель как обычно.
           </p>
 
-          {/* Per-device xray subscription URLs */}
-          <div className="space-y-2">
-            {activeKeys.map((key) => (
-              <div key={key.id} className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">{key.label}</p>
-                <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                  <span className="truncate flex-1">{subscription.url}?format=xray&amp;key={key.id}</span>
-                  <CopyButton text={`${subscription.url}?format=xray&key=${key.id}`} />
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+            <span className="truncate flex-1">{subscription.url}?format=xray</span>
+            <CopyButton text={`${subscription.url}?format=xray`} />
           </div>
 
           <div className="space-y-2 text-xs text-muted-foreground bg-muted/30 border border-border p-3">
