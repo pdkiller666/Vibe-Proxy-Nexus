@@ -304,7 +304,8 @@ export const GetPaymentSettingsResponse = zod.object({
   "referralCommissionPercent": zod.number().optional(),
   "sbpPaymentUrl": zod.string(),
   "showManualSbpDetails": zod.boolean(),
-  "hasSbpQr": zod.boolean()
+  "hasSbpQr": zod.boolean(),
+  "primaryDomainHealthy": zod.boolean()
 })
 
 
@@ -1103,7 +1104,8 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "referralCommissionPercent": zod.number().optional(),
   "sbpPaymentUrl": zod.string(),
   "showManualSbpDetails": zod.boolean(),
-  "hasSbpQr": zod.boolean()
+  "hasSbpQr": zod.boolean(),
+  "primaryDomainHealthy": zod.boolean()
 })
 
 

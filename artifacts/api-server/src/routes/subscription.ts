@@ -14,7 +14,7 @@ import {
   verifySubscriptionToken,
 } from "../lib/subscription";
 import { buildServingVlessLink, flagEmojiForNode } from "../lib/vless";
-import { resolvePublicAddress } from "../lib/domain";
+import { getPrimaryPublicDomain, resolvePublicAddress } from "../lib/domain";
 import { subscriptionRateLimit } from "../lib/rateLimit";
 import {
   buildXrayClientConfig,
@@ -207,6 +207,35 @@ router.get(
         );
       }
       res.setHeader("Subscription-Userinfo", parts.join("; "));
+    }
+
+    // ── Profile-Update-Url: auto-migrate clients when primary domain changes ──
+    //
+    // When the admin changes primaryDomain (e.g. domain got blocked), clients
+    // that still have the old URL baked in will reach us on the old host. We
+    // respond with Profile-Update-Url pointing to the current primary domain so
+    // compatible clients (v2rayN, v2rayNG, Happ) silently update their stored
+    // subscription URL on the next refresh — zero user action required.
+    //
+    // This only fires when the client is already reaching us (old domain not
+    // yet fully blocked at their ISP), so it covers the typical gradual-rollout
+    // blocking window. Clients that can no longer reach the old host at all are
+    // unaffected by this header (they never receive it), which is unavoidable.
+    {
+      const currentPrimaryDomain = await getPrimaryPublicDomain();
+      const requestHost = req.get("host") ?? "";
+      // Normalise: strip port suffix if present (e.g. "vpnexus.pro:443" → "vpnexus.pro")
+      const requestHostName = requestHost.replace(/:\d+$/, "");
+      if (
+        currentPrimaryDomain &&
+        requestHostName &&
+        requestHostName !== currentPrimaryDomain
+      ) {
+        res.setHeader(
+          "Profile-Update-Url",
+          `${req.protocol}://${currentPrimaryDomain}/api/sub/${token}`,
+        );
+      }
     }
 
     // ── Format branch ─────────────────────────────────────────────────────────

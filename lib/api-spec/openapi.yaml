@@ -1909,7 +1909,7 @@ components:
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -1948,6 +1948,10 @@ components:
         showManualSbpDetails: { type: boolean }
         # Whether a QR code image is currently stored (true = /payment-settings/sbp-qr-image is available).
         hasSbpQr: { type: boolean }
+        # Live health of the currently-configured primary domain. False means the
+        # server's outbound healthz check failed, which typically indicates the
+        # domain is blocked or misconfigured. Useful for admin alerting.
+        primaryDomainHealthy: { type: boolean }
 
     PaymentSettingsUpdate:
       type: object

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, paymentSettingsTable } from "@workspace/db";
 import { GetPaymentSettingsResponse } from "@workspace/api-zod";
+import { isPrimaryDomainHealthy } from "../lib/domain";
 
 const router: IRouter = Router();
 
@@ -13,7 +14,10 @@ function withHasSbpQr<
 }
 
 router.get("/payment-settings", async (_req, res): Promise<void> => {
-  const [settings] = await db.select().from(paymentSettingsTable).limit(1);
+  const [settings, primaryDomainHealthy] = await Promise.all([
+    db.select().from(paymentSettingsTable).limit(1).then((rows) => rows[0]),
+    isPrimaryDomainHealthy(),
+  ]);
 
   if (!settings) {
     res.json(
@@ -36,12 +40,15 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
         sbpPaymentUrl: "",
         showManualSbpDetails: false,
         hasSbpQr: false,
+        primaryDomainHealthy,
       }),
     );
     return;
   }
 
-  res.json(GetPaymentSettingsResponse.parse(withHasSbpQr(settings)));
+  res.json(
+    GetPaymentSettingsResponse.parse({ ...withHasSbpQr(settings), primaryDomainHealthy }),
+  );
 });
 
 // Public: serve the admin-uploaded SBP QR code image as binary.

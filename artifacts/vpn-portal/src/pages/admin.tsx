@@ -3889,7 +3889,11 @@ function UsersManagement() {
 }
 
 function PaymentSettingsForm() {
-  const { data: settings, isLoading } = useGetPaymentSettings();
+  // Refetch every 60 s so the domain-health alert auto-clears once the domain
+  // is healthy again — same cadence as the server-side healthz cache TTL.
+  const { data: settings, isLoading } = useGetPaymentSettings({
+    query: { queryKey: getGetPaymentSettingsQueryKey(), refetchInterval: 60_000 },
+  });
   const { data: plans } = useListPlans();
   const { mutate: update, isPending } = useUpdatePaymentSettings();
   const { toast } = useToast();
@@ -3979,6 +3983,25 @@ function PaymentSettingsForm() {
 
   return (
     <div className="bg-card border border-border p-5 space-y-3 max-w-xl">
+      {/* Domain health alert: shown when the primary domain fails the healthz check */}
+      {settings?.primaryDomainHealthy === false && (
+        <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/30 border border-red-400 dark:border-red-700 p-4">
+          <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+              Основной домен недоступен
+            </p>
+            <p className="text-xs text-red-600 dark:text-red-400">
+              Домен <strong>{settings.primaryDomain || "vpnexus.pro"}</strong> не отвечает на
+              проверку работоспособности. Если он заблокирован — смените поле «Основной домен»
+              ниже на новый адрес и сохраните. Сервер немедленно начнёт выдавать новый URL
+              подписки, а клиенты с поддержкой автообновления подпишутся на него автоматически
+              при следующем рефреше (каждые 3 часа).
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Payment method visibility toggles */}
       <div className="border border-border p-4 space-y-3">
         <p className="text-sm font-semibold">Способы оплаты</p>

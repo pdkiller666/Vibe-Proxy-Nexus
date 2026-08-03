@@ -241,6 +241,7 @@ export interface PaymentSettings {
   sbpPaymentUrl: string;
   showManualSbpDetails: boolean;
   hasSbpQr: boolean;
+  primaryDomainHealthy: boolean;
 }
 
 export interface PaymentSettingsUpdate {
