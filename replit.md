@@ -36,7 +36,11 @@
 
 - **Deployment target is Amvera Cloud, all-in-one**: the whole project (React frontend + Express API + Xray-core VPN) ships as a single Docker image and runs in one Amvera container, managed by `supervisord`. Replit is the dev environment only. Only Postgres stays external. See `deploy/amvera-all-in-one/`.
 - **VPN transport is VLESS over WebSocket, not raw TCP or Reality.** Amvera's edge (Traefik/Envoy) always terminates TLS itself and only forwards plain HTTP(S)/WebSocket to the container on the app's single public port (8080). Raw-TCP VLESS and Reality are both incompatible with that. The working setup: Xray listens on `127.0.0.1:10000` for plain VLESS+WS (`security: none`), and the Node server itself proxies the `/vpnws` WebSocket upgrade to it (see `src/index.ts`). Clients connect with `security=tls&type=ws&sni=<web domain>` — a completely standard HTTPS/WebSocket connection from the outside. See `.agents/memory/amvera-raw-tcp-port.md`.
-- **Self-updating subscription URL**: instead of making users paste/manage individual `vless://` links, `GET /api/vpn-keys/subscription-url` returns one stable URL (`/api/sub/<token>`, stateless HMAC-signed, no DB row) that VPN client apps (Happ, v2rayNG, etc.) re-fetch every 3 hours (`SUBSCRIPTION_UPDATE_INTERVAL_HOURS`). Returns base64 of all active links plus branded headers (`Profile-Title`, `Profile-Update-Interval`, `Subscription-Userinfo`, `Announce`). See `.agents/memory/vpn-subscription-links.md`.
+- **Self-updating subscription URL**: instead of making users paste/manage individual `vless://` links, `GET /api/vpn-keys/subscription-url` returns one stable URL (`/api/sub/<token>`, stateless HMAC-signed, no DB row) that VPN client apps re-fetch every 3 hours (`SUBSCRIPTION_UPDATE_INTERVAL_HOURS`). The `GET /api/sub/:token` endpoint supports three formats via `?format=`:
+  - *(default)* — base64 of all active `vless://` URIs; universal, works in any client
+  - `?format=xray` — Xray JSON config with all keys + Russian-bypass routing rules (geoip:ru / .ru / .рф / Yandex / VK / Sber → direct, everything else → tunnel)
+  - `?format=xray&key=<id>` — same but scoped to one device; sets `Profile-Title` header to the device name so Happ labels the subscription group with the device name
+  All variants return branded headers: `Profile-Title`, `Profile-Update-Interval`, `Subscription-Userinfo`, `Announce`. See `.agents/memory/vpn-subscription-links.md`.
 - **Happ Announce warnings**: `GET /api/sub/:token` sets the `Announce` response header (base64 text card shown inside Happ). Logic: for hourly plans — shows balance and warning if < 24 h or < 3 h remaining; for non-hourly — prepends expiry warning if subscription ends within 5 days or today. This is the only in-client notification channel available; push/email are absent.
 - **Dashboard low-balance banners**: `dashboard.tsx` computes `hoursLeft = balanceKopecks / hourlyRateKopecks` for hourly users and renders an orange banner (3–24 h left) or red alert (< 3 h left) above the subscription hero block. For monthly users `isExpiringSoon` (≤ 5 days left) renders an orange banner. All conditions are false while `me` is loading, so no flicker.
 - **Invite-only registration**: `/sign-up` requires a valid `?ref=CODE` referral code in the URL; without it registration is blocked. Every user has a unique `referral_code`; the seed admin's code is the root. Registration via open `/sign-up` without code returns 400.
@@ -83,6 +87,8 @@ Never hand-edit `lib/api-zod/src/generated/` or `lib/api-client-react/src/genera
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
-- Product overview for humans (features, stack, screenshots) — `README.md`
+- Product overview for humans (features, stack, deployment) — `README.md`
+- How the system works end-to-end (subscriptions, billing, UX, security) — `docs/SYSTEM_OVERVIEW.md`
 - Full repo map and API/schema reference — `PROJECT_MAP.md`
+- VPN node setup guide (auto and manual) — `docs/add-vpn-node.md`
 - Production deployment details — `deploy/amvera-all-in-one/README.md`
