@@ -94,26 +94,28 @@ export function buildXrayClientConfig(
       // minimising extra DNS lookups for the common case.
       domainStrategy: "IPIfNonMatch",
       rules: [
-        // 1. Local / RFC-1918 networks — always direct
+        // 1. Local / RFC-1918 networks — always direct.
+        //    geoip:private is a built-in Xray category that works without any
+        //    geoip.dat file, so it is safe to use on both Android and iOS.
         {
           type:        "field",
           ip:          ["geoip:private"],
           outboundTag: XRAY_TAG_DIRECT,
         },
-        // 2. Russian IP ranges — direct so domestic banking/gov apps work
-        {
-          type:        "field",
-          ip:          ["geoip:ru"],
-          outboundTag: XRAY_TAG_DIRECT,
-        },
-        // 3. Russian domains — direct (no geosite.dat required)
+        // 2. Russian domains — direct (no geosite.dat or geoip.dat required).
         //    regexp:\\.ru$       catches all .ru TLD (Сбербанк, Госуслуги, …)
-        //    regexp:\\.xn--p1ai$ catches .рф TLD (punycode form Xray expects)
-        //    Explicit domain: entries cover major Russian services that operate
-        //    on international domains (yandex.com, vk.com) not in .ru TLD.
+        //    regexp:\\.xn--p1ai$ catches .рф TLD (punycode form Xray uses)
+        //    Explicit domain: entries cover major Russian services that run on
+        //    international TLDs (yandex.com, vk.com) outside the .ru space.
         //
-        //    geosite:ru/yandex/mailru intentionally removed — Happ 3.26.x ships
-        //    a geosite.dat without the RU category, causing a hard start error.
+        //    geosite:ru/yandex/mailru — removed: Happ bundles a geosite.dat
+        //    without the RU category on both Android (≥3.26) and iOS (≥4.x),
+        //    causing a hard start error when those tags are referenced.
+        //
+        //    geoip:ru — removed: Happ iOS ships a minimal geoip.dat that lacks
+        //    the "ru" category, which also causes a hard start error on iOS.
+        //    Russian IP-only traffic falls through to the tunnel (acceptable
+        //    trade-off); Russian domain traffic is still bypassed by this rule.
         {
           type:   "field",
           domain: [
