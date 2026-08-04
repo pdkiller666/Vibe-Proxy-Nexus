@@ -2446,17 +2446,29 @@ function MetricHistoryPanel({
   // Period presets
   type Period = "7d" | "30d" | "90d" | "custom";
   const [period, setPeriod] = useState<Period>("30d");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+
+  // Default custom range: last 7 days (YYYY-MM-DD, local calendar)
+  const todayStr = new Date().toLocaleDateString("en-CA"); // "2026-08-04"
+  const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400_000).toLocaleDateString("en-CA");
+  const [customFrom, setCustomFrom] = useState(sevenDaysAgoStr);
+  const [customTo, setCustomTo]     = useState(todayStr);
 
   const { from, to } = (() => {
     const now = new Date();
     if (period === "7d")  return { from: new Date(now.getTime() - 7  * 86400_000).toISOString(), to: now.toISOString() };
     if (period === "30d") return { from: new Date(now.getTime() - 30 * 86400_000).toISOString(), to: now.toISOString() };
     if (period === "90d") return { from: new Date(now.getTime() - 90 * 86400_000).toISOString(), to: now.toISOString() };
+    // Custom: `<input type="date">` returns "YYYY-MM-DD" which new Date() parses
+    // as midnight UTC — that would cut off the whole calendar day in UTC+3 and
+    // later timezones. Append T23:59:59.999Z so the chosen "to" day is fully
+    // included regardless of the user's timezone.
     return {
-      from: customFrom ? new Date(customFrom).toISOString() : new Date(now.getTime() - 30 * 86400_000).toISOString(),
-      to:   customTo   ? new Date(customTo).toISOString()   : now.toISOString(),
+      from: customFrom
+        ? new Date(customFrom + "T00:00:00.000Z").toISOString()
+        : new Date(now.getTime() - 30 * 86400_000).toISOString(),
+      to: customTo
+        ? new Date(customTo + "T23:59:59.999Z").toISOString()
+        : now.toISOString(),
     };
   })();
 
