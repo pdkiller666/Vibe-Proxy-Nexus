@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
-import { asc, eq, isNull, and, ne, or, sql, gte, lte, desc } from "drizzle-orm";
+import { asc, eq, isNull, and, ne, or, sql } from "drizzle-orm";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
 import os from "node:os";
-import { db, vpnKeysTable, vpnNodesTable, systemEventsTable, nodeMetricSnapshotsTable } from "@workspace/db";
+import { db, vpnKeysTable, vpnNodesTable, systemEventsTable } from "@workspace/db";
 import {
   CreateVpnNodeBody,
   CreateVpnNodeResponse,
@@ -19,44 +19,11 @@ import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { removeRemoteXrayClient } from "../../lib/remoteNode";
 import { issueKeyForUser, resolveTotalSlots } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
+import { maybeRecordMetricSnapshot } from "../../lib/nodeMonitoring";
 
 const router: IRouter = Router();
 const execAsync = promisify(exec);
 
-// ─── Metric snapshot debounce ─────────────────────────────────────────────────
-// Write at most one snapshot per 5 minutes per node. Keeps the table from growing
-// too fast when multiple admins have the status panel open simultaneously.
-const METRIC_WRITE_INTERVAL_MS = 5 * 60 * 1000;
-const lastMetricWrite = new Map<number, number>(); // nodeId → lastWriteTimestamp
-
-async function maybeRecordMetricSnapshot(
-  nodeId: number,
-  status: { cpuPercent: number; ramUsedBytes: number; ramTotalBytes: number; diskUsedBytes: number; diskTotalBytes: number },
-): Promise<void> {
-  const now = Date.now();
-  const last = lastMetricWrite.get(nodeId) ?? 0;
-  if (now - last < METRIC_WRITE_INTERVAL_MS) return;
-  lastMetricWrite.set(nodeId, now);
-
-  const ramPercent = status.ramTotalBytes > 0
-    ? Math.round((status.ramUsedBytes / status.ramTotalBytes) * 100)
-    : 0;
-  const diskPercent = status.diskTotalBytes > 0
-    ? Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100)
-    : 0;
-
-  try {
-    await db.insert(nodeMetricSnapshotsTable).values({
-      nodeId,
-      cpuPercent: Math.round(Math.min(100, Math.max(0, status.cpuPercent))),
-      ramPercent: Math.min(100, Math.max(0, ramPercent)),
-      diskPercent: Math.min(100, Math.max(0, diskPercent)),
-    });
-  } catch (err) {
-    // Non-fatal: chart data is best-effort.
-    logger.warn({ err, nodeId }, "node metrics: failed to write snapshot (ignored)");
-  }
-}
 
 router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const parsed = CreateVpnNodeBody.safeParse(req.body);

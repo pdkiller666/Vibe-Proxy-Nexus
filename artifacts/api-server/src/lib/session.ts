@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from "node:crypto";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
 import type { Request, Response } from "express";
-import { db, sessionsTable, usersTable, type User } from "@workspace/db";
+import { db, sessionsTable, usersTable, nodeMetricSnapshotsTable, type User } from "@workspace/db";
 import { logger } from "./logger";
 import { deleteExpiredPasswordResetTokens } from "./passwordReset";
 
@@ -101,6 +101,22 @@ export function getSessionTokenFromRequest(req: Request): string | null {
 }
 
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const METRIC_SNAPSHOTS_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 1 day
+const METRIC_SNAPSHOTS_RETENTION_DAYS = 90;
+
+export async function deleteOldMetricSnapshots(): Promise<number> {
+  const result = await db
+    .delete(nodeMetricSnapshotsTable)
+    .where(
+      lt(
+        nodeMetricSnapshotsTable.recordedAt,
+        sql`NOW() - INTERVAL '${sql.raw(String(METRIC_SNAPSHOTS_RETENTION_DAYS))} days'`,
+      ),
+    )
+    .returning({ id: nodeMetricSnapshotsTable.id });
+
+  return result.length;
+}
 
 export async function deleteExpiredSessions(): Promise<number> {
   const deleted = await db
@@ -134,7 +150,20 @@ export function startSessionCleanupJob(): NodeJS.Timeout {
       });
   };
 
+  const runMetricsCleanup = () => {
+    deleteOldMetricSnapshots()
+      .then((count) => {
+        logger.info({ count, retentionDays: METRIC_SNAPSHOTS_RETENTION_DAYS }, "Pruned old node metric snapshots");
+      })
+      .catch((err) => {
+        logger.error({ err }, "Failed to prune old node metric snapshots");
+      });
+  };
+
   runCleanup();
+  runMetricsCleanup();
+
+  setInterval(runMetricsCleanup, METRIC_SNAPSHOTS_CLEANUP_INTERVAL_MS);
 
   return setInterval(runCleanup, SESSION_CLEANUP_INTERVAL_MS);
 }

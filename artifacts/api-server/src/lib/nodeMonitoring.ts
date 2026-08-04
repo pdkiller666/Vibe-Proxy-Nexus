@@ -27,11 +27,15 @@
 import { and, asc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import os from "node:os";
 import { promises as fs } from "node:fs";
-import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable, nodeMetricSnapshotsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { issueKeyForUser, resolveTotalSlots } from "./keyIssuance";
 import { removeXrayClient, isLocalXrayEnabled } from "./xray";
 import { removeRemoteXrayClient } from "./remoteNode";
+
+const execAsync = promisify(exec);
 
 const NODE_MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -39,10 +43,46 @@ const CPU_THRESHOLD_PERCENT = 90;
 const RAM_THRESHOLD_PERCENT = 90;
 const FAILURE_ALERT_THRESHOLD = 3;
 
+// ─── Metric snapshot helpers (shared with vpnNodes route) ─────────────────────
+// Write at most one snapshot per 5 minutes per node to keep the table size sane.
+const METRIC_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+const lastMetricWrite = new Map<number, number>(); // nodeId → lastWriteTimestamp
+
+export async function maybeRecordMetricSnapshot(
+  nodeId: number,
+  status: { cpuPercent: number; ramUsedBytes: number; ramTotalBytes: number; diskUsedBytes: number; diskTotalBytes: number },
+): Promise<void> {
+  const now = Date.now();
+  const last = lastMetricWrite.get(nodeId) ?? 0;
+  if (now - last < METRIC_WRITE_INTERVAL_MS) return;
+  lastMetricWrite.set(nodeId, now);
+
+  const ramPercent = status.ramTotalBytes > 0
+    ? Math.round((status.ramUsedBytes / status.ramTotalBytes) * 100)
+    : 0;
+  const diskPercent = status.diskTotalBytes > 0
+    ? Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100)
+    : 0;
+
+  try {
+    await db.insert(nodeMetricSnapshotsTable).values({
+      nodeId,
+      cpuPercent: Math.round(Math.min(100, Math.max(0, status.cpuPercent))),
+      ramPercent: Math.min(100, Math.max(0, ramPercent)),
+      diskPercent: Math.min(100, Math.max(0, diskPercent)),
+    });
+  } catch (err) {
+    // Non-fatal: chart data is best-effort.
+    logger.warn({ err, nodeId }, "node metrics: failed to write snapshot (ignored)");
+  }
+}
+
 interface SystemStatus {
   cpuPercent: number;
   ramUsedBytes: number;
   ramTotalBytes: number;
+  diskUsedBytes: number;
+  diskTotalBytes: number;
 }
 
 // ─── Status fetchers ──────────────────────────────────────────────────────────
@@ -77,7 +117,13 @@ async function getLocalSystemStatus(): Promise<SystemStatus> {
   const ramTotalBytes = getValue("MemTotal");
   const ramUsedBytes = ramTotalBytes - getValue("MemAvailable");
 
-  return { cpuPercent, ramUsedBytes, ramTotalBytes };
+  // Disk: df -B1 /
+  const dfOut = await execAsync("df -B1 / | tail -1", { timeout: 5_000 }).catch(() => ({ stdout: "" }));
+  const dfParts = dfOut.stdout.trim().split(/\s+/);
+  const diskTotalBytes = parseInt(dfParts[1] ?? "0") || 0;
+  const diskUsedBytes = parseInt(dfParts[2] ?? "0") || 0;
+
+  return { cpuPercent, ramUsedBytes, ramTotalBytes, diskUsedBytes, diskTotalBytes };
 }
 
 async function fetchRemoteSystemStatus(
@@ -389,6 +435,16 @@ async function pollNode(node: {
     .update(vpnNodesTable)
     .set({ consecutiveFailures: 0 })
     .where(eq(vpnNodesTable.id, node.id));
+
+  // Record a metric snapshot (debounced to METRIC_WRITE_INTERVAL_MS).
+  // disk fields default to 0 when the remote node omits them.
+  void maybeRecordMetricSnapshot(node.id, {
+    cpuPercent: status.cpuPercent,
+    ramUsedBytes: status.ramUsedBytes,
+    ramTotalBytes: status.ramTotalBytes,
+    diskUsedBytes: status.diskUsedBytes,
+    diskTotalBytes: status.diskTotalBytes,
+  });
 
   // If the node was previously auto-deactivated, bring it back.
   if (!node.isActive) {
