@@ -21,6 +21,10 @@ import {
   isIpAddress,
   type XrayOutboundParams,
 } from "../lib/xrayClientConfig";
+import {
+  buildSingboxClientConfig,
+  type SingboxOutboundParams,
+} from "../lib/singboxClientConfig";
 
 const router: IRouter = Router();
 
@@ -345,6 +349,90 @@ router.get(
       }
 
       const config = buildXrayClientConfig(outboundParams, { remarks: xrayRemarks });
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.json(config);
+      return;
+    }
+
+    if (format === "singbox") {
+      // Determine which key to use — mirrors the xray ?key= logic.
+      let singboxKeyRows = keyRows;
+      if (keyIdParam !== null && !isNaN(keyIdParam)) {
+        const directMatch = keyRows.find((r) => r.key.id === keyIdParam);
+        if (directMatch) {
+          singboxKeyRows = [directMatch];
+        } else {
+          const [relocatedKey] = await db
+            .select({ label: vpnKeysTable.label })
+            .from(vpnKeysTable)
+            .where(
+              and(
+                eq(vpnKeysTable.id, keyIdParam),
+                eq(vpnKeysTable.userId, userId),
+              ),
+            )
+            .limit(1);
+          if (relocatedKey) {
+            const labelMatch = keyRows.find(
+              (r) => r.key.label === relocatedKey.label,
+            );
+            singboxKeyRows = labelMatch ? [labelMatch] : [];
+          } else {
+            singboxKeyRows = [];
+          }
+        }
+      }
+
+      // Use the first active key (Sing-box config is single-outbound by design).
+      // If the user has multiple keys, they should use ?key=<id> for a specific device.
+      const firstRow = singboxKeyRows[0];
+      if (!firstRow) {
+        // No active key — return a minimal valid Sing-box config with no proxy.
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.json({
+          log: { level: "warn" },
+          outbounds: [{ type: "direct", tag: "direct" }],
+          route: { final: "direct" },
+        });
+        return;
+      }
+
+      const { key, node } = firstRow;
+      const isLocalNode = !node.managementApiUrl;
+      const resolved = isLocalNode
+        ? await resolvePublicAddress({
+            host: node.host || node.sni,
+            sni:  node.sni,
+          })
+        : { host: node.host || node.sni, sni: node.sni };
+
+      const flag = flagEmojiForNode(node);
+      const deviceLabel =
+        keyIdParam !== null && !isNaN(keyIdParam) && singboxKeyRows.length === 1
+          ? (flag ? `${flag} ${key.label}` : key.label)
+          : undefined;
+
+      if (deviceLabel) {
+        res.setHeader(
+          "Profile-Title",
+          `base64:${Buffer.from(`${BRAND_NAME} — ${deviceLabel}`, "utf8").toString("base64")}`,
+        );
+      }
+
+      const singboxParams: SingboxOutboundParams = {
+        uuid:      key.uuid,
+        label:     flag ? `${flag} ${key.label}` : key.label,
+        address:   resolved.host,
+        sni:       resolved.sni || resolved.host,
+        port:      node.port ?? 443,
+        isIpNode:  isIpAddress(resolved.host) || isIpAddress(node.sni),
+        certSha256: node.certSha256 ?? null,
+      };
+
+      const config = buildSingboxClientConfig(singboxParams, {
+        remarks: deviceLabel,
+      });
+
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.json(config);
       return;
