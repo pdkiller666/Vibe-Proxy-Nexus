@@ -812,6 +812,26 @@ try {
   `);
   console.log("heal-schema: M-28 plans.max_uses");
 
+  // ── M-29: node_metric_snapshots — historical CPU/RAM/Disk chart data ─────
+  // Rolling store of node system-metric snapshots. Written by the API server
+  // each time it fetches system/status for a node (debounced: at most once per
+  // 5 minutes per node). Rows older than 90 days are pruned by the cleanup job.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS node_metric_snapshots (
+      id           serial      PRIMARY KEY,
+      node_id      integer     NOT NULL REFERENCES vpn_nodes(id) ON DELETE CASCADE,
+      recorded_at  timestamptz NOT NULL DEFAULT now(),
+      cpu_percent  smallint    NOT NULL,
+      ram_percent  smallint    NOT NULL,
+      disk_percent smallint    NOT NULL
+    )
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS node_metric_snapshots_node_recorded_idx
+      ON node_metric_snapshots(node_id, recorded_at)
+  `);
+  console.log("heal-schema: M-29 node_metric_snapshots table + index");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

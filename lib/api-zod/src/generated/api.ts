@@ -1992,6 +1992,28 @@ export const GetVpnNodeSystemStatusResponse = zod.object({
 
 
 /**
+ * @summary Get historical CPU, RAM, or disk usage for a VPN node
+ */
+export const GetVpnNodeMetricsParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const GetVpnNodeMetricsQueryParams = zod.object({
+  "metric": zod.enum(['cpu', 'ram', 'disk']),
+  "from": zod.coerce.string().optional().describe('ISO-8601 start timestamp (inclusive). Defaults to 30 days ago.'),
+  "to": zod.coerce.string().optional().describe('ISO-8601 end timestamp (inclusive). Defaults to now.')
+})
+
+export const GetVpnNodeMetricsResponse = zod.object({
+  "metric": zod.enum(['cpu', 'ram', 'disk']),
+  "points": zod.array(zod.object({
+  "ts": zod.number().describe('Unix timestamp in milliseconds'),
+  "value": zod.number().describe('Metric value 0-100')
+}))
+})
+
+
+/**
  * @summary Get recent stdout log lines for a process on a VPN node
  */
 export const GetVpnNodeSystemLogsParams = zod.object({

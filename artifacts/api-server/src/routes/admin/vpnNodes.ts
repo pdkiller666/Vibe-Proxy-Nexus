@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
-import { asc, eq, isNull, and, ne, or, sql } from "drizzle-orm";
+import { asc, eq, isNull, and, ne, or, sql, gte, lte, desc } from "drizzle-orm";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
 import os from "node:os";
-import { db, vpnKeysTable, vpnNodesTable, systemEventsTable } from "@workspace/db";
+import { db, vpnKeysTable, vpnNodesTable, systemEventsTable, nodeMetricSnapshotsTable } from "@workspace/db";
 import {
   CreateVpnNodeBody,
   CreateVpnNodeResponse,
@@ -22,6 +22,41 @@ import { logger } from "../../lib/logger";
 
 const router: IRouter = Router();
 const execAsync = promisify(exec);
+
+// ─── Metric snapshot debounce ─────────────────────────────────────────────────
+// Write at most one snapshot per 5 minutes per node. Keeps the table from growing
+// too fast when multiple admins have the status panel open simultaneously.
+const METRIC_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+const lastMetricWrite = new Map<number, number>(); // nodeId → lastWriteTimestamp
+
+async function maybeRecordMetricSnapshot(
+  nodeId: number,
+  status: { cpuPercent: number; ramUsedBytes: number; ramTotalBytes: number; diskUsedBytes: number; diskTotalBytes: number },
+): Promise<void> {
+  const now = Date.now();
+  const last = lastMetricWrite.get(nodeId) ?? 0;
+  if (now - last < METRIC_WRITE_INTERVAL_MS) return;
+  lastMetricWrite.set(nodeId, now);
+
+  const ramPercent = status.ramTotalBytes > 0
+    ? Math.round((status.ramUsedBytes / status.ramTotalBytes) * 100)
+    : 0;
+  const diskPercent = status.diskTotalBytes > 0
+    ? Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100)
+    : 0;
+
+  try {
+    await db.insert(nodeMetricSnapshotsTable).values({
+      nodeId,
+      cpuPercent: Math.round(Math.min(100, Math.max(0, status.cpuPercent))),
+      ramPercent: Math.min(100, Math.max(0, ramPercent)),
+      diskPercent: Math.min(100, Math.max(0, diskPercent)),
+    });
+  } catch (err) {
+    // Non-fatal: chart data is best-effort.
+    logger.warn({ err, nodeId }, "node metrics: failed to write snapshot (ignored)");
+  }
+}
 
 router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const parsed = CreateVpnNodeBody.safeParse(req.body);
@@ -366,6 +401,8 @@ router.get("/admin/vpn-nodes/:nodeId/system/status", requireAuth, requireAdmin, 
     try {
       const status = await getLocalSystemStatus();
       res.json(status);
+      // Fire-and-forget snapshot (non-fatal, debounced to 5 min).
+      void maybeRecordMetricSnapshot(nodeId, status);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: msg });
@@ -388,10 +425,78 @@ router.get("/admin/vpn-nodes/:nodeId/system/status", requireAuth, requireAdmin, 
     }
     const data = await r.json();
     res.json(data);
+    // Fire-and-forget snapshot for remote nodes too.
+    void maybeRecordMetricSnapshot(nodeId, data as Parameters<typeof maybeRecordMetricSnapshot>[1]);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(502).json({ error: msg.includes("aborted") ? "Timeout (10s)" : msg });
   }
+});
+
+// ─── Historical metric time-series ───────────────────────────────────────────
+router.get("/admin/vpn-nodes/:nodeId/system/metrics", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const nodeId = Number(req.params["nodeId"]);
+  if (!nodeId || isNaN(nodeId)) { res.status(400).json({ error: "Invalid nodeId" }); return; }
+
+  const metric = req.query["metric"] as string;
+  if (!["cpu", "ram", "disk"].includes(metric)) {
+    res.status(400).json({ error: "metric must be cpu, ram, or disk" });
+    return;
+  }
+
+  const now = new Date();
+  const fromRaw = req.query["from"] as string | undefined;
+  const toRaw   = req.query["to"]   as string | undefined;
+  const fromDate = fromRaw ? new Date(fromRaw) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const toDate   = toRaw   ? new Date(toRaw)   : now;
+
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    res.status(400).json({ error: "Invalid from/to date" });
+    return;
+  }
+
+  // Pick the aggregation bucket based on range length:
+  //   ≤ 7 days  → 15-minute averages
+  //   ≤ 30 days → 1-hour averages
+  //   > 30 days → 4-hour averages
+  const rangeMs = toDate.getTime() - fromDate.getTime();
+  const bucketSeconds =
+    rangeMs <= 7 * 24 * 3600 * 1000  ? 15 * 60 :
+    rangeMs <= 30 * 24 * 3600 * 1000 ? 60 * 60 :
+                                        4 * 3600;
+
+  const colMap: Record<string, string> = {
+    cpu:  "cpu_percent",
+    ram:  "ram_percent",
+    disk: "disk_percent",
+  };
+  const col = colMap[metric]!;
+
+  // Raw SQL aggregate: group by time bucket, return avg value + bucket start ts.
+  const rows = await db.execute(
+    sql`
+      SELECT
+        date_trunc('second',
+          to_timestamp(
+            floor(extract(epoch from recorded_at) / ${bucketSeconds}) * ${bucketSeconds}
+          )
+        ) AS bucket,
+        round(avg(${sql.raw(col)}))::int AS value
+      FROM node_metric_snapshots
+      WHERE node_id = ${nodeId}
+        AND recorded_at >= ${fromDate}
+        AND recorded_at <= ${toDate}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `,
+  ) as { rows: Array<{ bucket: Date; value: number }> };
+
+  const points = rows.rows.map((r) => ({
+    ts: new Date(r.bucket).getTime(),
+    value: r.value,
+  }));
+
+  res.json({ metric, points });
 });
 
 router.get("/admin/vpn-nodes/:nodeId/system/logs", requireAuth, requireAdmin, async (req, res): Promise<void> => {

@@ -1530,6 +1530,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/VpnNodeSystemStatus"
 
+  /admin/vpn-nodes/{nodeId}/system/metrics:
+    get:
+      operationId: getVpnNodeMetrics
+      tags: [admin]
+      summary: Get historical CPU, RAM, or disk usage for a VPN node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: metric
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [cpu, ram, disk]
+        - name: from
+          in: query
+          required: false
+          description: ISO-8601 start timestamp (inclusive). Defaults to 30 days ago.
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          description: ISO-8601 end timestamp (inclusive). Defaults to now.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Time-series data points (aggregated by hour when range > 7 days)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNodeMetricsResponse"
+
   /admin/vpn-nodes/{nodeId}/system/logs:
     get:
       operationId: getVpnNodeSystemLogs
@@ -2509,6 +2546,23 @@ components:
         ok: { type: boolean }
         latencyMs: { type: ["integer", "null"] }
         error: { type: ["string", "null"] }
+
+    NodeMetricPoint:
+      type: object
+      required: [ts, value]
+      properties:
+        ts: { type: integer, description: Unix timestamp in milliseconds }
+        value: { type: number, description: Metric value 0-100 }
+
+    VpnNodeMetricsResponse:
+      type: object
+      required: [metric, points]
+      properties:
+        metric: { type: string, enum: [cpu, ram, disk] }
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeMetricPoint"
 
     VpnNodeSystemStatus:
       type: object

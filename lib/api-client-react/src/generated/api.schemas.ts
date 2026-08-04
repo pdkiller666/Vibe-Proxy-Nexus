@@ -732,6 +732,27 @@ export interface VpnNodeHealthResult {
   error?: string | null;
 }
 
+export interface NodeMetricPoint {
+  /** Unix timestamp in milliseconds */
+  ts: number;
+  /** Metric value 0-100 */
+  value: number;
+}
+
+export type VpnNodeMetricsResponseMetric = typeof VpnNodeMetricsResponseMetric[keyof typeof VpnNodeMetricsResponseMetric];
+
+
+export const VpnNodeMetricsResponseMetric = {
+  cpu: 'cpu',
+  ram: 'ram',
+  disk: 'disk',
+} as const;
+
+export interface VpnNodeMetricsResponse {
+  metric: VpnNodeMetricsResponseMetric;
+  points: NodeMetricPoint[];
+}
+
 export interface VpnNodeSystemStatus {
   cpuPercent: number;
   ramUsedBytes: number;
@@ -1023,6 +1044,27 @@ since?: string;
 export type ListAdminVpnKeysParams = {
 userId?: number;
 };
+
+export type GetVpnNodeMetricsParams = {
+metric: GetVpnNodeMetricsMetric;
+/**
+ * ISO-8601 start timestamp (inclusive). Defaults to 30 days ago.
+ */
+from?: string;
+/**
+ * ISO-8601 end timestamp (inclusive). Defaults to now.
+ */
+to?: string;
+};
+
+export type GetVpnNodeMetricsMetric = typeof GetVpnNodeMetricsMetric[keyof typeof GetVpnNodeMetricsMetric];
+
+
+export const GetVpnNodeMetricsMetric = {
+  cpu: 'cpu',
+  ram: 'ram',
+  disk: 'disk',
+} as const;
 
 export type GetVpnNodeSystemLogsParams = {
 process?: GetVpnNodeSystemLogsProcess;

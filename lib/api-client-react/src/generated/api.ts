@@ -54,6 +54,7 @@ import type {
   ForgotPasswordInput,
   ForgotPasswordResult,
   GetAdminNotificationsParams,
+  GetVpnNodeMetricsParams,
   GetVpnNodeSystemLogsParams,
   HealthStatus,
   ListAdminPaymentsParams,
@@ -98,6 +99,7 @@ import type {
   VpnNode,
   VpnNodeHealthResult,
   VpnNodeInput,
+  VpnNodeMetricsResponse,
   VpnNodeProvisionInput,
   VpnNodeProvisionStarted,
   VpnNodeRestartXrayResult,
@@ -6030,6 +6032,95 @@ export function useGetVpnNodeSystemStatus<TData = Awaited<ReturnType<typeof getV
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetVpnNodeSystemStatusQueryOptions(nodeId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVpnNodeMetricsUrl = (nodeId: number,
+    params: GetVpnNodeMetricsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/vpn-nodes/${nodeId}/system/metrics?${stringifiedParams}` : `/api/admin/vpn-nodes/${nodeId}/system/metrics`
+}
+
+/**
+ * @summary Get historical CPU, RAM, or disk usage for a VPN node
+ */
+export const getVpnNodeMetrics = async (nodeId: number,
+    params: GetVpnNodeMetricsParams, options?: RequestInit): Promise<VpnNodeMetricsResponse> => {
+
+  return customFetch<VpnNodeMetricsResponse>(getGetVpnNodeMetricsUrl(nodeId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVpnNodeMetricsQueryKey = (nodeId: number,
+    params?: GetVpnNodeMetricsParams,) => {
+    return [
+    `/api/admin/vpn-nodes/${nodeId}/system/metrics`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetVpnNodeMetricsQueryOptions = <TData = Awaited<ReturnType<typeof getVpnNodeMetrics>>, TError = ErrorType<unknown>>(nodeId: number,
+    params: GetVpnNodeMetricsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeMetrics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVpnNodeMetricsQueryKey(nodeId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVpnNodeMetrics>>> = ({ signal }) => getVpnNodeMetrics(nodeId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: nodeId !== null && nodeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeMetrics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVpnNodeMetricsQueryResult = NonNullable<Awaited<ReturnType<typeof getVpnNodeMetrics>>>
+export type GetVpnNodeMetricsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get historical CPU, RAM, or disk usage for a VPN node
+ */
+
+export function useGetVpnNodeMetrics<TData = Awaited<ReturnType<typeof getVpnNodeMetrics>>, TError = ErrorType<unknown>>(
+ nodeId: number,
+    params: GetVpnNodeMetricsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeMetrics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVpnNodeMetricsQueryOptions(nodeId,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

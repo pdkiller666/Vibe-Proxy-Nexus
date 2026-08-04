@@ -65,9 +65,11 @@ import {
   useGetVpnNodeSystemStatus,
   useGetVpnNodeSystemLogs,
   useRestartVpnNodeXray,
+  useGetVpnNodeMetrics,
   getGetVpnNodeSystemStatusQueryKey,
   getGetVpnNodeSystemLogsQueryKey,
   GetVpnNodeSystemLogsProcess,
+  GetVpnNodeMetricsMetric,
 } from "@workspace/api-client-react";
 import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
@@ -76,7 +78,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw, Zap, Server } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw, Zap, Server, LineChart as LineChartIcon } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -2418,6 +2422,210 @@ function NodeHealthButton({ nodeId }: { nodeId: number }) {
   );
 }
 
+// ─── Node Metric History Panel ────────────────────────────────────────────────
+
+type MetricKey = "cpu" | "ram" | "disk";
+
+const METRIC_LABELS: Record<MetricKey, string> = { cpu: "CPU", ram: "RAM", disk: "Диск" };
+
+const METRIC_COLORS: Record<MetricKey, string> = {
+  cpu:  "#3b82f6",
+  ram:  "#8b5cf6",
+  disk: "#f59e0b",
+};
+
+function MetricHistoryPanel({
+  nodeId,
+  metric,
+  onClose,
+}: {
+  nodeId: number;
+  metric: MetricKey;
+  onClose: () => void;
+}) {
+  // Period presets
+  type Period = "7d" | "30d" | "90d" | "custom";
+  const [period, setPeriod] = useState<Period>("30d");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const { from, to } = (() => {
+    const now = new Date();
+    if (period === "7d")  return { from: new Date(now.getTime() - 7  * 86400_000).toISOString(), to: now.toISOString() };
+    if (period === "30d") return { from: new Date(now.getTime() - 30 * 86400_000).toISOString(), to: now.toISOString() };
+    if (period === "90d") return { from: new Date(now.getTime() - 90 * 86400_000).toISOString(), to: now.toISOString() };
+    return {
+      from: customFrom ? new Date(customFrom).toISOString() : new Date(now.getTime() - 30 * 86400_000).toISOString(),
+      to:   customTo   ? new Date(customTo).toISOString()   : now.toISOString(),
+    };
+  })();
+
+  const { data, isLoading } = useGetVpnNodeMetrics(
+    nodeId,
+    { metric: metric as GetVpnNodeMetricsMetric, from, to },
+    {
+      query: {
+        queryKey: [nodeId, metric, from, to],
+      },
+    },
+  );
+
+  const points = data?.points ?? [];
+  const rangeMs = new Date(to).getTime() - new Date(from).getTime();
+  const shortRange = rangeMs <= 7 * 86400_000;
+
+  const formatXTick = (ts: number) => {
+    const d = new Date(ts);
+    if (shortRange) {
+      return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleString("ru-RU", { day: "2-digit", month: "short" });
+  };
+
+  const formatTooltipDate = (ts: number) =>
+    new Date(ts).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  const color = METRIC_COLORS[metric];
+  const label = METRIC_LABELS[metric];
+
+  return (
+    <div className="mt-3 border border-border bg-background">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+          <LineChartIcon className="w-3.5 h-3.5" />
+          {label} — история
+        </span>
+        <button
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+          title="Закрыть"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Period selector */}
+      <div className="flex items-center gap-1.5 px-4 py-2 border-b border-border flex-wrap">
+        {(["7d", "30d", "90d"] as Period[]).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            className={`px-2.5 py-0.5 text-xs border transition-colors ${
+              period === p
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+            }`}
+          >
+            {p === "7d" ? "7 дней" : p === "30d" ? "30 дней" : "90 дней"}
+          </button>
+        ))}
+        <button
+          onClick={() => setPeriod("custom")}
+          className={`px-2.5 py-0.5 text-xs border transition-colors ${
+            period === "custom"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+          }`}
+        >
+          Произвольный
+        </button>
+        {period === "custom" && (
+          <div className="flex items-center gap-1.5 mt-1 w-full">
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="border border-border bg-background text-xs px-2 py-0.5 flex-1 min-w-0"
+            />
+            <span className="text-xs text-muted-foreground shrink-0">—</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="border border-border bg-background text-xs px-2 py-0.5 flex-1 min-w-0"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Chart */}
+      <div className="px-2 py-3">
+        {isLoading ? (
+          <div className="h-36 flex items-center justify-center">
+            <p className="text-xs text-muted-foreground">Загрузка…</p>
+          </div>
+        ) : points.length === 0 ? (
+          <div className="h-36 flex flex-col items-center justify-center gap-1">
+            <p className="text-xs font-medium text-muted-foreground">Данных пока нет</p>
+            <p className="text-[10px] text-muted-foreground max-w-[220px] text-center">
+              Снимки метрик накапливаются с момента открытия панели статуса. Первые точки появятся через&nbsp;5&nbsp;минут.
+            </p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={160}>
+            <AreaChart data={points} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+              <defs>
+                <linearGradient id={`grad-${metric}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="10%" stopColor={color} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis
+                dataKey="ts"
+                type="number"
+                domain={["dataMin", "dataMax"]}
+                scale="time"
+                tickFormatter={formatXTick}
+                tick={{ fontSize: 9 }}
+                stroke="var(--muted-foreground)"
+                tickCount={5}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tickFormatter={(v: number) => `${v}%`}
+                tick={{ fontSize: 9 }}
+                stroke="var(--muted-foreground)"
+                width={38}
+              />
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const p = payload[0];
+                  if (!p?.payload) return null;
+                  return (
+                    <div className="bg-background border border-border px-2 py-1 text-xs shadow-md">
+                      <p className="text-muted-foreground">{formatTooltipDate(p.payload.ts as number)}</p>
+                      <p className="font-bold" style={{ color }}>
+                        {label}: {p.value}%
+                      </p>
+                    </div>
+                  );
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={color}
+                strokeWidth={1.5}
+                fill={`url(#grad-${metric})`}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+        {points.length > 0 && (
+          <p className="text-[9px] text-muted-foreground text-right mt-1 font-mono">
+            {points.length} точек · усреднение по {rangeMs <= 7 * 86400_000 ? "15 мин" : rangeMs <= 30 * 86400_000 ? "1 ч" : "4 ч"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Node Management Panel ────────────────────────────────────────────────────
 
 function formatUptime(seconds: number): string {
@@ -2441,6 +2649,7 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   const [logLines, setLogLines] = useState(100);
   const [logsEnabled, setLogsEnabled] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [openMetric, setOpenMetric] = useState<MetricKey | null>(null);
 
   // Status — auto-refresh every 30s once panel is open.
   const {
@@ -2515,9 +2724,16 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
         <p className="text-xs text-muted-foreground font-mono">Загрузка…</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {/* CPU */}
-          <div className="bg-background border border-border p-3">
-            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">CPU</div>
+          {/* CPU — clickable */}
+          <button
+            type="button"
+            onClick={() => setOpenMetric(openMetric === "cpu" ? null : "cpu")}
+            className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openMetric === "cpu" ? "border-blue-500 ring-1 ring-blue-500/30" : "border-border"}`}
+            title="Показать историю CPU"
+          >
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1 flex items-center justify-between">
+              CPU <LineChartIcon className="w-2.5 h-2.5 opacity-40" />
+            </div>
             <div className="text-lg font-bold">{status.cpuPercent.toFixed(1)}%</div>
             <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden">
               <div
@@ -2525,29 +2741,52 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
                 style={{ width: `${cpuBarWidth}%` }}
               />
             </div>
-          </div>
-          {/* RAM */}
-          <div className="bg-background border border-border p-3">
-            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">RAM</div>
+          </button>
+          {/* RAM — clickable */}
+          <button
+            type="button"
+            onClick={() => setOpenMetric(openMetric === "ram" ? null : "ram")}
+            className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openMetric === "ram" ? "border-violet-500 ring-1 ring-violet-500/30" : "border-border"}`}
+            title="Показать историю RAM"
+          >
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1 flex items-center justify-between">
+              RAM <LineChartIcon className="w-2.5 h-2.5 opacity-40" />
+            </div>
             <div className="text-lg font-bold">{ramPercent}%</div>
             <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
               {formatBytesShort(status.ramUsedBytes)} / {formatBytesShort(status.ramTotalBytes)}
             </div>
-          </div>
-          {/* Disk */}
-          <div className="bg-background border border-border p-3">
-            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Диск</div>
+          </button>
+          {/* Disk — clickable */}
+          <button
+            type="button"
+            onClick={() => setOpenMetric(openMetric === "disk" ? null : "disk")}
+            className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openMetric === "disk" ? "border-amber-500 ring-1 ring-amber-500/30" : "border-border"}`}
+            title="Показать историю диска"
+          >
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1 flex items-center justify-between">
+              Диск <LineChartIcon className="w-2.5 h-2.5 opacity-40" />
+            </div>
             <div className="text-lg font-bold">{diskPercent}%</div>
             <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
               {formatBytesShort(status.diskUsedBytes)} / {formatBytesShort(status.diskTotalBytes)}
             </div>
-          </div>
-          {/* Uptime */}
+          </button>
+          {/* Uptime — not charted */}
           <div className="bg-background border border-border p-3">
             <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Uptime</div>
             <div className="text-lg font-bold">{formatUptime(status.uptimeSeconds)}</div>
           </div>
         </div>
+      )}
+
+      {/* ── Metric history panel (slides in below tiles on click) ── */}
+      {openMetric && (
+        <MetricHistoryPanel
+          nodeId={nodeId}
+          metric={openMetric}
+          onClose={() => setOpenMetric(null)}
+        />
       )}
 
       {/* ── Logs ── */}
