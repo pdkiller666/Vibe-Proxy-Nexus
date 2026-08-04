@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   useGetAdminDashboardSummary,
@@ -2448,12 +2448,17 @@ function MetricHistoryPanel({
   const [period, setPeriod] = useState<Period>("30d");
 
   // Default custom range: last 7 days (YYYY-MM-DD, local calendar)
-  const todayStr = new Date().toLocaleDateString("en-CA"); // "2026-08-04"
-  const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400_000).toLocaleDateString("en-CA");
+  const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
+  const sevenDaysAgoStr = useMemo(() => new Date(Date.now() - 7 * 86400_000).toLocaleDateString("en-CA"), []);
   const [customFrom, setCustomFrom] = useState(sevenDaysAgoStr);
   const [customTo, setCustomTo]     = useState(todayStr);
 
-  const { from, to } = (() => {
+  // Memoize the date range so the queryKey stays stable between re-renders.
+  // Without this, `new Date()` produces a different ISO string on every render
+  // (e.g. when the parent's 30-second status refetch triggers a re-render),
+  // the queryKey changes, and React Query restarts the fetch — producing an
+  // infinite loading spinner.
+  const { from, to } = useMemo(() => {
     const now = new Date();
     if (period === "7d")  return { from: new Date(now.getTime() - 7  * 86400_000).toISOString(), to: now.toISOString() };
     if (period === "30d") return { from: new Date(now.getTime() - 30 * 86400_000).toISOString(), to: now.toISOString() };
@@ -2470,7 +2475,7 @@ function MetricHistoryPanel({
         ? new Date(customTo + "T23:59:59.999Z").toISOString()
         : now.toISOString(),
     };
-  })();
+  }, [period, customFrom, customTo]);
 
   const { data, isLoading } = useGetVpnNodeMetrics(
     nodeId,
