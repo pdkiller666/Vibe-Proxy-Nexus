@@ -7,6 +7,10 @@ import {
   resolveHappIosRoutingProfile,
   type HappIosRoutingProfile,
 } from "../lib/happIosRouting";
+import {
+  resolveAppDownloadLinks,
+  type AppDownloadLinks,
+} from "../lib/appDownloadLinks";
 
 const router: IRouter = Router();
 
@@ -27,6 +31,9 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
   const storedProfile = settings?.happIosRoutingProfile as HappIosRoutingProfile | null | undefined;
   const happIosRoutingProfile = resolveHappIosRoutingProfile(storedProfile);
   const happIosRoutingUrl = buildHappIosRoutingUrl(happIosRoutingProfile);
+
+  const storedLinks = settings?.appDownloadLinks as AppDownloadLinks | null | undefined;
+  const appDownloadLinks = resolveAppDownloadLinks(storedLinks);
 
   if (!settings) {
     res.json(
@@ -52,6 +59,7 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
         primaryDomainHealthy,
         happIosRoutingUrl,
         happIosRoutingProfile,
+        appDownloadLinks,
       }),
     );
     return;
@@ -63,6 +71,7 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
       primaryDomainHealthy,
       happIosRoutingUrl,
       happIosRoutingProfile,
+      appDownloadLinks,
     }),
   );
 });

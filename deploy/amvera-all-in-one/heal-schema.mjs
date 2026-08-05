@@ -832,6 +832,15 @@ try {
   `);
   console.log("heal-schema: M-29 node_metric_snapshots table + index");
 
+  // ── M-31: payment_settings.app_download_links ───────────────────────────
+  // Admin-configurable download links for recommended client apps (JSONB).
+  // NULL = use built-in defaults from appDownloadLinks.ts.
+  await client.query(`
+    ALTER TABLE payment_settings
+      ADD COLUMN IF NOT EXISTS app_download_links jsonb
+  `);
+  console.log("heal-schema: M-31 payment_settings.app_download_links");
+
   // ── M-30: payment_settings.happ_ios_routing_profile — Happ iOS routing ────
   // Admin-editable Happ iOS routing profile stored as JSONB. Contains the
   // editable subset {name, directsites, directip}. NULL = use built-in

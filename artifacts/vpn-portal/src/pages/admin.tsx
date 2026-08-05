@@ -4534,6 +4534,9 @@ function PaymentSettingsForm() {
 
       {/* iOS Happ routing profile — separate mutation */}
       <HappIosRoutingSection />
+
+      {/* App download links — separate mutation */}
+      <AppDownloadLinksSection />
     </div>
   );
 }
@@ -4781,6 +4784,120 @@ function HappIosRoutingSection() {
           className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {isPending ? "Сохраняем..." : "Сохранить профиль"}
+        </button>
+        <button
+          onClick={handleReset}
+          disabled={isPending}
+          className="border border-border px-4 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          Сбросить до умолчаний
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── App download links editor ─────────────────────────────────────────────────
+// Admin configures the 4 recommended client app links shown in the keys page
+// "Quick start" banners and iOS routing instructions. Saved via
+// PATCH /admin/payment-settings. Separate Save/Reset from the main form.
+
+const APP_LINK_LABELS: Record<string, string> = {
+  happAndroid: "Happ — Android",
+  happIos: "Happ — iOS (App Store)",
+  v2rayng: "v2rayNG — Android",
+  v2rayn: "v2rayN — Windows",
+};
+
+function AppDownloadLinksSection() {
+  const { data: settings } = useGetPaymentSettings();
+  const { mutate: update, isPending } = useUpdatePaymentSettings();
+  const { toast } = useToast();
+
+  const [links, setLinks] = useState({
+    happAndroid: "",
+    happIos: "",
+    v2rayng: "",
+    v2rayn: "",
+  });
+  const [initialized, setInitialized] = useState(false);
+
+  if (settings && !initialized) {
+    const l = settings.appDownloadLinks;
+    setLinks({ happAndroid: l.happAndroid, happIos: l.happIos, v2rayng: l.v2rayng, v2rayn: l.v2rayn });
+    setInitialized(true);
+  }
+
+  function handleSave() {
+    update(
+      { data: { appDownloadLinks: { happAndroid: links.happAndroid.trim(), happIos: links.happIos.trim(), v2rayng: links.v2rayng.trim(), v2rayn: links.v2rayn.trim() } } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
+          toast({ title: "Ссылки на приложения сохранены" });
+        },
+        onError: () => toast({ title: "Ошибка сохранения ссылок", variant: "destructive" }),
+      },
+    );
+  }
+
+  function handleReset() {
+    update(
+      { data: { appDownloadLinks: null } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
+          setInitialized(false);
+          toast({ title: "Ссылки сброшены до встроенных значений" });
+        },
+        onError: () => toast({ title: "Ошибка сброса", variant: "destructive" }),
+      },
+    );
+  }
+
+  return (
+    <div className="border border-border p-4 space-y-4 mt-2">
+      <div>
+        <p className="text-sm font-semibold">Ссылки на приложения</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Настройте ссылки на скачивание VPN-клиентов, которые показываются пользователям
+          на странице ключей (баннер «Быстрый старт» и инструкции). Изменения применяются мгновенно.
+        </p>
+      </div>
+
+      {(["happAndroid", "happIos", "v2rayng", "v2rayn"] as const).map((key) => (
+        <div key={key} className="space-y-1">
+          <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+            {APP_LINK_LABELS[key]}
+          </label>
+          <div className="flex items-center gap-2">
+            <Input
+              value={links[key]}
+              onChange={(e) => setLinks((prev) => ({ ...prev, [key]: e.target.value }))}
+              placeholder="https://..."
+              className="rounded-none font-mono text-xs"
+            />
+            {links[key] && (
+              <a
+                href={links[key]}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-xs text-muted-foreground hover:text-primary underline underline-offset-2 whitespace-nowrap"
+              >
+                Открыть
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={handleSave}
+          disabled={isPending}
+          className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {isPending ? "Сохраняем..." : "Сохранить ссылки"}
         </button>
         <button
           onClick={handleReset}

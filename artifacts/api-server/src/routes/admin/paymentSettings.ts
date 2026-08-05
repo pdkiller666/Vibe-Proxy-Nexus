@@ -8,6 +8,10 @@ import {
   resolveHappIosRoutingProfile,
   type HappIosRoutingProfile,
 } from "../../lib/happIosRouting";
+import {
+  resolveAppDownloadLinks,
+  type AppDownloadLinks,
+} from "../../lib/appDownloadLinks";
 
 const router: IRouter = Router();
 
@@ -50,16 +54,20 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
         })
         .returning();
 
-  // Compute iOS routing URL from the saved profile (or defaults if null).
+  // Compute derived fields from saved values (or defaults when null).
   const storedProfile = settings!.happIosRoutingProfile as HappIosRoutingProfile | null;
   const happIosRoutingProfile = resolveHappIosRoutingProfile(storedProfile);
   const happIosRoutingUrl = buildHappIosRoutingUrl(happIosRoutingProfile);
 
-  // Strip QR blob and raw profile from response — replace with derived fields.
+  const storedLinks = settings!.appDownloadLinks as AppDownloadLinks | null;
+  const appDownloadLinks = resolveAppDownloadLinks(storedLinks);
+
+  // Strip QR blob and raw JSON columns from response — replace with derived fields.
   const {
     sbpQrCodeData: _d,
     sbpQrCodeMimeType: _m,
     happIosRoutingProfile: _hp,
+    appDownloadLinks: _al,
     ...rest
   } = settings!;
 
@@ -69,6 +77,7 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
     primaryDomainHealthy: true, // live check skipped on write — client refetches
     happIosRoutingUrl,
     happIosRoutingProfile,
+    appDownloadLinks,
   }));
 });
 

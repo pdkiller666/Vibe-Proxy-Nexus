@@ -377,13 +377,14 @@ const revokedReasonLabel: Record<string, string> = {
   traffic_limit: "исчерпан лимит трафика",
 };
 
-const CLIENTS = [
-  { name: "Happ (Android / iOS)", url: "https://apps.apple.com/app/happ-proxy-utility/id6504287215" },
-  { name: "v2rayNG (Android)", url: "https://play.google.com/store/apps/details?id=com.v2ray.ang" },
-  { name: "Streisand (iOS)", url: "https://apps.apple.com/app/streisand/id6450534064" },
-  { name: "v2rayN (Windows)", url: "https://github.com/2dust/v2rayN/releases/latest" },
-  { name: "V2Box (macOS)", url: "https://apps.apple.com/app/v2box-v2ray-client/id6446814690" },
-];
+// App download links are now admin-configurable via payment settings.
+// Fallback URLs are used while paymentSettings is loading.
+const FALLBACK_LINKS = {
+  happAndroid: "https://play.google.com/store/apps/details?id=com.happproxy.v2ray",
+  happIos: "https://apps.apple.com/app/happ-proxy-utility/id6504287215",
+  v2rayng: "https://play.google.com/store/apps/details?id=com.v2ray.ang",
+  v2rayn: "https://github.com/2dust/v2rayN/releases/latest",
+};
 
 export default function Keys() {
   const { data: me } = useGetMe();
@@ -574,8 +575,8 @@ export default function Keys() {
           >
             <p>
               <strong>1.</strong> Установите приложение:{" "}
-              <a href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Happ</a>,{" "}
-              <a href="https://play.google.com/store/apps/details?id=com.v2ray.ang" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">v2rayNG</a>.
+              <a href={paymentSettings?.appDownloadLinks?.happAndroid ?? FALLBACK_LINKS.happAndroid} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Happ</a>,{" "}
+              <a href={paymentSettings?.appDownloadLinks?.v2rayng ?? FALLBACK_LINKS.v2rayng} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">v2rayNG</a>.
             </p>
             <p>
               <strong>2.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже → в приложении нажмите <strong>«Добавить подписку»</strong> → вставьте. Ключи обновляются автоматически.
@@ -700,7 +701,7 @@ export default function Keys() {
           >
             <p>
               <strong>1.</strong> Установите{" "}
-              <a href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Happ</a>{" "}
+              <a href={paymentSettings?.appDownloadLinks?.happIos ?? FALLBACK_LINKS.happIos} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Happ</a>{" "}
               из App Store (версия 4.11+, ядро Xray).
             </p>
             <p>

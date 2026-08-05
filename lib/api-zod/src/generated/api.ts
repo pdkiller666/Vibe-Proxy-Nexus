@@ -311,7 +311,13 @@ export const GetPaymentSettingsResponse = zod.object({
   "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
   "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
   "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
-}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n')
+}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),
+  "appDownloadLinks": zod.object({
+  "happAndroid": zod.string().describe('Happ for Android (Google Play or direct APK URL)'),
+  "happIos": zod.string().describe('Happ for iOS (App Store URL)'),
+  "v2rayng": zod.string().describe('v2rayNG for Android (Google Play URL)'),
+  "v2rayn": zod.string().describe('v2rayN for Windows (GitHub releases URL)')
+}).describe('Admin-configurable download links for recommended VPN client apps.')
 })
 
 
@@ -1092,7 +1098,13 @@ export const UpdatePaymentSettingsBody = zod.object({
   "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
   "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
   "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
-}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),zod.null()]).optional()
+}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),zod.null()]).optional(),
+  "appDownloadLinks": zod.union([zod.object({
+  "happAndroid": zod.string().describe('Happ for Android (Google Play or direct APK URL)'),
+  "happIos": zod.string().describe('Happ for iOS (App Store URL)'),
+  "v2rayng": zod.string().describe('v2rayNG for Android (Google Play URL)'),
+  "v2rayn": zod.string().describe('v2rayN for Windows (GitHub releases URL)')
+}).describe('Admin-configurable download links for recommended VPN client apps.'),zod.null()]).optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -1122,7 +1134,13 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
   "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
   "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
-}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n')
+}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),
+  "appDownloadLinks": zod.object({
+  "happAndroid": zod.string().describe('Happ for Android (Google Play or direct APK URL)'),
+  "happIos": zod.string().describe('Happ for iOS (App Store URL)'),
+  "v2rayng": zod.string().describe('v2rayNG for Android (Google Play URL)'),
+  "v2rayn": zod.string().describe('v2rayN for Windows (GitHub releases URL)')
+}).describe('Admin-configurable download links for recommended VPN client apps.')
 })
 
 

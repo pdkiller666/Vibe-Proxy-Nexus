@@ -1944,6 +1944,24 @@ components:
         data: { type: string }
         mimeType: { type: string }
 
+    AppDownloadLinks:
+      type: object
+      description: Admin-configurable download links for recommended VPN client apps.
+      required: [happAndroid, happIos, v2rayng, v2rayn]
+      properties:
+        happAndroid:
+          type: string
+          description: Happ for Android (Google Play or direct APK URL)
+        happIos:
+          type: string
+          description: Happ for iOS (App Store URL)
+        v2rayng:
+          type: string
+          description: v2rayNG for Android (Google Play URL)
+        v2rayn:
+          type: string
+          description: v2rayN for Windows (GitHub releases URL)
+
     HappIosRoutingProfile:
       type: object
       description: >
@@ -1968,7 +1986,7 @@ components:
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy, happIosRoutingUrl, happIosRoutingProfile]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy, happIosRoutingUrl, happIosRoutingProfile, appDownloadLinks]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -2019,6 +2037,10 @@ components:
         # Admin reads this to populate the editing form; never null in the response.
         happIosRoutingProfile:
           $ref: "#/components/schemas/HappIosRoutingProfile"
+        # Effective download links for recommended client apps (custom or built-in defaults).
+        # Never null in the response.
+        appDownloadLinks:
+          $ref: "#/components/schemas/AppDownloadLinks"
 
     PaymentSettingsUpdate:
       type: object
@@ -2047,6 +2069,11 @@ components:
         happIosRoutingProfile:
           oneOf:
             - $ref: "#/components/schemas/HappIosRoutingProfile"
+            - type: "null"
+        # Admin-editable app download links. Pass null to reset to defaults.
+        appDownloadLinks:
+          oneOf:
+            - $ref: "#/components/schemas/AppDownloadLinks"
             - type: "null"
 
     SubscriptionStatus:

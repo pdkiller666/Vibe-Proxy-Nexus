@@ -58,6 +58,10 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   sbpEnabled: boolean("sbp_enabled").notNull().default(true),
   sbpQrCodeData: text("sbp_qr_code_data"),
   sbpQrCodeMimeType: text("sbp_qr_code_mime_type"),
+  // Admin-configurable download links for recommended client apps.
+  // null = use built-in defaults from appDownloadLinks.ts.
+  appDownloadLinks: jsonb("app_download_links")
+    .$type<{ happAndroid: string; happIos: string; v2rayng: string; v2rayn: string } | null>(),
   // Admin-editable Happ iOS routing profile. Stored as JSON with the editable
   // subset of the full Happ profile (name, directsites, directip). The API
   // merges this with fixed infrastructure defaults when building the deep link.

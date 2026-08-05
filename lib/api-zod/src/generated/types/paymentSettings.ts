@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AppDownloadLinks } from './appDownloadLinks';
 import type { HappIosRoutingProfile } from './happIosRoutingProfile';
 
 export interface PaymentSettings {
@@ -33,4 +34,5 @@ export interface PaymentSettings {
   primaryDomainHealthy: boolean;
   happIosRoutingUrl: string;
   happIosRoutingProfile: HappIosRoutingProfile;
+  appDownloadLinks: AppDownloadLinks;
 }

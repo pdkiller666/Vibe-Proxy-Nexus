@@ -219,6 +219,20 @@ export interface SbpQrUpload {
 }
 
 /**
+ * Admin-configurable download links for recommended VPN client apps.
+ */
+export interface AppDownloadLinks {
+  /** Happ for Android (Google Play or direct APK URL) */
+  happAndroid: string;
+  /** Happ for iOS (App Store URL) */
+  happIos: string;
+  /** v2rayNG for Android (Google Play URL) */
+  v2rayng: string;
+  /** v2rayN for Windows (GitHub releases URL) */
+  v2rayn: string;
+}
+
+/**
  * Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ://routing/add/<base64> deep link.
  */
 export interface HappIosRoutingProfile {
@@ -256,6 +270,7 @@ export interface PaymentSettings {
   primaryDomainHealthy: boolean;
   happIosRoutingUrl: string;
   happIosRoutingProfile: HappIosRoutingProfile;
+  appDownloadLinks: AppDownloadLinks;
 }
 
 export interface PaymentSettingsUpdate {
@@ -292,6 +307,7 @@ export interface PaymentSettingsUpdate {
   sbpPaymentUrl?: string;
   showManualSbpDetails?: boolean;
   happIosRoutingProfile?: HappIosRoutingProfile | null;
+  appDownloadLinks?: AppDownloadLinks | null;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];

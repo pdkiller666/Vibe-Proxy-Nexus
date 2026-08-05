@@ -23,6 +23,7 @@ export * from './adminUser';
 export * from './adminUserActivityStatus';
 export * from './adminUserNoteUpdate';
 export * from './adminUserProfileUpdate';
+export * from './appDownloadLinks';
 export * from './balanceTopupOrderBody';
 export * from './balanceTopupOrderResult';
 export * from './balanceTransaction';
