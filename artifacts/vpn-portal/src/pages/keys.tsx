@@ -400,6 +400,7 @@ export default function Keys() {
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [xrayQRUrl, setXrayQRUrl] = useState<string | null>(null);
+  const [showRoutingQR, setShowRoutingQR] = useState(false);
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null);
   const [platform, setPlatform] = useState<Platform>(getInitialPlatform);
@@ -467,6 +468,9 @@ export default function Keys() {
       )}
       {xrayQRUrl && (
         <QRModal url={xrayQRUrl} onClose={() => setXrayQRUrl(null)} />
+      )}
+      {showRoutingQR && paymentSettings?.happIosRoutingUrl && (
+        <QRModal url={paymentSettings.happIosRoutingUrl} onClose={() => setShowRoutingQR(false)} />
       )}
 
       {showAddDeviceModal && (
@@ -782,13 +786,31 @@ export default function Keys() {
               </p>
 
               {paymentSettings?.happIosRoutingUrl ? (
-                <a
-                  href={paymentSettings.happIosRoutingUrl}
-                  className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-bold px-5 py-3 hover:opacity-90 transition-opacity text-sm"
-                >
-                  <Route className="w-4 h-4" />
-                  Настроить маршрутизацию →
-                </a>
+                <>
+                  <a
+                    href={paymentSettings.happIosRoutingUrl}
+                    className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-bold px-5 py-3 hover:opacity-90 transition-opacity text-sm"
+                  >
+                    <Route className="w-4 h-4" />
+                    Настроить маршрутизацию →
+                  </a>
+
+                  {/* URL + copy + QR — для отправки ссылки на другое устройство */}
+                  <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                    <span className="truncate flex-1">{paymentSettings.happIosRoutingUrl}</span>
+                    <button
+                      onClick={() => setShowRoutingQR(true)}
+                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                      title="QR-код маршрутизации"
+                    >
+                      <QrCode className="w-4 h-4" />
+                    </button>
+                    <CopyButton text={paymentSettings.happIosRoutingUrl} />
+                  </div>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Перешлите ссылку или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> с другого устройства.
+                  </p>
+                </>
               ) : (
                 <div className="h-12 bg-muted animate-pulse" />
               )}
