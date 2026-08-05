@@ -1812,6 +1812,7 @@ components:
           extraTrafficGb,
           trafficLimitExceeded,
           isBanned,
+          isTrialSubscription,
         ]
       properties:
         id: { type: integer }
@@ -1865,6 +1866,10 @@ components:
         # true while the account is administratively blocked. The frontend
         # must show a "banned" screen rather than redirecting to sign-in.
         isBanned: { type: boolean }
+        # true when the user's current active subscription was never backed by a
+        # completed payment — i.e. it is a free trial granted at registration.
+        # Always false when hasActiveSubscription is false.
+        isTrialSubscription: { type: boolean }
 
     PlanBillingType:
       type: string

@@ -56,7 +56,8 @@ export const RegisterResponse = zod.object({
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isTrialSubscription": zod.boolean()
 })
 
 
@@ -95,7 +96,8 @@ export const LoginResponse = zod.object({
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isTrialSubscription": zod.boolean()
 })
 
 
@@ -162,7 +164,8 @@ export const GetMeResponse = zod.object({
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isTrialSubscription": zod.boolean()
 })
 
 
@@ -196,7 +199,8 @@ export const UpdateMeResponse = zod.object({
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isTrialSubscription": zod.boolean()
 })
 
 
@@ -235,7 +239,8 @@ export const ChangeMyEmailResponse = zod.object({
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isTrialSubscription": zod.boolean()
 })
 
 

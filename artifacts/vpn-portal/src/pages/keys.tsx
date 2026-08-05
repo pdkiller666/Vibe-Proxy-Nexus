@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, ExternalLink, Zap, Pencil, Route, AlertTriangle } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, ExternalLink, Zap, Pencil, Route, AlertTriangle, Gift } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
 
@@ -540,6 +540,23 @@ export default function Keys() {
           </div>
         )}
       </div>
+
+      {/* ── Trial period strip ─────────────────────────────────────────────── */}
+      {me?.isTrialSubscription && me.hasActiveSubscription && (
+        <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3 text-sm">
+          <Gift className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span className="flex-1 text-emerald-800 dark:text-emerald-200">
+            <strong>Пробный период</strong> — бесплатный доступ.
+            После окончания VPN будет приостановлен.
+          </span>
+          <a
+            href="/plans"
+            className="shrink-0 text-emerald-700 dark:text-emerald-300 font-semibold underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-100 whitespace-nowrap"
+          >
+            Купить тариф →
+          </a>
+        </div>
+      )}
 
       {/* ── Platform tab switcher ──────────────────────────────────────────── */}
       <div className="flex items-center gap-1 bg-muted/50 border border-border p-1 w-fit">

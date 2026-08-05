@@ -1,5 +1,5 @@
 import { and, count, desc, eq, gt, isNull, or, sum } from "drizzle-orm";
-import { db, balanceTransactionsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
+import { db, balanceTransactionsTable, paymentsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
 import { resolvePublicAddress } from "./domain";
 
 export async function buildMeData(user: User, requestHost?: string) {
@@ -17,6 +17,7 @@ export async function buildMeData(user: User, requestHost?: string) {
   // tiebreaker defensively if that invariant is ever violated.
   const [activeSubscription] = await db
     .select({
+      subscriptionId: subscriptionsTable.id,
       endsAt: subscriptionsTable.endsAt,
       planName: plansTable.name,
       devicesIncluded: plansTable.devicesIncluded,
@@ -64,6 +65,24 @@ export async function buildMeData(user: User, requestHost?: string) {
       : null;
   const trafficLimitExceeded = Boolean(activeSubscription?.trafficLimitExceededAt);
 
+  // Detect trial: a subscription that was never backed by a completed payment
+  // (trial subscriptions are inserted directly in auth.ts without going through
+  // the payment flow, so they have no linked payment row with status "completed").
+  let isTrialSubscription = false;
+  if (activeSubscription) {
+    const [completedPayment] = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(
+        and(
+          eq(paymentsTable.subscriptionId, activeSubscription.subscriptionId),
+          eq(paymentsTable.status, "confirmed"),
+        ),
+      )
+      .limit(1);
+    isTrialSubscription = !completedPayment;
+  }
+
   const [settings] = await db.select({ referralCommissionPercent: paymentSettingsTable.referralCommissionPercent }).from(paymentSettingsTable).limit(1);
 
   const [earningsResult] = await db
@@ -103,5 +122,6 @@ export async function buildMeData(user: User, requestHost?: string) {
     referredUserCount,
     referralLinkHost,
     isBanned: user.isBanned,
+    isTrialSubscription,
   };
 }

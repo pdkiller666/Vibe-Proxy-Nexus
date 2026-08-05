@@ -28,6 +28,7 @@ import {
   Check,
   Server,
   X,
+  Gift,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OnboardingTip } from "@/components/onboarding-tip";
@@ -425,6 +426,13 @@ export default function Dashboard() {
   const isBalanceCritical = hoursLeft !== null && hoursLeft < 3;
   const isBalanceLow     = hoursLeft !== null && hoursLeft >= 3 && hoursLeft < 24;
 
+  // Trial detection — API returns isTrialSubscription = true when the active
+  // subscription has no completed payment (i.e. was granted for free on sign-up).
+  const isTrial = Boolean(me?.isTrialSubscription);
+  // Suppress the generic "expiring soon" orange warning when user is on trial —
+  // the dedicated teal trial banner below already handles the expiry message.
+  const showExpiringSoon = isExpiringSoon && !isExpired && !isTrial;
+
   // Promo plan — backend prepends it first when user's invite link has one.
   // Only show the promo CTA when the user has no active subscription yet.
   const promoPlan = !me?.hasActiveSubscription && plans?.[0]?.isPromo ? plans[0] : null;
@@ -439,14 +447,23 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Onboarding tip — adapts text to whether the user already has a subscription */}
+      {/* Onboarding tip — adapts text to the user's current state */}
       <OnboardingTip
         id="dashboard-welcome"
         icon={<Sparkles className="w-4 h-4" />}
         title="Добро пожаловать в VPNexus!"
       >
         <p>Здесь — статус вашей подписки и быстрый доступ ко всем разделам.</p>
-        {me?.hasActiveSubscription ? (
+        {isTrial ? (
+          <p>
+            У вас активен <strong>бесплатный пробный период</strong>. Первый VPN-ключ уже выпущен —
+            откройте раздел{" "}
+            <Link href="/keys" className="underline font-semibold">Ключи VPN</Link>{" "}
+            и подключитесь прямо сейчас. Чтобы продолжить пользоваться после пробного периода,
+            выберите{" "}
+            <Link href="/plans" className="underline font-semibold">подходящий тариф</Link>.
+          </p>
+        ) : me?.hasActiveSubscription ? (
           <p>
             <strong>Следующий шаг:</strong> откройте раздел{" "}
             <Link href="/keys" className="underline font-semibold">Ключи VPN</Link>{" "}
@@ -464,7 +481,54 @@ export default function Dashboard() {
       {/* Server migration notifications */}
       <ServerMigrationBanners />
 
-      {isExpiringSoon && !isExpired && (
+      {/* ── Trial period banner ── shown prominently so the user knows they're on
+          a free trial and what happens after it ends. Shown regardless of
+          days-left count (even on day 1) and suppresses the generic orange
+          "expiring soon" warning to avoid double-messaging. */}
+      {isTrial && me?.hasActiveSubscription && (
+        <div className="bg-card border border-emerald-300 dark:border-emerald-700 overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-teal-500" />
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-5">
+            <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
+              <Gift className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                  Пробный период
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 rounded-full">
+                  Бесплатно
+                </span>
+              </div>
+              <p className="text-sm font-semibold">
+                {daysLeft !== null && daysLeft >= 0
+                  ? daysLeft === 0
+                    ? "Пробный период заканчивается сегодня"
+                    : `Осталось ${daysLeft} ${pluralDays(daysLeft)} пробного доступа`
+                  : "Пробный период активен"}
+                {me.subscriptionEndsAt && (
+                  <span className="text-muted-foreground font-normal">
+                    {" "}· до {formatDate(me.subscriptionEndsAt as string | null | undefined)}
+                  </span>
+                )}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                После окончания пробного периода VPN-доступ будет приостановлен.
+                Купите подписку сейчас — она активируется немедленно.
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 text-sm transition-colors whitespace-nowrap"
+            >
+              Выбрать тариф
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {showExpiringSoon && (
         <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 text-sm text-orange-700">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>
@@ -536,14 +600,16 @@ export default function Dashboard() {
           </div>
         </div>
       ) : me?.hasActiveSubscription ? (
-        <div className="bg-card border border-border overflow-hidden">
+        <div className={`bg-card overflow-hidden ${isTrial ? "border border-emerald-200 dark:border-emerald-800" : "border border-border"}`}>
           {/* colour bar */}
-          <div className={`h-1 w-full ${isExpiringSoon ? "bg-orange-400" : "bg-primary"}`} />
+          <div className={`h-1 w-full ${isTrial ? "bg-gradient-to-r from-emerald-400 to-teal-500" : showExpiringSoon ? "bg-orange-400" : "bg-primary"}`} />
           <div className="p-6 flex flex-col sm:flex-row sm:items-center gap-6">
             {/* icon */}
             <div className={`w-14 h-14 flex items-center justify-center shrink-0
-              ${isExpiringSoon ? "bg-orange-100" : "bg-primary/10"}`}>
-              <Shield className={`w-7 h-7 ${isExpiringSoon ? "text-orange-600" : "text-primary"}`} />
+              ${isTrial ? "bg-emerald-50 dark:bg-emerald-950/40" : showExpiringSoon ? "bg-orange-100" : "bg-primary/10"}`}>
+              {isTrial
+                ? <Gift className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+                : <Shield className={`w-7 h-7 ${showExpiringSoon ? "text-orange-600" : "text-primary"}`} />}
             </div>
             {/* info */}
             <div className="flex-1 min-w-0">
@@ -551,13 +617,26 @@ export default function Dashboard() {
                 <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
                   Подписка
                 </span>
-                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full
-                  ${isExpiringSoon
-                    ? "bg-orange-100 text-orange-700"
-                    : "bg-green-100 text-green-700"}`}>
-                  <CheckCircle2 className="w-3 h-3" />
-                  Активна
-                </span>
+                {isTrial ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                      <Gift className="w-3 h-3" />
+                      Пробный период
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Активна
+                    </span>
+                  </>
+                ) : (
+                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full
+                    ${showExpiringSoon
+                      ? "bg-orange-100 text-orange-700"
+                      : "bg-green-100 text-green-700"}`}>
+                    <CheckCircle2 className="w-3 h-3" />
+                    Активна
+                  </span>
+                )}
               </div>
               <div className="text-2xl font-black tracking-tight">{me.currentPlanName}</div>
               {daysLeft !== null && daysLeft >= 0 && (
@@ -573,7 +652,7 @@ export default function Dashboard() {
                   </div>
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${isExpiringSoon ? "bg-orange-400" : "bg-primary"}`}
+                      className={`h-full rounded-full transition-all ${isTrial ? "bg-emerald-500" : showExpiringSoon ? "bg-orange-400" : "bg-primary"}`}
                       style={{ width: `${Math.max(4, Math.min(100, (daysLeft / 30) * 100))}%` }}
                     />
                   </div>
@@ -583,9 +662,12 @@ export default function Dashboard() {
             {/* action */}
             <Link
               href="/plans"
-              className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
+              className={`shrink-0 px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap
+                ${isTrial
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "border border-border hover:border-primary hover:text-primary"}`}
             >
-              Продлить / сменить
+              {isTrial ? "Купить подписку" : "Продлить / сменить"}
             </Link>
           </div>
         </div>

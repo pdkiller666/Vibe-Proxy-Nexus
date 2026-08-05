@@ -129,6 +129,7 @@ export interface Me {
   referredUserCount: number;
   referralLinkHost: string;
   isBanned: boolean;
+  isTrialSubscription: boolean;
 }
 
 export interface Plan {
