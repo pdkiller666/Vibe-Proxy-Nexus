@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -58,6 +58,12 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   sbpEnabled: boolean("sbp_enabled").notNull().default(true),
   sbpQrCodeData: text("sbp_qr_code_data"),
   sbpQrCodeMimeType: text("sbp_qr_code_mime_type"),
+  // Admin-editable Happ iOS routing profile. Stored as JSON with the editable
+  // subset of the full Happ profile (name, directsites, directip). The API
+  // merges this with fixed infrastructure defaults when building the deep link.
+  // null = use built-in default (DEFAULT_DIRECT_SITES from happIosRouting.ts).
+  happIosRoutingProfile: jsonb("happ_ios_routing_profile")
+    .$type<{ name: string; directsites: string[]; directip: string[] } | null>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

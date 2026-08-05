@@ -832,6 +832,16 @@ try {
   `);
   console.log("heal-schema: M-29 node_metric_snapshots table + index");
 
+  // ── M-30: payment_settings.happ_ios_routing_profile — Happ iOS routing ────
+  // Admin-editable Happ iOS routing profile stored as JSONB. Contains the
+  // editable subset {name, directsites, directip}. NULL = use built-in
+  // defaults (resolveHappIosRoutingProfile in happIosRouting.ts).
+  await client.query(`
+    ALTER TABLE payment_settings
+      ADD COLUMN IF NOT EXISTS happ_ios_routing_profile jsonb
+  `);
+  console.log("heal-schema: M-30 payment_settings.happ_ios_routing_profile");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

@@ -2,6 +2,11 @@ import { Router, type IRouter } from "express";
 import { db, paymentSettingsTable } from "@workspace/db";
 import { GetPaymentSettingsResponse } from "@workspace/api-zod";
 import { isPrimaryDomainHealthy } from "../lib/domain";
+import {
+  buildHappIosRoutingUrl,
+  resolveHappIosRoutingProfile,
+  type HappIosRoutingProfile,
+} from "../lib/happIosRouting";
 
 const router: IRouter = Router();
 
@@ -18,6 +23,10 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
     db.select().from(paymentSettingsTable).limit(1).then((rows) => rows[0]),
     isPrimaryDomainHealthy(),
   ]);
+
+  const storedProfile = settings?.happIosRoutingProfile as HappIosRoutingProfile | null | undefined;
+  const happIosRoutingProfile = resolveHappIosRoutingProfile(storedProfile);
+  const happIosRoutingUrl = buildHappIosRoutingUrl(happIosRoutingProfile);
 
   if (!settings) {
     res.json(
@@ -41,13 +50,20 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
         showManualSbpDetails: false,
         hasSbpQr: false,
         primaryDomainHealthy,
+        happIosRoutingUrl,
+        happIosRoutingProfile,
       }),
     );
     return;
   }
 
   res.json(
-    GetPaymentSettingsResponse.parse({ ...withHasSbpQr(settings), primaryDomainHealthy }),
+    GetPaymentSettingsResponse.parse({
+      ...withHasSbpQr(settings),
+      primaryDomainHealthy,
+      happIosRoutingUrl,
+      happIosRoutingProfile,
+    }),
   );
 });
 

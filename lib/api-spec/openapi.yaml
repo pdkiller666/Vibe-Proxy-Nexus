@@ -1944,9 +1944,31 @@ components:
         data: { type: string }
         mimeType: { type: string }
 
+    HappIosRoutingProfile:
+      type: object
+      description: >
+        Admin-editable subset of the Happ iOS routing profile.
+        The API merges this with fixed infrastructure defaults (DNS, geoip URLs,
+        etc.) when building the happ://routing/add/<base64> deep link.
+      required: [name, directsites, directip]
+      properties:
+        name:
+          type: string
+          description: Profile name displayed in Happ (e.g. "VPNexus")
+        directsites:
+          type: array
+          items: { type: string }
+          description: >
+            Xray domain-matcher rules for sites that bypass the tunnel.
+            Format: "domain:example.ru" or "regexp:\\.ru$"
+        directip:
+          type: array
+          items: { type: string }
+          description: CIDR blocks that bypass the tunnel (e.g. "10.0.0.0/8")
+
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy, happIosRoutingUrl, happIosRoutingProfile]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -1989,6 +2011,14 @@ components:
         # server's outbound healthz check failed, which typically indicates the
         # domain is blocked or misconfigured. Useful for admin alerting.
         primaryDomainHealthy: { type: boolean }
+        # Ready-to-use happ://routing/add/<base64> deep link for iOS Happ users.
+        # Always present — falls back to built-in defaults when no custom profile
+        # is stored. Clients display this as a button; iOS Happ opens on tap.
+        happIosRoutingUrl: { type: string }
+        # The effective routing profile currently in use (custom or merged defaults).
+        # Admin reads this to populate the editing form; never null in the response.
+        happIosRoutingProfile:
+          $ref: "#/components/schemas/HappIosRoutingProfile"
 
     PaymentSettingsUpdate:
       type: object
@@ -2013,6 +2043,11 @@ components:
         referralCommissionPercent: { type: integer, minimum: 0, maximum: 100 }
         sbpPaymentUrl: { type: string }
         showManualSbpDetails: { type: boolean }
+        # Admin-editable iOS Happ routing profile. Pass null to reset to defaults.
+        happIosRoutingProfile:
+          oneOf:
+            - $ref: "#/components/schemas/HappIosRoutingProfile"
+            - type: "null"
 
     SubscriptionStatus:
       type: string

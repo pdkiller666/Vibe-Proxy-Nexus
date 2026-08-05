@@ -4531,6 +4531,9 @@ function PaymentSettingsForm() {
 
       {/* QR code section — separate mutation, not part of the main form */}
       <SbpQrSection />
+
+      {/* iOS Happ routing profile — separate mutation */}
+      <HappIosRoutingSection />
     </div>
   );
 }
@@ -4620,6 +4623,173 @@ function SbpQrSection() {
         </div>
       )}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+    </div>
+  );
+}
+
+// ── iOS Happ routing profile editor ──────────────────────────────────────────
+// Standalone section: admin edits the direct-bypass domain / CIDR list and the
+// profile name. Changes are saved via PATCH /admin/payment-settings and do NOT
+// require the main form to be submitted — separate "Save" button below.
+
+/** Strip "domain:" prefix for display; keep other prefixes (regexp:, etc.) intact. */
+function formatSitesForDisplay(sites: string[]): string {
+  return sites
+    .map((s) => (s.startsWith("domain:") ? s.slice(7) : s))
+    .join("\n");
+}
+
+/** Restore full Xray matcher format from a textarea value.
+ *  Lines that already contain ":" are kept as-is (regexp:, full:, etc.).
+ *  Plain domain names get the "domain:" prefix added back. */
+function parseSitesFromDisplay(text: string): string[] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .map((l) => (l.includes(":") ? l : `domain:${l}`));
+}
+
+function HappIosRoutingSection() {
+  const { data: settings } = useGetPaymentSettings();
+  const { mutate: update, isPending } = useUpdatePaymentSettings();
+  const { toast } = useToast();
+
+  const [profileName, setProfileName] = useState("");
+  const [directSitesText, setDirectSitesText] = useState("");
+  const [directIpText, setDirectIpText] = useState("");
+  const [initialized, setInitialized] = useState(false);
+
+  // Seed form from API (effective profile — always non-null from server).
+  if (settings && !initialized) {
+    const p = settings.happIosRoutingProfile;
+    setProfileName(p.name);
+    setDirectSitesText(formatSitesForDisplay(p.directsites));
+    setDirectIpText(p.directip.join("\n"));
+    setInitialized(true);
+  }
+
+  function handleSave() {
+    const profile = {
+      name: profileName.trim() || "VPNexus",
+      directsites: parseSitesFromDisplay(directSitesText),
+      directip: directIpText
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0),
+    };
+    update(
+      { data: { happIosRoutingProfile: profile } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
+          toast({ title: "Профиль iOS маршрутизации сохранён" });
+        },
+        onError: () => toast({ title: "Ошибка сохранения профиля", variant: "destructive" }),
+      },
+    );
+  }
+
+  function handleReset() {
+    update(
+      { data: { happIosRoutingProfile: null } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
+          setInitialized(false); // re-seed form from refreshed defaults
+          toast({ title: "Профиль сброшен до встроенных значений" });
+        },
+        onError: () => toast({ title: "Ошибка сброса профиля", variant: "destructive" }),
+      },
+    );
+  }
+
+  return (
+    <div className="border border-border p-4 space-y-4 mt-2">
+      <div>
+        <p className="text-sm font-semibold">iOS Happ — профиль маршрутизации</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Управляйте списком сайтов и IP-адресов, которые будут проходить напрямую (обходить тоннель)
+          у iOS-пользователей. Изменения применяются мгновенно — пользователи переимпортируют
+          профиль нажатием кнопки на странице ключей.
+        </p>
+      </div>
+
+      {/* Current deep link preview */}
+      {settings?.happIosRoutingUrl && (
+        <div className="space-y-1">
+          <p className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Текущая ссылка профиля</p>
+          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+            <span className="truncate flex-1">{settings.happIosRoutingUrl}</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Пользователи открывают эту ссылку на iPhone — Happ применяет профиль автоматически.
+          </p>
+        </div>
+      )}
+
+      {/* Profile name */}
+      <div className="space-y-1">
+        <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+          Название профиля
+        </label>
+        <Input
+          value={profileName}
+          onChange={(e) => setProfileName(e.target.value)}
+          placeholder="VPNexus"
+          className="rounded-none max-w-[240px]"
+        />
+        <p className="text-xs text-muted-foreground">Отображается в Happ при импорте.</p>
+      </div>
+
+      {/* Direct sites textarea */}
+      <div className="space-y-1">
+        <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+          Сайты напрямую (по одному на строку)
+        </label>
+        <Textarea
+          value={directSitesText}
+          onChange={(e) => setDirectSitesText(e.target.value)}
+          placeholder={"avito.ru\nsberbankl.ru\nregexp:\\.ru$"}
+          rows={10}
+          className="rounded-none font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Просто доменное имя (без префикса) → будет добавлен <code>domain:</code>.
+          Строки с двоеточием (например <code>regexp:\\.ru$</code>) принимаются как есть.
+        </p>
+      </div>
+
+      {/* Direct IPs textarea */}
+      <div className="space-y-1">
+        <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
+          IP-диапазоны напрямую (CIDR, по одному на строку)
+        </label>
+        <Textarea
+          value={directIpText}
+          onChange={(e) => setDirectIpText(e.target.value)}
+          placeholder={"10.0.0.0/8\n192.168.0.0/16"}
+          rows={4}
+          className="rounded-none font-mono text-xs"
+        />
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={handleSave}
+          disabled={isPending}
+          className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {isPending ? "Сохраняем..." : "Сохранить профиль"}
+        </button>
+        <button
+          onClick={handleReset}
+          disabled={isPending}
+          className="border border-border px-4 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          Сбросить до умолчаний
+        </button>
+      </div>
     </div>
   );
 }

@@ -305,7 +305,13 @@ export const GetPaymentSettingsResponse = zod.object({
   "sbpPaymentUrl": zod.string(),
   "showManualSbpDetails": zod.boolean(),
   "hasSbpQr": zod.boolean(),
-  "primaryDomainHealthy": zod.boolean()
+  "primaryDomainHealthy": zod.boolean(),
+  "happIosRoutingUrl": zod.string(),
+  "happIosRoutingProfile": zod.object({
+  "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
+  "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
+  "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
+}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n')
 })
 
 
@@ -1081,7 +1087,12 @@ export const UpdatePaymentSettingsBody = zod.object({
   "primaryDomain": zod.string().optional(),
   "referralCommissionPercent": zod.number().min(updatePaymentSettingsBodyReferralCommissionPercentMin).max(updatePaymentSettingsBodyReferralCommissionPercentMax).optional(),
   "sbpPaymentUrl": zod.string().optional(),
-  "showManualSbpDetails": zod.boolean().optional()
+  "showManualSbpDetails": zod.boolean().optional(),
+  "happIosRoutingProfile": zod.union([zod.object({
+  "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
+  "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
+  "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
+}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),zod.null()]).optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -1105,7 +1116,13 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "sbpPaymentUrl": zod.string(),
   "showManualSbpDetails": zod.boolean(),
   "hasSbpQr": zod.boolean(),
-  "primaryDomainHealthy": zod.boolean()
+  "primaryDomainHealthy": zod.boolean(),
+  "happIosRoutingUrl": zod.string(),
+  "happIosRoutingProfile": zod.object({
+  "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
+  "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
+  "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
+}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n')
 })
 
 

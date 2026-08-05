@@ -3,6 +3,11 @@ import { eq } from "drizzle-orm";
 import { db, paymentSettingsTable } from "@workspace/db";
 import { UpdatePaymentSettingsBody, UpdatePaymentSettingsResponse, UploadSbpQrBody } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
+import {
+  buildHappIosRoutingUrl,
+  resolveHappIosRoutingProfile,
+  type HappIosRoutingProfile,
+} from "../../lib/happIosRouting";
 
 const router: IRouter = Router();
 
@@ -41,12 +46,30 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
           referralCommissionPercent: parsed.data.referralCommissionPercent ?? 0,
           sbpPaymentUrl: parsed.data.sbpPaymentUrl ?? "",
           showManualSbpDetails: parsed.data.showManualSbpDetails ?? false,
+          happIosRoutingProfile: parsed.data.happIosRoutingProfile ?? null,
         })
         .returning();
 
-  // Strip QR blob from response (hasSbpQr comes via /payment-settings GET)
-  const { sbpQrCodeData: _d, sbpQrCodeMimeType: _m, ...rest } = settings!;
-  res.json(UpdatePaymentSettingsResponse.parse({ ...rest, hasSbpQr: Boolean(_d) }));
+  // Compute iOS routing URL from the saved profile (or defaults if null).
+  const storedProfile = settings!.happIosRoutingProfile as HappIosRoutingProfile | null;
+  const happIosRoutingProfile = resolveHappIosRoutingProfile(storedProfile);
+  const happIosRoutingUrl = buildHappIosRoutingUrl(happIosRoutingProfile);
+
+  // Strip QR blob and raw profile from response — replace with derived fields.
+  const {
+    sbpQrCodeData: _d,
+    sbpQrCodeMimeType: _m,
+    happIosRoutingProfile: _hp,
+    ...rest
+  } = settings!;
+
+  res.json(UpdatePaymentSettingsResponse.parse({
+    ...rest,
+    hasSbpQr: Boolean(_d),
+    primaryDomainHealthy: true, // live check skipped on write — client refetches
+    happIosRoutingUrl,
+    happIosRoutingProfile,
+  }));
 });
 
 // ── PUT /admin/payment-settings/sbp-qr ───────────────────────────────────────

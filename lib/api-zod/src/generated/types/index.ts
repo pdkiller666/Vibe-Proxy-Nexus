@@ -47,6 +47,7 @@ export * from './getVpnNodeMetricsMetric';
 export * from './getVpnNodeMetricsParams';
 export * from './getVpnNodeSystemLogsParams';
 export * from './getVpnNodeSystemLogsProcess';
+export * from './happIosRoutingProfile';
 export * from './healthStatus';
 export * from './listAdminPaymentsParams';
 export * from './listAdminTicketsParams';

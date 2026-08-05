@@ -218,6 +218,18 @@ export interface SbpQrUpload {
   mimeType: string;
 }
 
+/**
+ * Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ://routing/add/<base64> deep link.
+ */
+export interface HappIosRoutingProfile {
+  /** Profile name displayed in Happ (e.g. "VPNexus") */
+  name: string;
+  /** Xray domain-matcher rules for sites that bypass the tunnel. Format: "domain:example.ru" or "regexp:\\.ru$" */
+  directsites: string[];
+  /** CIDR blocks that bypass the tunnel (e.g. "10.0.0.0/8") */
+  directip: string[];
+}
+
 export interface PaymentSettings {
   sbpPhone: string;
   sbpBank: string;
@@ -242,6 +254,8 @@ export interface PaymentSettings {
   showManualSbpDetails: boolean;
   hasSbpQr: boolean;
   primaryDomainHealthy: boolean;
+  happIosRoutingUrl: string;
+  happIosRoutingProfile: HappIosRoutingProfile;
 }
 
 export interface PaymentSettingsUpdate {
@@ -277,6 +291,7 @@ export interface PaymentSettingsUpdate {
   referralCommissionPercent?: number;
   sbpPaymentUrl?: string;
   showManualSbpDetails?: boolean;
+  happIosRoutingProfile?: HappIosRoutingProfile | null;
 }
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
