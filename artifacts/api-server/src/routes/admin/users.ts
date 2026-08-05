@@ -115,10 +115,12 @@ async function enrichUsersWithTraffic(users: User[]) {
       planName: plansTable.name,
       billingType: plansTable.billingType,
       startsAt: subscriptionsTable.startsAt,
+      endsAt: subscriptionsTable.endsAt,
       lastBilledAt: subscriptionsTable.lastBilledAt,
       extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
       extraTrafficGb: subscriptionsTable.extraTrafficGb,
       trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
+      isTrial: subscriptionsTable.isTrial,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
@@ -149,6 +151,8 @@ async function enrichUsersWithTraffic(users: User[]) {
   const extraDeviceSlotsByUser = new Map(activeRows.map((r) => [r.userId, r.extraDeviceSlots]));
   const extraTrafficGbByUser = new Map(activeRows.map((r) => [r.userId, r.extraTrafficGb]));
   const trafficLimitExceededAtByUser = new Map(activeRows.map((r) => [r.userId, r.trafficLimitExceededAt]));
+  const isTrialByUser = new Map(activeRows.map((r) => [r.userId, r.isTrial]));
+  const trialEndsAtByUser = new Map(activeRows.map((r) => [r.userId, r.endsAt]));
 
   // Referral info: who referred each user in (by email, for display), and
   // how many accounts each user has referred in themselves.
@@ -245,6 +249,12 @@ async function enrichUsersWithTraffic(users: User[]) {
       subscriptionStartsAt: current?.startsAt ?? null,
       subscriptionEndsAt: current?.endsAt ?? null,
       subscriptionBillingType: current?.billingType ?? null,
+      isOnTrial: isTrialByUser.get(user.id) ?? false,
+      trialEndsAt: (() => {
+        if (!(isTrialByUser.get(user.id) ?? false)) return null;
+        const endsAt = trialEndsAtByUser.get(user.id) ?? null;
+        return endsAt ? endsAt.toISOString() : null;
+      })(),
     };
   });
 }
@@ -481,12 +491,20 @@ router.patch("/admin/users/:userId/subscription", requireAuth, requireAdmin, asy
     .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
     .limit(1);
 
-  // Extend from the current active period's end if it hasn't lapsed yet
-  // (matches the renewal-via-payment logic in payments.ts); otherwise start
-  // fresh from now.
-  const startsAt = currentActive?.endsAt && currentActive.endsAt > now ? currentActive.endsAt : now;
+  // Hourly plans have no fixed end date — billing runs until balance depletes.
+  // Always start from now so the clock begins immediately; ignoring any prior
+  // endsAt on the old subscription avoids carrying over a stale fixed deadline.
+  //
+  // Monthly/annual plans: extend from the current period's end if it hasn't
+  // lapsed yet (matches the renewal-via-payment logic in payments.ts).
+  const isHourlyPlan = plan.billingType === "hourly";
+  const startsAt = isHourlyPlan
+    ? now
+    : (currentActive?.endsAt && currentActive.endsAt > now ? currentActive.endsAt : now);
   const durationDays = parsed.data.durationDays ?? plan.durationDays;
-  const endsAt = new Date(startsAt.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  const endsAt: Date | null = isHourlyPlan
+    ? null
+    : new Date(startsAt.getTime() + durationDays * 24 * 60 * 60 * 1000);
 
   await db.transaction(async (tx) => {
     // A user should only ever have one active subscription; defensively

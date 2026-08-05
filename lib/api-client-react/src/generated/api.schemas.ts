@@ -671,6 +671,9 @@ export interface AdminUser {
   /** @nullable */
   adminNote?: string | null;
   isBanned: boolean;
+  isOnTrial: boolean;
+  /** @nullable */
+  trialEndsAt?: string | null;
 }
 
 export interface AdminUserProfileUpdate {

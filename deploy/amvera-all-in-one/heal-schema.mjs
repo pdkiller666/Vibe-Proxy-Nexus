@@ -851,6 +851,20 @@ try {
   `);
   console.log("heal-schema: M-30 payment_settings.happ_ios_routing_profile");
 
+  // ── M-32: subscriptions.is_trial — explicit trial flag ───────────────────
+  // Replaces the old payment-heuristic in meResponse.ts (check for a confirmed
+  // payment linked to the subscription). Admin-assigned subscriptions are
+  // created without a payment row, just like trials — the heuristic can't
+  // distinguish them. The new flag is set to true only in auth.ts at trial
+  // creation; admin routes leave it at the DEFAULT false. Existing rows all
+  // default to false, which is safe: under-detection (a real trial row shows no
+  // banner) is less harmful than over-detection (an admin grant wrongly shows
+  // "Пробный период" and "Купить тариф" to a legitimately granted user).
+  await client.query(`
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_trial boolean NOT NULL DEFAULT false
+  `);
+  console.log("heal-schema: M-32 subscriptions.is_trial");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

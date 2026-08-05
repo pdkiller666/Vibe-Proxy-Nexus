@@ -2408,6 +2408,7 @@ components:
           referralCode,
           referredUserCount,
           isBanned,
+          isOnTrial,
         ]
       properties:
         id: { type: integer }
@@ -2505,6 +2506,10 @@ components:
         adminNote: { type: ["string", "null"] }
         # true while the account is administratively blocked.
         isBanned: { type: boolean }
+        # true when the user's currently active subscription has isTrial=true.
+        isOnTrial: { type: boolean }
+        # When the trial subscription expires (null if not on trial or no endsAt).
+        trialEndsAt: { type: ["string", "null"], format: date-time }
 
     AdminUserProfileUpdate:
       type: object

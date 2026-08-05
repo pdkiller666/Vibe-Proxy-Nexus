@@ -3722,7 +3722,7 @@ function UsersManagement() {
   const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
-  const [subscriptionFilter, setSubscriptionFilter] = useState<"all" | "active" | "none">("all");
+  const [subscriptionFilter, setSubscriptionFilter] = useState<"all" | "active" | "trial" | "none">("all");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic" | "online">("date_desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -3832,7 +3832,8 @@ function UsersManagement() {
     )
     .filter((u) => roleFilter === "all" || u.role === roleFilter)
     .filter((u) => {
-      if (subscriptionFilter === "active") return u.subscriptionStatus === "active";
+      if (subscriptionFilter === "active") return u.subscriptionStatus === "active" && !u.isOnTrial;
+      if (subscriptionFilter === "trial") return u.isOnTrial === true;
       if (subscriptionFilter === "none") return u.subscriptionStatus !== "active" && !u.activePlanName;
       return true;
     })
@@ -3881,6 +3882,7 @@ function UsersManagement() {
         >
           <option value="all">Все подписки</option>
           <option value="active">С активной</option>
+          <option value="trial">Пробный период</option>
           <option value="none">Без подписки</option>
         </select>
         <select
@@ -3977,6 +3979,14 @@ function UsersManagement() {
                   {user.isBanned && (
                     <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 rounded cursor-default">
                       ЗАБЛ
+                    </span>
+                  )}
+                  {user.isOnTrial && (
+                    <span
+                      title={user.trialEndsAt ? `Пробный период истекает ${new Date(user.trialEndsAt).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}` : "Пробный период"}
+                      className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-300 rounded cursor-default"
+                    >
+                      ПРОБНЫЙ
                     </span>
                   )}
                   {user.adminNote && (

@@ -1,5 +1,5 @@
 import { and, count, desc, eq, gt, isNull, or, sum } from "drizzle-orm";
-import { db, balanceTransactionsTable, paymentsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
+import { db, balanceTransactionsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
 import { resolvePublicAddress } from "./domain";
 
 export async function buildMeData(user: User, requestHost?: string) {
@@ -28,6 +28,7 @@ export async function buildMeData(user: User, requestHost?: string) {
       trafficLimitGb: plansTable.trafficLimitGb,
       extraTrafficGb: subscriptionsTable.extraTrafficGb,
       trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
+      isTrial: subscriptionsTable.isTrial,
     })
     .from(subscriptionsTable)
     .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
@@ -65,23 +66,10 @@ export async function buildMeData(user: User, requestHost?: string) {
       : null;
   const trafficLimitExceeded = Boolean(activeSubscription?.trafficLimitExceededAt);
 
-  // Detect trial: a subscription that was never backed by a completed payment
-  // (trial subscriptions are inserted directly in auth.ts without going through
-  // the payment flow, so they have no linked payment row with status "completed").
-  let isTrialSubscription = false;
-  if (activeSubscription) {
-    const [completedPayment] = await db
-      .select({ id: paymentsTable.id })
-      .from(paymentsTable)
-      .where(
-        and(
-          eq(paymentsTable.subscriptionId, activeSubscription.subscriptionId),
-          eq(paymentsTable.status, "confirmed"),
-        ),
-      )
-      .limit(1);
-    isTrialSubscription = !completedPayment;
-  }
+  // Detect trial: use the isTrial flag set at subscription creation time.
+  // Trial subscriptions are inserted with isTrial=true in auth.ts; admin-assigned
+  // subscriptions default to false so they never trigger the trial banner.
+  const isTrialSubscription = Boolean(activeSubscription?.isTrial);
 
   const [settings] = await db.select({ referralCommissionPercent: paymentSettingsTable.referralCommissionPercent }).from(paymentSettingsTable).limit(1);
 

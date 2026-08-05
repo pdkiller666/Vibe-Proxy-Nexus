@@ -1535,7 +1535,9 @@ export const ListAdminUsersResponseItem = zod.object({
   "activeSubscriptionLastBilledAt": zod.coerce.date().nullish(),
   "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isOnTrial": zod.boolean(),
+  "trialEndsAt": zod.coerce.date().nullish()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
 
@@ -1642,7 +1644,9 @@ export const UpdateUserProfileResponse = zod.object({
   "activeSubscriptionLastBilledAt": zod.coerce.date().nullish(),
   "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isOnTrial": zod.boolean(),
+  "trialEndsAt": zod.coerce.date().nullish()
 })
 
 
@@ -1705,7 +1709,9 @@ export const UpdateUserRoleResponse = zod.object({
   "activeSubscriptionLastBilledAt": zod.coerce.date().nullish(),
   "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isOnTrial": zod.boolean(),
+  "trialEndsAt": zod.coerce.date().nullish()
 })
 
 
@@ -1762,7 +1768,9 @@ export const UpdateUserSubscriptionResponse = zod.object({
   "activeSubscriptionLastBilledAt": zod.coerce.date().nullish(),
   "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isOnTrial": zod.boolean(),
+  "trialEndsAt": zod.coerce.date().nullish()
 })
 
 
@@ -1819,7 +1827,9 @@ export const UpdateUserExtraSlotsResponse = zod.object({
   "activeSubscriptionLastBilledAt": zod.coerce.date().nullish(),
   "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isOnTrial": zod.boolean(),
+  "trialEndsAt": zod.coerce.date().nullish()
 })
 
 
@@ -1876,7 +1886,9 @@ export const AdminSetUserBalanceResponse = zod.object({
   "activeSubscriptionLastBilledAt": zod.coerce.date().nullish(),
   "activeSubscriptionBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
   "adminNote": zod.string().nullish(),
-  "isBanned": zod.boolean()
+  "isBanned": zod.boolean(),
+  "isOnTrial": zod.boolean(),
+  "trialEndsAt": zod.coerce.date().nullish()
 })
 
 

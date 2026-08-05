@@ -1,4 +1,4 @@
-import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -58,6 +58,11 @@ export const subscriptionsTable = pgTable(
     // need to clear it because renewals create a brand new subscription row
     // that starts with this null by default.
     trafficLimitExceededAt: timestamp("traffic_limit_exceeded_at", { withTimezone: true }),
+    // True only for subscriptions created as a free trial during registration.
+    // Admin-assigned subscriptions (PATCH /admin/users/:userId/subscription) are
+    // inserted with isTrial=false (the default), so those users never see the
+    // "Пробный период" banner. Replaces the old payment-heuristic in meResponse.ts.
+    isTrial: boolean("is_trial").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

@@ -195,6 +195,7 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
           status: "active",
           startsAt,
           endsAt,
+          isTrial: true,
         });
         logger.info({ userId: user.id, trialDays, planId: trialPlan.id }, "Trial subscription created");
 
