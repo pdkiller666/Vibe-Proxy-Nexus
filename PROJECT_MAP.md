@@ -88,8 +88,10 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
     `GET /api/payments/:id/screenshot/image`
   - `vpnKeys.ts` — `GET /api/vpn-keys/me`, `POST /api/vpn-keys`
     (требует активную подписку и свободный слот; `nodeId` — явный или автовыбор,
-    пропускает переполненные ноды), `DELETE /api/vpn-keys/:id`,
-    `GET /api/vpn-keys/subscription-url`
+    пропускает переполненные ноды), `PATCH /api/vpn-keys/:id` (обновить label/description),
+    `DELETE /api/vpn-keys/:id`, `GET /api/vpn-keys/subscription-url`,
+    `POST /api/vpn-keys/:id/relocate` (перенести ключ на другую ноду: выдаёт новый ключ
+    на целевой ноде, отзывает старый)
   - `subscription.ts` — публичный `GET /api/sub/:token` (HMAC-токен, без cookie-авторизации).
     Поддерживает три формата через `?format=`:
     - *(по умолчанию)* — base64-список `vless://` URI всех активных ключей; работает в любом клиенте
@@ -102,6 +104,8 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
   - `extraSlotOrder.ts` — `POST /api/extra-slot-order` (создать заказ на доп. устройство;
     если цена=0 и `allowFreeExtraDeviceSlot` — выдаёт сразу бесплатно),
     `DELETE /api/extra-slot-order/:id`
+  - `extraTrafficOrder.ts` — `POST /api/extra-traffic-order` (заказ на доп. трафик,
+    аналогично extra-slot), `DELETE /api/extra-traffic-order/:paymentId`
   - `balanceTopupOrder.ts` — `POST /api/balance-topup-order`, `DELETE /api/balance-topup-order/:id`
   - `balanceTransactions.ts` — `GET /api/balance-transactions/me`
   - `yoomoney.ts` — `POST /api/yoomoney/notification` (HMAC-подписанный вебхук от ЮMoney;
@@ -143,6 +147,20 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
       `POST /admin/support-tickets/:id/messages`, `PATCH /admin/support-tickets/:id/status`
     - `vpnKeys.ts` — `GET /admin/vpn-keys`, `POST /admin/vpn-keys/issue` (выдать ключ вручную),
       `DELETE /admin/vpn-keys/:id`
+    - `inviteLinks.ts` — `GET /admin/invite-links`, `POST /admin/invite-links` (создать ссылку;
+      опционально: `planId` — переопределяет тариф для регистрирующихся по этой ссылке, `maxUses`,
+      `expiresAt`, `note`), `PATCH /admin/invite-links/:id` (обновить), `DELETE /admin/invite-links/:id`,
+      `GET /admin/invite-links/:id/users` (список зарегистрировавшихся по ссылке)
+    - `notifications.ts` — `GET /admin/notifications` (сводка системных событий для бейджа)
+    - `referrals.ts` — `GET /admin/referrals` (аналитика реферальной программы)
+    - `systemEvents.ts` — `GET /admin/system-events` (список системных событий:
+      `xray_config_remount`, `node_overloaded`, `node_unreachable`, `node_recovered` и др.),
+      `POST /admin/system-events/:id/acknowledge` (пометить как просмотренное)
+    - `vpnNodeProvisioning.ts` — `POST /admin/vpn-nodes/:id/provision` (запустить SSH-провижининг
+      на VPS: устанавливает Docker, Xray, management API, генерирует секрет, возвращает job-id),
+      `GET /admin/vpn-nodes/:id/provision` (SSE-стрим логов выполнения)
+    - `billingDebug.ts` — `GET /admin/debug/billing` (диагностика застывших почасовых подписок),
+      `POST /admin/debug/billing/fix/:subscriptionId` (принудительно исправить startsAt)
 
 - `src/lib/`:
   - `auth.ts` — middlewares: `requireAuth` (сессия + проверка `isBanned` → 403 AccountBanned), `requireAuthAllowBanned` (только сессия, без `isBanned` — только для `GET /me`), `requireAdmin`
@@ -161,19 +179,54 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
     только если `lastTrafficAt` в пределах `IDLE_GRACE_MS` = 15 мин;
     оптимистичная блокировка через `lastBilledAt` (защита от двойного списания);
     при нулевом балансе истекает подписку и отзывает ключи
+  - `balanceCheckout.ts` — `checkoutFromBalance(userId, target)`: транзакционная оплата
+    подписки с баланса (`billingType: hourly` и ежемесячные через баланс);
+    `FOR UPDATE` + inner dedup (confirmed+pending) защищает от двойного дебита при retry;
+    используется `autoRenew.ts` и напрямую из роута подписки
+  - `autoRenew.ts` — `runAutoRenew()` / `startAutoRenewJob()`: раз в час ищет ежемесячные
+    подписки с auto-renew, у которых до истечения < 24 ч, и пытается продлить через
+    `checkoutFromBalance`; при нехватке средств — уведомляет пользователя; при техошибке —
+    пишет admin system-event
+  - `reconcileBalancePayments.ts` — `runReconciliation()`: каждые 10 мин ищет зависшие
+    pending balance-платежи (старше 5 мин) и компенсирует их — возвращает деньги на баланс,
+    переводит статус в `rejected`
   - `confirmPayment.ts` — транзакционное, идемпотентное подтверждение платежа;
     `FOR UPDATE` lock, расчёт цепочки `startsAt`/`endsAt`, реферальная комиссия,
     `ensureActiveKeyForUser` (вне транзакции — намеренно)
+  - `nodeMonitoring.ts` — `startNodeMonitoringJob()`: периодически опрашивает health + system/status
+    каждой remote-ноды; после 3 неуспешных проб подряд — автоматически деактивирует ноду
+    (`isActive = false`), мигрирует все активные ключи, пишет system event `node_unreachable`;
+    как только нода отвечает снова — восстанавливает `isActive = true`, пишет `node_recovered`;
+    также записывает метрики CPU/RAM/Disk в `node_metric_snapshots` (не чаще раза в 5 мин)
+  - `sshProvisioner.ts` — SSH-провижининг удалённых нод: подключается к VPS по SSH (node-ssh),
+    устанавливает Docker+Nginx/Caddy+контейнер management API, генерирует TLS-сертификат,
+    пишет лог построчно в `provisioning_jobs`; фанаутит live-логи через SSE
+  - `xrayClientConfig.ts` — генерация Xray JSON-конфига для клиента (`buildXrayClientConfig`):
+    VLESS outbound(ы) + правила маршрутизации RF-обхода (geoip:ru, .ru/.рф домены, Яндекс/ВК/Сбер);
+    **не** использует `geoip:ru` через тег (Happ iOS не имеет этой категории в geoip.dat)
   - `xrayStats.ts` — gRPC-клиент для Xray Stats API (protobufjs)
   - `password.ts` — хэширование паролей (scrypt, N=16384)
   - `passwordReset.ts` — токены сброса (32 байта hex, SHA-256 в БД, TTL 30 мин, одноразовые)
   - `loginRateLimit.ts` — 5 попыток / 15 мин, in-memory Map (не синхронизируется при multi-instance)
+  - `rateLimit.ts` — общий rate-limiting middleware поверх in-memory Map
   - `vless.ts` — генерация UUID и VLESS+WS-ссылок, `generatePaymentReference`; `buildServingVlessLink`: пропускает замену домена на `vpnexus.pro` для удалённых нод (`managementApiUrl != null`); для IP-нод: `pinnedPeerCertSha256` если задан `certSha256`, иначе `allowInsecure=1`; определение флага страны по полю `region` (word-boundary regex, `vdsina` исключён из правила России)
   - `subscription.ts` — HMAC-токены подписочной ссылки, `BRAND_NAME`, `SUBSCRIPTION_UPDATE_INTERVAL_HOURS` = 3
   - `xray.ts` — правка живого конфига Xray на диске + `supervisorctl restart xray`; `addXrayClient(uuid, email, limitIp?)` принимает опциональный `limitIp` и добавляет его в объект клиента (backward-compatible); все новые ключи получают `limitIp: 1`
+  - `domain.ts` — `resolveServingDomain(req)`: выбирает активный домен между `primaryDomain`
+    из настроек и техническим Amvera-доменом из запроса (с fallback через healthz-check)
+  - `happIosRouting.ts` — правила маршрутизации для Happ iOS: корректно собирает routing rules
+    без тегов geoip/geosite, которых нет в минимальном geoip.dat Happ
+  - `imageValidation.ts` — `validateImageUpload`: MIME allowlist (jpeg/png/webp), magic-byte check,
+    лимит 8 МБ base64 — используется при загрузке скриншотов и QR-кодов
+  - `referralCode.ts` — генерация и валидация уникальных реферальных кодов
+  - `appDownloadLinks.ts` — `getAppDownloadLinks()`: ссылки на скачивание VPN-клиентов (Happ,
+    v2rayNG, v2rayN, Streisand) — используются на лендинге и странице ключей
+  - `corsOrigins.ts` — допустимые CORS-origins (dev/prod)
+  - `csrf.ts` — CSRF-хелперы (partial implementation, не активирован в проде)
   - `staticServer.ts` — отдаёт собранный фронтенд из `STATIC_DIR`
   - `meResponse.ts` — общий билдер данных для `/api/me`; считает `deviceSlots` =
-    `plan.devicesIncluded + subscription.extraDeviceSlots`
+    `plan.devicesIncluded + subscription.extraDeviceSlots`; `trafficLimitGb` =
+    `plan.trafficLimitGb + subscription.extraTrafficGb` (эффективный лимит)
   - `keyIssuance.ts` — логика выдачи VPN-ключа (проверка слотов, нод, добавление в Xray); передаёт `limitIp: 1` в `addXrayClient` и `addRemoteXrayClient` — покрывает все пути выдачи (ручной, auto после оплаты/анбана, trial)
   - `seedAdmin.ts` — при старте создаёт первого админа из `ADMIN_EMAIL`/`ADMIN_PASSWORD`
   - `backfillReferralCodes.ts` — при старте назначает `referral_code` старым строкам, у которых он пустой
@@ -261,7 +314,7 @@ lib/api-spec/openapi.yaml  (источник истины — ВСЕГДА ре�
 | `sessions` | token (SHA-256 хэш, PK), userId, expiresAt | БД-сессии (кука `vpn_session`, 30 дней); токен хранится захэшированным |
 | `password_reset_tokens` | token (SHA-256 хэш, PK), userId, expiresAt | одноразовые токены сброса пароля (TTL 30 мин); токен хранится захэшированным |
 | `plans` | name, description, priceRub, durationDays, devicesIncluded (default 1), trafficLimitGb (nullable=безлимит), billingType (monthly/hourly), hourlyRateKopecks (nullable), isActive | тарифные планы |
-| `subscriptions` | userId, planId, status (pending_payment/active/expired/cancelled/rejected), startsAt, endsAt (nullable для hourly), lastBilledAt (nullable, для hourly), extraDeviceSlots (default 0), trafficLimitExceededAt, revokedReason | подписки; `extraDeviceSlots` — доп. слоты, купленные в рамках этой подписки |
+| `subscriptions` | userId, planId, status (pending_payment/active/expired/cancelled/rejected), startsAt, endsAt (nullable для hourly), lastBilledAt (nullable, для hourly), extraDeviceSlots (default 0), extraTrafficGb (default 0), trafficLimitExceededAt (nullable), revokedReason (nullable) | подписки; `extraDeviceSlots`/`extraTrafficGb` — доп. слоты/трафик, купленные в рамках этой подписки |
 | `payments` | subscriptionId (nullable), userId, type (subscription/extra_device_slot/balance_topup/extra_traffic), provider (manual_sbp/yoomoney/freekassa[legacy]), amountRub, status (pending/confirmed/rejected), reference (уникальный код), userNote (nullable, minLength 0), screenshotData (base64, Postgres), screenshotMimeType, hasScreenshot (вычисляемое), rejectionReason | платежи |
 | `payment_settings` | sbpPhone, sbpBank, sbpRecipientName, instructions, sbpPaymentUrl (ссылка на платёж в банке), showManualSbpDetails (toggle реквизитов), sbpQrCodeData (base64 QR), sbpQrCodeMimeType, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, trialEnabled, trialDays, minHourlyTopupRub, primaryDomain, referralCommissionPercent, yookassaEnabled, sbpEnabled | синглтон-настройки оплаты и продуктовые параметры |
 | `vpn_nodes` | name, region, host, port (default 443), sni, publicKey, shortId, isActive, maxUsers (nullable=безлимит), managementApiUrl (nullable), managementApiSecret (nullable), certSha256 (nullable) | VPN-ноды; `activeUserCount` вычисляется на лету; `managementApiUrl != null` = удалённая нода; `certSha256` — SHA-256 fingerprint сертификата для IP-нод (вместо `allowInsecure=1`) |
@@ -269,6 +322,10 @@ lib/api-spec/openapi.yaml  (источник истины — ВСЕГДА ре�
 | `balance_transactions` | userId, amountKopecks, type (topup/debit/refund/referral), paymentId (nullable FK), description | лог всех движений баланса; отображается на странице Платежи |
 | `support_tickets` | userId, subject, status (open/answered/closed) | тикеты поддержки |
 | `support_messages` | ticketId, authorId, body | сообщения в тикетах |
+| `invite_links` | code (unique, 12 символов), note (nullable), createdByUserId, planId (nullable FK→plans — переопределяет тариф при регистрации), maxUses (nullable=∞), usedCount (default 0), isActive, expiresAt (nullable) | инвайт-ссылки, создаваемые администратором; приоритетнее `users.referral_code` при регистрации |
+| `system_events` | eventType (xray_config_remount / node_overloaded / node_unreachable / node_recovered / auto_renew_failed / auto_renew_error / key_migrated и др.), userId (nullable), metadata (JSONB), acknowledgedAt (nullable) | системные события от фоновых задач и мониторинга нод; отображаются в админ-панели |
+| `node_metric_snapshots` | nodeId (FK→vpn_nodes), cpuPercent, ramPercent, diskPercent, createdAt | исторические метрики нод (CPU/RAM/Disk), запись раз в 5 мин на ноду; строки старше 90 дней удаляются |
+| `provisioning_jobs` | nodeId (nullable FK→vpn_nodes), status (pending/running/done/failed), logs (JSONB-массив строк с уровнем/текстом/timestamp), createdAt, updatedAt | журнал SSH-провижининга новых нод; логи пишутся построчно, отдаются клиенту через SSE |
 
 Миграции — через `drizzle-kit push` (`pnpm --filter @workspace/db run push` в dev;
 в проде — шагом в `entrypoint.sh` при каждом старте контейнера, без файлов миграций).
@@ -324,7 +381,9 @@ DROP COLUMN), которые drizzle-kit push не может выполнить
               PostgreSQL (users, sessions, password_reset_tokens, plans,
                           subscriptions, payments, payment_settings,
                           vpn_nodes, vpn_keys, balance_transactions,
-                          support_tickets, support_messages)
+                          support_tickets, support_messages,
+                          invite_links, system_events,
+                          node_metric_snapshots, provisioning_jobs)
 
 ЮMoney → POST /api/yoomoney/notification (HMAC webhook) → confirmPaymentById()
 
