@@ -4,8 +4,11 @@ import { useToast } from "@/hooks/use-toast";
 
 export type AttachmentValue = { data: string; mimeType: string };
 
-const MAX_FILE_BYTES = 5.5 * 1024 * 1024; // 5.5 MB
+const MAX_FILE_BYTES = 5.5 * 1024 * 1024; // 5.5 MB per file
 const MAX_ATTACHMENTS = 4;
+// Combined raw-bytes budget so the base64 payload stays well under the 8 MB
+// Express body limit (base64 adds ~33% overhead; 5 MB raw → ~6.7 MB base64).
+const MAX_TOTAL_BYTES = 5 * 1024 * 1024; // 5 MB total across all files
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -56,6 +59,23 @@ export function SupportAttachmentPicker({
       toast({
         title: "Файл слишком большой",
         description: "Максимальный размер одного вложения — 5,5 МБ.",
+        variant: "destructive",
+      });
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
+    // Check combined size before reading — base64 adds ~33% overhead,
+    // so we budget the raw bytes here to stay under the server's 8 MB limit.
+    const currentTotalBytes = value.reduce((sum, a) => {
+      // base64 string length * 0.75 ≈ raw bytes
+      return sum + Math.ceil((a.data.length * 3) / 4);
+    }, 0);
+    if (currentTotalBytes + file.size > MAX_TOTAL_BYTES) {
+      const remainingMb = ((MAX_TOTAL_BYTES - currentTotalBytes) / 1024 / 1024).toFixed(1);
+      toast({
+        title: "Превышен суммарный лимит",
+        description: `Все вложения вместе не должны превышать 5 МБ. Осталось ~${remainingMb} МБ.`,
         variant: "destructive",
       });
       if (inputRef.current) inputRef.current.value = "";
