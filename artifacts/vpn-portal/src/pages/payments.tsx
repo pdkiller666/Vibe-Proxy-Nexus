@@ -231,7 +231,8 @@ function PendingPaymentCard({ payment }: { payment: Payment }) {
 
   return (
     <div className="bg-card border border-primary/50 p-5 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      {/* Top row: info + cancel trigger icon */}
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 break-words">
           <div className="font-bold">{payment.amountRub} ₽ · {paymentTypeLabel(payment.type)}</div>
           <div className="text-sm text-muted-foreground font-mono">
@@ -239,35 +240,40 @@ function PendingPaymentCard({ payment }: { payment: Payment }) {
           </div>
         </div>
         {!confirmCancel && (
-          <div className="flex items-center gap-3 shrink-0 flex-wrap">
-            {url && (
-              <button
-                onClick={() => setLocation(url)}
-                className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-xs hover:opacity-90 transition-opacity"
-              >
-                Продолжить оплату
-              </button>
-            )}
-            <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary">
-              <Clock className="w-3.5 h-3.5" /> Ожидает
-            </span>
-            <button
-              onClick={() => setConfirmCancel(true)}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
-              title="Отменить заявку"
-            >
-              <X className="w-3.5 h-3.5" /> Отменить
-            </button>
-          </div>
+          <button
+            onClick={() => setConfirmCancel(true)}
+            className="shrink-0 p-1 text-muted-foreground hover:text-destructive transition-colors"
+            title="Отменить заявку"
+          >
+            <X className="w-4 h-4" />
+          </button>
         )}
       </div>
 
+      {/* Bottom row: action buttons */}
+      {!confirmCancel && (
+        <div className="flex items-center gap-3 mt-3 flex-wrap">
+          {url && (
+            <button
+              onClick={() => setLocation(url)}
+              className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-xs hover:opacity-90 transition-opacity"
+            >
+              Продолжить оплату
+            </button>
+          )}
+          <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary">
+            <Clock className="w-3.5 h-3.5" /> Ожидает
+          </span>
+        </div>
+      )}
+
+      {/* Confirm cancel */}
       {confirmCancel && (
-        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-3 flex-wrap">
+        <div className="mt-3 pt-3 border-t border-border space-y-3">
           <p className="text-xs text-muted-foreground">
             Заявка будет отменена. Если вы уже перевели деньги — свяжитесь с поддержкой.
           </p>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2">
             <button
               onClick={handleCancel}
               disabled={cancelling}
