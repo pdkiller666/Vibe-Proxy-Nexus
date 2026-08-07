@@ -5,15 +5,19 @@ import {
   useGetMe,
   useCreateBalanceTopupOrder,
   useListMyBalanceTransactions,
+  useDeleteBalanceTopupOrder,
+  useDeleteExtraSlotOrder,
+  useDeleteExtraTrafficOrder,
   getGetMeQueryKey,
+  getListMyPaymentsQueryKey,
 } from "@workspace/api-client-react";
 import type { BalanceTransaction, Payment } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
   Clock, CheckCircle2, XCircle, Info, Wallet, Plus,
-  ArrowUpCircle, ArrowDownCircle, RotateCcw, Users, ChevronDown, ChevronRight,
+  ArrowUpCircle, ArrowDownCircle, RotateCcw, Users, ChevronDown, ChevronRight, X,
 } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { useToast } from "@/hooks/use-toast";
@@ -141,12 +145,81 @@ function BalanceWidget() {
   );
 }
 
-/** Prominent cards for payments awaiting confirmation — they need user action. */
-function PendingPaymentsSection({ payments }: { payments: Payment[] }) {
+/** Single pending payment card with inline cancel confirmation. */
+function PendingPaymentCard({ payment }: { payment: Payment }) {
   const [, setLocation] = useLocation();
-  if (payments.length === 0) return null;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
-  function continueUrl(payment: Payment): string | null {
+  // All cancel hooks called unconditionally — only the matching one is used.
+  const { mutate: cancelTopup, isPending: cancellingTopup } = useDeleteBalanceTopupOrder({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Заявка отменена" });
+        queryClient.invalidateQueries({ queryKey: getListMyPaymentsQueryKey() });
+      },
+      onError: () => {
+        toast({ title: "Не удалось отменить заявку", variant: "destructive" });
+        setConfirmCancel(false);
+      },
+    },
+  });
+  const { mutate: cancelSlot, isPending: cancellingSlot } = useDeleteExtraSlotOrder({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Заявка отменена" });
+        queryClient.invalidateQueries({ queryKey: getListMyPaymentsQueryKey() });
+      },
+      onError: () => {
+        toast({ title: "Не удалось отменить заявку", variant: "destructive" });
+        setConfirmCancel(false);
+      },
+    },
+  });
+  const { mutate: cancelTraffic, isPending: cancellingTraffic } = useDeleteExtraTrafficOrder({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Заявка отменена" });
+        queryClient.invalidateQueries({ queryKey: getListMyPaymentsQueryKey() });
+      },
+      onError: () => {
+        toast({ title: "Не удалось отменить заявку", variant: "destructive" });
+        setConfirmCancel(false);
+      },
+    },
+  });
+  const { mutate: cancelSubscription, isPending: cancellingSubscription } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/subscriptions/${payment.subscriptionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Не удалось отменить заявку");
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "Заявка отменена" });
+      queryClient.invalidateQueries({ queryKey: getListMyPaymentsQueryKey() });
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message, variant: "destructive" });
+      setConfirmCancel(false);
+    },
+  });
+
+  const cancelling = cancellingTopup || cancellingSlot || cancellingTraffic || cancellingSubscription;
+
+  function handleCancel() {
+    if (payment.type === "balance_topup") cancelTopup({ paymentId: payment.id });
+    else if (payment.type === "extra_device_slot") cancelSlot({ paymentId: payment.id });
+    else if (payment.type === "extra_traffic") cancelTraffic({ paymentId: payment.id });
+    else if (payment.type === "subscription") cancelSubscription();
+  }
+
+  function continueUrl(): string | null {
     if (payment.type === "balance_topup") return `/balance-topup/${payment.id}`;
     if (payment.type === "subscription" && payment.subscriptionId != null)
       return `/checkout/${payment.subscriptionId}`;
@@ -154,38 +227,75 @@ function PendingPaymentsSection({ payments }: { payments: Payment[] }) {
     if (payment.type === "extra_traffic") return `/checkout/traffic/${payment.id}`;
     return null;
   }
+  const url = continueUrl();
 
   return (
-    <div className="space-y-3">
-      {payments.map((payment) => {
-        const url = continueUrl(payment);
-        return (
-          <div
-            key={payment.id}
-            className="bg-card border border-primary/50 p-5 flex items-center justify-between gap-4 flex-wrap animate-in fade-in duration-500"
-          >
-            <div className="min-w-0 break-words">
-              <div className="font-bold">{payment.amountRub} ₽ · {paymentTypeLabel(payment.type)}</div>
-              <div className="text-sm text-muted-foreground font-mono">
-                {formatDate(payment.createdAt)} · {payment.reference}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 shrink-0 flex-wrap">
-              {url && (
-                <button
-                  onClick={() => setLocation(url)}
-                  className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-xs hover:opacity-90 transition-opacity"
-                >
-                  Продолжить оплату
-                </button>
-              )}
-              <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary">
-                <Clock className="w-3.5 h-3.5" /> Ожидает
-              </span>
-            </div>
+    <div className="bg-card border border-primary/50 p-5 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="min-w-0 break-words">
+          <div className="font-bold">{payment.amountRub} ₽ · {paymentTypeLabel(payment.type)}</div>
+          <div className="text-sm text-muted-foreground font-mono">
+            {formatDate(payment.createdAt)} · {payment.reference}
           </div>
-        );
-      })}
+        </div>
+        {!confirmCancel && (
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            {url && (
+              <button
+                onClick={() => setLocation(url)}
+                className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-xs hover:opacity-90 transition-opacity"
+              >
+                Продолжить оплату
+              </button>
+            )}
+            <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary">
+              <Clock className="w-3.5 h-3.5" /> Ожидает
+            </span>
+            <button
+              onClick={() => setConfirmCancel(true)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+              title="Отменить заявку"
+            >
+              <X className="w-3.5 h-3.5" /> Отменить
+            </button>
+          </div>
+        )}
+      </div>
+
+      {confirmCancel && (
+        <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-muted-foreground">
+            Заявка будет отменена. Если вы уже перевели деньги — свяжитесь с поддержкой.
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="bg-destructive text-destructive-foreground font-bold px-4 py-1.5 text-xs hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {cancelling ? "Отменяем..." : "Да, отменить"}
+            </button>
+            <button
+              onClick={() => setConfirmCancel(false)}
+              className="border border-border px-4 py-1.5 text-xs hover:bg-muted transition-colors"
+            >
+              Назад
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Prominent cards for payments awaiting confirmation — they need user action. */
+function PendingPaymentsSection({ payments }: { payments: Payment[] }) {
+  if (payments.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      {payments.map((payment) => (
+        <PendingPaymentCard key={payment.id} payment={payment} />
+      ))}
     </div>
   );
 }
