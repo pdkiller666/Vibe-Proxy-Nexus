@@ -8,6 +8,7 @@ import {
   useListMyNotifications,
   useAcknowledgeNotification,
   useListPlans,
+  useListMyPayments,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/query-client";
@@ -410,6 +411,7 @@ export default function Dashboard() {
   const { data: me, isLoading: meLoading } = useGetMe();
   const { data: keys, isLoading: keysLoading } = useListMyVpnKeys();
   const { data: plans } = useListPlans();
+  const { data: payments } = useListMyPayments();
   const { toast } = useToast();
 
   const activeKeys = keys?.filter((k) => !k.revokedAt) ?? [];
@@ -438,6 +440,8 @@ export default function Dashboard() {
   const promoPlan = !me?.hasActiveSubscription && plans?.[0]?.isPromo ? plans[0] : null;
   const hasUnusedPromo = promoPlan != null && (promoPlan.userUsedCount ?? 0) === 0;
 
+  const pendingPayments = (payments ?? []).filter((p) => p.status === "pending");
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
@@ -446,6 +450,24 @@ export default function Dashboard() {
           Статус вашего доступа к сервису.
         </p>
       </div>
+
+      {/* Pending payments banner — shown when user navigated away from an unfinished payment */}
+      {pendingPayments.length > 0 && (
+        <Link
+          href="/payments"
+          className="flex items-center justify-between gap-3 border border-primary/50 bg-primary/5 p-4 hover:bg-primary/10 transition-colors"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <Clock className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm font-bold text-primary">
+              {pendingPayments.length === 1
+                ? "Есть незавершённый платёж — ожидает подтверждения"
+                : `Незавершённых платежей: ${pendingPayments.length} — ожидают подтверждения`}
+            </span>
+          </div>
+          <ArrowRight className="w-4 h-4 text-primary shrink-0" />
+        </Link>
+      )}
 
       {/* Onboarding tip — adapts text to the user's current state */}
       <OnboardingTip

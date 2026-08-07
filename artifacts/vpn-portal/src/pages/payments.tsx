@@ -80,6 +80,12 @@ function BalanceWidget() {
           setLocation(`/balance-topup/${data.paymentId}`);
         },
         onError: (err: unknown) => {
+          // 409 = duplicate pending topup — redirect to existing instead of showing an error
+          const body = err as { paymentId?: number };
+          if (body?.paymentId) {
+            setLocation(`/balance-topup/${body.paymentId}`);
+            return;
+          }
           const msg = err instanceof Error ? err.message : undefined;
           toast({ title: msg ?? "Не удалось создать заявку", variant: "destructive" });
         },
@@ -139,34 +145,47 @@ function BalanceWidget() {
 function PendingPaymentsSection({ payments }: { payments: Payment[] }) {
   const [, setLocation] = useLocation();
   if (payments.length === 0) return null;
+
+  function continueUrl(payment: Payment): string | null {
+    if (payment.type === "balance_topup") return `/balance-topup/${payment.id}`;
+    if (payment.type === "subscription" && payment.subscriptionId != null)
+      return `/checkout/${payment.subscriptionId}`;
+    if (payment.type === "extra_device_slot") return `/checkout/slot/${payment.id}`;
+    if (payment.type === "extra_traffic") return `/checkout/traffic/${payment.id}`;
+    return null;
+  }
+
   return (
     <div className="space-y-3">
-      {payments.map((payment) => (
-        <div
-          key={payment.id}
-          className="bg-card border border-primary/50 p-5 flex items-center justify-between gap-4 flex-wrap animate-in fade-in duration-500"
-        >
-          <div className="min-w-0 break-words">
-            <div className="font-bold">{payment.amountRub} ₽ · {paymentTypeLabel(payment.type)}</div>
-            <div className="text-sm text-muted-foreground font-mono">
-              {formatDate(payment.createdAt)} · {payment.reference}
+      {payments.map((payment) => {
+        const url = continueUrl(payment);
+        return (
+          <div
+            key={payment.id}
+            className="bg-card border border-primary/50 p-5 flex items-center justify-between gap-4 flex-wrap animate-in fade-in duration-500"
+          >
+            <div className="min-w-0 break-words">
+              <div className="font-bold">{payment.amountRub} ₽ · {paymentTypeLabel(payment.type)}</div>
+              <div className="text-sm text-muted-foreground font-mono">
+                {formatDate(payment.createdAt)} · {payment.reference}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0 flex-wrap">
+              {url && (
+                <button
+                  onClick={() => setLocation(url)}
+                  className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-xs hover:opacity-90 transition-opacity"
+                >
+                  Продолжить оплату
+                </button>
+              )}
+              <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary">
+                <Clock className="w-3.5 h-3.5" /> Ожидает
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-3 shrink-0 flex-wrap">
-            {payment.type === "balance_topup" && (
-              <button
-                onClick={() => setLocation(`/balance-topup/${payment.id}`)}
-                className="bg-primary text-primary-foreground font-bold px-4 py-1.5 text-xs hover:opacity-90 transition-opacity"
-              >
-                Продолжить оплату
-              </button>
-            )}
-            <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary">
-              <Clock className="w-3.5 h-3.5" /> Ожидает
-            </span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
