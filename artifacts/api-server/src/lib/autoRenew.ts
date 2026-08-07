@@ -28,7 +28,7 @@ const RENEW_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours before expiry
 const AUTO_RENEW_INTERVAL_MS = 60 * 60 * 1000; // run every hour
 const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;  // 24 h dedup for user notifications
 
-async function runAutoRenew(): Promise<void> {
+export async function runAutoRenew(): Promise<void> {
   // Check feature flag first — short-circuit the whole job if disabled
   const [settings] = await db.select({ balancePaymentsEnabled: paymentSettingsTable.balancePaymentsEnabled })
     .from(paymentSettingsTable).limit(1);

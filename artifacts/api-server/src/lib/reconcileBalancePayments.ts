@@ -23,7 +23,7 @@ import { logger } from "./logger";
 const STALE_BALANCE_PAYMENT_MS = 5 * 60 * 1000; // 5 minutes
 const RECONCILE_INTERVAL_MS = 10 * 60 * 1000;   // 10 minutes
 
-async function runReconciliation(): Promise<void> {
+export async function runReconciliation(): Promise<void> {
   const staleBefore = new Date(Date.now() - STALE_BALANCE_PAYMENT_MS);
 
   // Find all stale pending balance payments
