@@ -809,13 +809,17 @@ export const createSupportTicketBodySubjectMax = 200;
 
 export const createSupportTicketBodyBodyMax = 4000;
 
+export const createSupportTicketBodyAttachmentDataMax = 4;
+
+export const createSupportTicketBodyAttachmentMimeTypeMax = 4;
+
 
 
 export const CreateSupportTicketBody = zod.object({
   "subject": zod.string().min(1).max(createSupportTicketBodySubjectMax),
   "body": zod.string().min(1).max(createSupportTicketBodyBodyMax),
-  "attachmentData": zod.string().optional(),
-  "attachmentMimeType": zod.string().optional()
+  "attachmentData": zod.array(zod.string()).max(createSupportTicketBodyAttachmentDataMax).optional(),
+  "attachmentMimeType": zod.array(zod.string()).max(createSupportTicketBodyAttachmentMimeTypeMax).optional()
 })
 
 export const CreateSupportTicketResponse = zod.object({
@@ -835,6 +839,10 @@ export const GetTicketParams = zod.object({
   "ticketId": zod.coerce.number()
 })
 
+export const getTicketResponseMessagesItemAttachmentCountMin = 0;
+
+
+
 export const GetTicketResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
@@ -852,7 +860,7 @@ export const GetTicketResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
   "isAdmin": zod.boolean(),
-  "hasAttachment": zod.boolean()
+  "attachmentCount": zod.number().min(getTicketResponseMessagesItemAttachmentCountMin)
 }))
 })
 
@@ -866,13 +874,21 @@ export const AddTicketMessageParams = zod.object({
 
 export const addTicketMessageBodyBodyMax = 4000;
 
+export const addTicketMessageBodyAttachmentDataMax = 4;
+
+export const addTicketMessageBodyAttachmentMimeTypeMax = 4;
+
 
 
 export const AddTicketMessageBody = zod.object({
   "body": zod.string().min(1).max(addTicketMessageBodyBodyMax),
-  "attachmentData": zod.string().optional(),
-  "attachmentMimeType": zod.string().optional()
+  "attachmentData": zod.array(zod.string()).max(addTicketMessageBodyAttachmentDataMax).optional(),
+  "attachmentMimeType": zod.array(zod.string()).max(addTicketMessageBodyAttachmentMimeTypeMax).optional()
 })
+
+export const addTicketMessageResponseAttachmentCountMin = 0;
+
+
 
 export const AddTicketMessageResponse = zod.object({
   "id": zod.number(),
@@ -882,7 +898,7 @@ export const AddTicketMessageResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
   "isAdmin": zod.boolean(),
-  "hasAttachment": zod.boolean()
+  "attachmentCount": zod.number().min(addTicketMessageResponseAttachmentCountMin)
 })
 
 
@@ -2143,6 +2159,10 @@ export const GetAdminTicketParams = zod.object({
   "ticketId": zod.coerce.number()
 })
 
+export const getAdminTicketResponseMessagesItemAttachmentCountMin = 0;
+
+
+
 export const GetAdminTicketResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
@@ -2160,7 +2180,7 @@ export const GetAdminTicketResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
   "isAdmin": zod.boolean(),
-  "hasAttachment": zod.boolean()
+  "attachmentCount": zod.number().min(getAdminTicketResponseMessagesItemAttachmentCountMin)
 }))
 })
 
@@ -2174,13 +2194,21 @@ export const AdminAddTicketMessageParams = zod.object({
 
 export const adminAddTicketMessageBodyBodyMax = 4000;
 
+export const adminAddTicketMessageBodyAttachmentDataMax = 4;
+
+export const adminAddTicketMessageBodyAttachmentMimeTypeMax = 4;
+
 
 
 export const AdminAddTicketMessageBody = zod.object({
   "body": zod.string().min(1).max(adminAddTicketMessageBodyBodyMax),
-  "attachmentData": zod.string().optional(),
-  "attachmentMimeType": zod.string().optional()
+  "attachmentData": zod.array(zod.string()).max(adminAddTicketMessageBodyAttachmentDataMax).optional(),
+  "attachmentMimeType": zod.array(zod.string()).max(adminAddTicketMessageBodyAttachmentMimeTypeMax).optional()
 })
+
+export const adminAddTicketMessageResponseAttachmentCountMin = 0;
+
+
 
 export const AdminAddTicketMessageResponse = zod.object({
   "id": zod.number(),
@@ -2190,7 +2218,7 @@ export const AdminAddTicketMessageResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
   "isAdmin": zod.boolean(),
-  "hasAttachment": zod.boolean()
+  "attachmentCount": zod.number().min(adminAddTicketMessageResponseAttachmentCountMin)
 })
 
 

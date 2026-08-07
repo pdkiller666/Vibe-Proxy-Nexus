@@ -83,7 +83,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => void }) {
   const [reply, setReply] = useState("");
-  const [attachment, setAttachment] = useState<AttachmentValue | null>(null);
+  const [attachments, setAttachments] = useState<AttachmentValue[]>([]);
   const { data: ticket, isLoading } = useGetTicket(ticketId);
   const { mutate: addMessage, isPending } = useAddTicketMessage();
   const qc = useQueryClient();
@@ -97,15 +97,18 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
         ticketId,
         data: {
           body,
-          ...(attachment
-            ? { attachmentData: attachment.data, attachmentMimeType: attachment.mimeType }
+          ...(attachments.length > 0
+            ? {
+                attachmentData: attachments.map((a) => a.data),
+                attachmentMimeType: attachments.map((a) => a.mimeType),
+              }
             : {}),
         },
       },
       {
         onSuccess: () => {
           setReply("");
-          setAttachment(null);
+          setAttachments([]);
           qc.invalidateQueries({ queryKey: getGetTicketQueryKey(ticketId) });
           qc.invalidateQueries({ queryKey: getListMyTicketsQueryKey() });
         },
@@ -160,11 +163,10 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
                 }`}
               >
                 <p className="text-gray-800 whitespace-pre-wrap">{msg.body}</p>
-                {msg.hasAttachment && (
-                  <SupportMessageAttachmentDisplay
-                    src={`/api/support-tickets/${ticketId}/messages/${msg.id}/attachment`}
-                  />
-                )}
+                <SupportMessageAttachmentDisplay
+                  baseUrl={`/api/support-tickets/${ticketId}/messages/${msg.id}/attachments`}
+                  count={msg.attachmentCount ?? 0}
+                />
                 <p className="text-xs text-gray-400 mt-1.5">
                   {msg.isAdmin ? "Поддержка" : "Вы"} ·{" "}
                   {new Date(msg.createdAt).toLocaleString("ru-RU", {
@@ -189,8 +191,8 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
                 }}
               />
               <SupportAttachmentPicker
-                value={attachment}
-                onChange={setAttachment}
+                value={attachments}
+                onChange={setAttachments}
                 disabled={isPending}
               />
               <button
@@ -216,7 +218,7 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
 function NewTicketForm({ onCreated }: { onCreated: (id: number) => void }) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [attachment, setAttachment] = useState<AttachmentValue | null>(null);
+  const [attachments, setAttachments] = useState<AttachmentValue[]>([]);
   const { mutate: create, isPending } = useCreateSupportTicket();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -229,8 +231,11 @@ function NewTicketForm({ onCreated }: { onCreated: (id: number) => void }) {
         data: {
           subject: subject.trim(),
           body: body.trim(),
-          ...(attachment
-            ? { attachmentData: attachment.data, attachmentMimeType: attachment.mimeType }
+          ...(attachments.length > 0
+            ? {
+                attachmentData: attachments.map((a) => a.data),
+                attachmentMimeType: attachments.map((a) => a.mimeType),
+              }
             : {}),
         },
       },
@@ -285,8 +290,8 @@ function NewTicketForm({ onCreated }: { onCreated: (id: number) => void }) {
           <span className="text-gray-400 normal-case font-normal">(необязательно — скриншот ошибки и т.п.)</span>
         </label>
         <SupportAttachmentPicker
-          value={attachment}
-          onChange={setAttachment}
+          value={attachments}
+          onChange={setAttachments}
           disabled={isPending}
         />
       </div>

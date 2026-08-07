@@ -1,4 +1,5 @@
 import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+// Note: attachmentData / attachmentMimeType are stored as parallel text[] arrays (up to 4 items each).
 import { usersTable } from "./users";
 
 export const ticketStatusValues = ["open", "answered", "closed"] as const;
@@ -32,10 +33,10 @@ export const supportMessagesTable = pgTable(
       .notNull()
       .references(() => usersTable.id),
     body: text("body").notNull(),
-    // Image attachment stored as base64, same pattern as payments.screenshotData.
-    // Nullable — most messages have no attachment.
-    attachmentData: text("attachment_data"),
-    attachmentMimeType: text("attachment_mime_type"),
+    // Image attachments stored as parallel base64 text[] arrays (up to 4 items).
+    // Nullable — most messages have no attachments.
+    attachmentData: text("attachment_data").array(),
+    attachmentMimeType: text("attachment_mime_type").array(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

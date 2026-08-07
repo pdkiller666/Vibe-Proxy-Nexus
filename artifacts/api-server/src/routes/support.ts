@@ -17,12 +17,30 @@ import { validateImage } from "../lib/imageValidation";
 
 const router: IRouter = Router();
 
-/** Strip raw base64 and expose a boolean flag — same pattern as payments.screenshotData. */
-function withHasAttachment<T extends { attachmentData?: string | null }>(
+const MAX_ATTACHMENTS = 4;
+
+/** Strip raw base64 array and expose the count — same pattern as payments.screenshotData. */
+function withAttachmentCount<T extends { attachmentData?: string[] | null }>(
   msg: T,
-): Omit<T, "attachmentData"> & { hasAttachment: boolean } {
+): Omit<T, "attachmentData"> & { attachmentCount: number } {
   const { attachmentData: _d, ...rest } = msg;
-  return { ...rest, hasAttachment: Boolean(msg.attachmentData) };
+  return { ...rest, attachmentCount: msg.attachmentData?.length ?? 0 };
+}
+
+/** Validate an array of attachments. Returns an error string or null. */
+function validateAttachments(data: string[] | null | undefined, mimeTypes: string[] | null | undefined): string | null {
+  if (!data || data.length === 0) return null;
+  if (!mimeTypes || mimeTypes.length !== data.length) {
+    return "attachmentData and attachmentMimeType must have the same length";
+  }
+  if (data.length > MAX_ATTACHMENTS) {
+    return `Maximum ${MAX_ATTACHMENTS} attachments allowed`;
+  }
+  for (let i = 0; i < data.length; i++) {
+    const err = validateImage(mimeTypes[i], data[i]);
+    if (err) return `Attachment ${i + 1}: ${err}`;
+  }
+  return null;
 }
 
 // List my tickets
@@ -66,16 +84,14 @@ router.post(
       return;
     }
 
-    // Validate optional attachment
     const { attachmentData, attachmentMimeType } = parsed.data;
-    const hasAttachmentInput = attachmentData != null && attachmentMimeType != null;
-    if (hasAttachmentInput) {
-      const err = validateImage(attachmentMimeType!, attachmentData!);
-      if (err) {
-        res.status(400).json({ error: err });
-        return;
-      }
+    const err = validateAttachments(attachmentData, attachmentMimeType);
+    if (err) {
+      res.status(400).json({ error: err });
+      return;
     }
+
+    const hasAttachments = attachmentData && attachmentData.length > 0;
 
     const ticket = await db.transaction(async (tx) => {
       const [newTicket] = await tx
@@ -87,9 +103,7 @@ router.post(
         ticketId: newTicket.id,
         authorId: user.id,
         body: parsed.data.body,
-        ...(hasAttachmentInput
-          ? { attachmentData, attachmentMimeType }
-          : {}),
+        ...(hasAttachments ? { attachmentData, attachmentMimeType } : {}),
       });
 
       return newTicket;
@@ -141,7 +155,7 @@ router.get("/support-tickets/:ticketId", requireAuth, async (req, res): Promise<
       userEmail: ticket.userEmail,
       messageCount: messages.length,
       messages: messages.map(({ msg, authorEmail, authorRole }) =>
-        withHasAttachment({
+        withAttachmentCount({
           ...msg,
           authorEmail,
           isAdmin: authorRole === "admin",
@@ -169,16 +183,14 @@ router.post(
       return;
     }
 
-    // Validate optional attachment
     const { attachmentData, attachmentMimeType } = parsed.data;
-    const hasAttachmentInput = attachmentData != null && attachmentMimeType != null;
-    if (hasAttachmentInput) {
-      const err = validateImage(attachmentMimeType!, attachmentData!);
-      if (err) {
-        res.status(400).json({ error: err });
-        return;
-      }
+    const err = validateAttachments(attachmentData, attachmentMimeType);
+    if (err) {
+      res.status(400).json({ error: err });
+      return;
     }
+
+    const hasAttachments = attachmentData && attachmentData.length > 0;
 
     const [ticket] = await db
       .select()
@@ -207,9 +219,7 @@ router.post(
           ticketId: ticket.id,
           authorId: user.id,
           body: parsed.data.body,
-          ...(hasAttachmentInput
-            ? { attachmentData, attachmentMimeType }
-            : {}),
+          ...(hasAttachments ? { attachmentData, attachmentMimeType } : {}),
         })
         .returning();
 
@@ -233,7 +243,7 @@ router.post(
 
     res.status(201).json(
       AddTicketMessageResponse.parse(
-        withHasAttachment({
+        withAttachmentCount({
           ...withAuthor.msg,
           authorEmail: withAuthor.authorEmail,
           isAdmin: withAuthor.authorRole === "admin",
@@ -243,21 +253,22 @@ router.post(
   },
 );
 
-// Serve attachment image for a support message
+// Serve one attachment by index for a support message
 router.get(
-  "/support-tickets/:ticketId/messages/:messageId/attachment",
+  "/support-tickets/:ticketId/messages/:messageId/attachments/:index",
   requireAuth,
   async (req, res): Promise<void> => {
     const user = req.appUser!;
     const ticketId = Number(req.params.ticketId);
     const messageId = Number(req.params.messageId);
+    const index = Number(req.params.index);
 
-    if (!Number.isInteger(ticketId) || !Number.isInteger(messageId)) {
-      res.status(400).json({ error: "Invalid id" });
+    if (!Number.isInteger(ticketId) || !Number.isInteger(messageId) || !Number.isInteger(index) || index < 0) {
+      res.status(400).json({ error: "Invalid id or index" });
       return;
     }
 
-    // Check ticket ownership (admin can access any)
+    // Check ticket ownership
     const [ticket] = await db
       .select({ userId: supportTicketsTable.userId })
       .from(supportTicketsTable)
@@ -287,13 +298,13 @@ router.get(
       )
       .limit(1);
 
-    if (!msg || !msg.attachmentData) {
+    if (!msg || !msg.attachmentData || index >= msg.attachmentData.length) {
       res.status(404).json({ error: "Attachment not found" });
       return;
     }
 
-    res.setHeader("Content-Type", msg.attachmentMimeType ?? "application/octet-stream");
-    res.send(Buffer.from(msg.attachmentData, "base64"));
+    res.setHeader("Content-Type", msg.attachmentMimeType?.[index] ?? "application/octet-stream");
+    res.send(Buffer.from(msg.attachmentData[index], "base64"));
   },
 );
 

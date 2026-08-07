@@ -14,5 +14,6 @@ export interface SupportMessage {
   createdAt: Date;
   authorEmail: string;
   isAdmin: boolean;
-  hasAttachment: boolean;
+  /** @minimum 0 */
+  attachmentCount: number;
 }

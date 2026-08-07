@@ -5324,11 +5324,10 @@ function TicketDetail({ ticketId, onBack }: { ticketId: number; onBack: () => vo
             {ticket.messages.map((msg) => (
               <div key={msg.id} className={`p-3 text-sm ${msg.isAdmin ? "bg-orange-50 border border-orange-100 ml-8" : "bg-muted border border-border mr-8"}`}>
                 <p className="whitespace-pre-wrap text-foreground">{msg.body}</p>
-                {msg.hasAttachment && (
-                  <SupportMessageAttachmentDisplay
-                    src={`/api/admin/support-tickets/${ticketId}/messages/${msg.id}/attachment`}
-                  />
-                )}
+                <SupportMessageAttachmentDisplay
+                  baseUrl={`/api/admin/support-tickets/${ticketId}/messages/${msg.id}/attachments`}
+                  count={msg.attachmentCount ?? 0}
+                />
                 <p className="text-xs text-muted-foreground mt-1">
                   {msg.isAdmin ? "Поддержка" : msg.authorEmail} · {formatDate(msg.createdAt.toString())}
                 </p>
