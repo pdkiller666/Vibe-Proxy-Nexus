@@ -1,0 +1,199 @@
+# ТЕХНИЧЕСКОЕ ЗАДАНИЕ v2 (lite-адаптер)
+## Проект: VPNexus (Vibe-Proxy-Nexus)
+## Задача: «Баланс как платёжное средство» — без модификации рабочего биллинга
+**Версия:** 2.0 · **Подход:** тонкий адаптер поверх существующей воронки `confirmPaymentById` · **Оценка:** 1–1.5 дня · **Откат:** feature flag из админки, мгновенно
+
+---
+
+## 0. Паспорт задачи
+
+**Цель:** позволить пользователю оплачивать месячную подписку, доп. слот и доп. трафик с внутреннего баланса; добавить опциональное автопродление с баланса.
+
+**Принцип:** новая функциональность НЕ модифицирует существующие биллинг-модули. Новый код — изолированный оркестратор: *списать баланс → вызвать существующий `confirmPaymentById()` → при сбое компенсировать*. Всё downstream (активация подписки, цепочки `startsAt/endsAt`, реферальные комиссии, выдача ключей, история платежей, админка) работает без правок, т.к. для системы это обычный подтверждённый платёж.
+
+**Старое ТЗ v1** — целевая архитектура будущего; в работу не берётся.
+
+---
+
+## 1. Что НЕ трогаем (принципиально)
+
+- `lib/confirmPayment.ts` — вызываем как есть, без рефакторинга;
+- `routes/subscriptions.ts`, `routes/extraSlotOrder.ts`, `routes/extraTrafficOrder.ts`, `routes/balanceTopupOrder.ts` — старые флоу неизменны;
+- `lib/subscriptionLifecycle.ts` (джоб истечения) и `lib/hourlyBilling.ts`;
+- `lib/xray.ts`, `lib/keyIssuance.ts`, админ-роуты;
+- `heal-schema.mjs` — не нужен (нет уникальных индексов/FK/drop).
+
+---
+
+## 2. Изменения схемы БД (`lib/db/src/schema/`)
+
+Два простых столбца — `drizzle-kit push` выполнит без промптов:
+
+```ts
+// users.ts
+autoRenewFromBalance: boolean("auto_renew_from_balance").notNull().default(false),
+
+// paymentSettings.ts (синглтон)
+balancePaymentsEnabled: boolean("balance_payments_enabled").notNull().default(false),
+```
+
+После правки: `pnpm --filter @workspace/db exec tsc -p .`, в dev — `pnpm --filter @workspace/db run push` (в проде выполнит `entrypoint.sh`).
+
+> Тип `provider` в `payments` — текстовой; новое значение `balance` не требует миграции. Если при вскрытии окажется enum-колонка — добавить значение через `heal-schema.mjs` (единственный допустимый выход за пределы §1).
+
+---
+
+## 3. API-контракт (`lib/api-spec/openapi.yaml`)
+
+> Регламент: правим только openapi.yaml → `pnpm --filter @workspace/api-spec run codegen`; `generated/` вручную не трогаем. Имена схем не должны совпадать с шаблоном `<operationId>Body/Response/...`.
+
+### 3.1. Enum
+```yaml
+PaymentProvider:
+  enum: [manual_sbp, yookassa, yoomoney, freekassa, balance]  # freekassa — legacy read-only
+```
+
+### 3.2. Новый эндпоинт `POST /api/balance-checkout` (operationId: `postBalanceCheckout`)
+
+**Input:**
+```yaml
+BalanceCheckoutInput:
+  type: object
+  required: [target]
+  properties:
+    target: { type: string, enum: [subscription, extra_device_slot, extra_traffic] }
+    planId: { type: integer }   # обязателен только для target=subscription
+```
+
+**Result (200):**
+```yaml
+BalanceCheckoutResult:
+  type: object
+  required: [paymentId, type, amountRub]
+  properties:
+    paymentId: { type: integer }
+    type: { $ref: "#/components/schemas/PaymentType" }
+    amountRub: { type: integer }
+    subscription: { $ref: "#/components/schemas/Subscription" }  # только для target=subscription
+```
+
+**Ошибки:**
+| Код | Условие | Тело |
+| :--- | :--- | :--- |
+| `409` | флаг `balancePaymentsEnabled = false` | `{ error }` |
+| `400` | hourly-план / нет активной подписки для slot/traffic / цена = 0 | `{ error }` |
+| `402` | недостаточно средств | `{ error: "insufficient_balance", balanceKopecks, requiredKopecks }` |
+
+### 3.3. Автопродление
+- `PATCH /api/me/auto-renew` (operationId: `patchMeAutoRenew`): `{ enabled: boolean }` → `{ autoRenewFromBalance: boolean }`.
+- В ответ `GET /api/me` добавить `autoRenewFromBalance: boolean`.
+- В **публичный** `GET /api/payment-settings` и в `PATCH /admin/payment-settings` добавить `balancePaymentsEnabled: boolean` (UI скрывает кнопку при выключенном флаге).
+
+---
+
+## 4. Backend
+
+### 4.1. Новый файл `src/lib/balanceCheckout.ts`
+
+```ts
+checkoutFromBalance(userId, target: { kind: "subscription"; planId: number }
+                              | { kind: "extra_device_slot" }
+                              | { kind: "extra_traffic" }): Promise<BalanceCheckoutResult>
+```
+
+**Алгоритм:**
+1. Прочитать `payment_settings`: флаг выключен → 409.
+2. Резолв суммы и `PaymentType`:
+   - subscription: план существует, `isActive`, `billingType = "monthly"` → `amount = plan.priceRub` (hourly → 400);
+   - extra_device_slot: `amount = extraDeviceSlotPriceRub`; требуется активная подписка (иначе 400);
+   - extra_traffic: `amount = extraTrafficPriceRub`, пакет `extraTrafficPackageGb`; требуется активная подписка;
+   - `amount === 0` → 400 («используйте стандартный флоу»).
+3. **Guard от даблклика** (до транзакции): если за последние 60 с у пользователя уже есть платёж `provider='balance'` с теми же `type` и `amountRub` и статусом `confirmed` — вернуть его результат без списания.
+4. **tx1** (одна транзакция): `FOR UPDATE` на `users` → повторная проверка баланса → `balanceKopecks < amount*100` → 402; иначе:
+   - insert `payments` (`type`, `provider='balance'`, `status='pending'`, `reference = generatePaymentReference()`, `amountRub`);
+   - списать `balanceKopecks`;
+   - insert `balance_transactions` (`type='debit'`, `paymentId`, знак и формат — **по аналогии с debit-записями в `hourlyBilling.ts`**, `description`: «Оплата с баланса: тариф X / доп. устройство / доп. трафик N ГБ»).
+5. **Вне транзакции** вызвать существующий `confirmPaymentById(paymentId)` — ровно так же, как это делает вебхук `yoomoney.ts`.
+6. **Компенсация при ошибке шага 5** (tx2): `payments.status='rejected'`, `rejectionReason='balance_confirm_failed'`, вернуть баланс, insert `balance_transactions(type='refund', paymentId)`; `logger.error`; → 500.
+
+Никаких вложенных транзакций/savepoint. Реферальная комиссия начисляется автоматически внутри `confirmPaymentById` — продуктовое решение: **да, баланс-оплаты участвуют в рефералке** (единообразие).
+
+### 4.2. Новый файл `src/routes/balanceCheckout.ts`
+`POST /api/balance-checkout` — `requireAuth` (бан-проверка уже в middleware), Zod-валидация, вызов `checkoutFromBalance`.
+
+### 4.3. Автопродление — новый файл `src/lib/autoRenew.ts`
+`startAutoRenewJob()` — интервал **1 час**:
+1. Выборка: `subscriptions.status='active'`, план monthly, `endsAt <= now + 24h`, `users.autoRenewFromBalance=true`, `users.isBanned=false`, флаг включён.
+2. **Guard:** пропустить, если у пользователя есть другая активная подписка с `startsAt >= endsAt` текущей (уже продлено).
+3. Вызвать `checkoutFromBalance(userId, { kind:"subscription", planId })`:
+   - успех → user-уведомление `system_events(userId)`, `eventType="auto_renew_success"`, `metadata { planName, amountRub }`;
+   - 402 (не хватает) → user-уведомление `auto_renew_failed` **с дедупликацией**: не вставлять, если у пользователя уже есть неacknowledged-событие этого типа за последние 24 ч; тумблер не сбрасывать; истечение позже отработает штатный джоб.
+
+**Регистрация:** в `src/app.ts` одна строка `startAutoRenewJob()` рядом с существующими джобами.
+
+### 4.4. Тумблер
+`PATCH /api/me/auto-renew` — добавить в `routes/me.ts` (аддитивный эндпоинт, 15 строк). Поле в ответ `/api/me` — одна строка в `lib/meResponse.ts`.
+
+---
+
+## 5. Frontend (`artifacts/vpn-portal`)
+
+Стиль: русский текст, чёрно-оранжевая палитра, острые углы, без эмодзи.
+
+1. **Новый компонент** `pay-from-balance-button.tsx`: читает `me.balanceKopecks` и флаг `balancePaymentsEnabled`; рендерит кнопку «Оплатить с баланса · N ₽»; при нехватке — строку «Не хватает Y ₽» + ссылку на `/balance-topup`; после клика кнопка disabled до ответа; onSuccess инвалидирует `me`, `payments`, `subscriptions`.
+2. **`pages/checkout`**: компонент над блоком ЮMoney/СБП (только monthly).
+3. **`pages/slot-checkout`**, **`pages/traffic-checkout`**: тот же компонент.
+4. **`pages/profile`**: тумблер «Автопродление с баланса» + пояснение «Спишем стоимость тарифа за 24 ч до окончания. Не хватит средств — подписка просто завершится».
+5. **Уведомления**: в существующем UI user-уведомлений добавить текстовки для `auto_renew_success` / `auto_renew_failed`.
+6. **Опционально (админка):** бейдж «Баланс» для `provider='balance'` в списке платежей — чисто визуальное, без логики.
+
+---
+
+## 6. Тесты (Vitest, новые файлы; старые не меняются)
+
+`balanceCheckout.test.ts`:
+1. Успех: баланс списан, payment `confirmed`/`balance`, подписка active, debit-транзакция с `paymentId`;
+2. Недостаточно средств → 402, ноль новых строк;
+3. Hourly-план → 400; флаг выключен → 409; banned → 403;
+4. Даблклик в окне 60 с → одно списание;
+5. `confirmPaymentById` бросает исключение (мок) → payment `rejected`, баланс восстановлен, refund-транзакция;
+6. Slot/traffic без активной подписки → 400; с подпиской — слот +1 / трафик начислен.
+
+`autoRenew.test.ts`:
+7. Подписка заканчивается < 24 ч, баланс есть → продлена, `startsAt` новой = `endsAt` старой, уведомление success;
+8. Баланса нет → не продлена, уведомление failed один раз (второй прогон джоба не дублирует);
+9. Уже продлена вручную (guard по `startsAt`) → пропуск;
+10. Тумблер выключен → пропуск.
+
+---
+
+## 7. Роллаут и откат
+
+1. Деплой с `balancePaymentsEnabled = false` (миграции применяются безопасно).
+2. Смоук на тестовом аккаунте: админ выставляет баланс через `set-balance` → оплата подписки/слота/трафика → автопродление.
+3. Включить флаг в админке → наблюдать сутки (логи pino: warn по 402/компенсациям).
+4. Откат = выключить флаг. Данные не повреждаются ни при каком сценарии: все платежи проходят штатную воронку.
+
+---
+
+## 8. Приёмка (ручное QA)
+
+- [ ] Кнопка видна только при включённом флаге и достаточном балансе;
+- [ ] Оплата monthly с баланса: подписка активна, в «Платежи» видны платёж «Баланс» и debit-операция;
+- [ ] Реферер получил комиссию с баланс-оплаты реферала;
+- [ ] Автопродление сработало за 24 ч; при пустом балансе — уведомление и штатное истечение;
+- [ ] Очередь модерации СБП не содержит balance-платежей; счётчик `pendingPayments` не изменился;
+- [ ] Выключение флага скрывает кнопку и возвращает 409 на прямые вызовы API.
+
+---
+
+## 9. Definition of Done
+
+- [ ] `pnpm run typecheck`, `pnpm run build` — зелёные; codegen перегенерирован;
+- [ ] новые тесты зелёные, старые не изменены и зелёные;
+- [ ] обновлены `README.md`, `docs/SYSTEM_OVERVIEW.md`, `PROJECT_MAP.md`;
+- [ ] деплой: `./deploy.sh "сообщение на русском"`; флаг включён после смоука.
+
+---
+
+*Итог для команды: дифф = 4 новых файла backend + 1 компонент и 4 точечных правки frontend + 2 столбца БД + контракт. Рабочий биллинг не модифицируется ни одной строкой.*

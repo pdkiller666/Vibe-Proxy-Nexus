@@ -13,6 +13,8 @@ import { startSubscriptionExpiryJob } from "./lib/subscriptionLifecycle";
 import { startTrafficPollingJob } from "./lib/trafficPolling";
 import { startHourlyBillingJob } from "./lib/hourlyBilling";
 import { startNodeMonitoringJob } from "./lib/nodeMonitoring";
+import { startReconcileBalancePaymentsJob } from "./lib/reconcileBalancePayments";
+import { startAutoRenewJob } from "./lib/autoRenew";
 
 // Fail fast if required secrets are missing — better to crash on startup than
 // to start serving requests and fail mysteriously on the first authenticated
@@ -119,5 +121,7 @@ startSubscriptionExpiryJob();
 startTrafficPollingJob();
 startHourlyBillingJob();
 startNodeMonitoringJob();
+startReconcileBalancePaymentsJob();
+startAutoRenewJob();
 
 export default app;

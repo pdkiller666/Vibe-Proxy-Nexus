@@ -56,6 +56,7 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
         sbpPaymentUrl: "",
         showManualSbpDetails: false,
         hasSbpQr: false,
+        balancePaymentsEnabled: false,
         primaryDomainHealthy,
         happIosRoutingUrl,
         happIosRoutingProfile,

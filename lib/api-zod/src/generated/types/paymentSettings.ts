@@ -31,6 +31,7 @@ export interface PaymentSettings {
   sbpPaymentUrl: string;
   showManualSbpDetails: boolean;
   hasSbpQr: boolean;
+  balancePaymentsEnabled: boolean;
   primaryDomainHealthy: boolean;
   happIosRoutingUrl: string;
   happIosRoutingProfile: HappIosRoutingProfile;

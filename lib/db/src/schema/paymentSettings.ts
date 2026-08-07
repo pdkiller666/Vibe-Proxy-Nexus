@@ -68,6 +68,10 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   // null = use built-in default (DEFAULT_DIRECT_SITES from happIosRouting.ts).
   happIosRoutingProfile: jsonb("happ_ios_routing_profile")
     .$type<{ name: string; directsites: string[]; directip: string[] } | null>(),
+  // Feature flag: when false the /balance-checkout endpoint returns 409 and
+  // the UI hides the "pay from balance" button. Flip from the admin panel
+  // without a redeploy to enable/disable the whole feature instantly.
+  balancePaymentsEnabled: boolean("balance_payments_enabled").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

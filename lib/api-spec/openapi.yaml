@@ -204,6 +204,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChangePasswordResult"
 
+  /me/auto-renew:
+    patch:
+      operationId: patchMeAutoRenew
+      tags: [me]
+      summary: Enable or disable automatic monthly renewal from balance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoRenewInput"
+      responses:
+        "200":
+          description: Updated preference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+
+  /balance-checkout:
+    post:
+      operationId: postBalanceCheckout
+      tags: [payments]
+      summary: Pay for a subscription, extra device slot, or extra traffic from the wallet balance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BalanceCheckoutInput"
+      responses:
+        "200":
+          description: Payment confirmed and item activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceCheckoutResult"
+        "400":
+          description: Invalid request (hourly plan, zero price, no active subscription, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "402":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Feature flag disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   /plans:
     get:
       operationId: listPlans
@@ -1813,6 +1869,7 @@ components:
           trafficLimitExceeded,
           isBanned,
           isTrialSubscription,
+          autoRenewFromBalance,
         ]
       properties:
         id: { type: integer }
@@ -1870,6 +1927,9 @@ components:
         # completed payment — i.e. it is a free trial granted at registration.
         # Always false when hasActiveSubscription is false.
         isTrialSubscription: { type: boolean }
+        # Opt-in automatic monthly renewal from the wallet balance.
+        # When true the autoRenewJob debits the plan price ~24 h before expiry.
+        autoRenewFromBalance: { type: boolean }
 
     PlanBillingType:
       type: string
@@ -1991,7 +2051,7 @@ components:
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy, happIosRoutingUrl, happIosRoutingProfile, appDownloadLinks]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy, happIosRoutingUrl, happIosRoutingProfile, appDownloadLinks, balancePaymentsEnabled]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -2030,6 +2090,9 @@ components:
         showManualSbpDetails: { type: boolean }
         # Whether a QR code image is currently stored (true = /payment-settings/sbp-qr-image is available).
         hasSbpQr: { type: boolean }
+        # Feature flag: when false the "pay from balance" button is hidden
+        # and POST /balance-checkout returns 409.
+        balancePaymentsEnabled: { type: boolean }
         # Live health of the currently-configured primary domain. False means the
         # server's outbound healthz check failed, which typically indicates the
         # domain is blocked or misconfigured. Useful for admin alerting.
@@ -2080,6 +2143,38 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AppDownloadLinks"
             - type: "null"
+        # Feature flag: enable/disable balance payments without a redeploy.
+        balancePaymentsEnabled: { type: boolean }
+
+    AutoRenewInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+
+    BalanceCheckoutInput:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          enum: [subscription, extra_device_slot, extra_traffic]
+        # Required when target=subscription
+        planId: { type: integer }
+
+    BalanceCheckoutResult:
+      type: object
+      required: [paymentId, type, amountRub]
+      properties:
+        paymentId: { type: integer }
+        type:
+          $ref: "#/components/schemas/PaymentType"
+        amountRub: { type: integer }
+        # Populated when target=subscription
+        subscription:
+          oneOf:
+            - $ref: "#/components/schemas/Subscription"
+            - type: "null"
 
     SubscriptionStatus:
       type: string
@@ -2114,7 +2209,8 @@ components:
       type: string
       # freekassa is legacy-read-only: integration removed 2026-07-17, kept so
       # historical payment rows still serialize/validate.
-      enum: [manual_sbp, yookassa, yoomoney, freekassa]
+      # balance: instant debit from the user's wallet balance (no moderation queue).
+      enum: [manual_sbp, yookassa, yoomoney, freekassa, balance]
 
     PaymentStatus:
       type: string

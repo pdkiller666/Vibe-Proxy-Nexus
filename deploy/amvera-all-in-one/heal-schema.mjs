@@ -865,6 +865,31 @@ try {
   `);
   console.log("heal-schema: M-32 subscriptions.is_trial");
 
+  // ── M-33: users.auto_renew_from_balance — opt-in automatic renewal ────────
+  // When true, autoRenewJob debits the monthly plan price from the user's
+  // wallet ~24 h before subscription expiry. Defaults to false (opt-in).
+  await client.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS auto_renew_from_balance boolean NOT NULL DEFAULT false
+  `);
+  console.log("heal-schema: M-33 users.auto_renew_from_balance");
+
+  // ── M-34: payment_settings.balance_payments_enabled — feature flag ────────
+  // Kill-switch for the "pay from balance" feature: when false, POST
+  // /api/balance-checkout returns 409 and the UI hides the button.
+  // Defaults to false so the feature is off until admin explicitly enables it.
+  await client.query(`
+    ALTER TABLE payment_settings
+      ADD COLUMN IF NOT EXISTS balance_payments_enabled boolean NOT NULL DEFAULT false
+  `);
+  console.log("heal-schema: M-34 payment_settings.balance_payments_enabled");
+
+  // ── M-35: payments.provider — ensure 'balance' is a known value ──────────
+  // provider is plain TEXT (not a Postgres ENUM), so no ALTER TYPE needed.
+  // The TS-level paymentProviderValues array already includes 'balance'.
+  // This comment-only migration documents that fact for ops runbooks.
+  console.log("heal-schema: M-35 payments.provider 'balance' — no DB change needed (plain TEXT column)");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

@@ -6,7 +6,9 @@ import {
   useUpdatePaymentNote,
   useDeleteExtraSlotOrder,
   getListMyPaymentsQueryKey,
+  useGetMe,
 } from "@workspace/api-client-react";
+import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +62,7 @@ export default function SlotCheckout() {
   const [submitted, setSubmitted] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
+  const { data: me } = useGetMe();
   const payment = payments?.find((p) => p.id === paymentId);
 
   function handleSubmitNote() {
@@ -172,6 +175,18 @@ export default function SlotCheckout() {
 
       {payment.status === "pending" && (
         <>
+          {/* Instant balance payment */}
+          <PayFromBalanceButton
+            target="extra_device_slot"
+            priceRub={payment.amountRub}
+            balanceKopecks={me?.balanceKopecks ?? 0}
+            enabled={settings?.balancePaymentsEnabled ?? false}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: getListMyPaymentsQueryKey() });
+              setLocation("/keys");
+            }}
+          />
+
           {/* Primary: YooMoney online payment */}
           <div className="bg-card border border-primary/40 p-6">
             <YooMoneyPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} reference={payment.reference} />

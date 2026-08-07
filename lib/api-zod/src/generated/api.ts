@@ -57,7 +57,8 @@ export const RegisterResponse = zod.object({
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
-  "isTrialSubscription": zod.boolean()
+  "isTrialSubscription": zod.boolean(),
+  "autoRenewFromBalance": zod.boolean()
 })
 
 
@@ -97,7 +98,8 @@ export const LoginResponse = zod.object({
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
-  "isTrialSubscription": zod.boolean()
+  "isTrialSubscription": zod.boolean(),
+  "autoRenewFromBalance": zod.boolean()
 })
 
 
@@ -165,7 +167,8 @@ export const GetMeResponse = zod.object({
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
-  "isTrialSubscription": zod.boolean()
+  "isTrialSubscription": zod.boolean(),
+  "autoRenewFromBalance": zod.boolean()
 })
 
 
@@ -200,7 +203,8 @@ export const UpdateMeResponse = zod.object({
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
-  "isTrialSubscription": zod.boolean()
+  "isTrialSubscription": zod.boolean(),
+  "autoRenewFromBalance": zod.boolean()
 })
 
 
@@ -240,7 +244,8 @@ export const ChangeMyEmailResponse = zod.object({
   "referredUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
-  "isTrialSubscription": zod.boolean()
+  "isTrialSubscription": zod.boolean(),
+  "autoRenewFromBalance": zod.boolean()
 })
 
 
@@ -261,6 +266,82 @@ export const ChangeMyPasswordBody = zod.object({
 
 export const ChangeMyPasswordResponse = zod.object({
   "message": zod.string()
+})
+
+
+/**
+ * @summary Enable or disable automatic monthly renewal from balance
+ */
+export const PatchMeAutoRenewBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const PatchMeAutoRenewResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string().nullish(),
+  "role": zod.enum(['user', 'admin']),
+  "hasActiveSubscription": zod.boolean(),
+  "currentPlanName": zod.string().nullish(),
+  "subscriptionEndsAt": zod.coerce.date().nullish(),
+  "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
+  "hourlyRateKopecks": zod.number().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
+  "deviceSlots": zod.number(),
+  "activeKeyCount": zod.number(),
+  "balanceKopecks": zod.number(),
+  "trafficLimitGb": zod.number().nullish(),
+  "extraTrafficGb": zod.number(),
+  "trafficLimitExceeded": zod.boolean(),
+  "periodUsageBytes": zod.number().optional(),
+  "referralCode": zod.string(),
+  "referralCommissionPercent": zod.number(),
+  "referralEarningsKopecks": zod.number(),
+  "referredUserCount": zod.number(),
+  "referralLinkHost": zod.string(),
+  "isBanned": zod.boolean(),
+  "isTrialSubscription": zod.boolean(),
+  "autoRenewFromBalance": zod.boolean()
+})
+
+
+/**
+ * @summary Pay for a subscription, extra device slot, or extra traffic from the wallet balance
+ */
+export const PostBalanceCheckoutBody = zod.object({
+  "target": zod.enum(['subscription', 'extra_device_slot', 'extra_traffic']),
+  "planId": zod.number().optional()
+})
+
+export const PostBalanceCheckoutResponse = zod.object({
+  "paymentId": zod.number(),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
+  "amountRub": zod.number(),
+  "subscription": zod.union([zod.object({
+  "id": zod.number(),
+  "planId": zod.number(),
+  "plan": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "priceRub": zod.number(),
+  "durationDays": zod.number(),
+  "devicesIncluded": zod.number(),
+  "trafficLimitGb": zod.number().nullable(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "hourlyRateKopecks": zod.number().nullable(),
+  "isActive": zod.boolean(),
+  "isPromo": zod.boolean().optional(),
+  "maxUses": zod.number().nullish(),
+  "userUsedCount": zod.number().nullish(),
+  "createdAt": zod.coerce.date().optional()
+}),
+  "status": zod.enum(['pending_payment', 'active', 'expired', 'cancelled', 'rejected']),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
+  "lastBilledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional()
 })
 
 
@@ -310,6 +391,7 @@ export const GetPaymentSettingsResponse = zod.object({
   "sbpPaymentUrl": zod.string(),
   "showManualSbpDetails": zod.boolean(),
   "hasSbpQr": zod.boolean(),
+  "balancePaymentsEnabled": zod.boolean(),
   "primaryDomainHealthy": zod.boolean(),
   "happIosRoutingUrl": zod.string(),
   "happIosRoutingProfile": zod.object({
@@ -383,7 +465,7 @@ export const ListMySubscriptionsResponse = zod.array(ListMySubscriptionsResponse
  */
 export const CreateSubscriptionBody = zod.object({
   "planId": zod.number(),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']).optional()
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']).optional()
 })
 
 export const CreateSubscriptionResponse = zod.object({
@@ -416,7 +498,7 @@ export const CreateSubscriptionResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -437,7 +519,7 @@ export const ListMyPaymentsResponseItem = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -470,7 +552,7 @@ export const UpdatePaymentNoteResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -506,7 +588,7 @@ export const UpdatePaymentScreenshotResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -1131,7 +1213,8 @@ export const UpdatePaymentSettingsBody = zod.object({
   "happIos": zod.string().describe('Happ for iOS (App Store URL)'),
   "v2rayng": zod.string().describe('v2rayNG for Android (Google Play URL)'),
   "v2rayn": zod.string().describe('v2rayN for Windows (GitHub releases URL)')
-}).describe('Admin-configurable download links for recommended VPN client apps.'),zod.null()]).optional()
+}).describe('Admin-configurable download links for recommended VPN client apps.'),zod.null()]).optional(),
+  "balancePaymentsEnabled": zod.boolean().optional()
 })
 
 export const UpdatePaymentSettingsResponse = zod.object({
@@ -1155,6 +1238,7 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "sbpPaymentUrl": zod.string(),
   "showManualSbpDetails": zod.boolean(),
   "hasSbpQr": zod.boolean(),
+  "balancePaymentsEnabled": zod.boolean(),
   "primaryDomainHealthy": zod.boolean(),
   "happIosRoutingUrl": zod.string(),
   "happIosRoutingProfile": zod.object({
@@ -1186,7 +1270,7 @@ export const ListAdminPaymentsResponseItem = zod.object({
   "userEmail": zod.string(),
   "planName": zod.string().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -1211,7 +1295,7 @@ export const ConfirmPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),
@@ -1239,7 +1323,7 @@ export const RejectPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'rejected']),

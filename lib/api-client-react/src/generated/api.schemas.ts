@@ -130,6 +130,7 @@ export interface Me {
   referralLinkHost: string;
   isBanned: boolean;
   isTrialSubscription: boolean;
+  autoRenewFromBalance: boolean;
 }
 
 export interface Plan {
@@ -268,6 +269,7 @@ export interface PaymentSettings {
   sbpPaymentUrl: string;
   showManualSbpDetails: boolean;
   hasSbpQr: boolean;
+  balancePaymentsEnabled: boolean;
   primaryDomainHealthy: boolean;
   happIosRoutingUrl: string;
   happIosRoutingProfile: HappIosRoutingProfile;
@@ -309,7 +311,36 @@ export interface PaymentSettingsUpdate {
   showManualSbpDetails?: boolean;
   happIosRoutingProfile?: HappIosRoutingProfile | null;
   appDownloadLinks?: AppDownloadLinks | null;
+  balancePaymentsEnabled?: boolean;
 }
+
+export interface AutoRenewInput {
+  enabled: boolean;
+}
+
+export type BalanceCheckoutInputTarget = typeof BalanceCheckoutInputTarget[keyof typeof BalanceCheckoutInputTarget];
+
+
+export const BalanceCheckoutInputTarget = {
+  subscription: 'subscription',
+  extra_device_slot: 'extra_device_slot',
+  extra_traffic: 'extra_traffic',
+} as const;
+
+export interface BalanceCheckoutInput {
+  target: BalanceCheckoutInputTarget;
+  planId?: number;
+}
+
+export type PaymentType = typeof PaymentType[keyof typeof PaymentType];
+
+
+export const PaymentType = {
+  subscription: 'subscription',
+  extra_device_slot: 'extra_device_slot',
+  balance_topup: 'balance_topup',
+  extra_traffic: 'extra_traffic',
+} as const;
 
 export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
 
@@ -336,6 +367,13 @@ export interface Subscription {
   createdAt: string;
 }
 
+export interface BalanceCheckoutResult {
+  paymentId: number;
+  type: PaymentType;
+  amountRub: number;
+  subscription?: Subscription | null;
+}
+
 export type PaymentProvider = typeof PaymentProvider[keyof typeof PaymentProvider];
 
 
@@ -344,6 +382,7 @@ export const PaymentProvider = {
   yookassa: 'yookassa',
   yoomoney: 'yoomoney',
   freekassa: 'freekassa',
+  balance: 'balance',
 } as const;
 
 export interface SubscriptionInput {
@@ -358,16 +397,6 @@ export const PaymentStatus = {
   pending: 'pending',
   confirmed: 'confirmed',
   rejected: 'rejected',
-} as const;
-
-export type PaymentType = typeof PaymentType[keyof typeof PaymentType];
-
-
-export const PaymentType = {
-  subscription: 'subscription',
-  extra_device_slot: 'extra_device_slot',
-  balance_topup: 'balance_topup',
-  extra_traffic: 'extra_traffic',
 } as const;
 
 export interface Payment {

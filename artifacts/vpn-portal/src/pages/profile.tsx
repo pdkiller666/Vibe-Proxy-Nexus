@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetMe, useUpdateMe, useChangeMyEmail, useChangeMyPassword, getGetMeQueryKey } from "@workspace/api-client-react";
-import { UserCircle, Mail, KeyRound, Save, Users, Copy, Check } from "lucide-react";
+import { useGetMe, useUpdateMe, useChangeMyEmail, useChangeMyPassword, usePatchMeAutoRenew, useGetPaymentSettings, getGetMeQueryKey } from "@workspace/api-client-react";
+import { UserCircle, Mail, KeyRound, Save, Users, Copy, Check, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
@@ -257,6 +257,58 @@ function ReferralSection() {
   );
 }
 
+function AutoRenewSection() {
+  const { data: me } = useGetMe();
+  const { data: paymentSettings } = useGetPaymentSettings();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { mutate, isPending } = usePatchMeAutoRenew({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        toast({ title: "Настройки автопродления сохранены" });
+      },
+      onError: () => toast({ title: "Не удалось изменить настройки", variant: "destructive" }),
+    },
+  });
+
+  // Show only when the feature is enabled and the user has a monthly subscription
+  const featureEnabled = paymentSettings?.balancePaymentsEnabled ?? false;
+  const isMonthly = me?.currentPlanBillingType === "monthly";
+  if (!featureEnabled || !isMonthly) return null;
+
+  const enabled = me?.autoRenewFromBalance ?? false;
+
+  return (
+    <div className="bg-card border border-border p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <RefreshCw className="w-4 h-4 text-primary" />
+        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">Автопродление</p>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold">Автоматически продлять подписку с баланса</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            За ~24 ч до истечения подписки система спишет стоимость тарифа с вашего кошелька.
+            Если средств недостаточно — подписка истечёт в обычном режиме.
+          </p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            className="sr-only peer"
+            checked={enabled}
+            disabled={isPending}
+            onChange={(e) => mutate({ data: { enabled: e.target.checked } })}
+          />
+          <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4 peer-disabled:opacity-50" />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -270,6 +322,7 @@ export default function Profile() {
       <NameSection />
       <EmailSection />
       <PasswordSection />
+      <AutoRenewSection />
       <ReferralSection />
     </div>
   );

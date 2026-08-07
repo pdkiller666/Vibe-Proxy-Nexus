@@ -4186,6 +4186,7 @@ function PaymentSettingsForm() {
   const [showManualSbpDetails, setShowManualSbpDetails] = useState(false);
   const [yookassaEnabled, setYookassaEnabled] = useState(true);
   const [sbpEnabled, setSbpEnabled] = useState(true);
+  const [balancePaymentsEnabled, setBalancePaymentsEnabled] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   if (settings && !initialized) {
@@ -4208,6 +4209,7 @@ function PaymentSettingsForm() {
     setShowManualSbpDetails(settings.showManualSbpDetails ?? false);
     setYookassaEnabled(settings.yookassaEnabled ?? true);
     setSbpEnabled(settings.sbpEnabled ?? true);
+    setBalancePaymentsEnabled(settings.balancePaymentsEnabled ?? false);
     setInitialized(true);
   }
 
@@ -4234,6 +4236,7 @@ function PaymentSettingsForm() {
           showManualSbpDetails,
           yookassaEnabled,
           sbpEnabled,
+          balancePaymentsEnabled,
         },
       },
       {
@@ -4298,6 +4301,21 @@ function PaymentSettingsForm() {
               className="sr-only peer"
               checked={sbpEnabled}
               onChange={(e) => setSbpEnabled(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Оплата с баланса</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Разрешить мгновенную оплату с кошелька (без модерации)</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={balancePaymentsEnabled}
+              onChange={(e) => setBalancePaymentsEnabled(e.target.checked)}
             />
             <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
           </label>

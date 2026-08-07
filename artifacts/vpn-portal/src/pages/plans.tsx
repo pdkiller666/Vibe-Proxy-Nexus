@@ -8,6 +8,7 @@ import {
   useCreateBalanceTopupOrder,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
+import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -393,26 +394,39 @@ export default function Plans() {
                     }
 
                     return (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCardClick(plan.id);
-                          handleSelect(plan.id, plan.billingType);
-                        }}
-                        disabled={isPending}
-                        className={cn(
-                          "w-full font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2",
-                          "bg-primary text-primary-foreground",
+                      <div className="space-y-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardClick(plan.id);
+                            handleSelect(plan.id, plan.billingType);
+                          }}
+                          disabled={isPending}
+                          className={cn(
+                            "w-full font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2",
+                            "bg-primary text-primary-foreground",
+                          )}
+                        >
+                          {loadingPlanId === plan.id ? (
+                            "Оформляем..."
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4" /> {plan.billingType === "hourly" ? "Подключить" : "Оформить"}
+                            </>
+                          )}
+                        </button>
+                        {/* Balance checkout — only for monthly paid plans */}
+                        {plan.billingType === "monthly" && (
+                          <PayFromBalanceButton
+                            target="subscription"
+                            planId={plan.id}
+                            priceRub={plan.priceRub}
+                            balanceKopecks={me?.balanceKopecks ?? 0}
+                            enabled={paymentSettings?.balancePaymentsEnabled ?? false}
+                            onSuccess={() => setLocation("/dashboard")}
+                          />
                         )}
-                      >
-                        {loadingPlanId === plan.id ? (
-                          "Оформляем..."
-                        ) : (
-                          <>
-                            <Check className="w-4 h-4" /> {plan.billingType === "hourly" ? "Подключить" : "Оформить"}
-                          </>
-                        )}
-                      </button>
+                      </div>
                     );
                   })()}
                   </div>{/* end inner promo wrapper */}

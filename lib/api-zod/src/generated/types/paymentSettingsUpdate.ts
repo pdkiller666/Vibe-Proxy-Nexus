@@ -43,4 +43,5 @@ export interface PaymentSettingsUpdate {
   showManualSbpDetails?: boolean;
   happIosRoutingProfile?: HappIosRoutingProfile | null;
   appDownloadLinks?: AppDownloadLinks | null;
+  balancePaymentsEnabled?: boolean;
 }

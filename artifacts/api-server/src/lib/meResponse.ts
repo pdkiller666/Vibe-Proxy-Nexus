@@ -111,5 +111,6 @@ export async function buildMeData(user: User, requestHost?: string) {
     referralLinkHost,
     isBanned: user.isBanned,
     isTrialSubscription,
+    autoRenewFromBalance: user.autoRenewFromBalance,
   };
 }

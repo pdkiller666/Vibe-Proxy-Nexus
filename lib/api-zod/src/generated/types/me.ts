@@ -39,4 +39,5 @@ export interface Me {
   referralLinkHost: string;
   isBanned: boolean;
   isTrialSubscription: boolean;
+  autoRenewFromBalance: boolean;
 }

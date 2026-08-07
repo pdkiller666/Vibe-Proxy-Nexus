@@ -35,6 +35,9 @@ import type {
   AdminUser,
   AdminUserNoteUpdate,
   AdminUserProfileUpdate,
+  AutoRenewInput,
+  BalanceCheckoutInput,
+  BalanceCheckoutResult,
   BalanceTopupOrderBody,
   BalanceTopupOrderResult,
   BalanceTransaction,
@@ -848,6 +851,146 @@ export const useChangeMyPassword = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getChangeMyPasswordMutationOptions(options));
+    }
+
+export const getPatchMeAutoRenewUrl = () => {
+
+
+
+
+  return `/api/me/auto-renew`
+}
+
+/**
+ * @summary Enable or disable automatic monthly renewal from balance
+ */
+export const patchMeAutoRenew = async (autoRenewInput: AutoRenewInput, options?: RequestInit): Promise<Me> => {
+
+  return customFetch<Me>(getPatchMeAutoRenewUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(autoRenewInput)
+  }
+);}
+
+
+
+
+export const getPatchMeAutoRenewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMeAutoRenew>>, TError,{data: BodyType<AutoRenewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchMeAutoRenew>>, TError,{data: BodyType<AutoRenewInput>}, TContext> => {
+
+const mutationKey = ['patchMeAutoRenew'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchMeAutoRenew>>, {data: BodyType<AutoRenewInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  patchMeAutoRenew(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchMeAutoRenewMutationResult = NonNullable<Awaited<ReturnType<typeof patchMeAutoRenew>>>
+    export type PatchMeAutoRenewMutationBody = BodyType<AutoRenewInput>
+    export type PatchMeAutoRenewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Enable or disable automatic monthly renewal from balance
+ */
+export const usePatchMeAutoRenew = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMeAutoRenew>>, TError,{data: BodyType<AutoRenewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchMeAutoRenew>>,
+        TError,
+        {data: BodyType<AutoRenewInput>},
+        TContext
+      > => {
+      return useMutation(getPatchMeAutoRenewMutationOptions(options));
+    }
+
+export const getPostBalanceCheckoutUrl = () => {
+
+
+
+
+  return `/api/balance-checkout`
+}
+
+/**
+ * @summary Pay for a subscription, extra device slot, or extra traffic from the wallet balance
+ */
+export const postBalanceCheckout = async (balanceCheckoutInput: BalanceCheckoutInput, options?: RequestInit): Promise<BalanceCheckoutResult> => {
+
+  return customFetch<BalanceCheckoutResult>(getPostBalanceCheckoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(balanceCheckoutInput)
+  }
+);}
+
+
+
+
+export const getPostBalanceCheckoutMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postBalanceCheckout>>, TError,{data: BodyType<BalanceCheckoutInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postBalanceCheckout>>, TError,{data: BodyType<BalanceCheckoutInput>}, TContext> => {
+
+const mutationKey = ['postBalanceCheckout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postBalanceCheckout>>, {data: BodyType<BalanceCheckoutInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postBalanceCheckout(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostBalanceCheckoutMutationResult = NonNullable<Awaited<ReturnType<typeof postBalanceCheckout>>>
+    export type PostBalanceCheckoutMutationBody = BodyType<BalanceCheckoutInput>
+    export type PostBalanceCheckoutMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Pay for a subscription, extra device slot, or extra traffic from the wallet balance
+ */
+export const usePostBalanceCheckout = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postBalanceCheckout>>, TError,{data: BodyType<BalanceCheckoutInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postBalanceCheckout>>,
+        TError,
+        {data: BodyType<BalanceCheckoutInput>},
+        TContext
+      > => {
+      return useMutation(getPostBalanceCheckoutMutationOptions(options));
     }
 
 export const getListPlansUrl = () => {

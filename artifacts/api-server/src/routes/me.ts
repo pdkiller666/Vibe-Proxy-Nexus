@@ -9,6 +9,7 @@ import {
   ChangeMyEmailResponse,
   ChangeMyPasswordBody,
   ChangeMyPasswordResponse,
+  PatchMeAutoRenewBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireAuthAllowBanned } from "../lib/auth";
 import { buildMeData } from "../lib/meResponse";
@@ -101,6 +102,22 @@ router.patch("/me/password", requireAuth, async (req, res): Promise<void> => {
   await invalidateUserSessions(req.appUser!.id);
 
   res.json(ChangeMyPasswordResponse.parse({ message: "Пароль изменён" }));
+});
+
+router.patch("/me/auto-renew", requireAuth, async (req, res): Promise<void> => {
+  const parsed = PatchMeAutoRenewBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ autoRenewFromBalance: parsed.data.enabled })
+    .where(eq(usersTable.id, req.appUser!.id))
+    .returning();
+
+  res.json(GetMeResponse.parse(await buildMeData(user!, req.get("host") ?? "")));
 });
 
 export default router;

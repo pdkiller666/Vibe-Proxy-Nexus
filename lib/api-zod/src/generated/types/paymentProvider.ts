@@ -14,4 +14,5 @@ export const PaymentProvider = {
   yookassa: 'yookassa',
   yoomoney: 'yoomoney',
   freekassa: 'freekassa',
+  balance: 'balance',
 } as const;

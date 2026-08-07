@@ -34,6 +34,10 @@ export const usersTable = pgTable("users", {
   // rather than silently redirecting to sign-in). VPN keys are revoked and
   // sessions are cleared on ban; ensureActiveKeyForUser is called on unban.
   isBanned: boolean("is_banned").notNull().default(false),
+  // Opt-in: when true the autoRenewJob will attempt to charge the monthly
+  // subscription from the wallet ~24 h before expiry. Billing is a no-op
+  // if the balance is insufficient; the subscription expires normally then.
+  autoRenewFromBalance: boolean("auto_renew_from_balance").notNull().default(false),
   // Which admin invite link this user registered through, if any. Nullable FK
   // to invite_links(id) with ON DELETE SET NULL — enforced at DB level via
   // heal-schema M-19. No TypeScript-level .references() here to avoid a

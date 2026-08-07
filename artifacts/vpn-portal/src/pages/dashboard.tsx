@@ -30,6 +30,7 @@ import {
   Server,
   X,
   Gift,
+  RefreshCw,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OnboardingTip } from "@/components/onboarding-tip";
@@ -323,6 +324,75 @@ function ReferralSection() {
 }
 
 /**
+ * Shows dismissible banners for auto_renew_success and auto_renew_failed events.
+ */
+function AutoRenewBanners() {
+  const { data: notifications } = useListMyNotifications();
+  const { mutate: acknowledge } = useAcknowledgeNotification({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
+      },
+    },
+  });
+
+  const renewEvents = (notifications ?? []).filter(
+    (n) => n.eventType === "auto_renew_success" || n.eventType === "auto_renew_failed",
+  );
+
+  if (renewEvents.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {renewEvents.map((n) => {
+        const meta = n.metadata as {
+          planName?: string;
+          amountRub?: number;
+          requiredRub?: number;
+          balanceRub?: number;
+        };
+        const isSuccess = n.eventType === "auto_renew_success";
+        return (
+          <div
+            key={n.id}
+            className={`flex items-start gap-3 p-4 text-sm border ${
+              isSuccess
+                ? "bg-green-50 border-green-200 text-green-800"
+                : "bg-amber-50 border-amber-300 text-amber-800"
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 shrink-0 mt-0.5 ${isSuccess ? "text-green-600" : "text-amber-600"}`} />
+            <div className="flex-1 min-w-0">
+              {isSuccess ? (
+                <>
+                  <span className="font-semibold">Подписка автоматически продлена.</span>{" "}
+                  С баланса списано <strong>{meta.amountRub} ₽</strong>
+                  {meta.planName ? ` за тариф «${meta.planName}»` : ""}.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">Не удалось автопродлить подписку.</span>{" "}
+                  Нужно <strong>{meta.requiredRub} ₽</strong>, на балансе{" "}
+                  <strong>{meta.balanceRub} ₽</strong>. Пополните баланс, чтобы не потерять доступ.
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="Закрыть уведомление"
+              onClick={() => acknowledge({ id: n.id })}
+              className={`shrink-0 transition-colors ${isSuccess ? "text-green-500 hover:text-green-800" : "text-amber-500 hover:text-amber-800"}`}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Shows one dismissible banner per unacknowledged "key_migrated" notification.
  * Each banner explains that the user's key was automatically moved to a new server.
  */
@@ -502,6 +572,9 @@ export default function Dashboard() {
 
       {/* Server migration notifications */}
       <ServerMigrationBanners />
+
+      {/* Auto-renew notifications */}
+      <AutoRenewBanners />
 
       {/* ── Trial period banner ── shown prominently so the user knows they're on
           a free trial and what happens after it ends. Shown regardless of
