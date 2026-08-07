@@ -12,7 +12,7 @@
  * expiry as usual; autoRenew only fires BEFORE expiry.
  */
 
-import { and, desc, eq, gt, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import {
   db,
   subscriptionsTable,
@@ -185,9 +185,9 @@ async function hasRecentEvent(
     return Boolean(row);
   }
 
-  // Admin-scoped events with userId stored in metadata (auto_renew_error)
-  // We can't query JSONB by metadata.userId portably in drizzle without raw SQL;
-  // use a simple count on eventType + createdAt — good enough for dedup.
+  // Admin-scoped events with userId stored in metadata (auto_renew_error).
+  // Filter by metadata->>'userId' so each user gets their own dedup window,
+  // not a shared one across all users.
   const [row] = await db
     .select({ id: systemEventsTable.id })
     .from(systemEventsTable)
@@ -197,6 +197,9 @@ async function hasRecentEvent(
         gt(systemEventsTable.createdAt, since),
         isNull(systemEventsTable.userId),
         isNull(systemEventsTable.acknowledgedAt),
+        metaUserId !== undefined
+          ? sql`(${systemEventsTable.metadata}->>'userId')::int = ${metaUserId}`
+          : undefined,
       ),
     )
     .limit(1);
