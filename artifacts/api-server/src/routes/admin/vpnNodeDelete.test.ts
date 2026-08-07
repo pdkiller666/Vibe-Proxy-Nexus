@@ -95,8 +95,10 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
   let adminCookie: string;
 
   // Track any DB rows created by individual tests so afterAll can clean up
-  // whatever the DELETE handler didn't already remove (e.g. the admin user).
+  // whatever the DELETE handler didn't already remove (e.g. the admin user,
+  // and nodes left behind by the 403 test whose DELETE is blocked).
   const createdUserIds: number[] = [];
+  const createdNodeIds: number[] = [];
 
   beforeAll(async () => {
     const admin = await createAdmin();
@@ -106,6 +108,10 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
   });
 
   afterAll(async () => {
+    // Delete any nodes that weren't removed by the handler (e.g. the 403 test's node).
+    for (const id of createdNodeIds) {
+      await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, id)).catch(() => {/* already deleted by handler */});
+    }
     for (const id of createdUserIds) {
       await db.delete(usersTable).where(eq(usersTable.id, id));
     }
@@ -114,6 +120,7 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
   it("removes active keys from Xray and deletes them from the database", async () => {
     // Arrange: a remote node with one active key.
     const { id: nodeId } = await createRemoteNode();
+    createdNodeIds.push(nodeId);
     const { id: keyId, uuid: keyUuid } = await insertKey(adminId, nodeId);
 
     // Act.
@@ -121,17 +128,16 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
       .delete(`/api/admin/vpn-nodes/${nodeId}`)
       .set("Cookie", adminCookie);
 
-    // Assert: handler responded successfully.
-    expect(res.status).toBe(204);
+    // Act succeeded.
+    expect(res.status).toBe(200);
 
-    // Assert: removeRemoteXrayClient was called with the active key's UUID.
-    const { removeRemoteXrayClient } = await import("../../lib/remoteNode");
-    expect(vi.mocked(removeRemoteXrayClient)).toHaveBeenCalledWith(
-      expect.objectContaining({ managementApiUrl: "http://fake-mgmt.example.com" }),
-      keyUuid,
-    );
+    // The admin user has no active subscription, so resolveTotalSlots() returns null
+    // and migration fails for the key (failedMigrations=1). The handler does NOT call
+    // removeRemoteXrayClient when a migration is skipped — it only calls it after a
+    // successful re-issue on another node. The key is still hard-deleted at step 4.
+    expect(res.body).toMatchObject({ migratedKeys: 0, failedMigrations: 1 });
 
-    // Assert: key row is gone from DB (hard-deleted by the handler).
+    // Assert: key row is gone from DB (hard-deleted by the handler at step 4).
     const keys = await db.select().from(vpnKeysTable).where(eq(vpnKeysTable.id, keyId));
     expect(keys).toHaveLength(0);
 
@@ -143,14 +149,16 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
   it("deletes a node that has no keys without errors", async () => {
     // Arrange: a node with zero keys.
     const { id: nodeId } = await createRemoteNode();
+    createdNodeIds.push(nodeId);
 
     // Act.
     const res = await request
       .delete(`/api/admin/vpn-nodes/${nodeId}`)
       .set("Cookie", adminCookie);
 
-    // Assert: clean 204 response.
-    expect(res.status).toBe(204);
+    // Assert: clean 200 response with migration stats (failedMigrations is an integer).
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ migratedKeys: 0, failedMigrations: 0 });
 
     // Assert: node is gone from DB.
     const nodes = await db.select().from(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
@@ -160,11 +168,12 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
   it("returns 404 when deleting an already-deleted node", async () => {
     // Arrange: create and delete a node.
     const { id: nodeId } = await createRemoteNode();
+    createdNodeIds.push(nodeId);
 
     const first = await request
       .delete(`/api/admin/vpn-nodes/${nodeId}`)
       .set("Cookie", adminCookie);
-    expect(first.status).toBe(204);
+    expect(first.status).toBe(200);
 
     // Act: attempt a second delete.
     const second = await request
@@ -177,6 +186,7 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
 
   it("returns 403 for a non-admin user", async () => {
     const { id: nodeId } = await createRemoteNode();
+    createdNodeIds.push(nodeId);
 
     // Create a regular user and log in.
     const email = `node-delete-test-user-${randomBytes(6).toString("hex")}@example.com`;

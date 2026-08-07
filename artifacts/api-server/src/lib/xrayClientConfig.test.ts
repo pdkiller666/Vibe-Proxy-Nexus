@@ -112,13 +112,12 @@ describe("buildXrayClientConfig — routing rules", () => {
     expect(rule?.outboundTag).toBe(XRAY_TAG_DIRECT);
   });
 
-  it("contains a rule that sends geoip:ru direct", () => {
+  it("does NOT use geoip:ru tag (Happ iOS ships a minimal geoip.dat that lacks the 'ru' category — causes hard start error)", () => {
     const { routing } = buildXrayClientConfig([DOMAIN_OUTBOUND]) as {
-      routing: { rules: Array<{ ip?: string[]; outboundTag: string }> };
+      routing: { rules: Array<{ ip?: string[] }> };
     };
-    const rule = routing.rules.find((r) => r.ip?.includes("geoip:ru"));
-    expect(rule).toBeDefined();
-    expect(rule?.outboundTag).toBe(XRAY_TAG_DIRECT);
+    const hasGeoipRu = routing.rules.some((r) => r.ip?.includes("geoip:ru"));
+    expect(hasGeoipRu).toBe(false);
   });
 
   it("contains a rule that sends .ru TLD direct via regexp", () => {

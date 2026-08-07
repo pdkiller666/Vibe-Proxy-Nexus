@@ -61,6 +61,10 @@ describe("VPN key revoke flow", () => {
         name: `Test plan ${randomBytes(4).toString("hex")}`,
         priceRub: 10000,
         durationDays: 30,
+        // Allow enough device slots so the sequential test cases can each issue
+        // a key without hitting the 1-device default limit. Some keys aren't
+        // revoked between tests (e.g. the "wrong owner" test leaves a key active).
+        devicesIncluded: 5,
       })
       .returning({ id: plansTable.id });
     planId = plan.id;
@@ -104,10 +108,13 @@ describe("VPN key revoke flow", () => {
   });
 
   async function issueKey(): Promise<number> {
+    // Explicitly specify nodeId so auto-selection never picks up a remote node
+    // from a parallel test suite (vpnNodeDelete creates active remote nodes that
+    // resolve to fake-mgmt.example.com — causing ENOTFOUND 502 in this worker).
     const res = await request
       .post("/api/vpn-keys")
       .set("Cookie", userCookie)
-      .send({});
+      .send({ nodeId });
 
     expect(res.status).toBe(201);
     vpnKeyIds.push(res.body.id);
