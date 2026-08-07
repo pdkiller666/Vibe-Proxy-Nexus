@@ -32,6 +32,10 @@ export const supportMessagesTable = pgTable(
       .notNull()
       .references(() => usersTable.id),
     body: text("body").notNull(),
+    // Image attachment stored as base64, same pattern as payments.screenshotData.
+    // Nullable — most messages have no attachment.
+    attachmentData: text("attachment_data"),
+    attachmentMimeType: text("attachment_mime_type"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

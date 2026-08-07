@@ -921,6 +921,7 @@ export interface SupportMessage {
   createdAt: string;
   authorEmail: string;
   isAdmin: boolean;
+  hasAttachment: boolean;
 }
 
 export interface SupportTicketCreateInput {
@@ -934,6 +935,8 @@ export interface SupportTicketCreateInput {
      * @maxLength 4000
      */
   body: string;
+  attachmentData?: string;
+  attachmentMimeType?: string;
 }
 
 export interface SupportTicketDetail {
@@ -976,6 +979,8 @@ export interface SupportMessageInput {
      * @maxLength 4000
      */
   body: string;
+  attachmentData?: string;
+  attachmentMimeType?: string;
 }
 
 export type TicketStatusFilter = TicketStatus;

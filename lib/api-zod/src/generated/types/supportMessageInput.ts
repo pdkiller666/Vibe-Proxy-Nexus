@@ -12,4 +12,6 @@ export interface SupportMessageInput {
      * @maxLength 4000
      */
   body: string;
+  attachmentData?: string;
+  attachmentMimeType?: string;
 }

@@ -2816,7 +2816,7 @@ components:
 
     SupportMessage:
       type: object
-      required: [id, ticketId, authorId, body, createdAt, authorEmail, isAdmin]
+      required: [id, ticketId, authorId, body, createdAt, authorEmail, isAdmin, hasAttachment]
       properties:
         id: { type: integer }
         ticketId: { type: integer }
@@ -2825,6 +2825,7 @@ components:
         createdAt: { type: string, format: date-time }
         authorEmail: { type: string }
         isAdmin: { type: boolean }
+        hasAttachment: { type: boolean }
 
     SupportTicketCreateInput:
       type: object
@@ -2832,6 +2833,8 @@ components:
       properties:
         subject: { type: string, minLength: 1, maxLength: 200 }
         body: { type: string, minLength: 1, maxLength: 4000 }
+        attachmentData: { type: string }
+        attachmentMimeType: { type: string }
 
     SupportTicketDetail:
       type: object
@@ -2880,6 +2883,8 @@ components:
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 4000 }
+        attachmentData: { type: string }
+        attachmentMimeType: { type: string }
 
     TicketStatusFilter:
       $ref: "#/components/schemas/TicketStatus"

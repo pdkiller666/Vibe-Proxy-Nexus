@@ -15,6 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageCircle, Plus, ArrowLeft, Send, ChevronDown, ChevronUp } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
+import {
+  SupportAttachmentPicker,
+  SupportMessageAttachmentDisplay,
+  type AttachmentValue,
+} from "@/components/support-attachment-picker";
 
 type TicketStatus = "open" | "answered" | "closed";
 
@@ -78,6 +83,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => void }) {
   const [reply, setReply] = useState("");
+  const [attachment, setAttachment] = useState<AttachmentValue | null>(null);
   const { data: ticket, isLoading } = useGetTicket(ticketId);
   const { mutate: addMessage, isPending } = useAddTicketMessage();
   const qc = useQueryClient();
@@ -87,14 +93,28 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
     const body = reply.trim();
     if (!body) return;
     addMessage(
-      { ticketId, data: { body } },
+      {
+        ticketId,
+        data: {
+          body,
+          ...(attachment
+            ? { attachmentData: attachment.data, attachmentMimeType: attachment.mimeType }
+            : {}),
+        },
+      },
       {
         onSuccess: () => {
           setReply("");
+          setAttachment(null);
           qc.invalidateQueries({ queryKey: getGetTicketQueryKey(ticketId) });
           qc.invalidateQueries({ queryKey: getListMyTicketsQueryKey() });
         },
-        onError: () => toast({ title: "Ошибка", description: "Не удалось отправить сообщение", variant: "destructive" }),
+        onError: () =>
+          toast({
+            title: "Ошибка",
+            description: "Не удалось отправить сообщение",
+            variant: "destructive",
+          }),
       },
     );
   }
@@ -122,7 +142,9 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
                 #{ticket.id} · {new Date(ticket.createdAt).toLocaleDateString("ru-RU")}
               </p>
             </div>
-            <span className={`text-xs font-semibold px-2.5 py-1 whitespace-nowrap ${STATUS_CLS[ticket.status as TicketStatus]}`}>
+            <span
+              className={`text-xs font-semibold px-2.5 py-1 whitespace-nowrap ${STATUS_CLS[ticket.status as TicketStatus]}`}
+            >
               {STATUS_LABEL[ticket.status as TicketStatus]}
             </span>
           </div>
@@ -138,6 +160,11 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
                 }`}
               >
                 <p className="text-gray-800 whitespace-pre-wrap">{msg.body}</p>
+                {msg.hasAttachment && (
+                  <SupportMessageAttachmentDisplay
+                    src={`/api/support-tickets/${ticketId}/messages/${msg.id}/attachment`}
+                  />
+                )}
                 <p className="text-xs text-gray-400 mt-1.5">
                   {msg.isAdmin ? "Поддержка" : "Вы"} ·{" "}
                   {new Date(msg.createdAt).toLocaleString("ru-RU", {
@@ -160,6 +187,11 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send();
                 }}
+              />
+              <SupportAttachmentPicker
+                value={attachment}
+                onChange={setAttachment}
+                disabled={isPending}
               />
               <button
                 onClick={send}
@@ -184,6 +216,7 @@ function TicketThread({ ticketId, onBack }: { ticketId: number; onBack: () => vo
 function NewTicketForm({ onCreated }: { onCreated: (id: number) => void }) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [attachment, setAttachment] = useState<AttachmentValue | null>(null);
   const { mutate: create, isPending } = useCreateSupportTicket();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -192,13 +225,26 @@ function NewTicketForm({ onCreated }: { onCreated: (id: number) => void }) {
     e.preventDefault();
     if (!subject.trim() || !body.trim()) return;
     create(
-      { data: { subject: subject.trim(), body: body.trim() } },
+      {
+        data: {
+          subject: subject.trim(),
+          body: body.trim(),
+          ...(attachment
+            ? { attachmentData: attachment.data, attachmentMimeType: attachment.mimeType }
+            : {}),
+        },
+      },
       {
         onSuccess: (ticket) => {
           qc.invalidateQueries({ queryKey: getListMyTicketsQueryKey() });
           onCreated(ticket.id);
         },
-        onError: () => toast({ title: "Ошибка", description: "Не удалось создать обращение", variant: "destructive" }),
+        onError: () =>
+          toast({
+            title: "Ошибка",
+            description: "Не удалось создать обращение",
+            variant: "destructive",
+          }),
       },
     );
   }
@@ -233,6 +279,17 @@ function NewTicketForm({ onCreated }: { onCreated: (id: number) => void }) {
         />
         <p className="text-xs text-gray-400 mt-1">{body.length}/4000</p>
       </div>
+      <div>
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1.5">
+          Вложение{" "}
+          <span className="text-gray-400 normal-case font-normal">(необязательно — скриншот ошибки и т.п.)</span>
+        </label>
+        <SupportAttachmentPicker
+          value={attachment}
+          onChange={setAttachment}
+          disabled={isPending}
+        />
+      </div>
       <div className="flex gap-3">
         <button
           type="submit"
@@ -250,7 +307,8 @@ export default function SupportPage() {
   const [view, setView] = useState<"list" | "new" | number>("list");
   const { data: tickets, isLoading } = useListMyTickets();
 
-  const openCount = tickets?.filter((t) => t.status === "open" || t.status === "answered").length ?? 0;
+  const openCount =
+    tickets?.filter((t) => t.status === "open" || t.status === "answered").length ?? 0;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
@@ -275,8 +333,14 @@ export default function SupportPage() {
         icon={<MessageCircle className="w-4 h-4" />}
         title="Как работает поддержка"
       >
-        <p>Создайте обращение — опишите проблему или задайте вопрос. Отвечаем обычно в течение нескольких часов.</p>
-        <p>В разделе <strong>FAQ</strong> ниже собраны ответы на самые частые вопросы — возможно, ответ уже там.</p>
+        <p>
+          Создайте обращение — опишите проблему или задайте вопрос. Отвечаем обычно в течение
+          нескольких часов.
+        </p>
+        <p>
+          В разделе <strong>FAQ</strong> ниже собраны ответы на самые частые вопросы — возможно,
+          ответ уже там.
+        </p>
       </OnboardingTip>
 
       {/* Main content */}
@@ -315,7 +379,9 @@ export default function SupportPage() {
 
             {isLoading ? (
               <div className="p-5 space-y-3">
-                {[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+                {[1, 2].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
               </div>
             ) : !tickets?.length ? (
               <div className="py-12 text-center text-sm text-gray-400">
@@ -335,10 +401,13 @@ export default function SupportPage() {
                         {t.subject}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        #{t.id} · {new Date(t.updatedAt).toLocaleDateString("ru-RU")} · {t.messageCount} сообщ.
+                        #{t.id} · {new Date(t.updatedAt).toLocaleDateString("ru-RU")} ·{" "}
+                        {t.messageCount} сообщ.
                       </p>
                     </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 shrink-0 ${STATUS_CLS[t.status as TicketStatus]}`}>
+                    <span
+                      className={`text-xs font-semibold px-2.5 py-1 shrink-0 ${STATUS_CLS[t.status as TicketStatus]}`}
+                    >
                       {STATUS_LABEL[t.status as TicketStatus]}
                     </span>
                   </button>

@@ -14,4 +14,5 @@ export interface SupportMessage {
   createdAt: Date;
   authorEmail: string;
   isAdmin: boolean;
+  hasAttachment: boolean;
 }

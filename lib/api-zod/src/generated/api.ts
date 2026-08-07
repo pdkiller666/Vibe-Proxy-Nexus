@@ -813,7 +813,9 @@ export const createSupportTicketBodyBodyMax = 4000;
 
 export const CreateSupportTicketBody = zod.object({
   "subject": zod.string().min(1).max(createSupportTicketBodySubjectMax),
-  "body": zod.string().min(1).max(createSupportTicketBodyBodyMax)
+  "body": zod.string().min(1).max(createSupportTicketBodyBodyMax),
+  "attachmentData": zod.string().optional(),
+  "attachmentMimeType": zod.string().optional()
 })
 
 export const CreateSupportTicketResponse = zod.object({
@@ -849,7 +851,8 @@ export const GetTicketResponse = zod.object({
   "body": zod.string(),
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
-  "isAdmin": zod.boolean()
+  "isAdmin": zod.boolean(),
+  "hasAttachment": zod.boolean()
 }))
 })
 
@@ -866,7 +869,9 @@ export const addTicketMessageBodyBodyMax = 4000;
 
 
 export const AddTicketMessageBody = zod.object({
-  "body": zod.string().min(1).max(addTicketMessageBodyBodyMax)
+  "body": zod.string().min(1).max(addTicketMessageBodyBodyMax),
+  "attachmentData": zod.string().optional(),
+  "attachmentMimeType": zod.string().optional()
 })
 
 export const AddTicketMessageResponse = zod.object({
@@ -876,7 +881,8 @@ export const AddTicketMessageResponse = zod.object({
   "body": zod.string(),
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
-  "isAdmin": zod.boolean()
+  "isAdmin": zod.boolean(),
+  "hasAttachment": zod.boolean()
 })
 
 
@@ -2153,7 +2159,8 @@ export const GetAdminTicketResponse = zod.object({
   "body": zod.string(),
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
-  "isAdmin": zod.boolean()
+  "isAdmin": zod.boolean(),
+  "hasAttachment": zod.boolean()
 }))
 })
 
@@ -2170,7 +2177,9 @@ export const adminAddTicketMessageBodyBodyMax = 4000;
 
 
 export const AdminAddTicketMessageBody = zod.object({
-  "body": zod.string().min(1).max(adminAddTicketMessageBodyBodyMax)
+  "body": zod.string().min(1).max(adminAddTicketMessageBodyBodyMax),
+  "attachmentData": zod.string().optional(),
+  "attachmentMimeType": zod.string().optional()
 })
 
 export const AdminAddTicketMessageResponse = zod.object({
@@ -2180,7 +2189,8 @@ export const AdminAddTicketMessageResponse = zod.object({
   "body": zod.string(),
   "createdAt": zod.coerce.date(),
   "authorEmail": zod.string(),
-  "isAdmin": zod.boolean()
+  "isAdmin": zod.boolean(),
+  "hasAttachment": zod.boolean()
 })
 
 

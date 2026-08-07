@@ -81,6 +81,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw, Zap, Server, LineChart as LineChartIcon } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { SupportMessageAttachmentDisplay } from "@/components/support-attachment-picker";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -5323,6 +5324,11 @@ function TicketDetail({ ticketId, onBack }: { ticketId: number; onBack: () => vo
             {ticket.messages.map((msg) => (
               <div key={msg.id} className={`p-3 text-sm ${msg.isAdmin ? "bg-orange-50 border border-orange-100 ml-8" : "bg-muted border border-border mr-8"}`}>
                 <p className="whitespace-pre-wrap text-foreground">{msg.body}</p>
+                {msg.hasAttachment && (
+                  <SupportMessageAttachmentDisplay
+                    src={`/api/admin/support-tickets/${ticketId}/messages/${msg.id}/attachment`}
+                  />
+                )}
                 <p className="text-xs text-muted-foreground mt-1">
                   {msg.isAdmin ? "Поддержка" : msg.authorEmail} · {formatDate(msg.createdAt.toString())}
                 </p>
