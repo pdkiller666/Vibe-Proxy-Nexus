@@ -429,15 +429,26 @@ function DebitGroupRow({ entry }: { entry: Extract<FeedEntry, { kind: "debitGrou
   );
 }
 
+function providerLabel(provider: string | undefined | null): string | null {
+  if (provider === "yoomoney") return "ЮMoney";
+  if (provider === "manual_sbp") return "СБП";
+  if (provider === "balance") return "Баланс";
+  return null;
+}
+
 function PaymentRow({ payment }: { payment: Payment }) {
   const status = statusConfig[payment.status];
   const StatusIcon = status.icon;
+  const pLabel = providerLabel(payment.provider);
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 flex-wrap">
       <div className="min-w-0 break-words">
         <p className="text-sm font-semibold">{payment.amountRub} ₽ · {paymentTypeLabel(payment.type)}</p>
-        <p className="text-xs text-muted-foreground font-mono">
-          {formatDateTime(payment.createdAt)} · {payment.reference}
+        <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5 flex-wrap">
+          <span>{formatDateTime(payment.createdAt)} · {payment.reference}</span>
+          {pLabel && (
+            <span className="px-1.5 py-0.5 bg-muted text-muted-foreground font-mono text-[10px]">{pLabel}</span>
+          )}
         </p>
         {payment.status === "rejected" && payment.rejectionReason && (
           <p className="text-xs text-destructive mt-0.5">{payment.rejectionReason}</p>

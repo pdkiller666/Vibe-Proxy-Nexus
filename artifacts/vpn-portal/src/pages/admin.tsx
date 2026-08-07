@@ -140,7 +140,7 @@ function useNotificationPoller(): AdminNotification[] {
 
         for (const n of newItems) {
           seenIds.current.add(n.id);
-          const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : "СБП";
+          const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : n.provider === "balance" ? "Баланс" : "СБП";
           const typeLabel =
             n.type === "extra_device_slot" ? "Доп. устройство" :
             n.type === "balance_topup"     ? "Пополнение баланса" :
@@ -636,7 +636,7 @@ function formatWaitTime(createdAt: string): string {
 
 function PaymentsQueue() {
   const [statusFilter, setStatusFilter] = useState<"pending" | "confirmed" | "rejected" | "all">("pending");
-  const [providerFilter, setProviderFilter] = useState<"all" | "yoomoney" | "manual_sbp">("all");
+  const [providerFilter, setProviderFilter] = useState<"all" | "yoomoney" | "manual_sbp" | "balance">("all");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc");
   const [search, setSearch] = useState("");
   const { data: payments, isLoading } = useListAdminPayments(
@@ -746,6 +746,7 @@ function PaymentsQueue() {
           <option value="all">Все методы</option>
           <option value="yoomoney">ЮMoney</option>
           <option value="manual_sbp">СБП</option>
+          <option value="balance">Баланс</option>
         </select>
         <select
           value={sort}
@@ -797,7 +798,7 @@ function PaymentsQueue() {
               <div className="text-sm text-muted-foreground font-mono flex items-center gap-2 flex-wrap">
                 <span>{payment.amountRub} ₽ · {payment.reference} · {formatDate(payment.createdAt)}</span>
                 <span className="text-[11px] px-1.5 py-0.5 bg-muted font-mono rounded">
-                  {payment.provider === "yoomoney" ? "ЮMoney" : "СБП"}
+                  {payment.provider === "yoomoney" ? "ЮMoney" : payment.provider === "balance" ? "Баланс" : "СБП"}
                 </span>
                 {payment.status === "pending" && (
                   <span className="flex items-center gap-1 text-[11px] text-orange-600 font-mono">
@@ -5504,7 +5505,7 @@ function NotificationBell() {
             ) : (
               <div className="divide-y divide-border">
                 {notifications.map((n) => {
-                  const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : "СБП";
+                  const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : n.provider === "balance" ? "Баланс" : "СБП";
                   const typeLabel =
                     n.type === "extra_device_slot" ? "Доп. устройство" :
                     n.type === "balance_topup"     ? "Пополнение" :
