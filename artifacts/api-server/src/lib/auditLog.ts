@@ -78,7 +78,14 @@ const ACTION_MAP: Record<string, string> = {
 function normalizeRoutePath(path: string): string {
   return path
     .split("/")
-    .map((seg) => (seg.startsWith(":") ? ":id" : seg))
+    .map((seg) => {
+      // Параметры маршрута (:userId, :nodeId и т.п.) → :id
+      if (seg.startsWith(":")) return ":id";
+      // Числовые сегменты в req.path (реальные ID) → :id
+      // Нужно когда req.route недоступен и используется req.path напрямую
+      if (/^\d+$/.test(seg)) return ":id";
+      return seg;
+    })
     .join("/");
 }
 
@@ -139,19 +146,15 @@ async function buildTargetDescription(
 
 /**
  * Логирует все успешные мутирующие запросы (POST/PATCH/PUT/DELETE) в
- * admin_audit_log. Перехватывает res.send после ответа — не влияет на
- * бизнес-логику. Не дублирует requireAuth/requireAdmin — они уже в цепочке.
+ * admin_audit_log. Слушает событие `finish` на response — срабатывает
+ * для любого типа ответа: res.json(), res.send(), res.status(204).end() и т.д.
+ * Не влияет на бизнес-логику. Не дублирует requireAuth/requireAdmin.
  */
 export function auditLogMiddleware() {
-  return async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     const startedAt = Date.now();
 
-    const originalSend = res.send.bind(res);
-    res.send = function (this: Response, body?: unknown): Response {
+    res.on("finish", () => {
       if (
         res.statusCode >= 200 &&
         res.statusCode < 300 &&
@@ -165,8 +168,7 @@ export function auditLogMiddleware() {
           );
         });
       }
-      return originalSend(body);
-    };
+    });
 
     next();
   };
