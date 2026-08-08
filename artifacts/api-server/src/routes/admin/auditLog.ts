@@ -1,11 +1,25 @@
 import { Router } from "express";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { z } from "zod/v4";
 import { db, adminAuditLogTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../../lib/auth";
-import {
-  GetAdminAuditLogQueryParams,
-  GetAdminAuditLogResponse,
-} from "@workspace/api-zod";
+import { GetAdminAuditLogResponse } from "@workspace/api-zod";
+
+// Кастомная схема валидации запроса.
+// Используем zod.coerce.date() для since/until — query params всегда строки,
+// а сгенерированный GetAdminAuditLogQueryParams использует zod.date() (без
+// принуждения), что приводит к 400 на любой фильтр по дате.
+const AuditLogQuery = z.object({
+  page: z.coerce.number().min(1).default(1),
+  pageSize: z.coerce.number().min(1).max(100).default(50),
+  adminId: z.coerce.number().optional(),
+  action: z.string().optional(),
+  targetType: z.string().optional(),
+  targetId: z.coerce.number().optional(),
+  since: z.coerce.date().optional(),
+  until: z.coerce.date().optional(),
+  format: z.enum(["json", "csv"]).optional(),
+});
 
 const router = Router();
 
@@ -14,15 +28,15 @@ router.get(
   requireAuth,
   requireAdmin,
   async (req, res): Promise<void> => {
-    const query = GetAdminAuditLogQueryParams.safeParse(req.query);
-    if (!query.success) {
-      res.status(400).json({ error: query.error.message });
+    const parsed = AuditLogQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: String(parsed.error) });
       return;
     }
 
     const {
-      page = 1,
-      pageSize = 50,
+      page,
+      pageSize,
       adminId,
       action,
       targetType,
@@ -30,20 +44,20 @@ router.get(
       since,
       until,
       format,
-    } = query.data;
+    } = parsed.data;
 
     const conditions = [];
     if (adminId != null) conditions.push(eq(adminAuditLogTable.adminId, adminId));
     if (action) conditions.push(eq(adminAuditLogTable.action, action));
     if (targetType) conditions.push(eq(adminAuditLogTable.targetType, targetType));
     if (targetId != null) conditions.push(eq(adminAuditLogTable.targetId, targetId));
-    if (since) conditions.push(gte(adminAuditLogTable.createdAt, new Date(since)));
-    if (until) conditions.push(lte(adminAuditLogTable.createdAt, new Date(until)));
+    if (since) conditions.push(gte(adminAuditLogTable.createdAt, since));
+    if (until) conditions.push(lte(adminAuditLogTable.createdAt, until));
 
     const whereClause =
       conditions.length > 0 ? and(...conditions) : undefined;
 
-    // CSV export — без пагинации, с safety cap
+    // CSV export — без пагинации, с safety cap 10k строк
     if (format === "csv") {
       const rows = await db
         .select()
@@ -101,15 +115,15 @@ router.get(
       .limit(pageSize)
       .offset(offset);
 
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)` })
+    const [countRow] = await db
+      .select({ count: sql<string>`count(*)` })
       .from(adminAuditLogTable)
       .where(whereClause);
 
     res.json(
       GetAdminAuditLogResponse.parse({
         entries,
-        total: Number(count),
+        total: Number(countRow!.count),
         page,
         pageSize,
       }),

@@ -890,6 +890,50 @@ try {
   // This comment-only migration documents that fact for ops runbooks.
   console.log("heal-schema: M-35 payments.provider 'balance' — no DB change needed (plain TEXT column)");
 
+  // ── M-36: admin_audit_log — admin action journal ──────────────────────────
+  // Immutable append-only log of all successful mutative admin actions.
+  // adminId → SET NULL (not CASCADE): deleting an admin must not erase history.
+  // adminEmail is denormalized so the identity is preserved after user deletion.
+  // drizzle-kit push creates this table automatically, but it runs in the
+  // background and may not finish before the first request. CREATE TABLE IF
+  // NOT EXISTS here guarantees the table exists before the app starts serving.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id                  serial        PRIMARY KEY,
+      admin_id            integer       REFERENCES users(id) ON DELETE SET NULL,
+      admin_email         varchar(255)  NOT NULL,
+      action              varchar(64)   NOT NULL,
+      method              varchar(10)   NOT NULL,
+      path                varchar(512)  NOT NULL,
+      target_type         varchar(64),
+      target_id           integer,
+      target_description  varchar(512),
+      details             jsonb,
+      response_status     smallint,
+      duration_ms         integer,
+      ip_address          varchar(64),
+      user_agent          varchar(512),
+      created_at          timestamptz   NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS admin_audit_log_admin_id_idx
+      ON admin_audit_log(admin_id)
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS admin_audit_log_action_idx
+      ON admin_audit_log(action)
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS admin_audit_log_target_idx
+      ON admin_audit_log(target_type, target_id)
+  `);
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS admin_audit_log_created_at_idx
+      ON admin_audit_log(created_at)
+  `);
+  console.log("heal-schema: M-36 admin_audit_log table + indexes");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
