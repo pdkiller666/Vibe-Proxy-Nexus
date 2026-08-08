@@ -231,6 +231,9 @@ describe("VPN node capacity limit", () => {
         name: `Test plan cap ${randomBytes(4).toString("hex")}`,
         priceRub: 10000,
         durationDays: 30,
+        // Give the owner enough device slots so per-user limits never interfere
+        // with the node-capacity checks these tests are designed to exercise.
+        devicesIncluded: 5,
       })
       .returning({ id: plansTable.id });
     planId = plan.id;
@@ -343,5 +346,148 @@ describe("VPN node capacity limit", () => {
 
     expect(res.status).toBe(201);
     vpnKeyIds.push(res.body.id);
+  });
+});
+
+/**
+ * Regression tests for the global slot-limit bug:
+ *   Amvera can retry a slow POST /vpn-keys and the retry may land on a
+ *   different node. Before the fix, the per-node slot check inside the
+ *   FOR UPDATE tx counted only keys on the *selected* node, so the retry
+ *   on node B succeeded even though the first request already committed a
+ *   key on node A — leaving the user with two keys on a 1-device plan.
+ *
+ *   The fix counts ALL active keys for the user across all nodes inside the
+ *   locked transaction. These tests catch any regression back to per-node counting.
+ */
+describe("Global slot limit enforced across different nodes", () => {
+  let userId: number;
+  let userCookie: string;
+  let planId: number;
+  let nodeAId: number;
+  let nodeBId: number;
+  const createdKeyIds: number[] = [];
+
+  async function createLoggedInUser(): Promise<{ id: number; cookie: string }> {
+    const email = `vpnkeys-global-${randomBytes(6).toString("hex")}@example.com`;
+    const password = "correct-horse-battery-staple";
+    const passwordHash = await hashPassword(password);
+    const [user] = await db
+      .insert(usersTable)
+      .values({ email, passwordHash, role: "user", referralCode: randomBytes(8).toString("hex") })
+      .returning({ id: usersTable.id });
+    const res = await request.post("/api/auth/login").send({ email, password });
+    expect(res.status).toBe(200);
+    const setCookie = res.headers["set-cookie"];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+    const sessionCookie = cookies.find((c: string) => c.startsWith("vpn_session="));
+    if (!sessionCookie) throw new Error("Login did not set session cookie");
+    return { id: user.id, cookie: sessionCookie.split(";")[0] };
+  }
+
+  beforeAll(async () => {
+    const owner = await createLoggedInUser();
+    userId = owner.id;
+    userCookie = owner.cookie;
+
+    // Plan with exactly 1 device slot (the default) so any second key is over-limit.
+    const [plan] = await db
+      .insert(plansTable)
+      .values({
+        name: `Global slot test plan ${randomBytes(4).toString("hex")}`,
+        priceRub: 10000,
+        durationDays: 30,
+        devicesIncluded: 1,
+      })
+      .returning({ id: plansTable.id });
+    planId = plan.id;
+
+    await db.insert(subscriptionsTable).values({
+      userId,
+      planId,
+      status: "active",
+      startsAt: new Date(),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+
+    // Two distinct nodes, both with unlimited capacity so node-level cap is never
+    // the reason for rejection — only the per-user global slot count matters.
+    const [nodeA] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Global-test node A ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "global-a.example.com",
+        sni: "global-a.example.com",
+        isActive: true,
+        maxUsers: null,
+      })
+      .returning({ id: vpnNodesTable.id });
+    nodeAId = nodeA.id;
+
+    const [nodeB] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Global-test node B ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "global-b.example.com",
+        sni: "global-b.example.com",
+        isActive: true,
+        maxUsers: null,
+      })
+      .returning({ id: vpnNodesTable.id });
+    nodeBId = nodeB.id;
+  });
+
+  afterAll(async () => {
+    for (const id of createdKeyIds) {
+      await db.delete(vpnKeysTable).where(eq(vpnKeysTable.id, id));
+    }
+    await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
+    await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, nodeAId));
+    await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, nodeBId));
+    await db.delete(plansTable).where(eq(plansTable.id, planId));
+    await db.delete(usersTable).where(eq(usersTable.id, userId));
+  });
+
+  it("blocks issuing a second key on node B when a key already exists on node A (sequential retry simulation)", async () => {
+    // First request lands on node A — should succeed.
+    const firstRes = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", userCookie)
+      .send({ nodeId: nodeAId });
+    expect(firstRes.status).toBe(201);
+    createdKeyIds.push(firstRes.body.id);
+
+    // Simulated Amvera retry: same user, different node — must be rejected.
+    const retryRes = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", userCookie)
+      .send({ nodeId: nodeBId });
+    expect(retryRes.status).toBe(409);
+  });
+
+  it("allows at most one key when two concurrent requests race for the same slot", async () => {
+    // Revoke the key created in the previous test so this user starts fresh.
+    for (const id of createdKeyIds) {
+      await db
+        .update(vpnKeysTable)
+        .set({ revokedAt: new Date() })
+        .where(eq(vpnKeysTable.id, id));
+    }
+
+    // Fire both requests simultaneously — the FOR UPDATE tx serializes them and
+    // only one should commit a new key row.
+    const [resA, resB] = await Promise.all([
+      request.post("/api/vpn-keys").set("Cookie", userCookie).send({ nodeId: nodeAId }),
+      request.post("/api/vpn-keys").set("Cookie", userCookie).send({ nodeId: nodeBId }),
+    ]);
+
+    const statuses = [resA.status, resB.status].sort();
+    expect(statuses).toEqual([201, 409]);
+
+    // Track the winning key for cleanup.
+    const winner = resA.status === 201 ? resA : resB;
+    createdKeyIds.push(winner.body.id);
   });
 });

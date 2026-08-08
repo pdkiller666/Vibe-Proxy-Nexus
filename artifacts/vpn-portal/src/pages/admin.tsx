@@ -71,6 +71,7 @@ import {
   GetVpnNodeSystemLogsProcess,
   GetVpnNodeMetricsMetric,
   useGetAdminAuditLog,
+  useGetMe,
   AdminAuditLogAction,
 } from "@workspace/api-client-react";
 import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser, AdminAuditLogEntry } from "@workspace/api-client-react";
@@ -116,75 +117,102 @@ function Badge({ count }: { count: number }) {
 }
 
 // ─── Payment notification poller ─────────────────────────────────────────────
-// Polls /admin/notifications every 30 s and shows in-app toasts for new events.
-// Uses a ref-based "seen" set so each event fires at most one toast per session.
-function useNotificationPoller(): AdminNotification[] {
+// Unified poller: payments + audit log actions from other admins.
+// Both channels use a ref-based "seen" set so each event fires at most one
+// toast per session. Starts from 2 min ago to surface recent events on mount.
+function useUnifiedPoller(currentAdminId: number | undefined): {
+  payments: AdminNotification[];
+  otherAdminActions: AdminAuditLogEntry[];
+} {
   const { toast } = useToast();
-  const seenIds = useRef<Set<number>>(new Set());
-  // Start from 2 min ago so any pending payment that arrived while the admin
-  // was on another tab is surfaced immediately on mount.
-  const sinceRef = useRef(new Date(Date.now() - 2 * 60 * 1000).toISOString());
-  const [recent, setRecent] = useState<AdminNotification[]>([]);
+
+  // ── Payments ──────────────────────────────────────────────────────────────
+  const seenPaymentIds = useRef<Set<number>>(new Set());
+  const paymentSinceRef = useRef(new Date(Date.now() - 2 * 60 * 1000).toISOString());
+  const [payments, setPayments] = useState<AdminNotification[]>([]);
+
+  // ── Audit log (other admins) ───────────────────────────────────────────────
+  const seenAuditIds = useRef<Set<number>>(new Set());
+  const auditSinceRef = useRef(new Date(Date.now() - 2 * 60 * 1000).toISOString());
+  const [otherAdminActions, setOtherAdminActions] = useState<AdminAuditLogEntry[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function poll() {
+      const now = new Date().toISOString();
+
+      // ── Poll payments ──────────────────────────────────────────────────────
       try {
         const res = await fetch(
-          `/api/admin/notifications?since=${encodeURIComponent(sinceRef.current)}`,
+          `/api/admin/notifications?since=${encodeURIComponent(paymentSinceRef.current)}`,
           { credentials: "include" },
         );
-        if (!res.ok || cancelled) return;
-        const data: AdminNotification[] = await res.json();
-        const now = new Date().toISOString();
-        const newItems = data.filter((n) => !seenIds.current.has(n.id));
-
-        for (const n of newItems) {
-          seenIds.current.add(n.id);
-          const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : n.provider === "balance" ? "Баланс" : "СБП";
-          const typeLabel =
-            n.type === "extra_device_slot" ? "Доп. устройство" :
-            n.type === "balance_topup"     ? "Пополнение баланса" :
-            n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` (+${n.extraTrafficGb} ГБ)` : ""}` :
-                                             "Подписка";
-
-          if (n.status === "pending") {
-            toast({
-              title: "Новый платёж",
-              description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽ · ${providerLabel}`,
-            });
-          } else if (n.status === "confirmed") {
-            toast({
-              title: "Платёж подтверждён",
-              description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽`,
-            });
-          } else if (n.status === "rejected") {
-            toast({
-              title: "Платёж отклонён",
-              description: `${n.userEmail} · ${n.amountRub} ₽`,
-              variant: "destructive",
-            });
+        if (res.ok && !cancelled) {
+          const data: AdminNotification[] = await res.json();
+          const newPayments = data.filter((n) => !seenPaymentIds.current.has(n.id));
+          for (const n of newPayments) {
+            seenPaymentIds.current.add(n.id);
+            const providerLabel =
+              n.provider === "yoomoney" ? "ЮMoney" :
+              n.provider === "balance"  ? "Баланс" : "СБП";
+            const typeLabel =
+              n.type === "extra_device_slot" ? "Доп. устройство" :
+              n.type === "balance_topup"     ? "Пополнение баланса" :
+              n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` (+${n.extraTrafficGb} ГБ)` : ""}` :
+                                               "Подписка";
+            if (n.status === "pending") {
+              toast({ title: "Новый платёж", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽ · ${providerLabel}` });
+            } else if (n.status === "confirmed") {
+              toast({ title: "Платёж подтверждён", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽` });
+            } else if (n.status === "rejected") {
+              toast({ title: "Платёж отклонён", description: `${n.userEmail} · ${n.amountRub} ₽`, variant: "destructive" });
+            }
           }
+          if (newPayments.length > 0) {
+            setPayments((prev) => [...newPayments.reverse(), ...prev].slice(0, 30));
+          }
+          paymentSinceRef.current = now;
         }
+      } catch { /* Network error — silently skip. */ }
 
-        if (newItems.length > 0) {
-          setRecent((prev) => [...newItems.reverse(), ...prev].slice(0, 30));
-        }
-        sinceRef.current = now;
-      } catch {
-        // Network error — silently skip this tick.
+      // ── Poll audit log: other admins ───────────────────────────────────────
+      if (currentAdminId != null && !cancelled) {
+        try {
+          const res = await fetch(
+            `/api/admin/audit-log?since=${encodeURIComponent(auditSinceRef.current)}&pageSize=20`,
+            { credentials: "include" },
+          );
+          if (res.ok && !cancelled) {
+            const data: { items: AdminAuditLogEntry[] } = await res.json();
+            const otherEntries = (data.items ?? []).filter(
+              (e) => e.adminId !== currentAdminId && !seenAuditIds.current.has(e.id),
+            );
+            for (const e of otherEntries) {
+              seenAuditIds.current.add(e.id);
+              toast({
+                title: "Действие другого администратора",
+                description: `${e.adminEmail} · ${ACTION_LABELS[e.action] ?? e.action}`,
+              });
+            }
+            if (otherEntries.length > 0) {
+              setOtherAdminActions((prev) => [...otherEntries.reverse(), ...prev].slice(0, 30));
+            }
+            auditSinceRef.current = now;
+          }
+        } catch { /* Network error — silently skip. */ }
       }
     }
 
+    poll(); // immediate first fetch on mount
     const timer = setInterval(poll, 30_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [toast]);
+  }, [toast, currentAdminId]);
 
-  return recent;
+  return { payments, otherAdminActions };
 }
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
@@ -5476,65 +5504,180 @@ function SupportManagement() {
 }
 
 // ─── Notification Bell ────────────────────────────────────────────────────────
+// Human-readable labels for system event types shown in the bell dropdown.
+const SYS_EVENT_LABELS: Record<string, string> = {
+  node_unreachable:      "Нода автоматически отключена",
+  node_unavailable:      "Нода недоступна",
+  node_overloaded:       "Нода перегружена",
+  node_recovered:        "Нода восстановлена",
+  auto_renew_success:    "Авто-продление выполнено",
+  auto_renew_failed:     "Ошибка авто-продления",
+  auto_renew_error:      "Критическая ошибка авто-продления",
+  xray_config_remount:   "Конфиг Xray восстановлен из шаблона",
+  key_migrated:          "Ключи VPN мигрированы",
+};
+
 function NotificationBell() {
-  const notifications = useNotificationPoller();
+  const { data: me } = useGetMe();
+  const { payments, otherAdminActions } = useUnifiedPoller(me?.id);
   const [open, setOpen] = useState(false);
+
+  const { data: systemEventsRaw } = useListAdminSystemEvents({
+    query: { queryKey: getListAdminSystemEventsQueryKey(), refetchInterval: 30_000 },
+  });
+  const { mutate: acknowledgeEvent } = useAcknowledgeAdminSystemEvent({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAdminSystemEventsQueryKey() }),
+    },
+  });
+
+  const systemEvents = systemEventsRaw ?? [];
+  const totalBadge = payments.length + systemEvents.length + otherAdminActions.length;
 
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
-        title="Уведомления о платежах"
+        title="Уведомления"
       >
         <Bell className="w-5 h-5" />
-        {notifications.length > 0 && (
+        {totalBadge > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
-            {notifications.length > 99 ? "99+" : notifications.length}
+            {totalBadge > 99 ? "99+" : totalBadge}
           </span>
         )}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-background border border-border shadow-lg z-50 max-h-96 overflow-y-auto">
-            <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-              <span className="text-xs font-bold uppercase text-muted-foreground">Уведомления</span>
-              <span className="text-xs text-muted-foreground">{notifications.length} за сессию</span>
+          <div className="absolute right-0 top-full mt-2 w-96 bg-background border border-border shadow-lg z-50 max-h-[32rem] overflow-y-auto">
+
+            {/* ── Header ──────────────────────────────────────────────────── */}
+            <div className="px-3 py-2 border-b border-border flex items-center justify-between sticky top-0 bg-background z-10">
+              <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">Уведомления</span>
+              <span className="text-xs text-muted-foreground">{totalBadge > 0 ? totalBadge : "нет новых"}</span>
             </div>
-            {notifications.length === 0 ? (
-              <p className="px-3 py-4 text-sm text-muted-foreground text-center">Нет уведомлений</p>
+
+            {totalBadge === 0 ? (
+              <p className="px-3 py-6 text-sm text-muted-foreground text-center">Нет уведомлений</p>
             ) : (
-              <div className="divide-y divide-border">
-                {notifications.map((n) => {
-                  const providerLabel = n.provider === "yoomoney" ? "ЮMoney" : n.provider === "balance" ? "Баланс" : "СБП";
-                  const typeLabel =
-                    n.type === "extra_device_slot" ? "Доп. устройство" :
-                    n.type === "balance_topup"     ? "Пополнение" :
-                    n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` +${n.extraTrafficGb}ГБ` : ""}` :
-                                                     "Подписка";
-                  const statusCls =
-                    n.status === "pending"   ? "text-orange-600" :
-                    n.status === "confirmed" ? "text-green-600"  : "text-destructive";
-                  const statusLabel =
-                    n.status === "pending"   ? "Ожидает" :
-                    n.status === "confirmed" ? "Подтверждён" : "Отклонён";
-                  return (
-                    <div key={n.id} className="px-3 py-2.5 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium truncate">{n.userEmail}</span>
-                        <span className={`font-mono font-bold shrink-0 ${statusCls}`}>{statusLabel}</span>
-                      </div>
-                      <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap font-mono">
-                        <span>{n.amountRub} ₽</span>
-                        <span>·</span><span>{typeLabel}</span>
-                        <span>·</span><span>{providerLabel}</span>
-                        <span>·</span><span>{formatDate(n.createdAt.toString())}</span>
-                      </div>
+              <>
+                {/* ── Системные события (персистентные) ───────────────────── */}
+                {systemEvents.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 bg-muted/50 border-b border-border">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Системные события
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="divide-y divide-border">
+                      {systemEvents.map((e) => {
+                        const meta = e.metadata as Record<string, unknown> | undefined;
+                        const nodeName = typeof meta?.nodeName === "string" ? meta.nodeName : null;
+                        const label = SYS_EVENT_LABELS[e.eventType] ?? e.eventType;
+                        const isOk  = e.eventType === "node_recovered" || e.eventType === "auto_renew_success";
+                        const isWarn = e.eventType === "node_overloaded";
+                        const iconCls = isOk ? "text-green-600" : isWarn ? "text-amber-500" : "text-destructive";
+                        return (
+                          <div key={e.id} className="px-3 py-2.5 flex items-start gap-2 text-xs">
+                            <AlertTriangle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${iconCls}`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium">
+                                {label}{nodeName ? <span className="text-muted-foreground"> — {nodeName}</span> : null}
+                              </div>
+                              <div className="text-muted-foreground font-mono mt-0.5">{formatDate(e.createdAt.toString())}</div>
+                            </div>
+                            <button
+                              onClick={() => acknowledgeEvent({ eventId: e.id })}
+                              className="text-muted-foreground hover:text-foreground shrink-0 mt-0.5"
+                              title="Подтвердить / закрыть"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Платежи (за сессию) ──────────────────────────────────── */}
+                {payments.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 bg-muted/50 border-b border-border">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Платежи — за сессию
+                      </span>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {payments.map((n) => {
+                        const providerLabel =
+                          n.provider === "yoomoney" ? "ЮMoney" :
+                          n.provider === "balance"  ? "Баланс" : "СБП";
+                        const typeLabel =
+                          n.type === "extra_device_slot" ? "Доп. устройство" :
+                          n.type === "balance_topup"     ? "Пополнение" :
+                          n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` +${n.extraTrafficGb}ГБ` : ""}` :
+                                                           "Подписка";
+                        const statusCls =
+                          n.status === "pending"   ? "text-orange-600" :
+                          n.status === "confirmed" ? "text-green-600"  : "text-destructive";
+                        const statusLabel =
+                          n.status === "pending"   ? "Ожидает" :
+                          n.status === "confirmed" ? "Подтверждён" : "Отклонён";
+                        return (
+                          <div key={n.id} className="px-3 py-2.5 flex items-start gap-2 text-xs">
+                            <CreditCard className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium truncate">{n.userEmail}</span>
+                                <span className={`font-bold shrink-0 ${statusCls}`}>{statusLabel}</span>
+                              </div>
+                              <div className="text-muted-foreground font-mono mt-0.5">
+                                {n.amountRub} ₽ · {typeLabel} · {providerLabel} · {formatDate(n.createdAt.toString())}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Действия других администраторов (за сессию) ─────────── */}
+                {otherAdminActions.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 bg-muted/50 border-b border-border">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Другие администраторы — за сессию
+                      </span>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {otherAdminActions.map((e) => (
+                        <div key={e.id} className="px-3 py-2.5 flex items-start gap-2 text-xs">
+                          <Activity className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium truncate">{e.adminEmail}</span>
+                              <span className={`font-mono shrink-0 ${(e.responseStatus ?? 0) >= 400 ? "text-destructive" : "text-muted-foreground"}`}>
+                                {e.responseStatus ?? "—"}
+                              </span>
+                            </div>
+                            <div className="mt-0.5">
+                              {ACTION_LABELS[e.action] ?? e.action}
+                              {e.targetDescription
+                                ? <span className="text-muted-foreground"> — {e.targetDescription}</span>
+                                : null}
+                            </div>
+                            <div className="text-muted-foreground font-mono mt-0.5">{formatDate(e.createdAt.toString())}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>

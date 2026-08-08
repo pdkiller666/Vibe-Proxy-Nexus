@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, plansTable, subscriptionsTable, paymentsTable, paymentSettingsTable } from "@workspace/db";
 import { CreateSubscriptionBody, CreateSubscriptionResponse, ListMySubscriptionsResponse } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
@@ -113,6 +113,31 @@ router.post("/subscriptions", requireAuth, createSubscriptionRateLimit, async (r
     let subscription;
     try {
       subscription = await db.transaction(async (tx) => {
+        // Lock the user row so two concurrent requests for the same user
+        // cannot both pass the pre-transaction existingActiveHourly check
+        // and both commit, leaving two active subscription rows.
+        // The FOR UPDATE lock serialises this critical section: the second
+        // request blocks here until the first transaction commits, then
+        // re-checks and finds the newly active subscription.
+        await tx.execute(
+          sql`SELECT id FROM users WHERE id = ${user.id} FOR UPDATE`,
+        );
+
+        // Re-check inside the transaction after acquiring the lock.
+        const [alreadyActive] = await tx
+          .select({ id: subscriptionsTable.id })
+          .from(subscriptionsTable)
+          .where(
+            and(
+              eq(subscriptionsTable.userId, user.id),
+              eq(subscriptionsTable.planId, plan.id),
+              eq(subscriptionsTable.status, "active"),
+            ),
+          )
+          .limit(1);
+
+        if (alreadyActive) throw new Error("HOURLY_ALREADY_ACTIVE");
+
         await tx
           .update(subscriptionsTable)
           .set({ status: "expired", endsAt: new Date() })
@@ -136,7 +161,11 @@ router.post("/subscriptions", requireAuth, createSubscriptionRateLimit, async (r
         if (!inserted) throw new Error("Failed to activate hourly plan");
         return inserted;
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message === "HOURLY_ALREADY_ACTIVE") {
+        res.status(409).json({ error: "Почасовой тариф уже подключён." });
+        return;
+      }
       res.status(500).json({ error: "Failed to activate hourly plan" });
       return;
     }
@@ -210,6 +239,40 @@ router.post("/subscriptions", requireAuth, createSubscriptionRateLimit, async (r
       return { subscription, payment };
     });
   } catch (err) {
+    // PostgreSQL unique_violation (23505) means Amvera retried a request that
+    // already committed. Re-fetch the existing pending_payment row and return
+    // 409 — same shape as the app-level guard above — so the client never sees
+    // a 500 for what is effectively a successful prior creation.
+    //
+    // Drizzle wraps pg errors in DrizzleQueryError; the original pg code may
+    // be on err.code directly (older drizzle/pg versions) or on err.cause.code
+    // (newer Node.js Error cause chain). Check both to be safe — same pattern
+    // used in referralCode.ts and admin/users.ts.
+    const pgCode =
+      (err as { code?: string; cause?: { code?: string } })?.code ??
+      (err as { cause?: { code?: string } })?.cause?.code;
+    if (pgCode === "23505") {
+      const existing = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(
+          and(
+            eq(subscriptionsTable.userId, user.id),
+            eq(subscriptionsTable.status, "pending_payment"),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0]);
+
+      if (existing) {
+        res.status(409).json({
+          error: "У вас уже есть подписка, ожидающая оплаты. Оплатите её или отмените, прежде чем создавать новую.",
+          existingSubscriptionId: existing.id,
+        });
+        return;
+      }
+    }
+
     logger.error({ err }, "Failed to create subscription with payment");
     res.status(500).json({ error: "Failed to create subscription" });
     return;

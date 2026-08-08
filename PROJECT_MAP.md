@@ -361,6 +361,42 @@ DROP COLUMN), которые drizzle-kit push не может выполнить
 `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `PORT` (дефолт 8080),
 `YOOMONEY_NOTIFICATION_SECRET`, `YOOMONEY_RECEIVER`.
 
+### Amvera retry-audit — идемпотентность POST-операций создания
+
+Amvera proxy может повторить медленный POST-запрос при таймауте, что создаёт риск
+дублирования записей. Ниже — аудит эндпоинтов создания с выводом по каждому.
+
+| Эндпоинт | Файл | Защита |
+|---|---|---|
+| `POST /api/extra-slot-order` | `extraSlotOrder.ts` | ✅ app-guard + DB unique index |
+| `POST /api/extra-traffic-order` | `extraTrafficOrder.ts` | ✅ app-guard + DB unique index |
+| `POST /api/balance-topup-order` | `balanceTopupOrder.ts` | ✅ app-guard + DB unique index |
+| `POST /api/subscriptions` (не-hourly, включая ЮMoney) | `subscriptions.ts` | ✅ app-guard на subscriptions + DB unique index через tx |
+| `POST /api/subscriptions` (hourly) | `subscriptions.ts` | ⚠️ только app-guard; tx самоисправляется (см. ниже) |
+
+**Механизм защиты для order-эндпоинтов:**
+
+Схема таблицы `payments` содержит уникальный частичный индекс
+`payments_one_pending_per_user_type_idx` по `(userId, type) WHERE status = 'pending'`
+(применён в `heal-schema.mjs`). Он гарантирует: даже если два конкурентных запроса
+одновременно пройдут app-level SELECT-проверку, второй INSERT упадёт с ошибкой
+уникальности — дублирование на уровне БД невозможно.
+
+Для `POST /subscriptions` (не-hourly): транзакция создаёт одновременно строку
+в `subscriptions` и `payments`. Если гонка обходит app-guard, INSERT payment-строки
+со статусом `pending` и `type='subscription'` нарушает тот же индекс → вся транзакция
+откатывается, subscription-строка не сохраняется. Пользователь получает 500 вместо 409
+в момент гонки — не идеально, но дублей нет.
+
+**Hourly-подписки (пониженный риск):**
+
+`POST /subscriptions` с hourly-тарифом не создаёт payment-строку (активация мгновенная,
+биллинг постфактный). App-guard (`existingActiveHourly`) — check-then-act без DB unique
+constraint. Однако транзакция атомично выполняет «пометить все active → expired, вставить
+новую active»: второй concurrent-запрос `UPDATE` захватывает строку первого и помечает её
+expired, а затем создаёт свою. Итог: одна active-строка (последняя), финансовый вред нулевой.
+Это известный пониженный риск, не требующий срочного исправления.
+
 ### Грабли деплоя на Amvera
 
 - `amvera.yml` не поддерживает `run.ports` (список) — только `run.containerPort` (одно число).
