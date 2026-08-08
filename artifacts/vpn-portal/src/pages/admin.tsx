@@ -5578,6 +5578,8 @@ const ACTION_LABELS: Record<string, string> = {
   update_payment_note: "Заметка к платежу",
   reply_to_ticket: "Ответ на тикет",
   update_ticket_status: "Статус тикета",
+  generate_password_reset_link: "Ссылка сброса пароля",
+  acknowledge_system_event: "Подтверждение события",
   unknown_action: "Неизвестное действие",
 };
 

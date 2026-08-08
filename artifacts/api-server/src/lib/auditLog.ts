@@ -67,6 +67,12 @@ const ACTION_MAP: Record<string, string> = {
   // Support
   "POST /admin/support-tickets/:id/messages": "reply_to_ticket",
   "PATCH /admin/support-tickets/:id/status": "update_ticket_status",
+
+  // Password reset link generation (admin generates link to share with user)
+  "POST /admin/users/:id/password-reset": "generate_password_reset_link",
+
+  // System events
+  "POST /admin/system-events/:id/acknowledge": "acknowledge_system_event",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -109,6 +115,7 @@ function inferTargetType(path: string): string | null {
   if (path.includes("/invite-links/")) return "invite_link";
   if (path.includes("/support-tickets/")) return "support_ticket";
   if (path.includes("/payment-settings")) return "payment_settings";
+  if (path.includes("/system-events/")) return "system_event";
   return null;
 }
 
@@ -187,6 +194,12 @@ async function logAdminAction(
   const rawPath = req.route?.path ?? req.path;
   const routePattern = `${req.method} ${normalizeRoutePath(rawPath)}`;
   const action = ACTION_MAP[routePattern] ?? "unknown_action";
+  if (action === "unknown_action") {
+    logger.warn(
+      { routePattern, method: req.method, path: req.path },
+      "admin_audit: no ACTION_MAP entry — logged as unknown_action",
+    );
+  }
 
   const targetType = inferTargetType(req.path);
   const targetId = extractTargetId(req.params);

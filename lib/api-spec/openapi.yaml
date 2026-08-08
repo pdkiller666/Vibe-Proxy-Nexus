@@ -3186,4 +3186,6 @@ components:
         - update_payment_note
         - reply_to_ticket
         - update_ticket_status
+        - generate_password_reset_link
+        - acknowledge_system_event
         - unknown_action
