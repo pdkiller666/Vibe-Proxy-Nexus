@@ -159,6 +159,10 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
     - `vpnNodeProvisioning.ts` — `POST /admin/vpn-nodes/:id/provision` (запустить SSH-провижининг
       на VPS: устанавливает Docker, Xray, management API, генерирует секрет, возвращает job-id),
       `GET /admin/vpn-nodes/:id/provision` (SSE-стрим логов выполнения)
+    - `auditLog.ts` — `GET /admin/audit-log` (журнал действий с фильтрами и CSV-экспортом;
+      использует кастомный `AuditLogQuery` с `z.coerce.date()` — сгенерированный
+      `GetAdminAuditLogQueryParams` использует `z.date()` без принуждения и роняет 400 на
+      любой date-фильтр из query-строки)
     - `billingDebug.ts` — `GET /admin/debug/billing` (диагностика застывших почасовых подписок),
       `POST /admin/debug/billing/fix/:subscriptionId` (принудительно исправить startsAt)
 
@@ -222,7 +226,7 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
   - `appDownloadLinks.ts` — `getAppDownloadLinks()`: ссылки на скачивание VPN-клиентов (Happ,
     v2rayNG, v2rayN, Streisand) — используются на лендинге и странице ключей
   - `corsOrigins.ts` — допустимые CORS-origins (dev/prod)
-  - `csrf.ts` — CSRF-хелперы (partial implementation, не активирован в проде)
+  - `csrf.ts` — Origin-based CSRF check (активен: `app.use("/api", csrfCheck)`); блокирует state-changing запросы с Origin, не совпадающим с Host; пропускает запросы без Origin (curl, вебхуки)
   - `staticServer.ts` — отдаёт собранный фронтенд из `STATIC_DIR`
   - `meResponse.ts` — общий билдер данных для `/api/me`; считает `deviceSlots` =
     `plan.devicesIncluded + subscription.extraDeviceSlots`; `trafficLimitGb` =
@@ -230,6 +234,14 @@ Express 5 + TypeScript, ESM, собирается в один файл чере�
   - `keyIssuance.ts` — логика выдачи VPN-ключа (проверка слотов, нод, добавление в Xray); передаёт `limitIp: 1` в `addXrayClient` и `addRemoteXrayClient` — покрывает все пути выдачи (ручной, auto после оплаты/анбана, trial)
   - `seedAdmin.ts` — при старте создаёт первого админа из `ADMIN_EMAIL`/`ADMIN_PASSWORD`
   - `backfillReferralCodes.ts` — при старте назначает `referral_code` старым строкам, у которых он пустой
+  - `auditLog.ts` — `auditLogMiddleware()` (перехватывает все 2xx POST/PATCH/PUT/DELETE через
+    `res.on("finish")`), `logAdminAction()` (строит запись + делает SELECT email для описания);
+    `ACTION_MAP` (34 пути → имена действий); `normalizeRoutePath` заменяет числовые сегменты
+    и любые `:param` на `:id` для мэтчинга. **Важно**: middleware зарегистрирован в `admin/index.ts`
+    как отдельный `router.use()` без пути — Express 4 молча не вызывает fn3+ при
+    `router.use(regex, fn1, fn2, fn3)`. Фильтр по роли/методу внутри самого middleware.
+  - `auditLogCleanup.ts` — `startAuditLogCleanupJob()`: каждые 24 ч удаляет записи
+    `admin_audit_log` старше 90 дней
   - `logger.ts` — pino
 
 **VPN-транспорт**: VLESS поверх WebSocket на обычном HTTPS-домене. Xray на `127.0.0.1:10000`, Node-сервер проксирует апгрейд `/vpnws`. Клиенты: `security=tls&type=ws&sni=<домен>`. Подробности — `.agents/memory/amvera-raw-tcp-port.md`.
@@ -326,13 +338,14 @@ lib/api-spec/openapi.yaml  (источник истины — ВСЕГДА ре�
 | `system_events` | eventType (xray_config_remount / node_overloaded / node_unreachable / node_recovered / auto_renew_failed / auto_renew_error / key_migrated и др.), userId (nullable), metadata (JSONB), acknowledgedAt (nullable) | системные события от фоновых задач и мониторинга нод; отображаются в админ-панели |
 | `node_metric_snapshots` | nodeId (FK→vpn_nodes), cpuPercent, ramPercent, diskPercent, createdAt | исторические метрики нод (CPU/RAM/Disk), запись раз в 5 мин на ноду; строки старше 90 дней удаляются |
 | `provisioning_jobs` | nodeId (nullable FK→vpn_nodes), status (pending/running/done/failed), logs (JSONB-массив строк с уровнем/текстом/timestamp), createdAt, updatedAt | журнал SSH-провижининга новых нод; логи пишутся построчно, отдаются клиенту через SSE |
+| `admin_audit_log` | adminId (FK→users), adminEmail, action (строка из ACTION_MAP), method, path, targetType (nullable), targetId (nullable), targetDescription (nullable), details (JSONB: requestBody+queryParams, sensitive fields redacted), responseStatus, durationMs, ipAddress, userAgent, createdAt | журнал всех мутирующих действий администратора; записывается middleware автоматически; хранится 90 дней |
 
 Миграции — через `drizzle-kit push` (`pnpm --filter @workspace/db run push` в dev;
 в проде — шагом в `entrypoint.sh` при каждом старте контейнера, без файлов миграций).
 `heal-schema.mjs` — нетривиальные DDL-изменения (уникальные индексы, FK constraints,
 DROP COLUMN), которые drizzle-kit push не может выполнить автоматически без промпта.
 Все PL/pgSQL блоки используют `DO $$ … $$` (двойное dollar-quoting).
-Текущие миграции: M-0→M-15 (исторические), M-16 (`users.is_banned`), M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL), M-24 (`vpn_nodes.cert_sha256`).
+Текущие миграции: M-0→M-15 (исторические), M-16 (`users.is_banned`), M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL), M-24 (`vpn_nodes.cert_sha256`), M-36 (`admin_audit_log` таблица), M-37 (`support_messages.attachment_data`/`attachment_mime_type`: text→text[] — drizzle-kit push падал при кастинге при каждом старте).
 
 ## deploy/ — деплой
 
@@ -383,7 +396,8 @@ DROP COLUMN), которые drizzle-kit push не может выполнить
                           vpn_nodes, vpn_keys, balance_transactions,
                           support_tickets, support_messages,
                           invite_links, system_events,
-                          node_metric_snapshots, provisioning_jobs)
+                          node_metric_snapshots, provisioning_jobs,
+                          admin_audit_log)
 
 ЮMoney → POST /api/yoomoney/notification (HMAC webhook) → confirmPaymentById()
 
