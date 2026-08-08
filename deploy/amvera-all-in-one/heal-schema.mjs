@@ -965,6 +965,24 @@ try {
   `);
   console.log("heal-schema: M-37 support_messages attachment columns → text[]");
 
+  // ── M-38: subscriptions — partial unique index (one pending_payment per user) ─
+  // Closes a race condition in POST /subscriptions (monthly branch): two
+  // concurrent requests (e.g. Amvera proxy retry) both passed the app-level
+  // pre-check and then raced into db.transaction(), creating two
+  // pending_payment rows.  The existing 23505-fallback in subscriptions.ts
+  // was already written to handle this error — it just had no constraint to
+  // actually trigger it.  This index makes that fallback functional.
+  //
+  // A partial index (WHERE status = 'pending_payment') is used so that users
+  // can have many historical (expired/cancelled/active) subscription rows;
+  // only the "waiting for payment" state is constrained to one per user.
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_pending_per_user_idx
+      ON subscriptions(user_id)
+      WHERE status = 'pending_payment'
+  `);
+  console.log("heal-schema: M-38 subscriptions_one_pending_per_user_idx (partial unique)");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

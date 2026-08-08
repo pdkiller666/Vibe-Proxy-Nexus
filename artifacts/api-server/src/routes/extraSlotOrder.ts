@@ -66,18 +66,50 @@ router.post("/extra-slot-order", requireAuth, async (req, res): Promise<void> =>
 
   const reference = generatePaymentReference(user.id * 10000 + (Date.now() % 10000));
 
-  const [payment] = await db
-    .insert(paymentsTable)
-    .values({
-      subscriptionId: activeSub.id,
-      userId: user.id,
-      type: "extra_device_slot",
-      provider: "manual_sbp",
-      amountRub,
-      status: "pending",
-      reference,
-    })
-    .returning();
+  let payment: typeof paymentsTable.$inferSelect | undefined;
+  try {
+    [payment] = await db
+      .insert(paymentsTable)
+      .values({
+        subscriptionId: activeSub.id,
+        userId: user.id,
+        type: "extra_device_slot",
+        provider: "manual_sbp",
+        amountRub,
+        status: "pending",
+        reference,
+      })
+      .returning();
+  } catch (err) {
+    // PostgreSQL unique_violation (23505) means Amvera retried a request that
+    // already committed. Re-fetch the existing pending row and return 409 —
+    // same shape as the app-level guard — so the client never sees a 500 for
+    // what is effectively a successful prior creation.
+    const pgCode =
+      (err as { code?: string; cause?: { code?: string } })?.code ??
+      (err as { cause?: { code?: string } })?.cause?.code;
+    if (pgCode === "23505") {
+      const [existing] = await db
+        .select({ id: paymentsTable.id })
+        .from(paymentsTable)
+        .where(
+          and(
+            eq(paymentsTable.userId, user.id),
+            eq(paymentsTable.type, "extra_device_slot"),
+            eq(paymentsTable.status, "pending"),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        res.status(409).json({
+          error: "У вас уже есть ожидающий платёж за дополнительное устройство.",
+          paymentId: existing.id,
+        });
+        return;
+      }
+    }
+    throw err;
+  }
 
   if (!payment) {
     res.status(500).json({ error: "Failed to create payment" });

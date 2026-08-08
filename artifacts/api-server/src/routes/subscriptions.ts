@@ -166,6 +166,35 @@ router.post("/subscriptions", requireAuth, createSubscriptionRateLimit, async (r
         res.status(409).json({ error: "Почасовой тариф уже подключён." });
         return;
       }
+
+      // PostgreSQL unique_violation (23505) means Amvera retried a request
+      // that already committed. Re-fetch the existing active subscription and
+      // return 409 — same shape as the app-level guard — so the client never
+      // sees a 500 for what is effectively a successful prior creation.
+      const pgCode =
+        (err as { code?: string; cause?: { code?: string } })?.code ??
+        (err as { cause?: { code?: string } })?.cause?.code;
+      if (pgCode === "23505") {
+        const existing = await db
+          .select()
+          .from(subscriptionsTable)
+          .where(
+            and(
+              eq(subscriptionsTable.userId, user.id),
+              eq(subscriptionsTable.planId, plan.id),
+              eq(subscriptionsTable.status, "active"),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0]);
+
+        if (existing) {
+          res.status(409).json({ error: "Почасовой тариф уже подключён." });
+          return;
+        }
+      }
+
+      logger.error({ err }, "Failed to activate hourly plan");
       res.status(500).json({ error: "Failed to activate hourly plan" });
       return;
     }

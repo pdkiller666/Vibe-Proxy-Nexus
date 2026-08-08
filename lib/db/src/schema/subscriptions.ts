@@ -1,4 +1,5 @@
-import { boolean, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -72,6 +73,15 @@ export const subscriptionsTable = pgTable(
     index("subscriptions_status_idx").on(table.status),
     // Plan-based filtering (reporting, plan deactivation cascade checks).
     index("subscriptions_plan_id_idx").on(table.planId),
+    // Partial unique index: at most one pending_payment row per user.
+    // This makes the 23505-fallback in subscriptions.ts actually fire on
+    // concurrent Amvera retries instead of letting a second row slip through.
+    // Only pending_payment rows are constrained — expired/cancelled/active rows
+    // are unlimited, which is the intended behaviour (a user may have many
+    // historical non-pending subscriptions).
+    uniqueIndex("subscriptions_one_pending_per_user_idx")
+      .on(table.userId)
+      .where(sql`status = 'pending_payment'`),
   ],
 );
 
