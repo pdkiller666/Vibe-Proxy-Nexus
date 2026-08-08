@@ -1106,6 +1106,94 @@ export interface UserNotificationAcknowledgeResult {
   id: number;
 }
 
+export type AdminAuditLogEntryMethod = typeof AdminAuditLogEntryMethod[keyof typeof AdminAuditLogEntryMethod];
+
+
+export const AdminAuditLogEntryMethod = {
+  POST: 'POST',
+  PATCH: 'PATCH',
+  PUT: 'PUT',
+  DELETE: 'DELETE',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminAuditLogEntryDetails = { [key: string]: unknown } | null;
+
+export interface AdminAuditLogEntry {
+  id: number;
+  /** @nullable */
+  adminId?: number | null;
+  adminEmail: string;
+  action: string;
+  method: AdminAuditLogEntryMethod;
+  path: string;
+  /** @nullable */
+  targetType?: string | null;
+  /** @nullable */
+  targetId?: number | null;
+  /** @nullable */
+  targetDescription?: string | null;
+  /** @nullable */
+  details?: AdminAuditLogEntryDetails;
+  /** @nullable */
+  responseStatus?: number | null;
+  /** @nullable */
+  durationMs?: number | null;
+  /** @nullable */
+  ipAddress?: string | null;
+  /** @nullable */
+  userAgent?: string | null;
+  createdAt: string;
+}
+
+export interface AdminAuditLogListResponse {
+  entries: AdminAuditLogEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type AdminAuditLogAction = typeof AdminAuditLogAction[keyof typeof AdminAuditLogAction];
+
+
+export const AdminAuditLogAction = {
+  update_user_role: 'update_user_role',
+  update_user_profile: 'update_user_profile',
+  delete_user: 'delete_user',
+  update_user_subscription: 'update_user_subscription',
+  update_user_extra_slots: 'update_user_extra_slots',
+  set_user_balance: 'set_user_balance',
+  reset_user_password: 'reset_user_password',
+  update_user_note: 'update_user_note',
+  ban_user: 'ban_user',
+  unban_user: 'unban_user',
+  force_logout: 'force_logout',
+  create_plan: 'create_plan',
+  update_plan: 'update_plan',
+  delete_plan: 'delete_plan',
+  create_vpn_node: 'create_vpn_node',
+  update_vpn_node: 'update_vpn_node',
+  delete_vpn_node: 'delete_vpn_node',
+  restart_xray: 'restart_xray',
+  provision_vpn_node: 'provision_vpn_node',
+  issue_vpn_key: 'issue_vpn_key',
+  revoke_vpn_key: 'revoke_vpn_key',
+  create_invite_link: 'create_invite_link',
+  update_invite_link: 'update_invite_link',
+  delete_invite_link: 'delete_invite_link',
+  update_payment_settings: 'update_payment_settings',
+  upload_sbp_qr: 'upload_sbp_qr',
+  delete_sbp_qr: 'delete_sbp_qr',
+  confirm_payment: 'confirm_payment',
+  reject_payment: 'reject_payment',
+  update_payment_note: 'update_payment_note',
+  reply_to_ticket: 'reply_to_ticket',
+  update_ticket_status: 'update_ticket_status',
+  unknown_action: 'unknown_action',
+} as const;
+
 export type ListAdminPaymentsParams = {
 status?: PaymentStatus;
 userId?: number;
@@ -1160,4 +1248,31 @@ export const GetVpnNodeSystemLogsProcess = {
 export type ListAdminTicketsParams = {
 status?: TicketStatus;
 };
+
+export type GetAdminAuditLogParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+adminId?: number;
+action?: AdminAuditLogAction;
+targetType?: string;
+targetId?: number;
+since?: string;
+until?: string;
+format?: GetAdminAuditLogFormat;
+};
+
+export type GetAdminAuditLogFormat = typeof GetAdminAuditLogFormat[keyof typeof GetAdminAuditLogFormat];
+
+
+export const GetAdminAuditLogFormat = {
+  json: 'json',
+  csv: 'csv',
+} as const;
 

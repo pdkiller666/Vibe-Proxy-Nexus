@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminAuditLogListResponse,
   AdminBalanceTransaction,
   AdminInviteLink,
   AdminInviteLinkCreateInput,
@@ -56,6 +57,7 @@ import type {
   ExtraTrafficOrderResult,
   ForgotPasswordInput,
   ForgotPasswordResult,
+  GetAdminAuditLogParams,
   GetAdminNotificationsParams,
   GetVpnNodeMetricsParams,
   GetVpnNodeSystemLogsParams,
@@ -6737,4 +6739,88 @@ export const useUpdateTicketStatus = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateTicketStatusMutationOptions(options));
     }
+
+export const getGetAdminAuditLogUrl = (params?: GetAdminAuditLogParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/audit-log?${stringifiedParams}` : `/api/admin/audit-log`
+}
+
+/**
+ * @summary List admin audit log entries with filtering and pagination
+ */
+export const getAdminAuditLog = async (params?: GetAdminAuditLogParams, options?: RequestInit): Promise<AdminAuditLogListResponse | string> => {
+
+  return customFetch<AdminAuditLogListResponse | string>(getGetAdminAuditLogUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminAuditLogQueryKey = (params?: GetAdminAuditLogParams,) => {
+    return [
+    `/api/admin/audit-log`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminAuditLogQueryOptions = <TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<unknown>>(params?: GetAdminAuditLogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminAuditLogQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminAuditLog>>> = ({ signal }) => getAdminAuditLog(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminAuditLogQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminAuditLog>>>
+export type GetAdminAuditLogQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List admin audit log entries with filtering and pagination
+ */
+
+export function useGetAdminAuditLog<TData = Awaited<ReturnType<typeof getAdminAuditLog>>, TError = ErrorType<unknown>>(
+ params?: GetAdminAuditLogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminAuditLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminAuditLogQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 

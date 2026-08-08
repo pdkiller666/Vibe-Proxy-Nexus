@@ -2327,3 +2327,49 @@ export const UpdateTicketStatusResponse = zod.object({
 })
 
 
+/**
+ * @summary List admin audit log entries with filtering and pagination
+ */
+export const getAdminAuditLogQueryPageDefault = 1;
+
+export const getAdminAuditLogQueryPageSizeDefault = 50;
+export const getAdminAuditLogQueryPageSizeMax = 100;
+
+
+
+export const GetAdminAuditLogQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).default(getAdminAuditLogQueryPageDefault),
+  "pageSize": zod.coerce.number().min(1).max(getAdminAuditLogQueryPageSizeMax).default(getAdminAuditLogQueryPageSizeDefault),
+  "adminId": zod.coerce.number().optional(),
+  "action": zod.enum(['update_user_role', 'update_user_profile', 'delete_user', 'update_user_subscription', 'update_user_extra_slots', 'set_user_balance', 'reset_user_password', 'update_user_note', 'ban_user', 'unban_user', 'force_logout', 'create_plan', 'update_plan', 'delete_plan', 'create_vpn_node', 'update_vpn_node', 'delete_vpn_node', 'restart_xray', 'provision_vpn_node', 'issue_vpn_key', 'revoke_vpn_key', 'create_invite_link', 'update_invite_link', 'delete_invite_link', 'update_payment_settings', 'upload_sbp_qr', 'delete_sbp_qr', 'confirm_payment', 'reject_payment', 'update_payment_note', 'reply_to_ticket', 'update_ticket_status', 'unknown_action']).optional(),
+  "targetType": zod.coerce.string().optional(),
+  "targetId": zod.coerce.number().optional(),
+  "since": zod.date().optional(),
+  "until": zod.date().optional(),
+  "format": zod.enum(['json', 'csv']).optional()
+})
+
+export const GetAdminAuditLogResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "adminId": zod.number().nullish(),
+  "adminEmail": zod.string().email(),
+  "action": zod.string(),
+  "method": zod.enum(['POST', 'PATCH', 'PUT', 'DELETE']),
+  "path": zod.string(),
+  "targetType": zod.string().nullish(),
+  "targetId": zod.number().nullish(),
+  "targetDescription": zod.string().nullish(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
+  "responseStatus": zod.number().nullish(),
+  "durationMs": zod.number().nullish(),
+  "ipAddress": zod.string().nullish(),
+  "userAgent": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number()
+})
+
+

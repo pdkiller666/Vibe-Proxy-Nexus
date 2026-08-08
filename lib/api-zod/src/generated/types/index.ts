@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminAuditLogAction';
+export * from './adminAuditLogEntry';
+export * from './adminAuditLogEntryDetails';
+export * from './adminAuditLogEntryMethod';
+export * from './adminAuditLogListResponse';
 export * from './adminBalanceTransaction';
 export * from './adminBalanceTransactionType';
 export * from './adminInviteLink';
@@ -47,6 +52,8 @@ export * from './extraSlotOrderResult';
 export * from './extraTrafficOrderResult';
 export * from './forgotPasswordInput';
 export * from './forgotPasswordResult';
+export * from './getAdminAuditLogFormat';
+export * from './getAdminAuditLogParams';
 export * from './getAdminNotificationsParams';
 export * from './getVpnNodeMetricsMetric';
 export * from './getVpnNodeMetricsParams';

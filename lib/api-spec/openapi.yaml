@@ -1766,6 +1766,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/SupportTicketBase"
 
+  /admin/audit-log:
+    get:
+      operationId: getAdminAuditLog
+      tags: [admin]
+      summary: List admin audit log entries with filtering and pagination
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: adminId, in: query, schema: { type: integer } }
+        - name: action
+          in: query
+          schema:
+            $ref: "#/components/schemas/AdminAuditLogAction"
+        - { name: targetType, in: query, schema: { type: string } }
+        - { name: targetId, in: query, schema: { type: integer } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: until, in: query, schema: { type: string, format: date-time } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+      responses:
+        "200":
+          description: JSON (default) or CSV stream (when format=csv)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAuditLogListResponse"
+            text/csv:
+              schema:
+                type: string
+
 components:
   schemas:
     HealthStatus:
@@ -3089,3 +3118,72 @@ components:
       required: [id]
       properties:
         id: { type: integer }
+
+    AdminAuditLogEntry:
+      type: object
+      required: [id, adminEmail, action, method, path, createdAt]
+      properties:
+        id: { type: integer }
+        adminId: { type: ["integer", "null"] }
+        adminEmail: { type: string, format: email }
+        action: { type: string }
+        method: { type: string, enum: [POST, PATCH, PUT, DELETE] }
+        path: { type: string }
+        targetType: { type: ["string", "null"] }
+        targetId: { type: ["integer", "null"] }
+        targetDescription: { type: ["string", "null"] }
+        details: { type: ["object", "null"], additionalProperties: true }
+        responseStatus: { type: ["integer", "null"] }
+        durationMs: { type: ["integer", "null"] }
+        ipAddress: { type: ["string", "null"] }
+        userAgent: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AdminAuditLogListResponse:
+      type: object
+      required: [entries, total, page, pageSize]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAuditLogEntry"
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    AdminAuditLogAction:
+      type: string
+      enum:
+        - update_user_role
+        - update_user_profile
+        - delete_user
+        - update_user_subscription
+        - update_user_extra_slots
+        - set_user_balance
+        - reset_user_password
+        - update_user_note
+        - ban_user
+        - unban_user
+        - force_logout
+        - create_plan
+        - update_plan
+        - delete_plan
+        - create_vpn_node
+        - update_vpn_node
+        - delete_vpn_node
+        - restart_xray
+        - provision_vpn_node
+        - issue_vpn_key
+        - revoke_vpn_key
+        - create_invite_link
+        - update_invite_link
+        - delete_invite_link
+        - update_payment_settings
+        - upload_sbp_qr
+        - delete_sbp_qr
+        - confirm_payment
+        - reject_payment
+        - update_payment_note
+        - reply_to_ticket
+        - update_ticket_status
+        - unknown_action

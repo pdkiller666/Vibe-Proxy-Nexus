@@ -1,0 +1,738 @@
+# ТЕХНИЧЕСКОЕ ЗАДАНИЕ
+## Задача: `admin_audit_log` — журнал действий администраторов
+**Версия:** 1.0 · **Приоритет:** P0 (последний критический пробел) · **Оценка:** 4-6 часов · **Откат:** drop table через heal-schema
+
+---
+
+## 0. Паспорт задачи
+
+**Цель:** обеспечить полную подотчётность действий администраторов — кто, когда, что изменил в системе.
+
+**Контекст:** проект имеет закрытую модель (инвайты), но при нескольких админах невозможно отследить:
+- Кто подтвердил платёж
+- Кто заблокировал пользователя
+- Кто изменил баланс
+- Кто создал инвайт-ссылку с промо-тарифом
+- Кто удалил VPN-ноду
+
+**Риск без исправления:** злоупотребления, ошибки без возможности отката, отсутствие подотчётности.
+
+**Принцип:** middleware-подход — автоматическое логирование всех мутирующих запросов в `admin/*` без модификации существующих роутов.
+
+---
+
+## 1. Схема БД (`lib/db/src/schema/adminAuditLog.ts`)
+
+```typescript
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { usersTable } from "./users";
+
+export const adminAuditLogTable = pgTable(
+  "admin_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    
+    // Who performed the action
+    adminId: integer("admin_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    adminEmail: text("admin_email").notNull(),
+    
+    // What action was performed
+    action: text("action").notNull(), // e.g., 'confirm_payment', 'ban_user', 'create_invite_link'
+    method: text("method").notNull(), // HTTP method: POST, PATCH, DELETE
+    path: text("path").notNull(),     // e.g., '/admin/payments/42/confirm'
+    
+    // Target entity (optional — for actions without a specific target)
+    targetType: text("target_type"), // 'user', 'payment', 'invite_link', 'vpn_node', 'plan', etc.
+    targetId: integer("target_id"),
+    targetDescription: text("target_description"), // human-readable: "user@example.com", "payment #42", etc.
+    
+    // Action details (structured payload)
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    
+    // Request metadata
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("admin_audit_log_admin_id_idx").on(table.adminId),
+    index("admin_audit_log_action_idx").on(table.action),
+    index("admin_audit_log_target_idx").on(table.targetType, table.targetId),
+    index("admin_audit_log_created_at_idx").on(table.createdAt),
+  ]
+);
+
+export const insertAdminAuditLogSchema = createInsertSchema(adminAuditLogTable).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAdminAuditLog = z.infer<typeof insertAdminAuditLogSchema>;
+export type AdminAuditLog = typeof adminAuditLogTable.$inferSelect;
+```
+
+**После создания файла:**
+```bash
+pnpm --filter @workspace/db exec tsc -p .
+pnpm --filter @workspace/db run push  # dev
+```
+
+**heal-schema.mjs:** не нужен (простая таблица, `drizzle-kit push` справится).
+
+---
+
+## 2. Middleware для автоматического логирования
+
+### 2.1. Новый файл `src/lib/auditLog.ts`
+
+```typescript
+import { Request, Response, NextFunction } from "express";
+import { db, adminAuditLogTable } from "@workspace/db";
+import { logger } from "./logger";
+
+// Action mapping: route pattern → action name
+const ACTION_MAP: Record<string, string> = {
+  // Payments
+  "POST /admin/payments/:id/confirm": "confirm_payment",
+  "POST /admin/payments/:id/reject": "reject_payment",
+  "PATCH /admin/payments/:id/note": "update_payment_note",
+  
+  // Users
+  "POST /admin/users/:id/ban": "ban_user",
+  "POST /admin/users/:id/unban": "unban_user",
+  "POST /admin/users/:id/force-logout": "force_logout",
+  "PATCH /admin/users/:id/set-password": "reset_user_password",
+  "PATCH /admin/users/:id/set-balance": "set_user_balance",
+  "PATCH /admin/users/:id/subscription": "update_user_subscription",
+  "PATCH /admin/users/:id/extra-slots": "update_user_extra_slots",
+  "PATCH /admin/users/:id/note": "update_user_note",
+  "PATCH /admin/users/:id/role": "update_user_role",
+  "DELETE /admin/users/:id": "delete_user",
+  
+  // Plans
+  "POST /admin/plans": "create_plan",
+  "PATCH /admin/plans/:id": "update_plan",
+  "DELETE /admin/plans/:id": "delete_plan",
+  
+  // VPN nodes
+  "POST /admin/vpn-nodes": "create_vpn_node",
+  "POST /admin/vpn-nodes/provision": "provision_vpn_node",
+  "PATCH /admin/vpn-nodes/:id": "update_vpn_node",
+  "DELETE /admin/vpn-nodes/:id": "delete_vpn_node",
+  
+  // VPN keys
+  "POST /admin/vpn-keys/issue": "issue_vpn_key",
+  "DELETE /admin/vpn-keys/:id": "revoke_vpn_key",
+  
+  // Invite links
+  "POST /admin/invite-links": "create_invite_link",
+  "PATCH /admin/invite-links/:id": "update_invite_link",
+  "DELETE /admin/invite-links/:id": "delete_invite_link",
+  
+  // Payment settings
+  "PATCH /admin/payment-settings": "update_payment_settings",
+  "PUT /admin/payment-settings/sbp-qr": "upload_sbp_qr",
+  "DELETE /admin/payment-settings/sbp-qr": "delete_sbp_qr",
+  
+  // Support
+  "POST /admin/support-tickets/:id/messages": "reply_to_ticket",
+  "PATCH /admin/support-tickets/:id/status": "update_ticket_status",
+};
+
+/**
+ * Middleware that logs all mutative admin actions to admin_audit_log.
+ * Attach to all admin routes after requireAdmin middleware.
+ */
+export function auditLogMiddleware() {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    // Only log successful responses (2xx)
+    const originalSend = res.send;
+    
+    res.send = function (body?: any): Response {
+      // Only log if response is successful and it's a mutative method
+      if (res.statusCode >= 200 && res.statusCode < 300 && ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
+        logAdminAction(req, res).catch((err) => {
+          logger.error({ err, path: req.path }, "auditLogMiddleware: failed to log action");
+        });
+      }
+      return originalSend.call(this, body);
+    };
+    
+    next();
+  };
+}
+
+async function logAdminAction(req: Request, res: Response): Promise<void> {
+  const adminUser = req.appUser;
+  if (!adminUser || adminUser.role !== "admin") return;
+  
+  // Find action name from route pattern
+  const routePattern = `${req.method} ${req.route?.path || req.path}`;
+  const action = ACTION_MAP[routePattern] || "unknown_action";
+  
+  // Extract target info from params
+  const targetType = inferTargetType(req.path);
+  const targetId = extractTargetId(req.params);
+  const targetDescription = inferTargetDescription(req, targetType, targetId);
+  
+  // Build details payload
+  const details: Record<string, unknown> = {
+    ...(req.body && Object.keys(req.body).length > 0 ? { requestBody: req.body } : {}),
+    ...(req.query && Object.keys(req.query).length > 0 ? { queryParams: req.query } : {}),
+  };
+  
+  // Get IP (trust proxy is already set in app.ts)
+  const ipAddress = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  const userAgent = req.headers["user-agent"] || null;
+  
+  try {
+    await db.insert(adminAuditLogTable).values({
+      adminId: adminUser.id,
+      adminEmail: adminUser.email,
+      action,
+      method: req.method,
+      path: req.path,
+      targetType,
+      targetId,
+      targetDescription,
+      details,
+      ipAddress,
+      userAgent,
+    });
+    
+    logger.info(
+      {
+        adminId: adminUser.id,
+        adminEmail: adminUser.email,
+        action,
+        method: req.method,
+        path: req.path,
+        targetType,
+        targetId,
+      },
+      "admin_audit: action logged"
+    );
+  } catch (err) {
+    logger.error({ err, action, path: req.path }, "admin_audit: failed to insert log");
+  }
+}
+
+function inferTargetType(path: string): string | null {
+  if (path.includes("/users/")) return "user";
+  if (path.includes("/payments/")) return "payment";
+  if (path.includes("/plans/")) return "plan";
+  if (path.includes("/vpn-nodes/")) return "vpn_node";
+  if (path.includes("/vpn-keys/")) return "vpn_key";
+  if (path.includes("/invite-links/")) return "invite_link";
+  if (path.includes("/support-tickets/")) return "support_ticket";
+  if (path.includes("/payment-settings")) return "payment_settings";
+  return null;
+}
+
+function extractTargetId(params: Record<string, string>): number | null {
+  const id = params.id;
+  return id ? parseInt(id, 10) : null;
+}
+
+function inferTargetDescription(
+  req: Request,
+  targetType: string | null,
+  targetId: number | null
+): string | null {
+  if (!targetType || !targetId) return null;
+  
+  // For common cases, provide human-readable description
+  if (targetType === "user" && req.body?.email) {
+    return req.body.email;
+  }
+  if (targetType === "payment") {
+    return `Payment #${targetId}`;
+  }
+  if (targetType === "plan" && req.body?.name) {
+    return req.body.name;
+  }
+  
+  return `${targetType} #${targetId}`;
+}
+```
+
+### 2.2. Регистрация в `src/routes/admin/index.ts`
+
+```typescript
+import { Router } from "express";
+import { requireAdmin, requireAuth } from "../../lib/auth";
+import { auditLogMiddleware } from "../../lib/auditLog";
+
+// ... existing imports ...
+
+const router = Router();
+
+// Apply audit logging to all admin routes (after auth + admin check)
+router.use(requireAuth, requireAdmin, auditLogMiddleware());
+
+// Mount existing admin routes
+router.use("/dashboard", dashboardRouter);
+router.use("/users", usersRouter);
+router.use("/payments", paymentsRouter);
+// ... rest of existing mounts ...
+
+export default router;
+```
+
+**Принцип:** middleware перехватывает успешные ответы (2xx) всех мутирующих запросов → логирует действие → не влияет на бизнес-логику.
+
+---
+
+## 3. API-контракт (`lib/api-spec/openapi.yaml`)
+
+### 3.1. Схемы
+
+```yaml
+AdminAuditLogEntry:
+  type: object
+  required:
+    - id
+    - adminId
+    - adminEmail
+    - action
+    - method
+    - path
+    - createdAt
+  properties:
+    id: { type: integer }
+    adminId: { type: integer }
+    adminEmail: { type: string, format: email }
+    action: { type: string }
+    method: { type: string, enum: [POST, PATCH, PUT, DELETE] }
+    path: { type: string }
+    targetType: { type: ["string", "null"] }
+    targetId: { type: ["integer", "null"] }
+    targetDescription: { type: ["string", "null"] }
+    details: { type: ["object", "null"], additionalProperties: true }
+    ipAddress: { type: ["string", "null"] }
+    userAgent: { type: ["string", "null"] }
+    createdAt: { type: string, format: date-time }
+
+AdminAuditLogListResponse:
+  type: object
+  required: [entries, total, page, pageSize]
+  properties:
+    entries:
+      type: array
+      items: { $ref: "#/components/schemas/AdminAuditLogEntry" }
+    total: { type: integer }
+    page: { type: integer }
+    pageSize: { type: integer }
+```
+
+### 3.2. Эндпоинт `GET /admin/audit-log`
+
+```yaml
+/admin/audit-log:
+  get:
+    operationId: getAdminAuditLog
+    summary: List admin audit log entries with filtering
+    parameters:
+      - name: page
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+      - name: pageSize
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: adminId
+        in: query
+        schema: { type: integer }
+      - name: action
+        in: query
+        schema: { type: string }
+      - name: targetType
+        in: query
+        schema: { type: string }
+      - name: targetId
+        in: query
+        schema: { type: integer }
+      - name: since
+        in: query
+        schema: { type: string, format: date-time }
+      - name: until
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminAuditLogListResponse" }
+```
+
+**Codegen:** `pnpm --filter @workspace/api-spec run codegen`
+
+---
+
+## 4. Backend — эндпоинт `GET /admin/audit-log`
+
+### 4.1. Новый файл `src/routes/admin/auditLog.ts`
+
+```typescript
+import { Router } from "express";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { db, adminAuditLogTable } from "@workspace/db";
+import { requireAdmin, requireAuth } from "../../lib/auth";
+import { GetAdminAuditLogQuery, GetAdminAuditLogListResponse } from "@workspace/api-zod";
+
+const router = Router();
+
+router.get("/audit-log", requireAuth, requireAdmin, async (req, res) => {
+  const query = GetAdminAuditLogQuery.safeParse(req.query);
+  if (!query.success) {
+    return res.status(400).json({ error: query.error.message });
+  }
+  
+  const {
+    page = 1,
+    pageSize = 50,
+    adminId,
+    action,
+    targetType,
+    targetId,
+    since,
+    until,
+  } = query.data;
+  
+  const offset = (page - 1) * pageSize;
+  
+  // Build WHERE clause
+  const conditions = [];
+  if (adminId) conditions.push(eq(adminAuditLogTable.adminId, adminId));
+  if (action) conditions.push(eq(adminAuditLogTable.action, action));
+  if (targetType) conditions.push(eq(adminAuditLogTable.targetType, targetType));
+  if (targetId) conditions.push(eq(adminAuditLogTable.targetId, targetId));
+  if (since) conditions.push(gte(adminAuditLogTable.createdAt, new Date(since)));
+  if (until) conditions.push(lte(adminAuditLogTable.createdAt, new Date(until)));
+  
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  
+  // Fetch entries
+  const entries = await db
+    .select()
+    .from(adminAuditLogTable)
+    .where(whereClause)
+    .orderBy(desc(adminAuditLogTable.createdAt))
+    .limit(pageSize)
+    .offset(offset);
+  
+  // Count total
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(adminAuditLogTable)
+    .where(whereClause);
+  
+  res.json(
+    GetAdminAuditLogListResponse.parse({
+      entries,
+      total: Number(count),
+      page,
+      pageSize,
+    })
+  );
+});
+
+export default router;
+```
+
+### 4.2. Регистрация в `src/routes/admin/index.ts`
+
+```typescript
+import auditLogRouter from "./auditLog";
+
+// ... existing code ...
+
+router.use("/", auditLogRouter);
+```
+
+---
+
+## 5. Frontend — раздел «Журнал действий» в админке
+
+### 5.1. Новая страница `src/pages/admin/audit-log.tsx`
+
+```tsx
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useGetAdminAuditLog } from "@workspace/api-client-react";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
+
+export function AuditLogPage() {
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({
+    adminId: "",
+    action: "",
+    targetType: "",
+    since: "",
+    until: "",
+  });
+  
+  const { data, isLoading } = useGetAdminAuditLog({
+    page,
+    pageSize: 50,
+    ...(filters.adminId && { adminId: parseInt(filters.adminId) }),
+    ...(filters.action && { action: filters.action }),
+    ...(filters.targetType && { targetType: filters.targetType }),
+    ...(filters.since && { since: filters.since }),
+    ...(filters.until && { until: filters.until }),
+  });
+  
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Журнал действий администраторов</h1>
+      
+      {/* Filters */}
+      <div className="flex gap-4 flex-wrap">
+        <input
+          type="text"
+          placeholder="Action (e.g., confirm_payment)"
+          value={filters.action}
+          onChange={(e) => setFilters({ ...filters, action: e.target.value })}
+          className="border px-3 py-2"
+        />
+        <input
+          type="text"
+          placeholder="Target type (e.g., user)"
+          value={filters.targetType}
+          onChange={(e) => setFilters({ ...filters, targetType: e.target.value })}
+          className="border px-3 py-2"
+        />
+        <input
+          type="datetime-local"
+          placeholder="Since"
+          value={filters.since}
+          onChange={(e) => setFilters({ ...filters, since: e.target.value })}
+          className="border px-3 py-2"
+        />
+        <input
+          type="datetime-local"
+          placeholder="Until"
+          value={filters.until}
+          onChange={(e) => setFilters({ ...filters, until: e.target.value })}
+          className="border px-3 py-2"
+        />
+        <button
+          onClick={() => setPage(1)}
+          className="bg-primary text-primary-foreground px-4 py-2"
+        >
+          Применить
+        </button>
+      </div>
+      
+      {/* Table */}
+      {isLoading ? (
+        <div>Загрузка...</div>
+      ) : (
+        <table className="w-full border">
+          <thead>
+            <tr className="bg-muted">
+              <th className="px-4 py-2 text-left">Время</th>
+              <th className="px-4 py-2 text-left">Админ</th>
+              <th className="px-4 py-2 text-left">Действие</th>
+              <th className="px-4 py-2 text-left">Цель</th>
+              <th className="px-4 py-2 text-left">IP</th>
+              <th className="px-4 py-2 text-left">Детали</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data?.entries.map((entry) => (
+              <tr key={entry.id} className="border-t">
+                <td className="px-4 py-2 text-sm">
+                  {format(new Date(entry.createdAt), "dd.MM.yyyy HH:mm:ss", { locale: ru })}
+                </td>
+                <td className="px-4 py-2 text-sm">{entry.adminEmail}</td>
+                <td className="px-4 py-2 text-sm font-mono">{entry.action}</td>
+                <td className="px-4 py-2 text-sm">
+                  {entry.targetDescription || entry.targetType || "—"}
+                </td>
+                <td className="px-4 py-2 text-sm text-muted-foreground">
+                  {entry.ipAddress || "—"}
+                </td>
+                <td className="px-4 py-2 text-sm">
+                  {entry.details ? (
+                    <details>
+                      <summary className="cursor-pointer text-primary">Показать</summary>
+                      <pre className="text-xs mt-2 p-2 bg-muted overflow-auto max-w-md">
+                        {JSON.stringify(entry.details, null, 2)}
+                      </pre>
+                    </details>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      
+      {/* Pagination */}
+      {data && data.total > data.pageSize && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="border px-4 py-2 disabled:opacity-50"
+          >
+            ← Назад
+          </button>
+          <span className="px-4 py-2">
+            Страница {page} из {Math.ceil(data.total / data.pageSize)}
+          </span>
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page * data.pageSize >= data.total}
+            className="border px-4 py-2 disabled:opacity-50"
+          >
+            Вперёд →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### 5.2. Роутинг в `src/App.tsx`
+
+```tsx
+import { AuditLogPage } from "./pages/admin/audit-log";
+
+// ... inside AdminRoute ...
+<Route path="/admin/audit-log" component={AuditLogPage} />
+```
+
+### 5.3. Навигация в `src/pages/admin/index.tsx`
+
+Добавить ссылку «Журнал действий» в меню админки.
+
+---
+
+## 6. Опционально: Retention (автоочистка старых записей)
+
+### 6.1. Новый файл `src/lib/auditLogCleanup.ts`
+
+```typescript
+import { lt } from "drizzle-orm";
+import { db, adminAuditLogTable } from "@workspace/db";
+import { logger } from "./logger";
+
+const RETENTION_DAYS = 90;
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+async function cleanupOldAuditLogs(): Promise<void> {
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  
+  try {
+    const result = await db
+      .delete(adminAuditLogTable)
+      .where(lt(adminAuditLogTable.createdAt, cutoff))
+      .returning({ id: adminAuditLogTable.id });
+    
+    if (result.length > 0) {
+      logger.info({ count: result.length }, "auditLogCleanup: deleted old entries");
+    }
+  } catch (err) {
+    logger.error({ err }, "auditLogCleanup: failed to delete old entries");
+  }
+}
+
+export function startAuditLogCleanupJob(): void {
+  // Run once at startup
+  cleanupOldAuditLogs().catch((err) =>
+    logger.error({ err }, "auditLogCleanup: startup run failed")
+  );
+  
+  // Then run daily
+  setInterval(() => {
+    cleanupOldAuditLogs().catch((err) =>
+      logger.error({ err }, "auditLogCleanup: periodic run failed")
+    );
+  }, CLEANUP_INTERVAL_MS);
+}
+```
+
+### 6.2. Регистрация в `src/app.ts`
+
+```typescript
+import { startAuditLogCleanupJob } from "./lib/auditLogCleanup";
+
+// ... alongside other startup jobs ...
+startAuditLogCleanupJob();
+```
+
+---
+
+## 7. Тесты (Vitest)
+
+### 7.1. `auditLog.test.ts`
+
+**Сценарии:**
+1. POST `/admin/payments/:id/confirm` → запись в `admin_audit_log` с `action='confirm_payment'`
+2. PATCH `/admin/users/:id/set-balance` → запись с `action='set_user_balance'`, `targetType='user'`, `details.requestBody`
+3. GET `/admin/dashboard` → **не логируется** (не мутирующий запрос)
+4. GET `/admin/audit-log` → возвращает список с пагинацией
+5. Фильтры работают: `adminId`, `action`, `targetType`, `since`, `until`
+6. Middleware не влияет на бизнес-логику (response code не меняется)
+7. Cleanup: записи старше 90 дней удаляются
+
+**Оценка:** 7 сценариев, 2-3 часа работы.
+
+---
+
+## 8. Приёмка (ручное QA)
+
+- [ ] Подтвердить платёж через админку → запись в журнале с `action='confirm_payment'`
+- [ ] Заблокировать пользователя → запись с `action='ban_user'`, `targetType='user'`
+- [ ] Создать инвайт-ссылку → запись с `action='create_invite_link'`
+- [ ] Открыть `/admin/audit-log` → видеть все действия с фильтрами
+- [ ] GET `/admin/dashboard` → **не создаёт** запись в журнале
+- [ ] Экспорт в CSV (опционально, если реализовано)
+
+---
+
+## 9. Definition of Done
+
+- [ ] `pnpm run typecheck`, `pnpm run build` — зелёные
+- [ ] codegen перегенерирован
+- [ ] 7 тестов зелёные
+- [ ] docs обновлены (`SYSTEM_OVERVIEW.md`, `PROJECT_MAP.md`)
+- [ ] деплой: `./deploy.sh "добавлен admin_audit_log"`
+- [ ] ручное QA пройдено
+
+---
+
+## 10. Порядок работ
+
+1. **Схема БД** (`adminAuditLog.ts`) + push
+2. **Middleware** (`auditLog.ts`) + регистрация в `admin/index.ts`
+3. **API эндпоинт** (`routes/admin/auditLog.ts`) + openapi.yaml + codegen
+4. **Frontend** (`audit-log.tsx` + роутинг + навигация)
+5. **Cleanup** (опционально, `auditLogCleanup.ts`)
+6. **Тесты** (7 сценариев)
+7. **Деплой + QA**
+
+**Оценка:** 4-6 часов.
+
+---
+
+*Это ТЗ закрывает последний критический пробел проекта. После реализации VPNexus.pro можно будет считать **полностью production-ready** с enterprise-уровнем безопасности и подотчётности.*

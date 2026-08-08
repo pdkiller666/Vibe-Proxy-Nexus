@@ -1,0 +1,80 @@
+# 🟢 ТЗ v1.2 — финальная версия, все 3 правки приняты
+
+Кодер работает хирургически точно — каждая правка обоснована и технически корректна. Признаю все три и применяю.
+
+---
+
+## 📋 Правки v1.1 → v1.2
+
+| # | Правка | Применение |
+| :--- | :--- | :--- |
+| 1 | **Убрать `req.baseUrl`** | Заменить на `const rawPath = req.route?.path ?? req.path;` — `req.route.path` уже содержит полный путь `/admin/...` |
+| 2 | **Удалить фантомный роут** | Убрать `"PATCH /admin/users/:id/extra-traffic"` из ACTION_MAP |
+| 3 | **Перенести `vpnNodeProvisioningRouter`** | Из `routes/index.ts` в `admin/index.ts` (одновременно устраняет структурную аномалию монтирования) |
+| 4 | **Убрать `"data"` из SENSITIVE_FIELDS** | Оставить только конкретные: `password`, `passwordHash`, `token`, `secret`, `managementApiSecret`, `screenshotData`, `sbpQrCodeData` |
+
+---
+
+## 🎯 Финальные фрагменты кода
+
+### Middleware (исправленный)
+
+```typescript
+// Внутри logAdminAction
+const rawPath = req.route?.path ?? req.path;  // ← БЕЗ req.baseUrl
+const routePattern = `${req.method} ${normalizeRoutePath(rawPath)}`;
+const action = ACTION_MAP[routePattern] ?? "unknown_action";
+
+// extractTargetId — остаётся как в v1.1
+function extractTargetId(params: Record<string, string>): number | null {
+  for (const value of Object.values(params)) {
+    if (/^\d+$/.test(value)) return parseInt(value, 10);
+  }
+  return null;
+}
+```
+
+### SENSITIVE_FIELDS (исправленный)
+
+```typescript
+const SENSITIVE_FIELDS = new Set([
+  "password", "passwordHash", "token", "secret",
+  "managementApiSecret", "screenshotData", "sbpQrCodeData",
+  // "data" — убрано, слишком широкое
+]);
+```
+
+### Регистрация middleware
+
+```typescript
+// admin/index.ts
+import vpnNodeProvisioningRouter from "./vpnNodeProvisioning";
+
+router.use(/^\/admin(\/|$)/, requireAuth, requireAdmin, auditLogMiddleware());
+router.use(vpnNodeProvisioningRouter);  // ← перенесено из routes/index.ts
+// ... остальные mounts ...
+```
+
+### ACTION_MAP (финальный, без фантома)
+
+Удалить строку `"PATCH /admin/users/:id/extra-traffic": "update_user_extra_traffic"`.
+
+---
+
+## ✅ Зелёный свет
+
+**ТЗ v1.2 готово к реализации.** Все критические правки применены, техническая точность подтверждена сверкой с реальным кодом.
+
+**Порядок работ без изменений:**
+1. Схема БД (`adminAuditLog.ts`) + push
+2. Middleware (`auditLog.ts`) + регистрация в `admin/index.ts`
+3. Перенос `vpnNodeProvisioningRouter` в `admin/index.ts`
+4. API эндпоинт + openapi.yaml + codegen
+5. Frontend + CSV + select-фильтр + timezone-конвертация
+6. Cleanup job (опционально)
+7. Тесты (добавить: удаление админа сохраняет записи, `set-password` → `[REDACTED]`, `restart-xray` логируется)
+8. Деплой + QA
+
+**Оценка:** 4-6 часов.
+
+*После реализации VPNexus.pro будет закрыт по всем критическим пунктам — production-grade SaaS уровня enterprise. Поздравляю с отличной командной работой на протяжении всей серии итераций.*

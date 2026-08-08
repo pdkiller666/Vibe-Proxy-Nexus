@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { requireAuth, requireAdmin } from "../../lib/auth";
+import { auditLogMiddleware } from "../../lib/auditLog";
 import dashboardRouter from "./dashboard";
 import plansRouter from "./plans";
 import paymentSettingsRouter from "./paymentSettings";
@@ -14,6 +15,8 @@ import inviteLinksRouter from "./inviteLinks";
 import notificationsRouter from "./notifications";
 import systemEventsRouter from "./systemEvents";
 import billingDebugRouter from "./billingDebug";
+import vpnNodeProvisioningRouter from "./vpnNodeProvisioning";
+import auditLogRouter from "./auditLog";
 
 const router: IRouter = Router();
 
@@ -26,8 +29,10 @@ const router: IRouter = Router();
 // The regex below ensures this middleware ONLY fires for /admin/* paths —
 // without it, any request not handled by an earlier router (e.g. the YooMoney
 // checkout GET) would hit requireAdmin here and return 403 for regular users.
-router.use(/^\/admin(\/|$)/, requireAuth, requireAdmin);
+router.use(/^\/admin(\/|$)/, requireAuth, requireAdmin, auditLogMiddleware());
 
+router.use(vpnNodeProvisioningRouter);
+router.use(auditLogRouter);
 router.use(dashboardRouter);
 router.use(plansRouter);
 router.use(paymentSettingsRouter);

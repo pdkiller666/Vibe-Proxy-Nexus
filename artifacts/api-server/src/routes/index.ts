@@ -18,8 +18,6 @@ import supportRouter from "./support";
 import notificationsRouter from "./notifications";
 import adminRouter from "./admin";
 import yooMoneyRouter from "./yoomoney";
-import vpnNodeProvisioningRouter from "./admin/vpnNodeProvisioning";
-
 const router: IRouter = Router();
 
 router.use(healthRouter);
@@ -41,6 +39,5 @@ router.use(supportRouter);
 router.use(notificationsRouter);
 router.use(adminRouter);
 router.use(yooMoneyRouter);
-router.use(vpnNodeProvisioningRouter);
 
 export default router;

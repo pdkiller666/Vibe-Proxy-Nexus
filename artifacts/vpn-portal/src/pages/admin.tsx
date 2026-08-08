@@ -70,15 +70,17 @@ import {
   getGetVpnNodeSystemLogsQueryKey,
   GetVpnNodeSystemLogsProcess,
   GetVpnNodeMetricsMetric,
+  useGetAdminAuditLog,
+  AdminAuditLogAction,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser, AdminAuditLogEntry } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw, Zap, Server, LineChart as LineChartIcon } from "lucide-react";
+import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw, Zap, Server, LineChart as LineChartIcon, ClipboardList, Download } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { SupportMessageAttachmentDisplay } from "@/components/support-attachment-picker";
@@ -5541,6 +5543,228 @@ function NotificationBell() {
   );
 }
 
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+
+const ACTION_LABELS: Record<string, string> = {
+  update_user_role: "Роль пользователя",
+  update_user_profile: "Профиль пользователя",
+  delete_user: "Удаление пользователя",
+  update_user_subscription: "Подписка",
+  update_user_extra_slots: "Слоты",
+  set_user_balance: "Баланс",
+  reset_user_password: "Сброс пароля",
+  update_user_note: "Заметка",
+  ban_user: "Бан",
+  unban_user: "Разбан",
+  force_logout: "Принудительный выход",
+  create_plan: "Создание тарифа",
+  update_plan: "Редактирование тарифа",
+  delete_plan: "Удаление тарифа",
+  create_vpn_node: "Создание узла",
+  update_vpn_node: "Редактирование узла",
+  delete_vpn_node: "Удаление узла",
+  restart_xray: "Перезапуск Xray",
+  provision_vpn_node: "Провизионирование узла",
+  issue_vpn_key: "Выдача ключа VPN",
+  revoke_vpn_key: "Отзыв ключа VPN",
+  create_invite_link: "Создание инвайта",
+  update_invite_link: "Редактирование инвайта",
+  delete_invite_link: "Удаление инвайта",
+  update_payment_settings: "Настройки платежей",
+  upload_sbp_qr: "Загрузка QR СБП",
+  delete_sbp_qr: "Удаление QR СБП",
+  confirm_payment: "Подтверждение платежа",
+  reject_payment: "Отклонение платежа",
+  update_payment_note: "Заметка к платежу",
+  reply_to_ticket: "Ответ на тикет",
+  update_ticket_status: "Статус тикета",
+  unknown_action: "Неизвестное действие",
+};
+
+function AuditLogRow({ entry }: { entry: AdminAuditLogEntry }) {
+  const [open, setOpen] = useState(false);
+  const label = ACTION_LABELS[entry.action] ?? entry.action;
+  const methodColor: Record<string, string> = {
+    POST: "text-green-600",
+    PATCH: "text-blue-600",
+    PUT: "text-blue-600",
+    DELETE: "text-red-600",
+  };
+
+  return (
+    <>
+      <tr
+        className="border-b hover:bg-muted/30 cursor-pointer text-sm"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <td className="p-2 font-mono text-xs text-muted-foreground whitespace-nowrap">
+          {new Date(entry.createdAt).toLocaleString("ru-RU")}
+        </td>
+        <td className="p-2 max-w-[180px] truncate" title={entry.adminEmail}>
+          {entry.adminEmail}
+        </td>
+        <td className="p-2 whitespace-nowrap">{label}</td>
+        <td className={`p-2 font-mono text-xs font-semibold ${methodColor[entry.method] ?? ""}`}>
+          {entry.method}
+        </td>
+        <td className="p-2 font-mono text-xs max-w-[220px] truncate text-muted-foreground" title={entry.path}>
+          {entry.path}
+        </td>
+        <td className="p-2 text-xs">
+          {entry.targetDescription ?? (entry.targetType ? `${entry.targetType} #${entry.targetId}` : "—")}
+        </td>
+        <td className="p-2 text-xs text-center">
+          {entry.responseStatus ?? "—"}
+        </td>
+        <td className="p-2 text-xs text-center text-muted-foreground">
+          {entry.durationMs != null ? `${entry.durationMs}ms` : "—"}
+        </td>
+      </tr>
+      {open && (
+        <tr className="bg-muted/20">
+          <td colSpan={8} className="p-3">
+            <div className="text-xs space-y-1">
+              {entry.ipAddress && (
+                <div><span className="font-semibold">IP:</span> {entry.ipAddress}</div>
+              )}
+              {entry.userAgent && (
+                <div><span className="font-semibold">UA:</span> <span className="text-muted-foreground">{entry.userAgent}</span></div>
+              )}
+              {entry.details && Object.keys(entry.details).length > 0 && (
+                <pre className="bg-muted p-2 rounded text-xs overflow-auto max-h-60">
+                  {JSON.stringify(entry.details, null, 2)}
+                </pre>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function AuditLogTab() {
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const [actionFilter, setActionFilter] = useState<string>("");
+  const [since, setSince] = useState("");
+  const [until, setUntil] = useState("");
+
+  const params = {
+    page,
+    pageSize,
+    ...(actionFilter ? { action: actionFilter as typeof AdminAuditLogAction[keyof typeof AdminAuditLogAction] } : {}),
+    ...(since ? { since: since } : {}),
+    ...(until ? { until: until } : {}),
+  };
+
+  const { data: rawData, isLoading } = useGetAdminAuditLog(params);
+  // Hook may return string on CSV format — we always request JSON here.
+  const data = rawData && typeof rawData !== "string" ? rawData : null;
+
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const csvHref = (() => {
+    const q = new URLSearchParams();
+    q.set("format", "csv");
+    if (actionFilter) q.set("action", actionFilter);
+    if (since) q.set("since", new Date(since).toISOString());
+    if (until) q.set("until", new Date(until).toISOString());
+    return `/api/admin/audit-log?${q.toString()}`;
+  })();
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="border rounded-none px-2 py-1.5 text-sm bg-background"
+          value={actionFilter}
+          onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
+        >
+          <option value="">Все действия</option>
+          {Object.entries(ACTION_LABELS).map(([v, label]) => (
+            <option key={v} value={v}>{label}</option>
+          ))}
+        </select>
+        <Input
+          type="datetime-local"
+          className="rounded-none w-auto text-sm"
+          value={since}
+          onChange={(e) => { setSince(e.target.value); setPage(1); }}
+          placeholder="С"
+        />
+        <Input
+          type="datetime-local"
+          className="rounded-none w-auto text-sm"
+          value={until}
+          onChange={(e) => { setUntil(e.target.value); setPage(1); }}
+          placeholder="По"
+        />
+        <a
+          href={csvHref}
+          download="audit-log.csv"
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-none bg-background hover:bg-muted"
+        >
+          <Download className="w-4 h-4" /> Экспорт CSV
+        </a>
+      </div>
+
+      {isLoading ? (
+        <div className="py-8 text-center text-muted-foreground">Загрузка...</div>
+      ) : !data || data.entries.length === 0 ? (
+        <div className="py-8 text-center text-muted-foreground">Нет записей</div>
+      ) : (
+        <div className="overflow-x-auto border rounded-none">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-b text-left text-xs font-semibold">
+                <th className="p-2 whitespace-nowrap">Время</th>
+                <th className="p-2">Администратор</th>
+                <th className="p-2">Действие</th>
+                <th className="p-2">Метод</th>
+                <th className="p-2">Путь</th>
+                <th className="p-2">Цель</th>
+                <th className="p-2 text-center">Статус</th>
+                <th className="p-2 text-center">Время</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.entries.map((entry) => (
+                <AuditLogRow key={entry.id} entry={entry} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {total > pageSize && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            {total} записей, страница {page} из {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1 border rounded-none text-sm disabled:opacity-40"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              ←
+            </button>
+            <button
+              className="px-3 py-1 border rounded-none text-sm disabled:opacity-40"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   const { data: summary } = useGetAdminDashboardSummary();
   const pendingPayments = summary?.pendingPayments ?? 0;
@@ -5595,6 +5819,9 @@ export default function Admin() {
                 <MessageCircle className="w-4 h-4" /> Поддержка
                 <Badge count={openTickets} />
               </TabsTrigger>
+              <TabsTrigger value="audit-log" className="rounded-none gap-1.5 whitespace-nowrap">
+                <ClipboardList className="w-4 h-4" /> Журнал действий
+              </TabsTrigger>
             </TabsList>
           </div>
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent md:hidden" />
@@ -5625,6 +5852,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="support" className="pt-4">
           <SupportManagement />
+        </TabsContent>
+        <TabsContent value="audit-log" className="pt-4">
+          <AuditLogTab />
         </TabsContent>
       </Tabs>
     </div>

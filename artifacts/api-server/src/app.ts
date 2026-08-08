@@ -15,6 +15,7 @@ import { startHourlyBillingJob } from "./lib/hourlyBilling";
 import { startNodeMonitoringJob } from "./lib/nodeMonitoring";
 import { startReconcileBalancePaymentsJob } from "./lib/reconcileBalancePayments";
 import { startAutoRenewJob } from "./lib/autoRenew";
+import { startAuditLogCleanupJob } from "./lib/auditLogCleanup";
 
 // Fail fast if required secrets are missing — better to crash on startup than
 // to start serving requests and fail mysteriously on the first authenticated
@@ -123,5 +124,6 @@ startHourlyBillingJob();
 startNodeMonitoringJob();
 startReconcileBalancePaymentsJob();
 startAutoRenewJob();
+startAuditLogCleanupJob();
 
 export default app;
