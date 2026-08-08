@@ -17,6 +17,7 @@ import systemEventsRouter from "./systemEvents";
 import billingDebugRouter from "./billingDebug";
 import vpnNodeProvisioningRouter from "./vpnNodeProvisioning";
 import auditLogRouter from "./auditLog";
+import auditLogDebugRouter from "./auditLogDebug";
 
 const router: IRouter = Router();
 
@@ -47,5 +48,6 @@ router.use(inviteLinksRouter);
 router.use(notificationsRouter);
 router.use(systemEventsRouter);
 router.use(billingDebugRouter);
+router.use(auditLogDebugRouter);
 
 export default router;

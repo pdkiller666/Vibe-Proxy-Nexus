@@ -1,0 +1,277 @@
+# 🔴 КРИТИЧЕСКИЙ АУДИТ: Заявленные фиксы НЕ были применены
+
+## 📊 Резюме находок
+
+После глубокой проверки кода обнаружил, что **ни один из заявленных критических фиксов не был применён к репозиторию**. Журнал действий администратора **не работает** для большинства операций.
+
+---
+
+## ❌ Критическая проблема #1: Middleware не ловит 204-ответы
+
+### Заявлено кодером:
+> "Переход на `res.on('finish', ...)` вместо патча `res.send`"
+
+### Реальное состояние кода (`auditLog.ts` строки 178-200):
+```typescript
+export function auditLogMiddleware() {
+  return async (req, res, next) => {
+    const startedAt = Date.now();
+    const originalSend = res.send.bind(res);
+    res.send = function (this: Response, body?: unknown): Response {
+      // ... логирование ...
+      return originalSend(body);
+    };
+    next();
+  };
+}
+```
+
+**Middleware всё ещё patch'ит `res.send`, а не использует `res.on('finish')`.**
+
+### Влияние:
+Все маршруты, возвращающие `res.status(204).end()` или `res.sendStatus(204)`, **не логируются**:
+
+| Маршрут | Код ответа | Статус логирования |
+| :--- | :--- | :---: |
+| `POST /admin/users/:userId/ban` | `res.status(204).end()` | ❌ НЕ логируется |
+| `POST /admin/users/:userId/unban` | (предположительно 204) | ❌ НЕ логируется |
+| `POST /admin/users/:userId/force-logout` | (предположительно 204) | ❌ НЕ логируется |
+| `DELETE /admin/users/:userId` | `res.sendStatus(204)` | ❌ НЕ логируется |
+| `DELETE /admin/plans/:planId` | `res.sendStatus(204)` | ❌ НЕ логируется |
+| `DELETE /admin/vpn-keys/:keyId` | `res.sendStatus(204)` | ❌ НЕ логируется |
+| `DELETE /admin/invite-links/:linkId` | `res.sendStatus(204)` | ❌ НЕ логируется |
+
+**Это объясняет, почему бан пользователя не отображается в журнале.**
+
+---
+
+## ❌ Критическая проблема #2: Пропуски в ACTION_MAP
+
+### Заявлено кодером:
+> "Добавлены `generate_password_reset_link` и `acknowledge_system_event`"
+
+### Реальное состояние кода (`auditLog.ts` ACTION_MAP):
+```typescript
+const ACTION_MAP: Record<string, string> = {
+  // Users
+  "PATCH /admin/users/:id/role": "update_user_role",
+  "PATCH /admin/users/:id": "update_user_profile",
+  "DELETE /admin/users/:id": "delete_user",
+  // ... другие ...
+  "POST /admin/users/:id/ban": "ban_user",
+  "POST /admin/users/:id/unban": "unban_user",
+  "POST /admin/users/:id/force-logout": "force_logout",
+  // ❌ ОТСУТСТВУЕТ: "POST /admin/users/:id/password-reset"
+  // ❌ ОТСУТСТВУЕТ: "POST /admin/system-events/:id/acknowledge"
+};
+```
+
+**Оба действия отсутствуют в ACTION_MAP.**
+
+### Влияние:
+Эти маршруты возвращают JSON (не 204), поэтому middleware сработает, но они будут логироваться как `unknown_action`:
+
+| Маршрут | Код ответа | ACTION_MAP | Результат |
+| :--- | :--- | :---: | :--- |
+| `POST /admin/users/:userId/password-reset` | `res.json(...)` | ❌ Отсутствует | `unknown_action` |
+| `POST /admin/system-events/:id/acknowledge` | `res.json(...)` | ❌ Отсутствует | `unknown_action` |
+
+---
+
+## ❌ Критическая проблема #3: inferTargetType не распознаёт system-events
+
+### Заявлено кодером:
+> "inferTargetType теперь распознаёт `/system-events/` → `targetType: 'system_event'`"
+
+### Реальное состояние кода (`auditLog.ts` строки 131-141):
+```typescript
+function inferTargetType(path: string): string | null {
+  if (path.includes("/users/")) return "user";
+  if (path.includes("/payments/")) return "payment";
+  if (path.includes("/plans/")) return "plan";
+  if (path.includes("/vpn-nodes/")) return "vpn_node";
+  if (path.includes("/vpn-keys/")) return "vpn_key";
+  if (path.includes("/invite-links/")) return "invite_link";
+  if (path.includes("/support-tickets/")) return "support_ticket";
+  if (path.includes("/payment-settings")) return "payment_settings";
+  // ❌ ОТСУТСТВУЕТ: if (path.includes("/system-events/")) return "system_event";
+  return null;
+}
+```
+
+**`/system-events/` не распознаётся.**
+
+---
+
+## ❌ Критическая проблема #4: normalizeRoutePath не нормализует числовые сегменты
+
+### Заявлено кодером:
+> "normalizeRoutePath теперь нормализует числовые сегменты пути"
+
+### Реальное состояние кода (`auditLog.ts` строки 114-120):
+```typescript
+function normalizeRoutePath(path: string): string {
+  return path
+    .split("/")
+    .map((seg) => (seg.startsWith(":") ? ":id" : seg))  // ❌ Только :xxx → :id
+    .join("/");
+}
+```
+
+**Числовые сегменты (например, `/admin/users/42/ban`) не заменяются на `:id`.**
+
+Это значит, что если `req.route` недоступен (edge case), путь `/admin/users/42/ban` не совпадёт с `POST /admin/users/:id/ban` в ACTION_MAP.
+
+---
+
+## ❌ Критическая проблема #5: Нет logger.warn для unknown_action
+
+### Заявлено кодером:
+> "Добавлен `logger.warn` когда action падает на `unknown_action`"
+
+### Реальное состояние кода (`auditLog.ts` строки 203-237):
+```typescript
+async function logAdminAction(req, res, durationMs) {
+  // ...
+  const action = ACTION_MAP[routePattern] ?? "unknown_action";
+  // ...
+  logger.info(  // ❌ Используется info, не warn
+    { adminId: adminUser.id, action, method: req.method, path: req.path },
+    "admin_audit: action logged",
+  );
+}
+```
+
+**Нет отдельного `logger.warn` для `unknown_action`.** Все действия логируются одинаково через `logger.info`.
+
+---
+
+## ❌ Критическая проблема #6: heal-schema.mjs не найден
+
+### Заявлено кодером:
+> "Добавлен M-36 в heal-schema с `CREATE TABLE admin_audit_log`"
+
+### Реальное состояние:
+Файл `lib/db/src/heal-schema.mjs` **не существует** в репозитории (404 при попытке извлечения).
+
+**Возможные причины:**
+1. Файл находится в другой локации
+2. Таблица создана через `drizzle-kit push`, а не heal-schema
+3. Заявленный фикс не был применён
+
+---
+
+## 📋 Полный список проблем
+
+| # | Проблема | Серьёзность | Статус |
+| :--- | :--- | :---: | :---: |
+| 1 | Middleware patch'ит `res.send`, не `res.on('finish')` | 🔴 Критическая | ❌ Не исправлено |
+| 2 | 7 маршрутов с 204-ответами не логируются | 🔴 Критическая | ❌ Не исправлено |
+| 3 | `password-reset` отсутствует в ACTION_MAP | 🟡 Средняя | ❌ Не исправлено |
+| 4 | `system-events/acknowledge` отсутствует в ACTION_MAP | 🟡 Средняя | ❌ Не исправлено |
+| 5 | `inferTargetType` не распознаёт `/system-events/` | 🟡 Средняя | ❌ Не исправлено |
+| 6 | `normalizeRoutePath` не нормализует числовые сегменты | 🟡 Средняя | ❌ Не исправлено |
+| 7 | Нет `logger.warn` для `unknown_action` | 🟢 Низкая | ❌ Не исправлено |
+| 8 | heal-schema.mjs не найден | 🟡 Средняя | ❓ Неясно |
+
+---
+
+## 🛠️ Инструкции по исправлению
+
+### Приоритет #1: Исправить middleware (критично)
+
+**Файл:** `artifacts/api-server/src/lib/auditLog.ts`
+
+**Заменить** (строки 178-200):
+```typescript
+export function auditLogMiddleware() {
+  return async (req, res, next) => {
+    const startedAt = Date.now();
+    
+    res.on('finish', () => {
+      if (
+        res.statusCode >= 200 &&
+        res.statusCode < 300 &&
+        ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
+      ) {
+        const durationMs = Date.now() - startedAt;
+        void logAdminAction(req, res, durationMs).catch((err) => {
+          logger.error({ err, path: req.path }, "auditLog: failed to log action");
+        });
+      }
+    });
+    
+    next();
+  };
+}
+```
+
+### Приоритет #2: Добавить пропущенные действия в ACTION_MAP
+
+**Файл:** `artifacts/api-server/src/lib/auditLog.ts` (строка ~80)
+
+**Добавить** в ACTION_MAP:
+```typescript
+// Users (дополнительно)
+"POST /admin/users/:id/password-reset": "generate_password_reset_link",
+
+// System events
+"POST /admin/system-events/:id/acknowledge": "acknowledge_system_event",
+```
+
+### Приоритет #3: Исправить inferTargetType
+
+**Файл:** `artifacts/api-server/src/lib/auditLog.ts` (строка ~140)
+
+**Добавить** в `inferTargetType`:
+```typescript
+if (path.includes("/system-events/")) return "system_event";
+```
+
+### Приоритет #4: Исправить normalizeRoutePath
+
+**Файл:** `artifacts/api-server/src/lib/auditLog.ts` (строка ~114)
+
+**Заменить** на:
+```typescript
+function normalizeRoutePath(path: string): string {
+  return path
+    .split("/")
+    .map((seg) => {
+      if (seg.startsWith(":")) return ":id";
+      if (/^\d+$/.test(seg)) return ":id";  // Числовые сегменты → :id
+      return seg;
+    })
+    .join("/");
+}
+```
+
+### Приоритет #5: Добавить logger.warn для unknown_action
+
+**Файл:** `artifacts/api-server/src/lib/auditLog.ts` (строка ~210)
+
+**Добавить** после определения `action`:
+```typescript
+const action = ACTION_MAP[routePattern] ?? "unknown_action";
+
+if (action === "unknown_action") {
+  logger.warn(
+    { method: req.method, path: req.path, routePattern },
+    "admin_audit: unknown action — route not in ACTION_MAP"
+  );
+}
+```
+
+---
+
+## 🎯 Вердикт
+
+**Журнал действий администратора НЕ работает** для критических операций (бан, разбан, удаление). Заявленные фиксы **не были применены к коду**.
+
+**Необходимо:**
+1. Применить все 5 исправлений выше
+2. Протестировать бан/разбан/удаление — проверить, что записи появляются в журнале
+3. Обновить тесты для покрытия новых действий
+4. Задеплоить и проверить на проде
+
+**Оценка качества работы кодера:** 2/10 — заявленные фиксы не были применены, критические проблемы остались.

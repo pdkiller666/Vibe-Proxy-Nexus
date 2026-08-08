@@ -1,0 +1,168 @@
+Вы правы — я работал с версией кода до вашего последнего коммита. Давайте проверим актуальное состояние.
+
+
+# ✅ ЧАСТИЧНОЕ ПРИЗНАНИЕ: Кодер прав частично
+
+После проверки коммита `86e0fda4` подтверждаю: **часть заявленных фиксов действительно применена**. Однако **критический фикс middleware всё ещё отсутствует**.
+
+---
+
+## ✅ Применённые фиксы (подтверждено)
+
+| Фикс | Статус | Доказательство в коммите 86e0fda4 |
+| :--- | :---: | :--- |
+| `password-reset` в ACTION_MAP | ✅ Применено | Строка 72: `"POST /admin/users/:id/password-reset": "generate_password_reset_link"` |
+| `system-events/acknowledge` в ACTION_MAP | ✅ Применено | Строка 75: `"POST /admin/system-events/:id/acknowledge": "acknowledge_system_event"` |
+| `/system-events/` в inferTargetType | ✅ Применено | Строка 118: `if (path.includes("/system-events/")) return "system_event"` |
+| `logger.warn` для unknown_action | ✅ Применено | Строки 197-202: добавлен блок `if (action === "unknown_action") { logger.warn(...) }` |
+
+**Кодер прав по этим 4 пунктам.** Моя проверка работала с версией до коммита 86e0fda4.
+
+---
+
+## ❌ НЕ применённые фиксы (критично)
+
+### 1. Middleware всё ещё patch'ит `res.send`, не `res.on('finish')`
+
+**Текущее состояние** (из последнего извлечения auditLog.ts):
+```typescript
+export function auditLogMiddleware() {
+  return async (req, res, next) => {
+    const startedAt = Date.now();
+    const originalSend = res.send.bind(res);
+    res.send = function (this: Response, body?: unknown): Response {
+      // ... логирование ...
+      return originalSend(body);
+    };
+    next();
+  };
+}
+```
+
+**Это та же самая проблема**, из-за которой бан пользователя не отображается в журнале. Все маршруты с `res.status(204).end()` или `res.sendStatus(204)` **по-прежнему не логируются**:
+- `POST /admin/users/:userId/ban`
+- `POST /admin/users/:userId/unban`
+- `POST /admin/users/:userId/force-logout`
+- `DELETE /admin/users/:userId`
+- `DELETE /admin/plans/:planId`
+- `DELETE /admin/vpn-keys/:keyId`
+- `DELETE /admin/invite-links/:linkId`
+
+### 2. `normalizeRoutePath` не нормализует числовые сегменты
+
+**Текущее состояние:**
+```typescript
+function normalizeRoutePath(path: string): string {
+  return path
+    .split("/")
+    .map((seg) => (seg.startsWith(":") ? ":id" : seg))  // Только :xxx → :id
+    .join("/");
+}
+```
+
+**Проблема:** Если `req.route` недоступен (edge case), путь `/admin/users/42/ban` не совпадёт с `POST /admin/users/:id/ban` в ACTION_MAP.
+
+---
+
+## 📊 Итоговая таблица
+
+| Пункт критики | Статус | Комментарий |
+| :--- | :---: | :--- |
+| res.send patch → res.on('finish') | ❌ **Не применено** | **Критическая проблема** — бан/удаление не логируются |
+| password-reset в ACTION_MAP | ✅ Применено | Коммит 86e0fda4, строка 72 |
+| system-events в ACTION_MAP | ✅ Применено | Коммит 86e0fda4, строка 75 |
+| inferTargetType для /system-events/ | ✅ Применено | Коммит 86e0fda4, строка 118 |
+| normalizeRoutePath для чисел | ❌ **Не применено** | Только `:xxx` → `:id`, числа игнорируются |
+| logger.warn для unknown_action | ✅ Применено | Коммит 86e0fda4, строки 197-202 |
+| heal-schema M-36 | ❓ Не проверено | Не удалось найти файл для верификации |
+
+---
+
+## 🎯 Вердикт
+
+**Кодер прав на 70%:** 4 из 6 заявленных фиксов применены и задеплоены.
+
+**НО критическая проблема остаётся:** middleware не ловит 204-ответы, поэтому **бан, разбан, force-logout и все DELETE-операции по-прежнему не логируются**.
+
+---
+
+## 🛠️ Что нужно сделать СЕЙЧАС
+
+### Приоритет #1: Исправить middleware (критично)
+
+**Файл:** `artifacts/api-server/src/lib/auditLog.ts`
+
+**Найти:** функцию `auditLogMiddleware()` (примерно строки 178-200 в текущей версии)
+
+**Заменить полностью на:**
+```typescript
+export function auditLogMiddleware() {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    const startedAt = Date.now();
+
+    // Используем событие 'finish' вместо patch res.send
+    // Это ловит ВСЕ ответы: res.json(), res.send(), res.status(204).end(), res.sendStatus(204)
+    res.on('finish', () => {
+      if (
+        res.statusCode >= 200 &&
+        res.statusCode < 300 &&
+        ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
+      ) {
+        const durationMs = Date.now() - startedAt;
+        void logAdminAction(req, res, durationMs).catch((err) => {
+          logger.error(
+            { err, path: req.path },
+            "auditLog: failed to log action",
+          );
+        });
+      }
+    });
+
+    next();
+  };
+}
+```
+
+### Приоритет #2: Исправить normalizeRoutePath
+
+**Найти:** функцию `normalizeRoutePath` (примерно строки 114-120)
+
+**Заменить на:**
+```typescript
+function normalizeRoutePath(path: string): string {
+  return path
+    .split("/")
+    .map((seg) => {
+      if (seg.startsWith(":")) return ":id";
+      if (/^\d+$/.test(seg)) return ":id";  // Числовые сегменты → :id
+      return seg;
+    })
+    .join("/");
+}
+```
+
+---
+
+## 💬 Извинения и признание
+
+**Приношу извинения кодеру** за то, что работал с устаревшей версией кода и не проверил последний коммит перед публикацией критики. Это была моя ошибка — нужно было запросить свежую версию файлов сразу после получения ответа от кодера.
+
+**Кодер был прав**, что 4 из 6 фиксов применены. Моя критика была частично некорректной.
+
+**НО:** критическая проблема с 204-ответами **всё ещё присутствует** и требует немедленного исправления. Без этого журнал действий не работает для самых важных операций (бан, удаление).
+
+---
+
+## 📋 Следующие шаги
+
+1. **Немедленно:** применить фикс middleware (`res.on('finish')`)
+2. **Опционально:** применить фикс `normalizeRoutePath` (защита от edge cases)
+3. **Протестировать:** бан/разбан/удаление на тестовом пользователе
+4. **Проверить:** записи появляются в журнале
+5. **Задеплоить**
+
+После применения фикса middleware журнал будет работать **полностью**.
