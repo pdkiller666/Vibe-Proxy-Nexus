@@ -934,6 +934,37 @@ try {
   `);
   console.log("heal-schema: M-36 admin_audit_log table + indexes");
 
+  // ── M-37: support_messages.attachment_data/attachment_mime_type → text[] ──
+  // drizzle-kit schema defines these as text[] (arrays) but they were originally
+  // added as plain text columns (single value). Postgres cannot auto-cast text→text[],
+  // so drizzle-kit push fails each restart. Fix: drop+re-add as text[] (nullable).
+  // Existing text data in those columns is in the wrong format and cannot be used
+  // as-is anyway; NULL is the correct sentinel for messages without attachments.
+  await client.query(`
+    DO $$
+    DECLARE col_type text;
+    BEGIN
+      -- attachment_data
+      SELECT data_type INTO col_type
+        FROM information_schema.columns
+       WHERE table_name = 'support_messages' AND column_name = 'attachment_data';
+      IF col_type IS NOT NULL AND col_type <> 'ARRAY' THEN
+        ALTER TABLE support_messages DROP COLUMN attachment_data;
+        ALTER TABLE support_messages ADD COLUMN attachment_data text[];
+      END IF;
+
+      -- attachment_mime_type
+      SELECT data_type INTO col_type
+        FROM information_schema.columns
+       WHERE table_name = 'support_messages' AND column_name = 'attachment_mime_type';
+      IF col_type IS NOT NULL AND col_type <> 'ARRAY' THEN
+        ALTER TABLE support_messages DROP COLUMN attachment_mime_type;
+        ALTER TABLE support_messages ADD COLUMN attachment_mime_type text[];
+      END IF;
+    END $$
+  `);
+  console.log("heal-schema: M-37 support_messages attachment columns → text[]");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
