@@ -161,24 +161,28 @@ export function auditLogMiddleware() {
   return (req: Request, res: Response, next: NextFunction): void => {
     const startedAt = Date.now();
 
-    res.on("finish", () => {
-      // DIAG-1: finish event fired — always log so we can confirm in Amvera logs
-      logger.info(
-        { method: req.method, path: req.path, status: res.statusCode },
-        "admin_audit: finish event fired",
-      );
+    // res.on("finish") proved unreliable in the Amvera container environment —
+    // confirmed by diagnostic: direct db.insert works but finish never fires.
+    // Solution: intercept res.end directly. Every response path ultimately calls
+    // res.end() — res.json() → res.send() → res.end(); res.status(204).end()
+    // → res.end(). Monkey-patching at this level catches everything.
+    const originalEnd = res.end.bind(res);
+    let logged = false;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (res as any).end = function (
+      chunk?: unknown,
+      encoding?: unknown,
+      callback?: unknown,
+    ) {
       if (
+        !logged &&
         res.statusCode >= 200 &&
         res.statusCode < 300 &&
         ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
       ) {
+        logged = true;
         const durationMs = Date.now() - startedAt;
-        // DIAG-2: condition passed — proceeding to logAdminAction
-        logger.info(
-          { method: req.method, path: req.path },
-          "admin_audit: condition passed — calling logAdminAction",
-        );
         void logAdminAction(req, res, durationMs).catch((err) => {
           logger.error(
             { err, path: req.path },
@@ -186,7 +190,9 @@ export function auditLogMiddleware() {
           );
         });
       }
-    });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (originalEnd as any)(chunk, encoding, callback);
+    };
 
     next();
   };
@@ -197,23 +203,11 @@ async function logAdminAction(
   res: Response,
   durationMs: number,
 ): Promise<void> {
-  // DIAG-3: logAdminAction called
-  logger.info(
-    { method: req.method, path: req.path, hasAppUser: !!req.appUser, role: req.appUser?.role },
-    "admin_audit: logAdminAction called",
-  );
-
   const adminUser = req.appUser;
-  if (!adminUser || adminUser.role !== "admin") {
-    logger.warn(
-      { hasAppUser: !!adminUser, role: adminUser?.role },
-      "admin_audit: skipped — not admin or no appUser",
-    );
-    return;
-  }
+  if (!adminUser || adminUser.role !== "admin") return;
 
-  // req.route.path содержит полный путь вида "/admin/users/:userId/ban"
-  // НЕ использовать req.baseUrl — он добавляет лишний префикс "/api"
+  // req.route.path contains the full pattern like "/admin/users/:userId/ban".
+  // Do NOT use req.baseUrl — it adds an extra "/api" prefix.
   const rawPath = req.route?.path ?? req.path;
   const routePattern = `${req.method} ${normalizeRoutePath(rawPath)}`;
   const action = ACTION_MAP[routePattern] ?? "unknown_action";
@@ -224,17 +218,10 @@ async function logAdminAction(
     );
   }
 
-  // DIAG-4: action resolved — log before buildTargetDescription
-  logger.info(
-    { action, routePattern },
-    "admin_audit: action resolved, calling buildTargetDescription",
-  );
-
   const targetType = inferTargetType(req.path);
   const targetId = extractTargetId(req.params);
 
-  // buildTargetDescription is async (DB SELECT) — wrap separately so its
-  // failure does NOT prevent the INSERT from running.
+  // Wrap separately so a DB lookup failure does NOT block the INSERT.
   let targetDescription: string | null = null;
   try {
     targetDescription = await buildTargetDescription(targetType, targetId);
@@ -259,14 +246,7 @@ async function logAdminAction(
     req.ip ??
     req.socket.remoteAddress ??
     null;
-  const userAgent =
-    (req.headers["user-agent"] as string | undefined) ?? null;
-
-  // DIAG-5: about to INSERT
-  logger.info(
-    { action, adminId: adminUser.id, path: req.path },
-    "admin_audit: inserting row",
-  );
+  const userAgent = (req.headers["user-agent"] as string | undefined) ?? null;
 
   try {
     await db.insert(adminAuditLogTable).values({
@@ -286,18 +266,10 @@ async function logAdminAction(
     });
 
     logger.info(
-      {
-        adminId: adminUser.id,
-        action,
-        method: req.method,
-        path: req.path,
-      },
-      "admin_audit: action logged ✓",
+      { adminId: adminUser.id, action, method: req.method, path: req.path },
+      "admin_audit: action logged",
     );
   } catch (err) {
-    logger.error(
-      { err, action, path: req.path },
-      "admin_audit: insert failed",
-    );
+    logger.error({ err, action, path: req.path }, "admin_audit: insert failed");
   }
 }
