@@ -3,6 +3,14 @@ import { eq } from "drizzle-orm";
 import { db, adminAuditLogTable, usersTable } from "@workspace/db";
 import { logger } from "./logger";
 
+// ── Debug counters (exported so diagnostic endpoint can read them) ───────────
+// Reset on every container restart. Counts survive across requests.
+export const _auditDebug = {
+  middlewareCalls: 0,   // times the middleware function was invoked
+  endPatchCalls: 0,     // times our res.end override was actually called
+  insertAttempts: 0,    // times logAdminAction reached the db.insert call
+};
+
 // ── Sensitive fields (никогда не попадают в журнал) ───────────────────────────
 const SENSITIVE_FIELDS = new Set<string>([
   "password",
@@ -159,13 +167,13 @@ async function buildTargetDescription(
  */
 export function auditLogMiddleware() {
   return (req: Request, res: Response, next: NextFunction): void => {
+    _auditDebug.middlewareCalls++;
     const startedAt = Date.now();
 
-    // res.on("finish") proved unreliable in the Amvera container environment —
-    // confirmed by diagnostic: direct db.insert works but finish never fires.
-    // Solution: intercept res.end directly. Every response path ultimately calls
-    // res.end() — res.json() → res.send() → res.end(); res.status(204).end()
-    // → res.end(). Monkey-patching at this level catches everything.
+    // res.on("finish") is unreliable in Amvera. We patch res.end directly so
+    // every response path (res.json → res.send → res.end; res.status(204).end)
+    // triggers the audit. The _auditDebug counters let the diagnostic endpoint
+    // verify each step without needing to read container logs.
     const originalEnd = res.end.bind(res);
     let logged = false;
 
@@ -175,6 +183,7 @@ export function auditLogMiddleware() {
       encoding?: unknown,
       callback?: unknown,
     ) {
+      _auditDebug.endPatchCalls++; // increments even for GET — proves patch fires
       if (
         !logged &&
         res.statusCode >= 200 &&
@@ -248,6 +257,7 @@ async function logAdminAction(
     null;
   const userAgent = (req.headers["user-agent"] as string | undefined) ?? null;
 
+  _auditDebug.insertAttempts++;
   try {
     await db.insert(adminAuditLogTable).values({
       adminId: adminUser.id,

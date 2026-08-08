@@ -10,6 +10,7 @@ import { sql, count } from "drizzle-orm";
 import { db, adminAuditLogTable } from "@workspace/db";
 import { requireAuth, requireAdmin } from "../../lib/auth";
 import { logger } from "../../lib/logger";
+import { _auditDebug } from "../../lib/auditLog";
 
 const router = Router();
 
@@ -101,27 +102,27 @@ router.get(
       logger.error({ err: e }, "audit-log-debug: direct insert failed");
     }
 
-    // 5. Register a finish-event listener RIGHT HERE on this very response.
-    //    When res.json() sends the response below, the finish event should fire
-    //    and we should see a row appear in admin_audit_log.
-    //    Check: call this endpoint, wait 2s, call it again.
-    //    If totalRows increased by 1 (and then cleaned up by probe), finish fires.
-    //    NOTE: we override method to POST so the middleware condition passes.
-    const diagStartedAt = Date.now();
-    res.once("finish", () => {
-      logger.info(
-        { adminId: req.appUser?.id, path: req.path, status: res.statusCode },
-        "audit-log-debug: finish event fired on GET diagnostic ← if you see this, finish works",
-      );
-    });
+    // 5. Module-level debug counters from auditLogMiddleware.
+    //    middlewareCalls: how many times the middleware ran (resets on restart).
+    //    endPatchCalls:   how many times our res.end override was invoked.
+    //                     THIS increments for every request including this GET.
+    //                     If this value equals middlewareCalls → patch fires correctly.
+    //                     If this value is 0 → res.end is bypassing our patch.
+    //    insertAttempts:  how many times logAdminAction reached db.insert.
+    out._debugCounters = { ..._auditDebug };
+    out._debugCounters_note =
+      "endPatchCalls should be ≥ middlewareCalls (each middleware call patches one res.end). " +
+      "If endPatchCalls < middlewareCalls → patch not firing. " +
+      "If endPatchCalls > 0 but insertAttempts = 0 → condition check failing (check method/status). " +
+      "If insertAttempts > 0 but totalRows = 0 → db.insert throws (check directInsertError).";
 
     out.instructions = [
-      "1. Perform ANY admin action (ban, unban, delete, etc.) in the admin panel.",
-      "2. Reload this page.",
-      "3. If rowsLast24h > 0 → middleware is working.",
-      "4. If rowsLast24h = 0 → check Amvera app logs for 'admin_audit:' lines.",
+      "KEY: endPatchCalls should increase by 1 each time you load THIS page.",
+      "1. Load this page → note endPatchCalls (should be N).",
+      "2. Do an admin action (ban/create plan/etc).",
+      "3. Load this page again → endPatchCalls should be N+2 (this GET + the POST).",
+      "4. If endPatchCalls only grew by 1 (just this GET) → res.end patch not firing for POST routes.",
     ];
-    out.diagDurationMs = Date.now() - diagStartedAt;
 
     res.json(out);
   },
