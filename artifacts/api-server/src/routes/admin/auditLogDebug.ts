@@ -98,4 +98,31 @@ router.get(
   },
 );
 
+/**
+ * POST /admin/debug/audit-log-probe
+ * Делает POST-запрос (мутативный метод) с 200-ответом.
+ * Если middleware работает — в таблице должна появиться запись с action=unknown_action
+ * и path=/admin/debug/audit-log-probe в течение секунды после этого вызова.
+ * Проверить: сразу после вызова этого endpoint — вызовите GET /admin/debug/audit-log-check
+ * и убедитесь что rowsLast24h > 0.
+ */
+router.post(
+  "/admin/debug/audit-log-probe",
+  requireAuth,
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const [{ cnt }] = await db.execute<{ cnt: string }>(
+      sql`SELECT count(*)::text AS cnt FROM admin_audit_log`,
+    ).catch(() => [{ cnt: "error" }] as { cnt: string }[]);
+
+    res.json({
+      ok: true,
+      message: "POST probe — this action should be logged by auditLogMiddleware. " +
+        "Call GET /admin/debug/audit-log-check after 1s and verify rowsLast24h > 0.",
+      rowsBefore: cnt,
+      timestamp: new Date().toISOString(),
+    });
+  },
+);
+
 export default router;

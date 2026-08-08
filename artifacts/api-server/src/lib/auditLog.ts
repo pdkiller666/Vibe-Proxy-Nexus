@@ -162,12 +162,23 @@ export function auditLogMiddleware() {
     const startedAt = Date.now();
 
     res.on("finish", () => {
+      // DIAG-1: finish event fired — always log so we can confirm in Amvera logs
+      logger.info(
+        { method: req.method, path: req.path, status: res.statusCode },
+        "admin_audit: finish event fired",
+      );
+
       if (
         res.statusCode >= 200 &&
         res.statusCode < 300 &&
         ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
       ) {
         const durationMs = Date.now() - startedAt;
+        // DIAG-2: condition passed — proceeding to logAdminAction
+        logger.info(
+          { method: req.method, path: req.path },
+          "admin_audit: condition passed — calling logAdminAction",
+        );
         void logAdminAction(req, res, durationMs).catch((err) => {
           logger.error(
             { err, path: req.path },
@@ -186,8 +197,20 @@ async function logAdminAction(
   res: Response,
   durationMs: number,
 ): Promise<void> {
+  // DIAG-3: logAdminAction called
+  logger.info(
+    { method: req.method, path: req.path, hasAppUser: !!req.appUser, role: req.appUser?.role },
+    "admin_audit: logAdminAction called",
+  );
+
   const adminUser = req.appUser;
-  if (!adminUser || adminUser.role !== "admin") return;
+  if (!adminUser || adminUser.role !== "admin") {
+    logger.warn(
+      { hasAppUser: !!adminUser, role: adminUser?.role },
+      "admin_audit: skipped — not admin or no appUser",
+    );
+    return;
+  }
 
   // req.route.path содержит полный путь вида "/admin/users/:userId/ban"
   // НЕ использовать req.baseUrl — он добавляет лишний префикс "/api"
@@ -196,14 +219,31 @@ async function logAdminAction(
   const action = ACTION_MAP[routePattern] ?? "unknown_action";
   if (action === "unknown_action") {
     logger.warn(
-      { routePattern, method: req.method, path: req.path },
+      { routePattern, rawPath, method: req.method, path: req.path },
       "admin_audit: no ACTION_MAP entry — logged as unknown_action",
     );
   }
 
+  // DIAG-4: action resolved — log before buildTargetDescription
+  logger.info(
+    { action, routePattern },
+    "admin_audit: action resolved, calling buildTargetDescription",
+  );
+
   const targetType = inferTargetType(req.path);
   const targetId = extractTargetId(req.params);
-  const targetDescription = await buildTargetDescription(targetType, targetId);
+
+  // buildTargetDescription is async (DB SELECT) — wrap separately so its
+  // failure does NOT prevent the INSERT from running.
+  let targetDescription: string | null = null;
+  try {
+    targetDescription = await buildTargetDescription(targetType, targetId);
+  } catch (err) {
+    logger.error(
+      { err, targetType, targetId },
+      "admin_audit: buildTargetDescription failed — continuing without description",
+    );
+  }
 
   const details: Record<string, unknown> = {};
   const sanitized = sanitizeBody(req.body);
@@ -221,6 +261,12 @@ async function logAdminAction(
     null;
   const userAgent =
     (req.headers["user-agent"] as string | undefined) ?? null;
+
+  // DIAG-5: about to INSERT
+  logger.info(
+    { action, adminId: adminUser.id, path: req.path },
+    "admin_audit: inserting row",
+  );
 
   try {
     await db.insert(adminAuditLogTable).values({
@@ -246,7 +292,7 @@ async function logAdminAction(
         method: req.method,
         path: req.path,
       },
-      "admin_audit: action logged",
+      "admin_audit: action logged ✓",
     );
   } catch (err) {
     logger.error(
