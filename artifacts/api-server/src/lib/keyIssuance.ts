@@ -82,13 +82,15 @@ export async function issueKeyForUser(
       };
     }
 
+    // Count total active keys for this user across ALL nodes (not just the
+    // selected node) so that a retry landing on a different node cannot bypass
+    // the slot limit that was already exhausted on the first attempt.
     const [{ slotCount }] = await db
       .select({ slotCount: count() })
       .from(vpnKeysTable)
       .where(
         and(
           eq(vpnKeysTable.userId, userId),
-          eq(vpnKeysTable.nodeId, node.id),
           isNull(vpnKeysTable.revokedAt),
         ),
       );
@@ -122,6 +124,18 @@ export async function issueKeyForUser(
         and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)),
       )
       .groupBy(vpnKeysTable.nodeId);
+
+    // Fast-fail: if the user already has totalSlots keys across ALL nodes,
+    // there is no point selecting a node — the inner-tx check would reject it
+    // anyway. This catches retries that arrive after the first request commits.
+    const totalExisting = userKeyCounts.reduce((sum, r) => sum + r.cnt, 0);
+    if (totalExisting >= totalSlots) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Все слоты устройств заняты (${totalExisting} из ${totalSlots}). Обратитесь к администратору для расширения.`,
+      };
+    }
 
     const userCountMap = new Map(userKeyCounts.map((r) => [r.nodeId, r.cnt]));
     node = candidateNodes.find(
@@ -166,13 +180,16 @@ export async function issueKeyForUser(
       );
 
       // Re-count inside the lock — the safe, authoritative slot count.
+      // IMPORTANT: count across ALL nodes, not just the selected one.
+      // A per-node count allows a concurrent retry (e.g. Amvera proxy retry)
+      // to slip through by landing on a different node after the first request
+      // has already committed a key on the originally selected node.
       const [{ slotCount }] = await tx
         .select({ slotCount: count() })
         .from(vpnKeysTable)
         .where(
           and(
             eq(vpnKeysTable.userId, userId),
-            eq(vpnKeysTable.nodeId, node.id),
             isNull(vpnKeysTable.revokedAt),
           ),
         );
