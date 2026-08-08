@@ -27,10 +27,16 @@ const router: IRouter = Router();
 //
 // IMPORTANT: the admin router is mounted without a path prefix (router.use(adminRouter))
 // so that all routes can keep their /admin/ prefix in their own path strings.
-// The regex below ensures this middleware ONLY fires for /admin/* paths —
-// without it, any request not handled by an earlier router (e.g. the YooMoney
-// checkout GET) would hit requireAdmin here and return 403 for regular users.
-router.use(/^\/admin(\/|$)/, requireAuth, requireAdmin, auditLogMiddleware());
+//
+// Auth guards keep their regex path so they don't block non-admin traffic
+// (e.g. YooMoney webhooks) that also flows through this router.
+router.use(/^\/admin(\/|$)/, requireAuth, requireAdmin);
+
+// Audit middleware is registered WITHOUT a path — Express 4 creates one Layer
+// per callback in router.use(path, fn1, fn2, fn3), and the third Layer was
+// silently skipped (middlewareCalls=0 confirmed by diagnostic). No-path means
+// this Layer always matches; logAdminAction filters internally by role/method.
+router.use(auditLogMiddleware());
 
 router.use(vpnNodeProvisioningRouter);
 router.use(auditLogRouter);
