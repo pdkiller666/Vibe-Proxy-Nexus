@@ -873,10 +873,17 @@ export default function Dashboard() {
           className="group bg-card border border-border p-5 flex items-center justify-between hover:border-primary transition-colors"
         >
           <div>
-            <div className="font-bold">Платежи</div>
+            <div className="font-bold flex items-center gap-2">
+              Платежи
+              {!meLoading && me && (
+                <span className="inline-flex items-center justify-center h-5 px-2 text-xs font-bold bg-primary/10 text-primary rounded-full">
+                  {formatKopecks(me.balanceKopecks ?? 0)}
+                </span>
+              )}
+            </div>
             <div className="text-sm text-muted-foreground">История и статус оплат</div>
           </div>
-          <CreditCard className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-all" />
+          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
         </Link>
       </div>
 
