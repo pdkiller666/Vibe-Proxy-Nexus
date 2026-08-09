@@ -480,7 +480,7 @@ function CollapsibleOnMobile({ title, children }: { title: string; children: Rea
 export default function Dashboard() {
   const { data: me, isLoading: meLoading } = useGetMe();
   const { data: keys, isLoading: keysLoading } = useListMyVpnKeys();
-  const { data: plans } = useListPlans();
+  const { data: plans, isLoading: plansLoading } = useListPlans();
   const { data: payments } = useListMyPayments();
   const { toast } = useToast();
 
@@ -846,7 +846,14 @@ export default function Dashboard() {
           className="group bg-card border border-border p-5 flex items-center justify-between hover:border-primary transition-colors"
         >
           <div>
-            <div className="font-bold">Тарифы</div>
+            <div className="font-bold flex items-center gap-2">
+              Тарифы
+              {!plansLoading && plans && (
+                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold bg-primary/10 text-primary rounded-full">
+                  {plans.length}
+                </span>
+              )}
+            </div>
             <div className="text-sm text-muted-foreground">Продлить или сменить план</div>
           </div>
           <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
