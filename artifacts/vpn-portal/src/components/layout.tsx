@@ -26,7 +26,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ? (summary?.pendingPayments ?? 0) + (summary?.openTickets ?? 0)
     : 0;
 
-  // User-facing notifications (payment rejections, key migrations, etc.)
+  // User-facing notifications (payment rejections, confirmations, key migrations, etc.)
   const { data: notifications } = useListMyNotifications({
     query: { queryKey: getListMyNotificationsQueryKey(), enabled: !!me, refetchInterval: 60_000 },
   });
@@ -171,10 +171,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden">
         <div className="max-w-5xl mx-auto">
-          {/* User notification banners (payment confirmed / rejected) */}
+          {/* User notification banners (payment confirmed/rejected + key migrations) */}
           {unreadNotifications
-            .filter((n) => n.eventType === "payment_rejected" || n.eventType === "payment_confirmed")
+            .filter((n) =>
+              n.eventType === "payment_rejected" ||
+              n.eventType === "payment_confirmed" ||
+              n.eventType === "key_migrated"
+            )
             .map((n) => {
+              if (n.eventType === "key_migrated") {
+                const meta = n.metadata as { oldNodeName?: string; newNodeName?: string };
+                return (
+                  <div
+                    key={n.id}
+                    className="mb-4 flex items-start gap-3 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 text-sm"
+                  >
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-yellow-500" />
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold">Автоматическая миграция VPN-ключа</span>
+                      {" — "}
+                      {"Ваш VPN-ключ был автоматически перемещён"}
+                      {meta.oldNodeName ? ` с ${meta.oldNodeName}` : ""}
+                      {meta.newNodeName ? ` на ${meta.newNodeName}` : ""}
+                      {". Обновите конфигурацию подключения."}
+                    </div>
+                    <button
+                      onClick={() => acknowledgeNotification({ id: n.id })}
+                      className="shrink-0 text-yellow-400 hover:text-yellow-600 transition-colors"
+                      aria-label="Закрыть"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              }
+
               const meta = n.metadata as Record<string, unknown>;
               const isConfirmed = n.eventType === "payment_confirmed";
               const typeLabel =
