@@ -8,9 +8,27 @@ import {
   vpnKeysTable,
   balanceTransactionsTable,
   paymentSettingsTable,
+  systemEventsTable,
   type Payment,
 } from "@workspace/db";
 import { ensureActiveKeyForUser } from "./keyIssuance";
+
+/** Insert a user-facing "payment confirmed" notification. Best-effort — never throws. */
+async function notifyPaymentConfirmed(payment: Payment): Promise<void> {
+  try {
+    await db.insert(systemEventsTable).values({
+      eventType: "payment_confirmed",
+      userId: payment.userId,
+      metadata: {
+        paymentId: payment.id,
+        amountRub: payment.amountRub,
+        type: payment.type,
+      },
+    });
+  } catch {
+    // non-critical
+  }
+}
 
 export type ConfirmResult =
   | { ok: true; payment: Payment }
@@ -73,6 +91,7 @@ export async function confirmPaymentById(
         if (!updatedPay) throw new Error("Payment state changed concurrently");
         return updatedPay;
       });
+      await notifyPaymentConfirmed(updatedPayment);
       return { ok: true, payment: updatedPayment };
     } catch (err) {
       if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
@@ -137,6 +156,7 @@ export async function confirmPaymentById(
       // make sure they end up with at least one usable key again now that
       // the cap has been raised.
       await ensureActiveKeyForUser(updatedPayment.userId);
+      await notifyPaymentConfirmed(updatedPayment.updatedPay);
       return { ok: true, payment: updatedPayment.updatedPay };
     } catch (err) {
       if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
@@ -187,6 +207,7 @@ export async function confirmPaymentById(
         if (!updatedPay) throw new Error("Payment state changed concurrently");
         return updatedPay;
       });
+      await notifyPaymentConfirmed(updatedPayment);
       return { ok: true, payment: updatedPayment };
     } catch {
       return {
@@ -357,6 +378,7 @@ export async function confirmPaymentById(
     // confirmed payment. See ensureActiveKeyForUser's doc comment for why
     // this guarantee is needed even though nothing here deletes keys.
     await ensureActiveKeyForUser(subscription.userId);
+    await notifyPaymentConfirmed(updatedPayment);
 
     return { ok: true, payment: updatedPayment };
   } catch {

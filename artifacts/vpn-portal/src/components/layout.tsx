@@ -34,7 +34,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() }) },
   });
   const unreadNotifications = notifications ?? [];
-  const paymentBadgeCount = unreadNotifications.filter((n) => n.eventType === "payment_rejected").length;
+  const paymentBadgeCount = unreadNotifications.filter(
+    (n) => n.eventType === "payment_rejected" || n.eventType === "payment_confirmed"
+  ).length;
 
   const logoutMutation = useLogout({
     mutation: {
@@ -169,37 +171,52 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden">
         <div className="max-w-5xl mx-auto">
-          {/* User notification banners (payment rejections only) */}
-          {unreadNotifications.filter((n) => n.eventType === "payment_rejected").map((n) => {
-            const meta = n.metadata as Record<string, unknown>;
-            const typeLabel =
-              meta.type === "extra_device_slot" ? "доп. устройство" :
-              meta.type === "balance_topup"     ? "пополнение баланса" :
-              meta.type === "extra_traffic"     ? "доп. трафик" :
-                                                  "подписка";
-            return (
-              <div
-                key={n.id}
-                className="mb-4 flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-3 text-sm"
-              >
-                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
-                <div className="flex-1 min-w-0">
-                  <span className="font-semibold">Платёж отклонён</span>
-                  {" — "}
-                  {typeLabel}
-                  {meta.amountRub ? ` · ${meta.amountRub} ₽` : ""}
-                  {meta.reason ? <span className="text-red-600"> · {String(meta.reason)}</span> : null}
-                </div>
-                <button
-                  onClick={() => acknowledgeNotification({ id: n.id })}
-                  className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
-                  aria-label="Закрыть"
+          {/* User notification banners (payment confirmed / rejected) */}
+          {unreadNotifications
+            .filter((n) => n.eventType === "payment_rejected" || n.eventType === "payment_confirmed")
+            .map((n) => {
+              const meta = n.metadata as Record<string, unknown>;
+              const isConfirmed = n.eventType === "payment_confirmed";
+              const typeLabel =
+                meta.type === "extra_device_slot" ? "доп. устройство" :
+                meta.type === "balance_topup"     ? "пополнение баланса" :
+                meta.type === "extra_traffic"     ? "доп. трафик" :
+                                                    "подписка";
+              return (
+                <div
+                  key={n.id}
+                  className={`mb-4 flex items-start gap-3 px-4 py-3 text-sm border ${
+                    isConfirmed
+                      ? "bg-green-50 border-green-200 text-green-800"
+                      : "bg-red-50 border-red-200 text-red-800"
+                  }`}
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            );
-          })}
+                  <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${isConfirmed ? "text-green-500" : "text-red-500"}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-semibold">
+                      {isConfirmed ? "Платёж подтверждён" : "Платёж отклонён"}
+                    </span>
+                    {" — "}
+                    {typeLabel}
+                    {meta.amountRub ? ` · ${meta.amountRub} ₽` : ""}
+                    {!isConfirmed && meta.reason
+                      ? <span className="text-red-600"> · {String(meta.reason)}</span>
+                      : null}
+                  </div>
+                  <button
+                    onClick={() => acknowledgeNotification({ id: n.id })}
+                    className={`shrink-0 transition-colors ${
+                      isConfirmed
+                        ? "text-green-400 hover:text-green-600"
+                        : "text-red-400 hover:text-red-600"
+                    }`}
+                    aria-label="Закрыть"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
           {children}
         </div>
       </main>
