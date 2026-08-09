@@ -393,6 +393,78 @@ function AutoRenewBanners() {
 }
 
 /**
+ * Shows dismissible banners for balance_low and balance_exhausted events.
+ * balance_low  — emitted by the hourly billing tick when < 3 hours of balance remain.
+ * balance_exhausted — emitted when the balance ran out and VPN keys were revoked.
+ */
+function BalanceBanners() {
+  const { data: notifications } = useListMyNotifications();
+  const { mutate: acknowledge } = useAcknowledgeNotification({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
+      },
+    },
+  });
+
+  const balanceEvents = (notifications ?? []).filter(
+    (n) => n.eventType === "balance_low" || n.eventType === "balance_exhausted",
+  );
+
+  if (balanceEvents.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {balanceEvents.map((n) => {
+        const isExhausted = n.eventType === "balance_exhausted";
+        return (
+          <div
+            key={n.id}
+            className={`flex items-start gap-3 p-4 text-sm border ${
+              isExhausted
+                ? "bg-red-50 border-red-300 text-red-700"
+                : "bg-orange-50 border-orange-200 text-orange-700"
+            }`}
+          >
+            <AlertTriangle
+              className={`w-4 h-4 shrink-0 mt-0.5 ${isExhausted ? "text-red-500" : "text-orange-500"}`}
+            />
+            <div className="flex-1 min-w-0">
+              {isExhausted ? (
+                <>
+                  <span className="font-semibold">VPN был отключён — баланс закончился.</span>{" "}
+                  <Link href="/payments" className="underline font-semibold hover:opacity-80">
+                    Пополните баланс
+                  </Link>{" "}
+                  и выберите тариф заново, чтобы восстановить доступ.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">Баланс заканчивается</span> — осталось менее 3 часов работы VPN.{" "}
+                  <Link href="/payments" className="underline font-semibold hover:opacity-80">
+                    Пополнить прямо сейчас
+                  </Link>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="Закрыть уведомление"
+              onClick={() => acknowledge({ id: n.id })}
+              className={`shrink-0 transition-colors ${
+                isExhausted ? "text-red-400 hover:text-red-700" : "text-orange-400 hover:text-orange-700"
+              }`}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Shows one dismissible banner per unacknowledged "key_migrated" notification.
  * Each banner explains that the user's key was automatically moved to a new server.
  */
@@ -575,6 +647,9 @@ export default function Dashboard() {
 
       {/* Auto-renew notifications */}
       <AutoRenewBanners />
+
+      {/* Hourly balance warnings (balance_low / balance_exhausted) */}
+      <BalanceBanners />
 
       {/* ── Trial period banner ── shown prominently so the user knows they're on
           a free trial and what happens after it ends. Shown regardless of

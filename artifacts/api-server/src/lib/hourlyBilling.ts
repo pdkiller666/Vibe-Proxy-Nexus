@@ -18,6 +18,7 @@ import {
   jobsDb,
   plansTable,
   subscriptionsTable,
+  systemEventsTable,
   usersTable,
   vpnKeysTable,
 } from "@workspace/db";
@@ -134,6 +135,8 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
     amountKopecks: number;
     oldLastBilledAt: Date | null;
     newLastBilledAt: Date;
+    remainingKopecks: number;
+    hourlyRateKopecks: number;
   }[] = [];
   const expirations: {
     subscriptionId: number;
@@ -211,6 +214,8 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
       amountKopecks,
       oldLastBilledAt: lastBilledAt,
       newLastBilledAt,
+      remainingKopecks: row.balanceKopecks - amountKopecks,
+      hourlyRateKopecks: rateKopecks,
     });
 
     if (affordableTicks < ticksElapsed) {
@@ -294,6 +299,49 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
         "Hourly billing: some charges lost the optimistic lock (concurrent tick) and were skipped, not double-charged",
       );
     }
+
+    // ── balance_low notifications ────────────────────────────────────────────
+    // Emit a persistent user notification when remaining balance after this
+    // tick drops below 3 hours of usage — so the nav badge lights up even if
+    // the user is not on the dashboard. Deduped per 12 h to avoid spamming.
+    const wonCharges = charges.filter((c) => chargedSubscriptionIds.has(c.subscriptionId));
+    const expiringUserIds = new Set(expirations.map((e) => e.userId));
+    const LOW_BALANCE_HOURS = 3;
+    const LOW_BALANCE_DEDUP_MS = 12 * 60 * 60 * 1000;
+    const dedupCutoff = new Date(now.getTime() - LOW_BALANCE_DEDUP_MS);
+
+    const lowBalanceCandidates = wonCharges.filter((c) => {
+      if (expiringUserIds.has(c.userId)) return false; // will get balance_exhausted instead
+      return c.remainingKopecks < c.hourlyRateKopecks * LOW_BALANCE_HOURS;
+    });
+
+    if (lowBalanceCandidates.length > 0) {
+      const recentEvents = await jobsDb
+        .select({ userId: systemEventsTable.userId })
+        .from(systemEventsTable)
+        .where(
+          and(
+            eq(systemEventsTable.eventType, "balance_low"),
+            inArray(systemEventsTable.userId, lowBalanceCandidates.map((c) => c.userId).filter((id): id is number => id !== null)),
+            gt(systemEventsTable.createdAt, dedupCutoff),
+          ),
+        );
+      const alreadyNotified = new Set(recentEvents.map((r) => r.userId));
+      const toNotify = lowBalanceCandidates.filter((c) => !alreadyNotified.has(c.userId));
+      if (toNotify.length > 0) {
+        await jobsDb.insert(systemEventsTable).values(
+          toNotify.map((c) => ({
+            eventType: "balance_low",
+            userId: c.userId,
+            metadata: {
+              remainingKopecks: c.remainingKopecks,
+              hourlyRateKopecks: c.hourlyRateKopecks,
+            },
+          })),
+        );
+        logger.info({ userIds: toNotify.map((c) => c.userId) }, "Hourly billing: emitted balance_low notifications");
+      }
+    }
   }
 
   if (expirations.length > 0) {
@@ -356,6 +404,25 @@ export async function runHourlyBillingTick(): Promise<{ billed: number; expired:
     }
 
     logger.info({ subscriptionIds: subIds, userIds: usersToRevoke }, "Expired hourly subscriptions: balance ran out");
+
+    // ── balance_exhausted notifications ──────────────────────────────────────
+    // Emit a persistent user notification for every user whose keys were just
+    // revoked — so they see a clear dismissible banner explaining why VPN stopped
+    // (instead of silently losing connection and thinking the service is broken).
+    if (usersToRevoke.length > 0) {
+      try {
+        await jobsDb.insert(systemEventsTable).values(
+          usersToRevoke.map((userId) => ({
+            eventType: "balance_exhausted",
+            userId,
+            metadata: {},
+          })),
+        );
+        logger.info({ userIds: usersToRevoke }, "Hourly billing: emitted balance_exhausted notifications");
+      } catch (err) {
+        logger.warn({ err }, "Hourly billing: failed to emit balance_exhausted notifications (non-fatal)");
+      }
+    }
   }
 
   return { billed: charges.length, expired: expirations.length };

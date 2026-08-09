@@ -35,7 +35,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
   const unreadNotifications = notifications ?? [];
   const paymentBadgeCount = unreadNotifications.filter(
-    (n) => n.eventType === "payment_rejected" || n.eventType === "payment_confirmed"
+    (n) =>
+      n.eventType === "payment_rejected" ||
+      n.eventType === "payment_confirmed" ||
+      n.eventType === "balance_low" ||
+      n.eventType === "balance_exhausted"
   ).length;
 
   const logoutMutation = useLogout({
