@@ -5583,7 +5583,7 @@ function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-0.5rem)] bg-background border border-border shadow-lg z-50 max-h-[32rem] overflow-y-auto">
+          <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-1.5rem)] bg-background border border-border shadow-lg z-50 max-h-[32rem] overflow-y-auto">
 
             {/* ── Header ──────────────────────────────────────────────────── */}
             <div className="px-3 py-2 border-b border-border flex items-center justify-between sticky top-0 bg-background z-10">
