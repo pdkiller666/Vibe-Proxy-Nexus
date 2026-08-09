@@ -169,8 +169,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden">
         <div className="max-w-5xl mx-auto">
-          {/* User notification banners */}
-          {unreadNotifications.map((n) => {
+          {/* User notification banners (payment rejections only) */}
+          {unreadNotifications.filter((n) => n.eventType === "payment_rejected").map((n) => {
             const meta = n.metadata as Record<string, unknown>;
             const typeLabel =
               meta.type === "extra_device_slot" ? "доп. устройство" :
