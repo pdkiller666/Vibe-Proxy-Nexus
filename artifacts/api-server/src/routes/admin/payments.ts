@@ -5,6 +5,7 @@ import {
   paymentsTable,
   plansTable,
   subscriptionsTable,
+  systemEventsTable,
   usersTable,
 } from "@workspace/db";
 import {
@@ -193,6 +194,22 @@ router.post(
             "Payment or subscription state changed concurrently, please retry",
         });
       return;
+    }
+
+    // Insert user-facing notification (best-effort, outside transaction)
+    try {
+      await db.insert(systemEventsTable).values({
+        eventType: "payment_rejected",
+        userId: updatedPayment.userId,
+        metadata: {
+          paymentId: updatedPayment.id,
+          amountRub: updatedPayment.amountRub,
+          type: updatedPayment.type,
+          reason: parsed.data.reason ?? null,
+        },
+      });
+    } catch {
+      // non-critical — don't fail the request if notification insert fails
     }
 
     res.json(RejectPaymentResponse.parse(withHasScreenshot(updatedPayment)));

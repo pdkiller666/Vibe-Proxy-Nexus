@@ -6,8 +6,11 @@ import {
   useLogout,
   useGetAdminDashboardSummary,
   getGetAdminDashboardSummaryQueryKey,
+  useListMyNotifications,
+  useAcknowledgeNotification,
+  getListMyNotificationsQueryKey,
 } from "@workspace/api-client-react";
-import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle, UserCircle } from "lucide-react";
+import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle, UserCircle, AlertCircle } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
@@ -23,6 +26,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ? (summary?.pendingPayments ?? 0) + (summary?.openTickets ?? 0)
     : 0;
 
+  // User-facing notifications (payment rejections, key migrations, etc.)
+  const { data: notifications } = useListMyNotifications({
+    query: { queryKey: getListMyNotificationsQueryKey(), enabled: !!me, refetchInterval: 60_000 },
+  });
+  const { mutate: acknowledgeNotification } = useAcknowledgeNotification({
+    mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() }) },
+  });
+  const unreadNotifications = notifications ?? [];
+  const paymentBadgeCount = unreadNotifications.filter((n) => n.eventType === "payment_rejected").length;
+
   const logoutMutation = useLogout({
     mutation: {
       onSuccess: () => {
@@ -33,12 +46,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
 
   const navItems = [
-    { href: "/dashboard", label: "Панель", icon: LayoutDashboard },
-    { href: "/plans", label: "Тарифы", icon: Shield },
-    { href: "/keys", label: "Ключи VPN", icon: Key },
-    { href: "/payments", label: "Платежи", icon: CreditCard },
-    { href: "/support", label: "Поддержка", icon: MessageCircle },
-    { href: "/profile", label: "Профиль", icon: UserCircle },
+    { href: "/dashboard", label: "Панель", icon: LayoutDashboard, badge: 0 },
+    { href: "/plans", label: "Тарифы", icon: Shield, badge: 0 },
+    { href: "/keys", label: "Ключи VPN", icon: Key, badge: 0 },
+    { href: "/payments", label: "Платежи", icon: CreditCard, badge: paymentBadgeCount },
+    { href: "/support", label: "Поддержка", icon: MessageCircle, badge: 0 },
+    { href: "/profile", label: "Профиль", icon: UserCircle, badge: 0 },
   ];
 
   if (isAdmin) {
@@ -50,7 +63,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <nav className="flex-1 p-4 space-y-1">
         {navItems.map((item) => {
           const isActive = location === item.href || location.startsWith(`${item.href}/`);
-          const showBadge = item.href === "/admin" && adminAlertCount > 0;
+          const navBadge = item.href === "/admin" ? adminAlertCount : (item.badge ?? 0);
           return (
             <Link
               key={item.href}
@@ -64,9 +77,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             >
               <item.icon className="w-4 h-4 shrink-0" />
               <span className="flex-1">{item.label}</span>
-              {showBadge && (
+              {navBadge > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-orange-600 text-white text-[10px] font-bold leading-none">
-                  {adminAlertCount > 99 ? "99+" : adminAlertCount}
+                  {navBadge > 99 ? "99+" : navBadge}
                 </span>
               )}
             </Link>
@@ -156,6 +169,37 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden">
         <div className="max-w-5xl mx-auto">
+          {/* User notification banners */}
+          {unreadNotifications.map((n) => {
+            const meta = n.metadata as Record<string, unknown>;
+            const typeLabel =
+              meta.type === "extra_device_slot" ? "доп. устройство" :
+              meta.type === "balance_topup"     ? "пополнение баланса" :
+              meta.type === "extra_traffic"     ? "доп. трафик" :
+                                                  "подписка";
+            return (
+              <div
+                key={n.id}
+                className="mb-4 flex items-start gap-3 bg-red-50 border border-red-200 text-red-800 px-4 py-3 text-sm"
+              >
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold">Платёж отклонён</span>
+                  {" — "}
+                  {typeLabel}
+                  {meta.amountRub ? ` · ${meta.amountRub} ₽` : ""}
+                  {meta.reason ? <span className="text-red-600"> · {String(meta.reason)}</span> : null}
+                </div>
+                <button
+                  onClick={() => acknowledgeNotification({ id: n.id })}
+                  className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
+                  aria-label="Закрыть"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
           {children}
         </div>
       </main>
