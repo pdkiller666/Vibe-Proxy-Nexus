@@ -36,9 +36,10 @@ router.get("/admin/notifications", requireAuth, requireAdmin, async (req, res): 
     .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
     .where(
       or(
-        // New pending payments
-        and(eq(paymentsTable.status, "pending"), gte(paymentsTable.createdAt, since)),
-        // Payments confirmed or rejected since last check
+        // ALL currently pending payments — no time filter so the bell always
+        // shows the full queue regardless of when the admin opened the page.
+        eq(paymentsTable.status, "pending"),
+        // Recent confirmed / rejected payments for toast notifications only.
         and(
           inArray(paymentsTable.status, ["confirmed", "rejected"]),
           gte(paymentsTable.confirmedAt, since),

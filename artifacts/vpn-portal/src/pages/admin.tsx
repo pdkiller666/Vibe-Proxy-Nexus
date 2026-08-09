@@ -118,8 +118,17 @@ function Badge({ count }: { count: number }) {
 
 // ─── Payment notification poller ─────────────────────────────────────────────
 // Unified poller: payments + audit log actions from other admins.
-// Both channels use a ref-based "seen" set so each event fires at most one
-// toast per session. Starts from 2 min ago to surface recent events on mount.
+//
+// Pending payments: the backend returns ALL currently pending payments on every
+// poll (no time filter), so the bell always reflects the live queue — even
+// payments submitted before the admin opened the page. The local state is
+// replaced (not accumulated) on each successful poll so the badge count stays
+// accurate when payments are confirmed / rejected externally.
+//
+// Confirmed / rejected: returned only since the last poll timestamp so we can
+// fire a one-time toast without accumulating stale history.
+//
+// Audit log: actions by OTHER admins, deduplicated by entry id.
 function useUnifiedPoller(currentAdminId: number | undefined): {
   payments: AdminNotification[];
   otherAdminActions: AdminAuditLogEntry[];
@@ -127,8 +136,11 @@ function useUnifiedPoller(currentAdminId: number | undefined): {
   const { toast } = useToast();
 
   // ── Payments ──────────────────────────────────────────────────────────────
-  const seenPaymentIds = useRef<Set<number>>(new Set());
+  // seenEventKeys tracks `${id}:${status}` so a pending→confirmed transition
+  // fires a toast even though the same id was seen before.
+  const seenEventKeys = useRef<Set<string>>(new Set());
   const paymentSinceRef = useRef(new Date(Date.now() - 2 * 60 * 1000).toISOString());
+  // Live pending queue — replaced on every successful poll.
   const [payments, setPayments] = useState<AdminNotification[]>([]);
 
   // ── Audit log (other admins) ───────────────────────────────────────────────
@@ -150,28 +162,48 @@ function useUnifiedPoller(currentAdminId: number | undefined): {
         );
         if (res.ok && !cancelled) {
           const data: AdminNotification[] = await res.json();
-          const newPayments = data.filter((n) => !seenPaymentIds.current.has(n.id));
-          for (const n of newPayments) {
-            seenPaymentIds.current.add(n.id);
-            const providerLabel =
-              n.provider === "yoomoney" ? "ЮMoney" :
-              n.provider === "balance"  ? "Баланс" : "СБП";
-            const typeLabel =
-              n.type === "extra_device_slot" ? "Доп. устройство" :
-              n.type === "balance_topup"     ? "Пополнение баланса" :
-              n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` (+${n.extraTrafficGb} ГБ)` : ""}` :
-                                               "Подписка";
-            if (n.status === "pending") {
+
+          const pendingPayments = data.filter((n) => n.status === "pending");
+          const statusChanges  = data.filter((n) => n.status === "confirmed" || n.status === "rejected");
+
+          // Toast for newly-submitted pending payments (first time we see them).
+          for (const n of pendingPayments) {
+            const key = `${n.id}:pending`;
+            if (!seenEventKeys.current.has(key)) {
+              seenEventKeys.current.add(key);
+              const providerLabel =
+                n.provider === "yoomoney" ? "ЮMoney" :
+                n.provider === "balance"  ? "Баланс" : "СБП";
+              const typeLabel =
+                n.type === "extra_device_slot" ? "Доп. устройство" :
+                n.type === "balance_topup"     ? "Пополнение баланса" :
+                n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` (+${n.extraTrafficGb} ГБ)` : ""}` :
+                                                 "Подписка";
               toast({ title: "Новый платёж", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽ · ${providerLabel}` });
-            } else if (n.status === "confirmed") {
-              toast({ title: "Платёж подтверждён", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽` });
-            } else if (n.status === "rejected") {
-              toast({ title: "Платёж отклонён", description: `${n.userEmail} · ${n.amountRub} ₽`, variant: "destructive" });
             }
           }
-          if (newPayments.length > 0) {
-            setPayments((prev) => [...newPayments.reverse(), ...prev].slice(0, 30));
+
+          // Toast for confirmed / rejected (deduplicated by id+status).
+          for (const n of statusChanges) {
+            const key = `${n.id}:${n.status}`;
+            if (!seenEventKeys.current.has(key)) {
+              seenEventKeys.current.add(key);
+              const typeLabel =
+                n.type === "extra_device_slot" ? "Доп. устройство" :
+                n.type === "balance_topup"     ? "Пополнение баланса" :
+                n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` (+${n.extraTrafficGb} ГБ)` : ""}` :
+                                                 "Подписка";
+              if (n.status === "confirmed") {
+                toast({ title: "Платёж подтверждён", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽` });
+              } else {
+                toast({ title: "Платёж отклонён", description: `${n.userEmail} · ${n.amountRub} ₽`, variant: "destructive" });
+              }
+            }
           }
+
+          // Replace bell's pending list with current server state so the badge
+          // count is always accurate (shrinks when payments are confirmed/rejected).
+          setPayments(pendingPayments);
           paymentSinceRef.current = now;
         }
       } catch { /* Network error — silently skip. */ }
