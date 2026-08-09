@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   useGetAdminDashboardSummary,
@@ -5553,6 +5554,8 @@ function NotificationBell() {
   const { data: me } = useGetMe();
   const { payments, otherAdminActions } = useUnifiedPoller(me?.id);
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
   const { data: systemEventsRaw } = useListAdminSystemEvents({
     query: { queryKey: getListAdminSystemEventsQueryKey(), refetchInterval: 30_000 },
@@ -5566,10 +5569,31 @@ function NotificationBell() {
   const systemEvents = systemEventsRaw ?? [];
   const totalBadge = payments.length + systemEvents.length + otherAdminActions.length;
 
+  const handleOpen = () => {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const MARGIN = 8;
+      const panelWidth = Math.min(384, vw - MARGIN * 2);
+      // Align right edge of panel with right edge of button, clamped so left edge ≥ MARGIN
+      const rightFromEdge = Math.max(MARGIN, vw - rect.right);
+      const leftEdge = vw - rightFromEdge - panelWidth;
+      const finalRight = leftEdge < MARGIN ? vw - panelWidth - MARGIN : rightFromEdge;
+      setDropdownStyle({
+        position: "fixed",
+        top: rect.bottom + 8,
+        right: finalRight,
+        width: panelWidth,
+      });
+    }
+    setOpen((o) => !o);
+  };
+
   return (
-    <div className="relative">
+    <div>
       <button
-        onClick={() => setOpen((o) => !o)}
+        ref={buttonRef}
+        onClick={handleOpen}
         className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
         title="Уведомления"
       >
@@ -5580,10 +5604,10 @@ function NotificationBell() {
           </span>
         )}
       </button>
-      {open && (
+      {open && createPortal(
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-1.5rem)] bg-background border border-border shadow-lg z-50 max-h-[32rem] overflow-y-auto">
+          <div className="z-50 max-h-[32rem] overflow-y-auto bg-background border border-border shadow-lg" style={dropdownStyle}>
 
             {/* ── Header ──────────────────────────────────────────────────── */}
             <div className="px-3 py-2 border-b border-border flex items-center justify-between sticky top-0 bg-background z-10">
@@ -5712,7 +5736,8 @@ function NotificationBell() {
               </>
             )}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
