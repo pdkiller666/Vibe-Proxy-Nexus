@@ -216,8 +216,8 @@ function useUnifiedPoller(currentAdminId: number | undefined): {
             { credentials: "include" },
           );
           if (res.ok && !cancelled) {
-            const data: { items: AdminAuditLogEntry[] } = await res.json();
-            const otherEntries = (data.items ?? []).filter(
+            const data: { entries: AdminAuditLogEntry[] } = await res.json();
+            const otherEntries = (data.entries ?? []).filter(
               (e) => e.adminId !== currentAdminId && !seenAuditIds.current.has(e.id),
             );
             for (const e of otherEntries) {
