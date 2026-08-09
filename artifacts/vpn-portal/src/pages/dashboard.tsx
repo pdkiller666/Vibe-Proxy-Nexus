@@ -850,7 +850,7 @@ export default function Dashboard() {
               Тарифы
               {!plansLoading && plans && (
                 <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold bg-primary/10 text-primary rounded-full">
-                  {plans.length}
+                  {plans.filter((p) => p.isActive).length}
                 </span>
               )}
             </div>
