@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
-import { db, plansTable, subscriptionsTable, paymentsTable, paymentSettingsTable } from "@workspace/db";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { db, plansTable, subscriptionsTable, paymentsTable, paymentSettingsTable, systemEventsTable } from "@workspace/db";
 import { CreateSubscriptionBody, CreateSubscriptionResponse, ListMySubscriptionsResponse } from "@workspace/api-zod";
 import { requireAuth } from "../lib/auth";
 import { createSubscriptionRateLimit } from "../lib/rateLimit";
@@ -159,6 +159,19 @@ router.post("/subscriptions", requireAuth, createSubscriptionRateLimit, async (r
           .returning();
 
         if (!inserted) throw new Error("Failed to activate hourly plan");
+
+        // Acknowledge any open balance_low warnings — user just activated a plan
+        await tx
+          .update(systemEventsTable)
+          .set({ acknowledgedAt: new Date() })
+          .where(
+            and(
+              eq(systemEventsTable.userId, user.id),
+              eq(systemEventsTable.eventType, "balance_low"),
+              isNull(systemEventsTable.acknowledgedAt),
+            ),
+          );
+
         return inserted;
       });
     } catch (err) {

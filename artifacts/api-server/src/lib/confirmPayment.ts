@@ -205,6 +205,17 @@ export async function confirmPaymentById(
           )
           .returning();
         if (!updatedPay) throw new Error("Payment state changed concurrently");
+        // Acknowledge any open balance_low warnings — the wallet is now topped up
+        await tx
+          .update(systemEventsTable)
+          .set({ acknowledgedAt: new Date() })
+          .where(
+            and(
+              eq(systemEventsTable.userId, payment.userId),
+              eq(systemEventsTable.eventType, "balance_low"),
+              isNull(systemEventsTable.acknowledgedAt),
+            ),
+          );
         return updatedPay;
       });
       await notifyPaymentConfirmed(updatedPayment);
@@ -318,6 +329,18 @@ export async function confirmPaymentById(
         )
         .returning();
       if (!updatedPay) throw new Error("Payment state changed concurrently");
+
+      // Acknowledge any open balance_low warnings — the user just activated a plan
+      await tx
+        .update(systemEventsTable)
+        .set({ acknowledgedAt: new Date() })
+        .where(
+          and(
+            eq(systemEventsTable.userId, subscription.userId),
+            eq(systemEventsTable.eventType, "balance_low"),
+            isNull(systemEventsTable.acknowledgedAt),
+          ),
+        );
 
       await tx
         .update(vpnKeysTable)
