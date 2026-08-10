@@ -279,22 +279,27 @@ function ReferralSection() {
   return (
     <div className="bg-card border border-border overflow-hidden">
 
-      {/* ── Заголовок — одна компактная строка, всегда виден ──────────── */}
+      {/* ── Заголовок — название + шеврон сверху, бейджи снизу ─────────── */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 border-b border-border text-left"
+        className="w-full flex flex-col gap-2 px-4 py-3 border-b border-border text-left"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <Gift className="w-4 h-4 text-primary shrink-0" />
-          <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground truncate">
-            Реферальная программа
-          </span>
+        {/* Строка 1: иконка + название + шеврон */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Gift className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm font-mono font-bold uppercase tracking-widest text-muted-foreground">
+              Реферальная программа
+            </span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Строка 2: бейджи (комиссия + статус) */}
+        <div className="flex items-center gap-2 flex-wrap pl-6">
           {commission > 0 && (
             <span className="inline-flex items-center text-xs font-black px-2 py-0.5 bg-primary/10 text-primary rounded-full">
-              {commission}%
+              {commission}% с каждой оплаты
             </span>
           )}
           {isFree ? (
@@ -304,10 +309,11 @@ function ReferralSection() {
             </span>
           ) : invited > 0 ? (
             <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-muted text-muted-foreground rounded-full">
-              {invited} реф.
+              {invited} приглашено
             </span>
-          ) : null}
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+          ) : (
+            <span className="text-xs text-muted-foreground">Приглашайте друзей</span>
+          )}
         </div>
       </button>
 
