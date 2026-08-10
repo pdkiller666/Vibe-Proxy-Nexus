@@ -1091,6 +1091,28 @@ export interface SystemEventAcknowledgeResult {
   id: number;
 }
 
+export interface AcknowledgeAllSystemEventsResult {
+  acknowledged: number;
+}
+
+export type SystemEventHistoryEntryMetadata = { [key: string]: unknown };
+
+export interface SystemEventHistoryEntry {
+  id: number;
+  eventType: string;
+  metadata: SystemEventHistoryEntryMetadata;
+  createdAt: string;
+  /** @nullable */
+  acknowledgedAt?: string | null;
+}
+
+export interface SystemEventHistoryResponse {
+  entries: SystemEventHistoryEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export type UserNotificationMetadata = { [key: string]: unknown };
 
 export interface UserNotification {
@@ -1207,6 +1229,21 @@ since?: string;
 
 export type ListAdminVpnKeysParams = {
 userId?: number;
+};
+
+export type GetAdminSystemEventsHistoryParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+eventType?: string;
+since?: string;
+until?: string;
 };
 
 export type GetVpnNodeMetricsParams = {

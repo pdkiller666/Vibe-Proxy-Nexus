@@ -1505,14 +1505,56 @@ paths:
     get:
       operationId: listAdminSystemEvents
       tags: [admin]
-      summary: List unacknowledged system events (e.g. Xray config remounts)
+      summary: List unacknowledged admin-scoped system events (e.g. Xray config remounts)
       responses:
         "200":
-          description: List of unacknowledged system events
+          description: List of unacknowledged admin-scoped system events
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SystemEventList"
+
+  /admin/system-events/acknowledge-all:
+    post:
+      operationId: acknowledgeAllAdminSystemEvents
+      tags: [admin]
+      summary: Acknowledge (dismiss) all unacknowledged admin-scoped system events at once
+      responses:
+        "200":
+          description: Number of events acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcknowledgeAllSystemEventsResult"
+
+  /admin/system-events/history:
+    get:
+      operationId: getAdminSystemEventsHistory
+      tags: [admin]
+      summary: Paginated history of all admin-scoped system events (acknowledged and unacknowledged)
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: eventType
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Paginated list of admin-scoped system events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemEventHistoryResponse"
 
   /admin/system-events/{eventId}/acknowledge:
     post:
@@ -3098,6 +3140,34 @@ components:
       required: [id]
       properties:
         id: { type: integer }
+
+    AcknowledgeAllSystemEventsResult:
+      type: object
+      required: [acknowledged]
+      properties:
+        acknowledged: { type: integer }
+
+    SystemEventHistoryEntry:
+      type: object
+      required: [id, eventType, metadata, createdAt]
+      properties:
+        id: { type: integer }
+        eventType: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+        acknowledgedAt: { type: ["string", "null"], format: date-time }
+
+    SystemEventHistoryResponse:
+      type: object
+      required: [entries, total, page, pageSize]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/SystemEventHistoryEntry"
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
 
     UserNotification:
       type: object

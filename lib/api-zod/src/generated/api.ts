@@ -2079,7 +2079,7 @@ export const ListAdminUserBalanceTransactionsResponse = zod.array(ListAdminUserB
 
 
 /**
- * @summary List unacknowledged system events (e.g. Xray config remounts)
+ * @summary List unacknowledged admin-scoped system events (e.g. Xray config remounts)
  */
 export const ListAdminSystemEventsResponseItem = zod.object({
   "id": zod.number(),
@@ -2088,6 +2088,46 @@ export const ListAdminSystemEventsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListAdminSystemEventsResponse = zod.array(ListAdminSystemEventsResponseItem)
+
+
+/**
+ * @summary Acknowledge (dismiss) all unacknowledged admin-scoped system events at once
+ */
+export const AcknowledgeAllAdminSystemEventsResponse = zod.object({
+  "acknowledged": zod.number()
+})
+
+
+/**
+ * @summary Paginated history of all admin-scoped system events (acknowledged and unacknowledged)
+ */
+export const getAdminSystemEventsHistoryQueryPageDefault = 1;
+
+export const getAdminSystemEventsHistoryQueryPageSizeDefault = 50;
+export const getAdminSystemEventsHistoryQueryPageSizeMax = 100;
+
+
+
+export const GetAdminSystemEventsHistoryQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).default(getAdminSystemEventsHistoryQueryPageDefault),
+  "pageSize": zod.coerce.number().min(1).max(getAdminSystemEventsHistoryQueryPageSizeMax).default(getAdminSystemEventsHistoryQueryPageSizeDefault),
+  "eventType": zod.coerce.string().optional(),
+  "since": zod.date().optional(),
+  "until": zod.date().optional()
+})
+
+export const GetAdminSystemEventsHistoryResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "eventType": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date(),
+  "acknowledgedAt": zod.coerce.date().nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number()
+})
 
 
 /**

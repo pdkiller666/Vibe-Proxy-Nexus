@@ -61,7 +61,10 @@ import {
   useGetAdminInviteLinkUsers,
   useListAdminSystemEvents,
   useAcknowledgeAdminSystemEvent,
+  useAcknowledgeAllAdminSystemEvents,
+  useGetAdminSystemEventsHistory,
   getListAdminSystemEventsQueryKey,
+  getGetAdminSystemEventsHistoryQueryKey,
   useProvisionVpnNode,
   useGetVpnNodeSystemStatus,
   useGetVpnNodeSystemLogs,
@@ -5565,6 +5568,11 @@ function NotificationBell() {
       onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAdminSystemEventsQueryKey() }),
     },
   });
+  const { mutate: acknowledgeAll, isPending: isAckAllPending } = useAcknowledgeAllAdminSystemEvents({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAdminSystemEventsQueryKey() }),
+    },
+  });
 
   const systemEvents = systemEventsRaw ?? [];
   const totalBadge = payments.length + systemEvents.length + otherAdminActions.length;
@@ -5622,10 +5630,18 @@ function NotificationBell() {
                 {/* ── Системные события (персистентные) ───────────────────── */}
                 {systemEvents.length > 0 && (
                   <div>
-                    <div className="px-3 py-1.5 bg-muted/50 border-b border-border">
+                    <div className="px-3 py-1.5 bg-muted/50 border-b border-border flex items-center justify-between">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         Системные события
                       </span>
+                      <button
+                        onClick={() => acknowledgeAll()}
+                        disabled={isAckAllPending}
+                        className="text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                        title="Закрыть все"
+                      >
+                        Закрыть все
+                      </button>
                     </div>
                     <div className="divide-y divide-border">
                       {systemEvents.map((e) => {
@@ -5845,6 +5861,159 @@ function AuditLogRow({ entry }: { entry: AdminAuditLogEntry }) {
   );
 }
 
+// ─── Event History Tab ────────────────────────────────────────────────────────
+function EventHistoryTab() {
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>("");
+  const [since, setSince] = useState("");
+  const [until, setUntil] = useState("");
+
+  const params = {
+    page,
+    pageSize,
+    ...(eventTypeFilter ? { eventType: eventTypeFilter } : {}),
+    ...(since  ? { since:  since  } : {}),
+    ...(until  ? { until:  until  } : {}),
+  };
+
+  const { data, isLoading } = useGetAdminSystemEventsHistory(params, {
+    query: { queryKey: getGetAdminSystemEventsHistoryQueryKey(params), refetchInterval: 30_000 },
+  });
+
+  const { mutate: acknowledgeOne } = useAcknowledgeAdminSystemEvent({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListAdminSystemEventsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetAdminSystemEventsHistoryQueryKey() });
+      },
+    },
+  });
+
+  const total      = data?.total    ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return (
+    <div className="space-y-4">
+      {/* ── Filters ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          className="border rounded-none px-2 py-1.5 text-sm bg-background"
+          value={eventTypeFilter}
+          onChange={(e) => { setEventTypeFilter(e.target.value); setPage(1); }}
+        >
+          <option value="">Все типы</option>
+          {Object.entries(SYS_EVENT_LABELS).map(([v, label]) => (
+            <option key={v} value={v}>{label}</option>
+          ))}
+        </select>
+        <Input
+          type="datetime-local"
+          className="rounded-none w-auto text-sm"
+          value={since}
+          onChange={(e) => { setSince(e.target.value); setPage(1); }}
+          placeholder="С"
+        />
+        <Input
+          type="datetime-local"
+          className="rounded-none w-auto text-sm"
+          value={until}
+          onChange={(e) => { setUntil(e.target.value); setPage(1); }}
+          placeholder="По"
+        />
+      </div>
+
+      {/* ── Table ── */}
+      {isLoading ? (
+        <div className="py-8 text-center text-muted-foreground">Загрузка...</div>
+      ) : !data || data.entries.length === 0 ? (
+        <div className="py-8 text-center text-muted-foreground">Нет записей</div>
+      ) : (
+        <div className="overflow-x-auto border rounded-none">
+          <table className="w-full min-w-[600px] text-sm">
+            <thead>
+              <tr className="bg-muted/50 border-b text-left text-xs font-semibold">
+                <th className="p-2 whitespace-nowrap">Время</th>
+                <th className="p-2">Тип события</th>
+                <th className="p-2">Детали</th>
+                <th className="p-2 text-center">Статус</th>
+                <th className="p-2 w-8" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {data.entries.map((e) => {
+                const meta       = e.metadata as Record<string, unknown> | undefined;
+                const label      = SYS_EVENT_LABELS[e.eventType] ?? e.eventType;
+                const nodeName   = typeof meta?.nodeName   === "string" ? meta.nodeName   : null;
+                const nodeId     = typeof meta?.nodeId     === "number" ? meta.nodeId     : null;
+                const isOk       = e.eventType === "node_recovered" || e.eventType === "auto_renew_success";
+                const isWarn     = e.eventType === "node_overloaded";
+                const isDone     = !!e.acknowledgedAt;
+                const dotCls     = isOk ? "bg-green-500" : isWarn ? "bg-amber-500" : "bg-destructive";
+                return (
+                  <tr key={e.id} className={isDone ? "opacity-50" : ""}>
+                    <td className="p-2 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                      {formatDate(e.createdAt.toString())}
+                    </td>
+                    <td className="p-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
+                        <span className="font-medium text-xs">{label}</span>
+                      </div>
+                    </td>
+                    <td className="p-2 text-xs text-muted-foreground">
+                      {nodeName ?? (nodeId != null ? `Node #${nodeId}` : "—")}
+                    </td>
+                    <td className="p-2 text-center">
+                      {isDone ? (
+                        <span className="text-xs text-muted-foreground">Закрыто</span>
+                      ) : (
+                        <span className="text-xs font-semibold text-destructive">Активно</span>
+                      )}
+                    </td>
+                    <td className="p-2 text-right">
+                      {!isDone && (
+                        <button
+                          onClick={() => acknowledgeOne({ eventId: e.id })}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          title="Закрыть событие"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Pagination ── */}
+      {total > pageSize && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            {total} записей, страница {page} из {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1 border rounded-none text-sm disabled:opacity-40"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >←</button>
+            <button
+              className="px-3 py-1 border rounded-none text-sm disabled:opacity-40"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >→</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AuditLogTab() {
   const [page, setPage] = useState(1);
   const pageSize = 50;
@@ -6021,6 +6190,9 @@ export default function Admin() {
                 <MessageCircle className="w-4 h-4" /> Поддержка
                 <Badge count={openTickets} />
               </TabsTrigger>
+              <TabsTrigger value="event-history" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Bell className="w-4 h-4" /> История событий
+              </TabsTrigger>
               <TabsTrigger value="audit-log" className="rounded-none gap-1.5 whitespace-nowrap">
                 <ClipboardList className="w-4 h-4" /> Журнал действий
               </TabsTrigger>
@@ -6054,6 +6226,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="support" className="pt-4">
           <SupportManagement />
+        </TabsContent>
+        <TabsContent value="event-history" className="pt-4">
+          <EventHistoryTab />
         </TabsContent>
         <TabsContent value="audit-log" className="pt-4">
           <AuditLogTab />

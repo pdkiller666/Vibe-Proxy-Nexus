@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './acknowledgeAllSystemEventsResult';
 export * from './adminAuditLogAction';
 export * from './adminAuditLogEntry';
 export * from './adminAuditLogEntryDetails';
@@ -55,6 +56,7 @@ export * from './forgotPasswordResult';
 export * from './getAdminAuditLogFormat';
 export * from './getAdminAuditLogParams';
 export * from './getAdminNotificationsParams';
+export * from './getAdminSystemEventsHistoryParams';
 export * from './getVpnNodeMetricsMetric';
 export * from './getVpnNodeMetricsParams';
 export * from './getVpnNodeSystemLogsParams';
@@ -100,6 +102,9 @@ export * from './supportTicketCreateInput';
 export * from './supportTicketDetail';
 export * from './systemEvent';
 export * from './systemEventAcknowledgeResult';
+export * from './systemEventHistoryEntry';
+export * from './systemEventHistoryEntryMetadata';
+export * from './systemEventHistoryResponse';
 export * from './systemEventList';
 export * from './systemEventMetadata';
 export * from './ticketStatus';

@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AcknowledgeAllSystemEventsResult,
   AdminAuditLogListResponse,
   AdminBalanceTransaction,
   AdminInviteLink,
@@ -59,6 +60,7 @@ import type {
   ForgotPasswordResult,
   GetAdminAuditLogParams,
   GetAdminNotificationsParams,
+  GetAdminSystemEventsHistoryParams,
   GetVpnNodeMetricsParams,
   GetVpnNodeSystemLogsParams,
   HealthStatus,
@@ -90,6 +92,7 @@ import type {
   SupportTicketCreateInput,
   SupportTicketDetail,
   SystemEventAcknowledgeResult,
+  SystemEventHistoryResponse,
   SystemEventList,
   TicketStatusUpdate,
   TrafficPollingHealth,
@@ -5820,7 +5823,7 @@ export const getListAdminSystemEventsUrl = () => {
 }
 
 /**
- * @summary List unacknowledged system events (e.g. Xray config remounts)
+ * @summary List unacknowledged admin-scoped system events (e.g. Xray config remounts)
  */
 export const listAdminSystemEvents = async ( options?: RequestInit): Promise<SystemEventList> => {
 
@@ -5867,7 +5870,7 @@ export type ListAdminSystemEventsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List unacknowledged system events (e.g. Xray config remounts)
+ * @summary List unacknowledged admin-scoped system events (e.g. Xray config remounts)
  */
 
 export function useListAdminSystemEvents<TData = Awaited<ReturnType<typeof listAdminSystemEvents>>, TError = ErrorType<unknown>>(
@@ -5876,6 +5879,160 @@ export function useListAdminSystemEvents<TData = Awaited<ReturnType<typeof listA
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAdminSystemEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAcknowledgeAllAdminSystemEventsUrl = () => {
+
+
+
+
+  return `/api/admin/system-events/acknowledge-all`
+}
+
+/**
+ * @summary Acknowledge (dismiss) all unacknowledged admin-scoped system events at once
+ */
+export const acknowledgeAllAdminSystemEvents = async ( options?: RequestInit): Promise<AcknowledgeAllSystemEventsResult> => {
+
+  return customFetch<AcknowledgeAllSystemEventsResult>(getAcknowledgeAllAdminSystemEventsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAcknowledgeAllAdminSystemEventsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeAllAdminSystemEvents>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acknowledgeAllAdminSystemEvents>>, TError,void, TContext> => {
+
+const mutationKey = ['acknowledgeAllAdminSystemEvents'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acknowledgeAllAdminSystemEvents>>, void> = () => {
+
+
+          return  acknowledgeAllAdminSystemEvents(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcknowledgeAllAdminSystemEventsMutationResult = NonNullable<Awaited<ReturnType<typeof acknowledgeAllAdminSystemEvents>>>
+
+    export type AcknowledgeAllAdminSystemEventsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Acknowledge (dismiss) all unacknowledged admin-scoped system events at once
+ */
+export const useAcknowledgeAllAdminSystemEvents = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acknowledgeAllAdminSystemEvents>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acknowledgeAllAdminSystemEvents>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getAcknowledgeAllAdminSystemEventsMutationOptions(options));
+    }
+
+export const getGetAdminSystemEventsHistoryUrl = (params?: GetAdminSystemEventsHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/system-events/history?${stringifiedParams}` : `/api/admin/system-events/history`
+}
+
+/**
+ * @summary Paginated history of all admin-scoped system events (acknowledged and unacknowledged)
+ */
+export const getAdminSystemEventsHistory = async (params?: GetAdminSystemEventsHistoryParams, options?: RequestInit): Promise<SystemEventHistoryResponse> => {
+
+  return customFetch<SystemEventHistoryResponse>(getGetAdminSystemEventsHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminSystemEventsHistoryQueryKey = (params?: GetAdminSystemEventsHistoryParams,) => {
+    return [
+    `/api/admin/system-events/history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminSystemEventsHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getAdminSystemEventsHistory>>, TError = ErrorType<unknown>>(params?: GetAdminSystemEventsHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminSystemEventsHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminSystemEventsHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminSystemEventsHistory>>> = ({ signal }) => getAdminSystemEventsHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminSystemEventsHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminSystemEventsHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminSystemEventsHistory>>>
+export type GetAdminSystemEventsHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Paginated history of all admin-scoped system events (acknowledged and unacknowledged)
+ */
+
+export function useGetAdminSystemEventsHistory<TData = Awaited<ReturnType<typeof getAdminSystemEventsHistory>>, TError = ErrorType<unknown>>(
+ params?: GetAdminSystemEventsHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminSystemEventsHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminSystemEventsHistoryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
