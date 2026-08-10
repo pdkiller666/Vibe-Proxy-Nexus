@@ -1,4 +1,4 @@
-import { useListPlans } from "@workspace/api-client-react";
+import { useListPlans, useGetPaymentSettings } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
 import {
   Shield, ArrowRight, Check, Zap, Eye, Lock,
@@ -365,6 +365,8 @@ function PlanSkeleton() {
 export default function Home() {
   const { data: plans, isLoading: plansLoading } = useListPlans();
   const activePlans = plans?.filter((p: { isActive: boolean }) => p.isActive) ?? [];
+  const { data: paymentSettings } = useGetPaymentSettings();
+  const referralCommission = paymentSettings?.referralCommissionPercent ?? 0;
   const [, navigate] = useLocation();
   const [inviteCode, setInviteCode] = useState("");
   const [inviteErr, setInviteErr] = useState(false);
@@ -866,13 +868,24 @@ export default function Home() {
                 Приглашайте друзей —<br />
                 <span className="text-orange-400">пользуйтесь бесплатно</span>
               </h2>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                Каждый действующий пользователь получает процент от оплат своих рефералов
-                на внутренний баланс. Баланс автоматически идёт в счёт подписки —
-                никакого вывода не нужно.
-              </p>
+              {referralCommission > 0 ? (
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Каждый действующий пользователь получает{" "}
+                  <span className="text-orange-400 font-bold">{referralCommission}%</span>{" "}
+                  от оплат своих рефералов на внутренний баланс. Баланс автоматически
+                  идёт в счёт подписки — никакого вывода не нужно.
+                </p>
+              ) : (
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Каждый действующий пользователь получает процент от оплат своих рефералов
+                  на внутренний баланс. Баланс автоматически идёт в счёт подписки —
+                  никакого вывода не нужно.
+                </p>
+              )}
               <p className="text-gray-300 text-sm font-medium">
-                Позовите нужное количество друзей — и перестаньте платить за VPN.
+                {referralCommission > 0
+                  ? `Пригласите ${Math.ceil(100 / referralCommission)} человек — и подписка окупается сама`
+                  : "Позовите нужное количество друзей — и перестаньте платить за VPN."}
               </p>
               <Link
                 href="/sign-in"
