@@ -279,42 +279,35 @@ function ReferralSection() {
   return (
     <div className="bg-card border border-border overflow-hidden">
 
-      {/* ── Заголовок — название + шеврон сверху, бейджи снизу ─────────── */}
+      {/* ── Заголовок — стиль nav-кнопки (как Тарифы / Ключи VPN) ────────── */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex flex-col gap-2 px-4 py-3 border-b border-border text-left"
+        className="w-full flex items-center justify-between gap-4 p-5 border-b border-border text-left hover:bg-muted/30 transition-colors"
       >
-        {/* Строка 1: иконка + название + шеврон */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div>
+          <div className="font-bold flex items-center gap-2">
             <Gift className="w-4 h-4 text-primary shrink-0" />
-            <span className="text-sm font-mono font-bold uppercase tracking-widest text-muted-foreground">
-              Реферальная программа
-            </span>
+            Реферальная программа
+            {isFree && (
+              <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
+                <CheckCircle2 className="w-3 h-3" />
+                Окупается
+              </span>
+            )}
+            {!isFree && invited > 0 && (
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold bg-primary/10 text-primary rounded-full">
+                {invited}
+              </span>
+            )}
           </div>
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
+          <div className="text-sm text-muted-foreground mt-0.5">
+            {commission > 0
+              ? `${commission}% с каждой оплаты реферала`
+              : "Приглашайте друзей"}
+          </div>
         </div>
-        {/* Строка 2: бейджи (комиссия + статус) */}
-        <div className="flex items-center gap-2 flex-wrap pl-6">
-          {commission > 0 && (
-            <span className="inline-flex items-center text-xs font-black px-2 py-0.5 bg-primary/10 text-primary rounded-full">
-              {commission}% с каждой оплаты
-            </span>
-          )}
-          {isFree ? (
-            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
-              <CheckCircle2 className="w-3 h-3" />
-              Окупается
-            </span>
-          ) : invited > 0 ? (
-            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-muted text-muted-foreground rounded-full">
-              {invited} приглашено
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">Приглашайте друзей</span>
-          )}
-        </div>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
       </button>
 
       {/* ── Тело: заголовок + цифры, прогресс, ссылка — сворачивается ── */}
@@ -657,6 +650,8 @@ export default function Dashboard() {
   const { data: plans, isLoading: plansLoading } = useListPlans();
   const { data: payments } = useListMyPayments();
   const { toast } = useToast();
+  // Usage details toggle — collapsed on mobile by default, open on desktop
+  const [usageOpen, setUsageOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
 
   const activeKeys = keys?.filter((k) => !k.revokedAt) ?? [];
   const daysLeft = getDaysLeft(me?.subscriptionEndsAt as string | null | undefined);
@@ -870,6 +865,24 @@ export default function Dashboard() {
               Сменить тариф
             </Link>
           </div>
+          {/* ── Подробности использования — встроенный тогглер ── */}
+          <div className="border-t border-border">
+            <button
+              type="button"
+              onClick={() => setUsageOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+            >
+              <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                Подробности использования
+              </span>
+              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${usageOpen ? "rotate-180" : ""}`} />
+            </button>
+            {usageOpen && (
+              <div className="px-5 pb-5 space-y-6">
+                <TrafficSection />
+              </div>
+            )}
+          </div>
         </div>
       ) : me?.hasActiveSubscription ? (
         <div className={`bg-card overflow-hidden ${isTrial ? "border border-emerald-200 dark:border-emerald-800" : "border border-border"}`}>
@@ -940,6 +953,24 @@ export default function Dashboard() {
               {isTrial ? "Купить подписку" : "Продлить / сменить"}
             </Link>
           </div>
+          {/* ── Подробности использования — встроенный тогглер ── */}
+          <div className="border-t border-border">
+            <button
+              type="button"
+              onClick={() => setUsageOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+            >
+              <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                Подробности использования
+              </span>
+              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${usageOpen ? "rotate-180" : ""}`} />
+            </button>
+            {usageOpen && (
+              <div className="px-5 pb-5 space-y-6">
+                <TrafficSection />
+              </div>
+            )}
+          </div>
         </div>
       ) : hasUnusedPromo && promoPlan ? (
         /* ── Promo offer hero — shown instead of plain "no subscription" ── */
@@ -1005,14 +1036,6 @@ export default function Dashboard() {
           </Link>
         </div>
       )}
-
-      {/* ── Usage detail: right after subscription so traffic/key info is
-           immediately visible; collapsed on mobile to keep the hero clean ── */}
-      <CollapsibleOnMobile title="Подробности использования">
-        <div className="space-y-6 pt-1">
-          <TrafficSection />
-        </div>
-      </CollapsibleOnMobile>
 
       {/* ── Referral ──────────────────────────────────────────────────── */}
       <ReferralSection />
