@@ -852,6 +852,71 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ─── REFERRAL FOR USERS ─────────────────────────────────── */}
+      <section className="py-20 px-6 bg-gray-950 text-white">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex flex-col md:flex-row gap-10 items-start">
+
+            {/* Left: heading + copy */}
+            <div className="flex-1 space-y-5">
+              <p className="text-orange-400 text-xs font-bold uppercase tracking-widest">
+                Для действующих пользователей
+              </p>
+              <h2 className="text-3xl md:text-4xl font-black tracking-tight leading-tight">
+                Приглашайте друзей —<br />
+                <span className="text-orange-400">пользуйтесь бесплатно</span>
+              </h2>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Каждый действующий пользователь получает процент от оплат своих рефералов
+                на внутренний баланс. Баланс автоматически идёт в счёт подписки —
+                никакого вывода не нужно.
+              </p>
+              <p className="text-gray-300 text-sm font-medium">
+                Позовите нужное количество друзей — и перестаньте платить за VPN.
+              </p>
+              <Link
+                href="/sign-in"
+                className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold px-6 py-3 text-sm transition-colors"
+              >
+                Войти и поделиться ссылкой <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* Right: 3 steps */}
+            <div className="flex-shrink-0 w-full md:w-64 space-y-4">
+              {[
+                {
+                  n: "01",
+                  title: "Поделитесь ссылкой",
+                  desc: "Скопируйте реферальную ссылку из личного кабинета и отправьте другу",
+                },
+                {
+                  n: "02",
+                  title: "Друг оплачивает",
+                  desc: "Как только его платёж подтверждён — комиссия поступает на ваш баланс",
+                },
+                {
+                  n: "03",
+                  title: "Вы платите меньше",
+                  desc: "Баланс списывается в счёт подписки. Больше рефералов — ниже ваша реальная стоимость",
+                },
+              ].map(({ n, title, desc }) => (
+                <div key={n} className="flex gap-4">
+                  <div className="text-orange-400 font-black text-xl font-mono leading-none mt-0.5 shrink-0 w-8">
+                    {n}
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm text-white mb-1">{title}</div>
+                    <div className="text-xs text-gray-500 leading-relaxed">{desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      </section>
+
       {/* ─── FOOTER ─────────────────────────────────────────────── */}
       <footer className="border-t border-gray-100 py-10 px-6">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">

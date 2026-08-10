@@ -249,6 +249,15 @@ function ReferralSection() {
   if (!me?.referralCode) return null;
 
   const referralLink = `https://${me.referralLinkHost}/sign-up?ref=${me.referralCode}`;
+  const commission  = me.referralCommissionPercent;
+  const invited     = me.referredUserCount;
+  const earned      = me.referralEarningsKopecks;
+
+  // How many paying referrals covers one subscription period?
+  // At N% commission: 100/N referrals = 100% of plan cost covered.
+  const refsNeeded  = commission > 0 ? Math.ceil(100 / commission) : null;
+  const progressPct = refsNeeded ? Math.min(100, Math.round((invited / refsNeeded) * 100)) : 0;
+  const isFree      = refsNeeded !== null && invited >= refsNeeded;
 
   function copyLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
@@ -268,56 +277,120 @@ function ReferralSection() {
   }
 
   return (
-    <div className="bg-card border border-border p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <Users className="w-4 h-4 text-primary" />
-        <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
-          Реферальная программа
-        </p>
-      </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex-1 min-w-0 font-mono text-sm bg-muted px-3 py-2 truncate select-all">
-          {referralLink}
+    <div className="bg-card border border-border overflow-hidden">
+
+      {/* ── Заголовок ──────────────────────────────────────────────── */}
+      <div className="px-5 pt-5 pb-4 border-b border-border flex items-start justify-between gap-4">
+        <div className="space-y-1 flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <Gift className="w-4 h-4 text-primary shrink-0" />
+            <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+              Реферальная программа
+            </p>
+          </div>
+          <p className="text-lg font-black tracking-tight leading-snug">
+            {isFree
+              ? "Ваша подписка окупается рефералами"
+              : "Пользуйтесь бесплатно — приглашайте друзей"}
+          </p>
+          {commission > 0 && !isFree && refsNeeded && (
+            <p className="text-sm text-muted-foreground">
+              {refsNeeded === 1
+                ? "Достаточно одного оплатившего реферала — и подписка окупается"
+                : `Пригласите ${refsNeeded} человек — их оплаты перекроют стоимость вашей подписки`}
+            </p>
+          )}
+          {isFree && (
+            <p className="text-sm text-green-600 font-medium">
+              Комиссия с рефералов уже покрывает стоимость подписки
+            </p>
+          )}
         </div>
-        <button
-          onClick={copyLink}
-          className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
-        >
-          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          {copied ? "Скопировано" : "Копировать"}
-        </button>
+        {commission > 0 && (
+          <div className="shrink-0 text-right">
+            <div className="text-3xl font-black text-primary leading-none">{commission}%</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">с каждой оплаты</div>
+          </div>
+        )}
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs text-muted-foreground whitespace-nowrap">Инвайт-код:</span>
-          <div className="font-mono text-sm bg-muted px-3 py-2 select-all tracking-widest">
-            {me.referralCode}
+
+      {/* ── Статистика ─────────────────────────────────────────────── */}
+      <div className={`grid divide-x divide-border border-b border-border ${commission > 0 ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className="px-5 py-4">
+          <div className="text-3xl font-black">{invited}</div>
+          <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">
+            {invited === 1 ? "приглашённый" : "приглашено"}
           </div>
         </div>
-        <button
-          onClick={copyCode}
-          className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
-        >
-          {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          {copiedCode ? "Скопировано" : "Копировать"}
-        </button>
-      </div>
-      <div className="flex items-center gap-6 flex-wrap text-sm border-t border-border pt-3">
-        <div>
-          <span className="text-muted-foreground">Приглашено:</span>{" "}
-          <strong className="text-foreground">{me.referredUserCount}</strong>
-        </div>
-        {me.referralCommissionPercent > 0 && (
-          <>
-            <div>
-              <span className="text-muted-foreground">Заработано:</span>{" "}
-              <strong className="text-green-600">{formatKopecks(me.referralEarningsKopecks)}</strong>
+        {commission > 0 && (
+          <div className="px-5 py-4">
+            <div className={`text-3xl font-black ${earned > 0 ? "text-green-600" : ""}`}>
+              {formatKopecks(earned)}
             </div>
-            <div className="text-xs text-muted-foreground font-mono">
-              {me.referralCommissionPercent}% от оплат ваших рефералов
-            </div>
-          </>
+            <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">начислено на баланс</div>
+          </div>
         )}
+      </div>
+
+      {/* ── Прогресс к бесплатной подписке ────────────────────────── */}
+      {commission > 0 && refsNeeded && (
+        <div className="px-5 py-3 border-b border-border space-y-2">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>До бесплатной подписки</span>
+            <span className={isFree ? "text-green-600 font-semibold" : ""}>
+              {invited} / {refsNeeded}
+            </span>
+          </div>
+          <div className="h-1.5 bg-muted overflow-hidden">
+            <div
+              className={`h-full transition-all ${isFree ? "bg-green-500" : "bg-primary"}`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          {!isFree && invited === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Поделитесь ссылкой — каждый оплативший друг приближает вас к бесплатной подписке
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Ссылка и код ───────────────────────────────────────────── */}
+      <div className="p-5 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex-1 min-w-0 font-mono text-sm bg-muted px-3 py-2 truncate select-all">
+            {referralLink}
+          </div>
+          <button
+            onClick={copyLink}
+            className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
+          >
+            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copied ? "Скопировано" : "Скопировать ссылку"}
+          </button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Инвайт-код:</span>
+            <div className="font-mono text-sm bg-muted px-3 py-2 select-all tracking-widest">
+              {me.referralCode}
+            </div>
+          </div>
+          <button
+            onClick={copyCode}
+            className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
+          >
+            {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copiedCode ? "Скопировано" : "Скопировать код"}
+          </button>
+        </div>
+
+        {/* Механика */}
+        <div className="border-t border-border pt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+          <span>✓ Зачисляется сразу после оплаты реферала</span>
+          <span>✓ Идёт в счёт вашей подписки</span>
+          <span>✓ Без вывода, замкнутый баланс</span>
+        </div>
       </div>
     </div>
   );
