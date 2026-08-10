@@ -279,50 +279,61 @@ function ReferralSection() {
   return (
     <div className="bg-card border border-border overflow-hidden">
 
-      {/* ── Заголовок — всегда виден, кликабелен для коллапса ───────── */}
+      {/* ── Заголовок — одна компактная строка, всегда виден ──────────── */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-start justify-between gap-4 px-5 pt-5 pb-4 border-b border-border text-left"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 border-b border-border text-left"
       >
-        <div className="space-y-1 flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Gift className="w-4 h-4 text-primary shrink-0" />
-            <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
-              Реферальная программа
-            </p>
-          </div>
-          <p className="text-lg font-black tracking-tight leading-snug">
+        <div className="flex items-center gap-2 min-w-0">
+          <Gift className="w-4 h-4 text-primary shrink-0" />
+          <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground truncate">
+            Реферальная программа
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {commission > 0 && (
+            <span className="inline-flex items-center text-xs font-black px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+              {commission}%
+            </span>
+          )}
+          {isFree ? (
+            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
+              <CheckCircle2 className="w-3 h-3" />
+              Окупается
+            </span>
+          ) : invited > 0 ? (
+            <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-muted text-muted-foreground rounded-full">
+              {invited} реф.
+            </span>
+          ) : null}
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+        </div>
+      </button>
+
+      {/* ── Тело: заголовок + цифры, прогресс, ссылка — сворачивается ── */}
+      <div className={open ? "block" : "hidden"}>
+
+        {/* Описание — внутри тела, видно только при раскрытии */}
+        <div className="px-5 pt-4 pb-2">
+          <p className="text-base font-black tracking-tight leading-snug">
             {isFree
               ? "Ваша подписка окупается рефералами"
               : "Пользуйтесь бесплатно — приглашайте друзей"}
           </p>
           {commission > 0 && !isFree && refsNeeded && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mt-1">
               {refsNeeded === 1
                 ? "Достаточно одного оплатившего реферала — и подписка окупается"
                 : `Пригласите ${refsNeeded} человек — их оплаты перекроют стоимость вашей подписки`}
             </p>
           )}
           {isFree && (
-            <p className="text-sm text-green-600 font-medium">
+            <p className="text-sm text-green-600 font-medium mt-1">
               Комиссия с рефералов уже покрывает стоимость подписки
             </p>
           )}
         </div>
-        <div className="flex items-start gap-3 shrink-0">
-          {commission > 0 && (
-            <div className="text-right">
-              <div className="text-3xl font-black text-primary leading-none">{commission}%</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">с каждой оплаты</div>
-            </div>
-          )}
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform mt-1 ${open ? "rotate-180" : ""}`} />
-        </div>
-      </button>
-
-      {/* ── Тело: цифры, прогресс, ссылка — сворачивается ──────────── */}
-      <div className={open ? "block" : "hidden"}>
 
         {/* Статистика */}
         <div className={`grid divide-x divide-border border-b border-border ${commission > 0 ? "grid-cols-2" : "grid-cols-1"}`}>
@@ -827,10 +838,7 @@ export default function Dashboard() {
       ) : me?.hasActiveSubscription && me.currentPlanBillingType === "hourly" ? (
         <div className="bg-card border border-border overflow-hidden">
           <div className="h-1 w-full bg-primary" />
-          <div className="p-6 flex flex-col sm:flex-row sm:items-center gap-6">
-            <div className="w-14 h-14 bg-primary/10 flex items-center justify-center shrink-0">
-              <Zap className="w-7 h-7 text-primary" />
-            </div>
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
@@ -841,9 +849,12 @@ export default function Dashboard() {
                   Активна
                 </span>
               </div>
-              <div className="text-2xl font-black tracking-tight">{me.currentPlanName}</div>
-              <p className="text-sm text-muted-foreground mt-2">
-                Почасовая оплата — {formatKopecks(me.hourlyRateKopecks ?? 0)}/час, списывается автоматически с баланса, пока есть трафик. Ничего останавливать не нужно.
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-primary shrink-0" />
+                <div className="text-2xl font-black tracking-tight">{me.currentPlanName}</div>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                {formatKopecks(me.hourlyRateKopecks ?? 0)}/час — списывается с баланса автоматически.
               </p>
             </div>
             <Link
@@ -858,14 +869,7 @@ export default function Dashboard() {
         <div className={`bg-card overflow-hidden ${isTrial ? "border border-emerald-200 dark:border-emerald-800" : "border border-border"}`}>
           {/* colour bar */}
           <div className={`h-1 w-full ${isTrial ? "bg-gradient-to-r from-emerald-400 to-teal-500" : showExpiringSoon ? "bg-orange-400" : "bg-primary"}`} />
-          <div className="p-6 flex flex-col sm:flex-row sm:items-center gap-6">
-            {/* icon */}
-            <div className={`w-14 h-14 flex items-center justify-center shrink-0
-              ${isTrial ? "bg-emerald-50 dark:bg-emerald-950/40" : showExpiringSoon ? "bg-orange-100" : "bg-primary/10"}`}>
-              {isTrial
-                ? <Gift className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
-                : <Shield className={`w-7 h-7 ${showExpiringSoon ? "text-orange-600" : "text-primary"}`} />}
-            </div>
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
             {/* info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -893,7 +897,12 @@ export default function Dashboard() {
                   </span>
                 )}
               </div>
-              <div className="text-2xl font-black tracking-tight">{me.currentPlanName}</div>
+              <div className="flex items-center gap-2">
+                {isTrial
+                  ? <Gift className={`w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400`} />
+                  : <Shield className={`w-5 h-5 shrink-0 ${showExpiringSoon ? "text-orange-500" : "text-primary"}`} />}
+                <div className="text-2xl font-black tracking-tight">{me.currentPlanName}</div>
+              </div>
               {daysLeft !== null && daysLeft >= 0 && (
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
