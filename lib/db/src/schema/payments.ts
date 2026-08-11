@@ -11,7 +11,10 @@ import { subscriptionsTable } from "./subscriptions";
 // "freekassa" is a LEGACY value: the integration was removed 2026-07-17, no
 // code path creates it anymore, but historical rows still contain it and all
 // read/serialization paths must keep accepting it.
-export const paymentProviderValues = ["manual_sbp", "yookassa", "yoomoney", "freekassa", "balance"] as const;
+// "free_grant" is used when an admin enables allowFreeExtraTraffic: payments
+// with this provider are created-then-immediately-confirmed in a single
+// request so free grants leave an auditable trail in the payments table.
+export const paymentProviderValues = ["manual_sbp", "yookassa", "yoomoney", "freekassa", "balance", "free_grant"] as const;
 export const paymentStatusValues = ["pending", "confirmed", "rejected"] as const;
 export const paymentTypeValues = ["subscription", "extra_device_slot", "balance_topup", "extra_traffic"] as const;
 

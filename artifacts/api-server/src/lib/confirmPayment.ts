@@ -125,8 +125,33 @@ export async function confirmPaymentById(
           .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, userId: subscriptionsTable.userId })
           .from(subscriptionsTable)
           .where(eq(subscriptionsTable.id, payment.subscriptionId!));
-        if (!sub || sub.status !== "active")
-          throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+
+        // If the original subscription is no longer active (e.g. the user
+        // renewed between creating the payment and admin confirming it), fall
+        // back to the user's current active subscription so the paid traffic
+        // is not silently lost.
+        let targetSubId: number;
+        let targetUserId: number;
+        if (!sub || sub.status !== "active") {
+          const [currentActive] = await tx
+            .select({ id: subscriptionsTable.id, userId: subscriptionsTable.userId })
+            .from(subscriptionsTable)
+            .where(
+              and(
+                eq(subscriptionsTable.userId, payment.userId),
+                eq(subscriptionsTable.status, "active"),
+              ),
+            )
+            .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+            .limit(1);
+          if (!currentActive) throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+          targetSubId = currentActive.id;
+          targetUserId = currentActive.userId;
+        } else {
+          targetSubId = sub.id;
+          targetUserId = sub.userId;
+        }
+
         // Atomic increment (same pattern as extra_device_slot above) plus
         // clearing the exceeded flag so a blocked user regains the ability
         // to issue a key immediately, without waiting for the next
@@ -137,7 +162,17 @@ export async function confirmPaymentById(
             extraTrafficGb: sql`${subscriptionsTable.extraTrafficGb} + ${grantedGb}`,
             trafficLimitExceededAt: null,
           })
-          .where(eq(subscriptionsTable.id, sub.id));
+          .where(eq(subscriptionsTable.id, targetSubId));
+
+        // If we redirected to a different subscription, update the payment
+        // record so the audit trail reflects where traffic was actually applied.
+        if (targetSubId !== payment.subscriptionId!) {
+          await tx
+            .update(paymentsTable)
+            .set({ subscriptionId: targetSubId })
+            .where(eq(paymentsTable.id, payment.id));
+        }
+
         const [updatedPay] = await tx
           .update(paymentsTable)
           .set({ status: "confirmed", confirmedAt: new Date() })
@@ -149,7 +184,7 @@ export async function confirmPaymentById(
           )
           .returning();
         if (!updatedPay) throw new Error("Payment state changed concurrently");
-        return { updatedPay, userId: sub.userId };
+        return { updatedPay, userId: targetUserId };
       });
       // Outside the transaction, same rationale as the subscription branch
       // below: if the user's keys were revoked for exceeding the old limit,

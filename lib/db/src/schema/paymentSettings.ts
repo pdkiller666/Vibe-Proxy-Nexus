@@ -22,6 +22,11 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   extraTrafficPackageGb: integer("extra_traffic_package_gb").notNull().default(10),
   // Same free-grant escape hatch as allowFreeExtraDeviceSlot, for symmetry.
   allowFreeExtraTraffic: boolean("allow_free_extra_traffic").notNull().default(false),
+  // Rate-limiting for free traffic grants: how many grants a user can receive
+  // within a rolling cooldown window. Defaults to 1 grant per 24 hours.
+  // Only enforced when allowFreeExtraTraffic is true; paid orders are unlimited.
+  freeTrafficGrantCooldownHours: integer("free_traffic_grant_cooldown_hours").notNull().default(24),
+  freeTrafficGrantsPerCooldown: integer("free_traffic_grants_per_cooldown").notNull().default(1),
   trialEnabled: boolean("trial_enabled").notNull().default(false),
   trialDays: integer("trial_days").notNull().default(5),
   // Which plan is assigned to new users during the trial. When null the system

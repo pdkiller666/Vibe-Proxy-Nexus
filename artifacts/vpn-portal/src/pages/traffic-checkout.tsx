@@ -155,6 +155,11 @@ export default function TrafficCheckout() {
           {payment.extraTrafficGb ? `${payment.extraTrafficGb} ГБ на текущий период. ` : ""}
           Выберите удобный способ оплаты.
         </p>
+        {payment.extraTrafficGb && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Докупленный трафик действует до конца текущего периода подписки и не переносится на следующий.
+          </p>
+        )}
       </div>
 
       <div className={`flex items-center gap-2 font-bold ${status.color}`}>

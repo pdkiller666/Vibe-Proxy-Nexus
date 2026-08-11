@@ -56,6 +56,12 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS vpn_keys_node_id_idx ON vpn_keys(node_id)`,
   `CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions(plan_id)`,
   `CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx ON users(referred_by_user_id)`,
+  // ── M-39: free traffic grant rate-limiting settings ─────────────────────────
+  // Two new columns on payment_settings that control how often a user can
+  // receive a free extra-traffic grant when allowFreeExtraTraffic is true.
+  // Defaults match the server-side fallbacks in extraTrafficOrder.ts.
+  `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS free_traffic_grant_cooldown_hours integer NOT NULL DEFAULT 24`,
+  `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS free_traffic_grants_per_cooldown integer NOT NULL DEFAULT 1`,
 ];
 
 // Referral codes must be unique and non-empty before the `users_referral_code_unique`

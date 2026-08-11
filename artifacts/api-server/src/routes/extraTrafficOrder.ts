@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { db, paymentsTable, paymentSettingsTable, plansTable, subscriptionsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { generatePaymentReference } from "../lib/vless";
+import { confirmPaymentById } from "../lib/confirmPayment";
 
 const router: IRouter = Router();
 
@@ -68,13 +69,61 @@ router.post("/extra-traffic-order", requireAuth, async (req, res): Promise<void>
       return;
     }
 
-    await db
-      .update(subscriptionsTable)
-      .set({
-        extraTrafficGb: sql`${subscriptionsTable.extraTrafficGb} + ${packageGb}`,
-        trafficLimitExceededAt: null,
+    // Rate-limit free grants: count confirmed free grants the user received
+    // within the rolling cooldown window (default: 1 per 24 hours).
+    const cooldownHours = settings?.freeTrafficGrantCooldownHours ?? 24;
+    const grantsPerCooldown = settings?.freeTrafficGrantsPerCooldown ?? 1;
+    const since = new Date(Date.now() - cooldownHours * 3_600_000);
+
+    const [{ recentCount }] = await db
+      .select({ recentCount: count() })
+      .from(paymentsTable)
+      .where(
+        and(
+          eq(paymentsTable.userId, user.id),
+          eq(paymentsTable.type, "extra_traffic"),
+          eq(paymentsTable.amountRub, 0),
+          eq(paymentsTable.status, "confirmed"),
+          gte(paymentsTable.confirmedAt, since),
+        ),
+      );
+
+    if (recentCount >= grantsPerCooldown) {
+      res.status(429).json({
+        error: `Бесплатный пакет трафика уже был выдан. Следующий доступен через ${cooldownHours} ч.`,
+      });
+      return;
+    }
+
+    // Create a pending payment record (provider "free_grant") and confirm it
+    // immediately through the shared confirmPaymentById path. This gives free
+    // grants an auditable trail in the payments table and ensures
+    // ensureActiveKeyForUser is called if the user's keys were previously revoked.
+    const reference = generatePaymentReference(user.id * 10000 + (Date.now() % 10000));
+    const [pendingPayment] = await db
+      .insert(paymentsTable)
+      .values({
+        userId: user.id,
+        subscriptionId: activeSub.id,
+        type: "extra_traffic",
+        provider: "free_grant",
+        amountRub: 0,
+        extraTrafficGb: packageGb,
+        status: "pending",
+        reference,
       })
-      .where(eq(subscriptionsTable.id, activeSub.id));
+      .returning();
+
+    const confirmResult = await confirmPaymentById(pendingPayment.id);
+    if (!confirmResult.ok) {
+      // Roll back the orphaned pending record so it cannot block future grants.
+      await db
+        .update(paymentsTable)
+        .set({ status: "rejected", rejectionReason: "Auto-confirm failed" })
+        .where(eq(paymentsTable.id, pendingPayment.id));
+      res.status(500).json({ error: "Не удалось выдать бесплатный трафик — попробуйте ещё раз." });
+      return;
+    }
 
     res.status(200).json({ freeGranted: true, amountRub: 0, extraTrafficGb: packageGb });
     return;
