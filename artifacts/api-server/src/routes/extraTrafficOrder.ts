@@ -61,8 +61,9 @@ router.post("/extra-traffic-order", requireAuth, async (req, res): Promise<void>
   }
 
   // Price 0 normally means "not configured" — block purchases unless the
-  // admin has explicitly opted into granting free top-ups, in which case we
-  // skip the payment/checkout flow entirely and grant the traffic immediately.
+  // admin has explicitly opted into granting free top-ups. When free grants
+  // are enabled, we still go through the payments table (provider "free_grant")
+  // so that grants are auditable and rate-limited by the cooldown settings.
   if (amountRub <= 0) {
     if (!settings?.allowFreeExtraTraffic) {
       res.status(403).json({ error: "Покупка дополнительного трафика временно недоступна." });
