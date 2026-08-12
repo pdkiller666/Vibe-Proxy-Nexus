@@ -5877,12 +5877,19 @@ function UserSearchCombobox({
   selected: AdminUserSearchResult[];
   onChange: (users: AdminUserSearchResult[]) => void;
 }) {
-  const [open,  setOpen]  = useState(false);
-  const [query, setQuery] = useState("");
+  const [open,    setOpen]    = useState(false);
+  const [query,   setQuery]   = useState("");
+  const [debounced, setDebounced] = useState("");
+
+  // 300ms debounce — prevents a request per keystroke
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(id);
+  }, [query]);
 
   const { data: results = [], isFetching } = useSearchAdminUsers(
-    { q: query || "_", limit: 20 },
-    { query: { enabled: query.trim().length >= 1, staleTime: 10_000, queryKey: ["admin-user-search", query] } },
+    { q: debounced || "_", limit: 20 },
+    { query: { enabled: debounced.trim().length >= 1, staleTime: 10_000, queryKey: ["admin-user-search", debounced] } },
   );
 
   const selectedIds = new Set(selected.map((u) => u.id));

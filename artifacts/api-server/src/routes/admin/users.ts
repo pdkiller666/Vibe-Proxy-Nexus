@@ -285,6 +285,8 @@ router.get("/admin/users/search", requireAuth, requireAdmin, async (req, res): P
   }
 
   const numericId = /^\d+$/.test(q) ? parseInt(q, 10) : null;
+  // Escape ILIKE wildcards so a literal "%" or "_" in the query doesn't match everything
+  const escapedQ  = q.replace(/[%_\\]/g, "\\$&");
 
   const rows = await db
     .select({ id: usersTable.id, email: usersTable.email, isBanned: usersTable.isBanned })
@@ -292,7 +294,7 @@ router.get("/admin/users/search", requireAuth, requireAdmin, async (req, res): P
     .where(
       numericId !== null
         ? eq(usersTable.id, numericId)
-        : ilike(usersTable.email, `%${q}%`),
+        : sql`${usersTable.email} ilike ${"%" + escapedQ + "%"} escape '\\'`,
     )
     .orderBy(usersTable.email)
     .limit(limit);
