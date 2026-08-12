@@ -65,6 +65,9 @@ import {
   useGetAdminSystemEventsHistory,
   getListAdminSystemEventsQueryKey,
   getGetAdminSystemEventsHistoryQueryKey,
+  useSendAdminBroadcast,
+  useListAdminBroadcasts,
+  getListAdminBroadcastsQueryKey,
   useProvisionVpnNode,
   useGetVpnNodeSystemStatus,
   useGetVpnNodeSystemLogs,
@@ -5796,6 +5799,7 @@ const ACTION_LABELS: Record<string, string> = {
   update_ticket_status: "Статус тикета",
   generate_password_reset_link: "Ссылка сброса пароля",
   acknowledge_system_event: "Подтверждение события",
+  send_broadcast: "Рассылка уведомления",
   unknown_action: "Неизвестное действие",
 };
 
@@ -5858,6 +5862,256 @@ function AuditLogRow({ entry }: { entry: AdminAuditLogEntry }) {
         </tr>
       )}
     </>
+  );
+}
+
+// ─── Broadcasts Tab ───────────────────────────────────────────────────────────
+function BroadcastsTab() {
+  const { toast } = useToast();
+  const { data: plans } = useListAdminPlans();
+
+  // ── Compose form state ──
+  const [title,      setTitle]      = useState("");
+  const [message,    setMessage]    = useState("");
+  const [targetType, setTargetType] = useState<"all" | "filtered" | "specific">("all");
+  const [filterHasActiveSub, setFilterHasActiveSub] = useState<"" | "true" | "false">("");
+  const [filterPlanId,       setFilterPlanId]       = useState<string>("");
+  const [specificIds,        setSpecificIds]         = useState("");
+
+  // ── History state ──
+  const [page,    setPage]    = useState(1);
+  const pageSize = 20;
+
+  const { data: history, isLoading: historyLoading, refetch: refetchHistory } = useListAdminBroadcasts(
+    { page, pageSize },
+    { query: { queryKey: getListAdminBroadcastsQueryKey({ page, pageSize }) } },
+  );
+
+  const { mutate: send, isPending: isSending } = useSendAdminBroadcast({
+    mutation: {
+      onSuccess: (result) => {
+        toast({ title: `Рассылка отправлена ${result.sentCount} пользователям` });
+        setTitle("");
+        setMessage("");
+        setTargetType("all");
+        setFilterHasActiveSub("");
+        setFilterPlanId("");
+        setSpecificIds("");
+        refetchHistory();
+        queryClient.invalidateQueries({ queryKey: getListAdminBroadcastsQueryKey() });
+      },
+      onError: () => toast({ title: "Ошибка отправки рассылки", variant: "destructive" }),
+    },
+  });
+
+  const handleSend = () => {
+    if (!title.trim() || !message.trim()) {
+      toast({ title: "Заполните заголовок и текст", variant: "destructive" });
+      return;
+    }
+
+    const filters: { hasActiveSubscription?: boolean; planId?: number } = {};
+    if (targetType === "filtered") {
+      if (filterHasActiveSub === "true")  filters.hasActiveSubscription = true;
+      if (filterHasActiveSub === "false") filters.hasActiveSubscription = false;
+      if (filterPlanId) filters.planId = parseInt(filterPlanId, 10);
+    }
+
+    const userIds =
+      targetType === "specific"
+        ? specificIds
+            .split(/[\s,]+/)
+            .map((s) => parseInt(s.trim(), 10))
+            .filter((n) => !isNaN(n) && n > 0)
+        : undefined;
+
+    if (targetType === "specific" && (!userIds || userIds.length === 0)) {
+      toast({ title: "Укажите ID пользователей", variant: "destructive" });
+      return;
+    }
+
+    send({
+      data: {
+        title:      title.trim(),
+        message:    message.trim(),
+        targetType,
+        ...(userIds ? { userIds } : {}),
+        ...(targetType === "filtered" ? { filters } : {}),
+      },
+    });
+  };
+
+  const total      = history?.total    ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return (
+    <div className="space-y-8">
+
+      {/* ── Compose ─────────────────────────────────────────────────────── */}
+      <div className="border border-border p-4 space-y-4">
+        <h3 className="font-semibold text-sm">Новая рассылка</h3>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase">Заголовок</label>
+          <Input
+            className="rounded-none"
+            placeholder="Например: Плановое обслуживание"
+            maxLength={100}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase">Текст сообщения</label>
+          <Textarea
+            className="rounded-none min-h-[80px]"
+            placeholder="Текст уведомления, который увидят пользователи…"
+            maxLength={2000}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+          <div className="text-xs text-muted-foreground text-right">{message.length}/2000</div>
+        </div>
+
+        {/* Target selector */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase">Получатели</label>
+          <div className="flex flex-wrap gap-2">
+            {(["all", "filtered", "specific"] as const).map((t) => {
+              const label = t === "all" ? "Все пользователи" : t === "filtered" ? "По фильтру" : "Конкретные";
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTargetType(t)}
+                  className={`px-3 py-1.5 text-xs font-medium border transition-colors ${
+                    targetType === t
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Filtered options */}
+        {targetType === "filtered" && (
+          <div className="flex flex-wrap gap-3 p-3 bg-muted/40 border border-border">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Статус подписки</label>
+              <select
+                className="border rounded-none px-2 py-1.5 text-sm bg-background block"
+                value={filterHasActiveSub}
+                onChange={(e) => setFilterHasActiveSub(e.target.value as "" | "true" | "false")}
+              >
+                <option value="">Любой</option>
+                <option value="true">С активной подпиской</option>
+                <option value="false">Без активной подписки</option>
+              </select>
+            </div>
+            {filterHasActiveSub === "true" && (
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Тариф (опционально)</label>
+                <select
+                  className="border rounded-none px-2 py-1.5 text-sm bg-background block"
+                  value={filterPlanId}
+                  onChange={(e) => setFilterPlanId(e.target.value)}
+                >
+                  <option value="">Все тарифы</option>
+                  {(plans ?? []).map((p) => (
+                    <option key={p.id} value={String(p.id)}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Specific user IDs */}
+        {targetType === "specific" && (
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">ID пользователей (через запятую или пробел)</label>
+            <Input
+              className="rounded-none"
+              placeholder="1, 42, 107"
+              value={specificIds}
+              onChange={(e) => setSpecificIds(e.target.value)}
+            />
+          </div>
+        )}
+
+        <button
+          onClick={handleSend}
+          disabled={isSending || !title.trim() || !message.trim()}
+          className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:bg-primary/90 transition-colors"
+        >
+          {isSending ? "Отправка…" : "Отправить"}
+        </button>
+      </div>
+
+      {/* ── History ─────────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <h3 className="font-semibold text-sm">История рассылок</h3>
+
+        {historyLoading ? (
+          <div className="py-8 text-center text-muted-foreground">Загрузка…</div>
+        ) : !history || history.entries.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">Рассылок пока не было</div>
+        ) : (
+          <div className="overflow-x-auto border rounded-none">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="bg-muted/50 border-b text-left text-xs font-semibold">
+                  <th className="p-2 whitespace-nowrap">Отправлено</th>
+                  <th className="p-2">Заголовок</th>
+                  <th className="p-2">Текст</th>
+                  <th className="p-2 text-right whitespace-nowrap">Получателей</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {history.entries.map((b) => (
+                  <tr key={b.broadcastId} className="hover:bg-muted/20">
+                    <td className="p-2 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                      {formatDate(b.sentAt.toString())}
+                    </td>
+                    <td className="p-2 font-medium max-w-[180px] truncate" title={b.title}>
+                      {b.title}
+                    </td>
+                    <td className="p-2 text-xs text-muted-foreground max-w-[300px] truncate" title={b.message}>
+                      {b.message}
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs">{b.recipientCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {total > pageSize && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              {total} рассылок, страница {page} из {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                className="px-3 py-1 border rounded-none text-sm disabled:opacity-40"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >←</button>
+              <button
+                className="px-3 py-1 border rounded-none text-sm disabled:opacity-40"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >→</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -6190,6 +6444,9 @@ export default function Admin() {
                 <MessageCircle className="w-4 h-4" /> Поддержка
                 <Badge count={openTickets} />
               </TabsTrigger>
+              <TabsTrigger value="broadcasts" className="rounded-none gap-1.5 whitespace-nowrap">
+                <Bell className="w-4 h-4" /> Рассылки
+              </TabsTrigger>
               <TabsTrigger value="event-history" className="rounded-none gap-1.5 whitespace-nowrap">
                 <Bell className="w-4 h-4" /> История событий
               </TabsTrigger>
@@ -6226,6 +6483,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="support" className="pt-4">
           <SupportManagement />
+        </TabsContent>
+        <TabsContent value="broadcasts" className="pt-4">
+          <BroadcastsTab />
         </TabsContent>
         <TabsContent value="event-history" className="pt-4">
           <EventHistoryTab />

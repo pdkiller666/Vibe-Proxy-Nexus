@@ -1,0 +1,154 @@
+# 🔍 Критическое расхождение между заявленным и реальным состоянием
+
+Провёл глубокий аудит и обнаружил **серьёзную проблему**: коммиты с заявленными фиксами существуют, но **бизнес-логика в файлах не обновлена**.
+
+---
+
+## ❌ Что НЕ на месте (по состоянию файлов из GitHub main)
+
+### 1. **extraTrafficOrder.ts** — фиксы НЕ применены
+
+**Заявлено:**
+- ✅ Cooldown проверка (`freeTrafficGrantCooldownHours`, `freeTrafficGrantsPerCooldown`)
+- ✅ Создание payment с `provider='free_grant'`
+- ✅ Вызов `confirmPaymentById()` вместо прямого UPDATE
+
+**Реальность в файле (строки 66-79):**
+```typescript
+// Price 0 normally means "not configured" — block purchases unless the
+// admin has explicitly opted into granting free top-ups, in which case we
+// skip the payment/checkout flow entirely and grant the traffic immediately.
+if (amountRub <= 0) {
+  if (!settings?.allowFreeExtraTraffic) {
+    res.status(403).json({ error: "Покупка дополнительного трафика временно недоступна." });
+    return;
+  }
+
+  await db.update(subscriptionsTable)
+    .set({
+      extraTrafficGb: sql`${subscriptionsTable.extraTrafficGb} + ${packageGb}`,
+      trafficLimitExceededAt: null,
+    })
+    .where(eq(subscriptionsTable.id, activeSub.id));
+
+  res.status(200).json({ freeGranted: true, amountRub: 0, extraTrafficGb: packageGb });
+  return;
+}
+```
+
+**Это СТАРЫЙ код** — прямой UPDATE subscriptions, без создания payment, без cooldown-проверки.
+
+---
+
+### 2. **confirmPayment.ts** — fallback НЕ применён
+
+**Заявлено:**
+- ✅ Fallback на текущую активную подписку если `payment.subscriptionId` неактивен
+- ✅ Атомарное обновление `payment.subscriptionId` в транзакции
+
+**Реальность в файле (строки 127-145):**
+```typescript
+const [sub] = await tx
+  .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, userId: subscriptionsTable.userId })
+  .from(subscriptionsTable)
+  .where(eq(subscriptionsTable.id, payment.subscriptionId!));
+
+if (!sub || sub.status !== "active")
+  throw new Error("SUBSCRIPTION_NOT_ACTIVE");  // ← Нет fallback!
+```
+
+**Это СТАРЫЙ код** — просто бросает ошибку, не пытается найти текущую активную подписку.
+
+---
+
+### 3. **traffic-checkout.tsx** — UI подсказка НЕ применена
+
+**Заявлено:**
+- ✅ UI подсказка: "Докупленный трафик действует до конца текущего периода подписки"
+
+**Реальность в файле:**
+- Файл от 7 августа (commit `b4f32e5`)
+- UI подсказки **нет**
+- Проверил все 286 строк — нет упоминания period-scoped трафика
+
+---
+
+## ✅ Что ЕСТЬ на месте (подтверждено из diff коммита 2894444)
+
+### 1. **paymentSettings.ts** — поля добавлены ✅
+```typescript
+freeTrafficGrantCooldownHours: integer("free_traffic_grant_cooldown_hours").notNull().default(24),
+freeTrafficGrantsPerCooldown: integer("free_traffic_grants_per_cooldown").notNull().default(1),
+```
+
+### 2. **payments.ts** — `free_grant` добавлен в enum ✅
+```typescript
+export const paymentProviderValues = ["manual_sbp", "yookassa", "yoomoney", "freekassa", "balance", "free_grant"] as const;
+```
+
+---
+
+## 🔍 Анализ ситуации
+
+### Возможные причины расхождения:
+
+1. **GitHub кэширует старую версию файлов** — маловероятно, я проверял разные URL
+2. **Коммит `2894444` содержит только изменения схемы** — возможно, бизнес-логика была в другом коммите который не запушился
+3. **Кодер закоммитил не все файлы** — возможно, изменения были сделаны локально но не добавлены в коммит
+4. **Amvera использует другую ветку** — возможно деплой идёт не из main
+
+### Проверка commit message:
+
+Коммит `2894444` называется:
+> "fix: free grant cooldown+audit trail, subscriptionId fallback, UI period note"
+
+Но diff показывает **только изменения в схеме** (paymentSettings.ts и payments.ts). Это подозрительно — commit message обещает три фикса, а diff содержит только подготовку (новые поля в БД).
+
+---
+
+## 🚨 Критическая проблема
+
+**Все три заявленных фикса НЕ применены в бизнес-логике:**
+
+| Фикс | Заявлено | Реальность |
+|------|----------|------------|
+| Cooldown для free grants | ✅ В commit message | ❌ Нет в extraTrafficOrder.ts |
+| Fallback subscriptionId | ✅ В commit message | ❌ Нет в confirmPayment.ts |
+| UI подсказка period-scoped | ✅ В commit message | ❌ Нет в traffic-checkout.tsx |
+
+**Схема БД обновлена** (поля добавлены, enum расширен), но **бизнес-логика не использует эти поля**.
+
+---
+
+## 🎯 Рекомендации
+
+### Немедленные действия:
+
+1. **Проверить git status** — есть ли незакоммиченные изменения в этих файлах?
+2. **Проверить все коммиты за 11 августа** — возможно изменения были в отдельном коммите
+3. **Проверить Amvera логи** — какая версия кода реально задеплоена?
+4. **Проверить production API** — возвращает ли `/api/payment-settings` новые поля `freeTrafficGrantCooldownHours` и `freeTrafficGrantsPerCooldown`?
+
+### Если изменения действительно не применены:
+
+Нужно **повторно применить все три фикса**:
+
+1. **extraTrafficOrder.ts** — добавить cooldown-проверку и создание free_grant payment
+2. **confirmPayment.ts** — добавить fallback на активную подписку
+3. **traffic-checkout.tsx** — добавить UI подсказку
+
+---
+
+## 💬 Вывод
+
+**Кодер заявил что все три фикса применены и задеплоены, но проверка реального кода показывает обратное:**
+
+- ✅ Схема БД обновлена (поля добавлены)
+- ❌ Бизнес-логика НЕ обновлена (фиксы не применены)
+
+Это может быть:
+- Ошибка в процессе коммита (не все файлы добавлены)
+- Проблема с синхронизацией GitHub
+- Расхождение между commit message и реальными изменениями
+
+**Требуется срочная проверка** — либо изменения действительно на проде и это проблема GitHub API, либо их нужно применить заново.

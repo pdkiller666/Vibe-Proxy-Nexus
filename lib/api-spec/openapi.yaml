@@ -1577,6 +1577,45 @@ paths:
         "404":
           description: Event not found
 
+  /admin/broadcasts:
+    post:
+      operationId: sendAdminBroadcast
+      tags: [admin]
+      summary: Send a broadcast notification to a set of users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminBroadcastInput"
+      responses:
+        "200":
+          description: Broadcast sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendAdminBroadcastResult"
+        "400":
+          description: Validation error
+    get:
+      operationId: listAdminBroadcasts
+      tags: [admin]
+      summary: Paginated history of admin broadcasts (newest first)
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Broadcast history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBroadcastListResponse"
+
   /admin/health/traffic-polling:
     get:
       operationId: getAdminTrafficPollingHealth
@@ -3189,6 +3228,58 @@ components:
       properties:
         id: { type: integer }
 
+    AdminBroadcastInput:
+      type: object
+      required: [title, message, targetType]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        targetType:
+          type: string
+          enum: [all, filtered, specific]
+        userIds:
+          type: array
+          items: { type: integer }
+        filters:
+          type: object
+          properties:
+            hasActiveSubscription: { type: boolean }
+            planId: { type: integer }
+
+    SendAdminBroadcastResult:
+      type: object
+      required: [sentCount]
+      properties:
+        sentCount: { type: integer }
+
+    AdminBroadcast:
+      type: object
+      required: [broadcastId, title, message, sentAt, recipientCount]
+      properties:
+        broadcastId: { type: string }
+        title: { type: string }
+        message: { type: string }
+        sentAt: { type: string, format: date-time }
+        recipientCount: { type: integer }
+
+    AdminBroadcastListResponse:
+      type: object
+      required: [entries, total, page, pageSize]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminBroadcast"
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
     AdminAuditLogEntry:
       type: object
       required: [id, adminEmail, action, method, path, createdAt]
@@ -3258,4 +3349,5 @@ components:
         - update_ticket_status
         - generate_password_reset_link
         - acknowledge_system_event
+        - send_broadcast
         - unknown_action

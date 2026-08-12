@@ -10,7 +10,7 @@ import {
   useAcknowledgeNotification,
   getListMyNotificationsQueryKey,
 } from "@workspace/api-client-react";
-import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle, UserCircle, AlertCircle } from "lucide-react";
+import { LogOut, Shield, Key, CreditCard, LayoutDashboard, Settings, Menu, X, MessageCircle, UserCircle, AlertCircle, Bell } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
@@ -61,7 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   if (isAdmin) {
-    navItems.push({ href: "/admin", label: "Админ", icon: Settings });
+    navItems.push({ href: "/admin", label: "Админ", icon: Settings, badge: 0 });
   }
 
   const NavContent = () => (
@@ -180,9 +180,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
             .filter((n) =>
               n.eventType === "payment_rejected" ||
               n.eventType === "payment_confirmed" ||
-              n.eventType === "key_migrated"
+              n.eventType === "key_migrated" ||
+              n.eventType === "admin_message"
             )
             .map((n) => {
+              if (n.eventType === "admin_message") {
+                const meta = n.metadata as { title?: string; message?: string };
+                return (
+                  <div
+                    key={n.id}
+                    className="mb-4 flex items-start gap-3 bg-blue-50 border border-blue-200 text-blue-900 px-4 py-3 text-sm"
+                  >
+                    <Bell className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" />
+                    <div className="flex-1 min-w-0">
+                      {meta.title && (
+                        <span className="font-semibold">{meta.title}{meta.message ? " — " : ""}</span>
+                      )}
+                      {meta.message}
+                    </div>
+                    <button
+                      onClick={() => acknowledgeNotification({ id: n.id })}
+                      className="shrink-0 text-blue-400 hover:text-blue-600 transition-colors"
+                      aria-label="Закрыть"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              }
+
               if (n.eventType === "key_migrated") {
                 const meta = n.metadata as { oldNodeName?: string; newNodeName?: string };
                 return (

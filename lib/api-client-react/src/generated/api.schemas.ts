@@ -1128,6 +1128,55 @@ export interface UserNotificationAcknowledgeResult {
   id: number;
 }
 
+export type AdminBroadcastInputTargetType = typeof AdminBroadcastInputTargetType[keyof typeof AdminBroadcastInputTargetType];
+
+
+export const AdminBroadcastInputTargetType = {
+  all: 'all',
+  filtered: 'filtered',
+  specific: 'specific',
+} as const;
+
+export type AdminBroadcastInputFilters = {
+  hasActiveSubscription?: boolean;
+  planId?: number;
+};
+
+export interface AdminBroadcastInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  message: string;
+  targetType: AdminBroadcastInputTargetType;
+  userIds?: number[];
+  filters?: AdminBroadcastInputFilters;
+}
+
+export interface SendAdminBroadcastResult {
+  sentCount: number;
+}
+
+export interface AdminBroadcast {
+  broadcastId: string;
+  title: string;
+  message: string;
+  sentAt: string;
+  recipientCount: number;
+}
+
+export interface AdminBroadcastListResponse {
+  entries: AdminBroadcast[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export type AdminAuditLogEntryMethod = typeof AdminAuditLogEntryMethod[keyof typeof AdminAuditLogEntryMethod];
 
 
@@ -1215,6 +1264,7 @@ export const AdminAuditLogAction = {
   update_ticket_status: 'update_ticket_status',
   generate_password_reset_link: 'generate_password_reset_link',
   acknowledge_system_event: 'acknowledge_system_event',
+  send_broadcast: 'send_broadcast',
   unknown_action: 'unknown_action',
 } as const;
 
@@ -1244,6 +1294,18 @@ pageSize?: number;
 eventType?: string;
 since?: string;
 until?: string;
+};
+
+export type ListAdminBroadcastsParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
 };
 
 export type GetVpnNodeMetricsParams = {

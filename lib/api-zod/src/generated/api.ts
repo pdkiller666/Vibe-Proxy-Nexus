@@ -2143,6 +2143,60 @@ export const AcknowledgeAdminSystemEventResponse = zod.object({
 
 
 /**
+ * @summary Send a broadcast notification to a set of users
+ */
+export const sendAdminBroadcastBodyTitleMax = 100;
+
+export const sendAdminBroadcastBodyMessageMax = 2000;
+
+
+
+export const SendAdminBroadcastBody = zod.object({
+  "title": zod.string().min(1).max(sendAdminBroadcastBodyTitleMax),
+  "message": zod.string().min(1).max(sendAdminBroadcastBodyMessageMax),
+  "targetType": zod.enum(['all', 'filtered', 'specific']),
+  "userIds": zod.array(zod.number()).optional(),
+  "filters": zod.object({
+  "hasActiveSubscription": zod.boolean().optional(),
+  "planId": zod.number().optional()
+}).optional()
+})
+
+export const SendAdminBroadcastResponse = zod.object({
+  "sentCount": zod.number()
+})
+
+
+/**
+ * @summary Paginated history of admin broadcasts (newest first)
+ */
+export const listAdminBroadcastsQueryPageDefault = 1;
+
+export const listAdminBroadcastsQueryPageSizeDefault = 20;
+export const listAdminBroadcastsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminBroadcastsQueryParams = zod.object({
+  "page": zod.coerce.number().min(1).default(listAdminBroadcastsQueryPageDefault),
+  "pageSize": zod.coerce.number().min(1).max(listAdminBroadcastsQueryPageSizeMax).default(listAdminBroadcastsQueryPageSizeDefault)
+})
+
+export const ListAdminBroadcastsResponse = zod.object({
+  "entries": zod.array(zod.object({
+  "broadcastId": zod.string(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "sentAt": zod.coerce.date(),
+  "recipientCount": zod.number()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number()
+})
+
+
+/**
  * @summary Get traffic polling health status (last success time + consecutive failure count)
  */
 export const GetAdminTrafficPollingHealthResponse = zod.object({
@@ -2381,7 +2435,7 @@ export const GetAdminAuditLogQueryParams = zod.object({
   "page": zod.coerce.number().min(1).default(getAdminAuditLogQueryPageDefault),
   "pageSize": zod.coerce.number().min(1).max(getAdminAuditLogQueryPageSizeMax).default(getAdminAuditLogQueryPageSizeDefault),
   "adminId": zod.coerce.number().optional(),
-  "action": zod.enum(['update_user_role', 'update_user_profile', 'delete_user', 'update_user_subscription', 'update_user_extra_slots', 'set_user_balance', 'reset_user_password', 'update_user_note', 'ban_user', 'unban_user', 'force_logout', 'create_plan', 'update_plan', 'delete_plan', 'create_vpn_node', 'update_vpn_node', 'delete_vpn_node', 'restart_xray', 'provision_vpn_node', 'issue_vpn_key', 'revoke_vpn_key', 'create_invite_link', 'update_invite_link', 'delete_invite_link', 'update_payment_settings', 'upload_sbp_qr', 'delete_sbp_qr', 'confirm_payment', 'reject_payment', 'update_payment_note', 'reply_to_ticket', 'update_ticket_status', 'generate_password_reset_link', 'acknowledge_system_event', 'unknown_action']).optional(),
+  "action": zod.enum(['update_user_role', 'update_user_profile', 'delete_user', 'update_user_subscription', 'update_user_extra_slots', 'set_user_balance', 'reset_user_password', 'update_user_note', 'ban_user', 'unban_user', 'force_logout', 'create_plan', 'update_plan', 'delete_plan', 'create_vpn_node', 'update_vpn_node', 'delete_vpn_node', 'restart_xray', 'provision_vpn_node', 'issue_vpn_key', 'revoke_vpn_key', 'create_invite_link', 'update_invite_link', 'delete_invite_link', 'update_payment_settings', 'upload_sbp_qr', 'delete_sbp_qr', 'confirm_payment', 'reject_payment', 'update_payment_note', 'reply_to_ticket', 'update_ticket_status', 'generate_password_reset_link', 'acknowledge_system_event', 'send_broadcast', 'unknown_action']).optional(),
   "targetType": zod.coerce.string().optional(),
   "targetId": zod.coerce.number().optional(),
   "since": zod.date().optional(),

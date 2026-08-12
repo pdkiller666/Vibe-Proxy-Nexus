@@ -23,6 +23,8 @@ import type {
   AcknowledgeAllSystemEventsResult,
   AdminAuditLogListResponse,
   AdminBalanceTransaction,
+  AdminBroadcastInput,
+  AdminBroadcastListResponse,
   AdminInviteLink,
   AdminInviteLinkCreateInput,
   AdminInviteLinkUpdateInput,
@@ -64,6 +66,7 @@ import type {
   GetVpnNodeMetricsParams,
   GetVpnNodeSystemLogsParams,
   HealthStatus,
+  ListAdminBroadcastsParams,
   ListAdminPaymentsParams,
   ListAdminTicketsParams,
   ListAdminVpnKeysParams,
@@ -82,6 +85,7 @@ import type {
   ResetPasswordInput,
   ResetPasswordResult,
   SbpQrUpload,
+  SendAdminBroadcastResult,
   Subscription,
   SubscriptionInput,
   SubscriptionUrl,
@@ -6114,6 +6118,160 @@ export const useAcknowledgeAdminSystemEvent = <TError = ErrorType<void>,
       > => {
       return useMutation(getAcknowledgeAdminSystemEventMutationOptions(options));
     }
+
+export const getSendAdminBroadcastUrl = () => {
+
+
+
+
+  return `/api/admin/broadcasts`
+}
+
+/**
+ * @summary Send a broadcast notification to a set of users
+ */
+export const sendAdminBroadcast = async (adminBroadcastInput: AdminBroadcastInput, options?: RequestInit): Promise<SendAdminBroadcastResult> => {
+
+  return customFetch<SendAdminBroadcastResult>(getSendAdminBroadcastUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminBroadcastInput)
+  }
+);}
+
+
+
+
+export const getSendAdminBroadcastMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAdminBroadcast>>, TError,{data: BodyType<AdminBroadcastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendAdminBroadcast>>, TError,{data: BodyType<AdminBroadcastInput>}, TContext> => {
+
+const mutationKey = ['sendAdminBroadcast'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendAdminBroadcast>>, {data: BodyType<AdminBroadcastInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendAdminBroadcast(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendAdminBroadcastMutationResult = NonNullable<Awaited<ReturnType<typeof sendAdminBroadcast>>>
+    export type SendAdminBroadcastMutationBody = BodyType<AdminBroadcastInput>
+    export type SendAdminBroadcastMutationError = ErrorType<void>
+
+    /**
+ * @summary Send a broadcast notification to a set of users
+ */
+export const useSendAdminBroadcast = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAdminBroadcast>>, TError,{data: BodyType<AdminBroadcastInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendAdminBroadcast>>,
+        TError,
+        {data: BodyType<AdminBroadcastInput>},
+        TContext
+      > => {
+      return useMutation(getSendAdminBroadcastMutationOptions(options));
+    }
+
+export const getListAdminBroadcastsUrl = (params?: ListAdminBroadcastsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/broadcasts?${stringifiedParams}` : `/api/admin/broadcasts`
+}
+
+/**
+ * @summary Paginated history of admin broadcasts (newest first)
+ */
+export const listAdminBroadcasts = async (params?: ListAdminBroadcastsParams, options?: RequestInit): Promise<AdminBroadcastListResponse> => {
+
+  return customFetch<AdminBroadcastListResponse>(getListAdminBroadcastsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminBroadcastsQueryKey = (params?: ListAdminBroadcastsParams,) => {
+    return [
+    `/api/admin/broadcasts`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminBroadcastsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminBroadcasts>>, TError = ErrorType<unknown>>(params?: ListAdminBroadcastsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminBroadcasts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminBroadcastsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminBroadcasts>>> = ({ signal }) => listAdminBroadcasts(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminBroadcasts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminBroadcastsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminBroadcasts>>>
+export type ListAdminBroadcastsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Paginated history of admin broadcasts (newest first)
+ */
+
+export function useListAdminBroadcasts<TData = Awaited<ReturnType<typeof listAdminBroadcasts>>, TError = ErrorType<unknown>>(
+ params?: ListAdminBroadcastsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminBroadcasts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminBroadcastsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAdminTrafficPollingHealthUrl = () => {
 

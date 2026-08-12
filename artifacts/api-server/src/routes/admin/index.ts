@@ -14,6 +14,7 @@ import referralsRouter from "./referrals";
 import inviteLinksRouter from "./inviteLinks";
 import notificationsRouter from "./notifications";
 import systemEventsRouter from "./systemEvents";
+import broadcastsRouter from "./broadcasts";
 import billingDebugRouter from "./billingDebug";
 import vpnNodeProvisioningRouter from "./vpnNodeProvisioning";
 import auditLogRouter from "./auditLog";
@@ -52,6 +53,7 @@ router.use(referralsRouter);
 router.use(inviteLinksRouter);
 router.use(notificationsRouter);
 router.use(systemEventsRouter);
+router.use(broadcastsRouter);
 router.use(billingDebugRouter);
 
 export default router;
