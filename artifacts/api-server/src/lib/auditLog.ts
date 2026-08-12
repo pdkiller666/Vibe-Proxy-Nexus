@@ -73,6 +73,9 @@ const ACTION_MAP: Record<string, string> = {
 
   // System events
   "POST /admin/system-events/:id/acknowledge": "acknowledge_system_event",
+
+  // Broadcasts
+  "POST /admin/broadcasts": "send_broadcast",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -2163,7 +2163,8 @@ export const SendAdminBroadcastBody = zod.object({
 })
 
 export const SendAdminBroadcastResponse = zod.object({
-  "sentCount": zod.number()
+  "sentCount": zod.number(),
+  "skippedBannedCount": zod.number()
 })
 
 

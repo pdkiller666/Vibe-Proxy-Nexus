@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { z } from "zod/v4";
 import { randomUUID } from "crypto";
 import { db, systemEventsTable, usersTable, subscriptionsTable } from "@workspace/db";
@@ -41,6 +42,7 @@ router.post("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pr
 
   // ── Resolve target user IDs ──────────────────────────────────────────────
   let targetUserIds: number[] = [];
+  let skippedBannedCount = 0;
 
   if (targetType === "specific") {
     if (!inputUserIds || inputUserIds.length === 0) {
@@ -48,19 +50,27 @@ router.post("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pr
       return;
     }
     const users = await db
-      .select({ id: usersTable.id })
+      .select({ id: usersTable.id, isBanned: usersTable.isBanned })
       .from(usersTable)
-      .where(and(inArray(usersTable.id, inputUserIds), eq(usersTable.isBanned, false)));
-    targetUserIds = users.map((u) => u.id);
+      .where(inArray(usersTable.id, inputUserIds));
+    // Track how many requested IDs were silently dropped due to ban
+    skippedBannedCount = users.filter((u) => u.isBanned).length;
+    targetUserIds = users.filter((u) => !u.isBanned).map((u) => u.id);
 
   } else {
     // "all" or "filtered": start with non-banned users, then narrow
-    const conditions: ReturnType<typeof eq>[] = [eq(usersTable.isBanned, false)];
+    const conditions: SQL[] = [eq(usersTable.isBanned, false)];
 
     if (targetType === "filtered" && filters) {
+      // planId without hasActiveSubscription=true is meaningless — reject early
+      if (filters.planId && filters.hasActiveSubscription !== true) {
+        res.status(400).json({ error: "planId требует hasActiveSubscription=true" });
+        return;
+      }
+
       if (filters.hasActiveSubscription === true) {
         // Users who have at least one active subscription (optionally for a specific plan)
-        const subConditions = [eq(subscriptionsTable.status, "active")];
+        const subConditions: SQL[] = [eq(subscriptionsTable.status, "active")];
         if (filters.planId) {
           subConditions.push(eq(subscriptionsTable.planId, filters.planId));
         }
@@ -70,10 +80,10 @@ router.post("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pr
           .where(and(...subConditions));
         const activeIds = activeSubs.map((r) => r.userId);
         if (activeIds.length === 0) {
-          res.json({ sentCount: 0 });
+          res.json({ sentCount: 0, skippedBannedCount: 0 });
           return;
         }
-        conditions.push(inArray(usersTable.id, activeIds) as ReturnType<typeof eq>);
+        conditions.push(inArray(usersTable.id, activeIds));
 
       } else if (filters.hasActiveSubscription === false) {
         // Users who have NO active subscription
@@ -83,7 +93,7 @@ router.post("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pr
           .where(eq(subscriptionsTable.status, "active"));
         const activeIds = activeSubs.map((r) => r.userId);
         if (activeIds.length > 0) {
-          conditions.push(notInArray(usersTable.id, activeIds) as ReturnType<typeof eq>);
+          conditions.push(notInArray(usersTable.id, activeIds));
         }
       }
     }
@@ -93,7 +103,7 @@ router.post("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pr
   }
 
   if (targetUserIds.length === 0) {
-    res.json({ sentCount: 0 });
+    res.json({ sentCount: 0, skippedBannedCount });
     return;
   }
 
@@ -109,7 +119,7 @@ router.post("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pr
     })),
   );
 
-  res.json({ sentCount: targetUserIds.length });
+  res.json({ sentCount: targetUserIds.length, skippedBannedCount });
 });
 
 /**
@@ -137,19 +147,16 @@ router.get("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pro
       recipientCount: number;
     }>(sql`
       SELECT
-        metadata->>'broadcastId'   AS "broadcastId",
-        metadata->>'title'         AS title,
-        metadata->>'message'       AS message,
-        MIN(created_at)            AS "sentAt",
-        COUNT(*)::int              AS "recipientCount"
+        metadata->>'broadcastId'        AS "broadcastId",
+        MIN(metadata->>'title')         AS title,
+        MIN(metadata->>'message')       AS message,
+        MIN(created_at)                 AS "sentAt",
+        COUNT(*)::int                   AS "recipientCount"
       FROM system_events
       WHERE event_type = 'admin_message'
         AND user_id IS NOT NULL
         AND metadata->>'broadcastId' IS NOT NULL
-      GROUP BY
-        metadata->>'broadcastId',
-        metadata->>'title',
-        metadata->>'message'
+      GROUP BY metadata->>'broadcastId'
       ORDER BY MIN(created_at) DESC
       LIMIT ${pageSize} OFFSET ${offset}
     `),

@@ -1160,6 +1160,7 @@ export interface AdminBroadcastInput {
 
 export interface SendAdminBroadcastResult {
   sentCount: number;
+  skippedBannedCount: number;
 }
 
 export interface AdminBroadcast {

@@ -5890,7 +5890,10 @@ function BroadcastsTab() {
   const { mutate: send, isPending: isSending } = useSendAdminBroadcast({
     mutation: {
       onSuccess: (result) => {
-        toast({ title: `Рассылка отправлена ${result.sentCount} пользователям` });
+        const skipped = result.skippedBannedCount > 0
+          ? ` (пропущено забаненных: ${result.skippedBannedCount})`
+          : "";
+        toast({ title: `Рассылка отправлена ${result.sentCount} пользователям${skipped}` });
         setTitle("");
         setMessage("");
         setTargetType("all");
@@ -5927,6 +5930,15 @@ function BroadcastsTab() {
 
     if (targetType === "specific" && (!userIds || userIds.length === 0)) {
       toast({ title: "Укажите ID пользователей", variant: "destructive" });
+      return;
+    }
+
+    // Confirmation guard — mandatory before any send to prevent accidental blasts
+    const targetLabel =
+      targetType === "all"      ? "ВСЕМ пользователям" :
+      targetType === "filtered" ? "отфильтрованным пользователям" :
+                                  `конкретным пользователям (${userIds?.length ?? 0} ID)`;
+    if (!window.confirm(`Отправить рассылку "${title.trim()}" — ${targetLabel}?\n\nЭто действие необратимо.`)) {
       return;
     }
 

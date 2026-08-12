@@ -8,4 +8,5 @@
 
 export interface SendAdminBroadcastResult {
   sentCount: number;
+  skippedBannedCount: number;
 }

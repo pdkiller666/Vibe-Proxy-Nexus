@@ -3254,9 +3254,10 @@ components:
 
     SendAdminBroadcastResult:
       type: object
-      required: [sentCount]
+      required: [sentCount, skippedBannedCount]
       properties:
         sentCount: { type: integer }
+        skippedBannedCount: { type: integer }
 
     AdminBroadcast:
       type: object
