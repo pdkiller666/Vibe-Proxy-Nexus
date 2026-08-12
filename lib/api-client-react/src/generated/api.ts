@@ -39,6 +39,7 @@ import type {
   AdminUser,
   AdminUserNoteUpdate,
   AdminUserProfileUpdate,
+  AdminUserSearchResult,
   AutoRenewInput,
   BalanceCheckoutInput,
   BalanceCheckoutResult,
@@ -85,6 +86,7 @@ import type {
   ResetPasswordInput,
   ResetPasswordResult,
   SbpQrUpload,
+  SearchAdminUsersParams,
   SendAdminBroadcastResult,
   Subscription,
   SubscriptionInput,
@@ -4651,6 +4653,90 @@ export function useGetAdminNotifications<TData = Awaited<ReturnType<typeof getAd
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminNotificationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSearchAdminUsersUrl = (params: SearchAdminUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/users/search?${stringifiedParams}` : `/api/admin/users/search`
+}
+
+/**
+ * @summary Search users by email or ID (for combobox)
+ */
+export const searchAdminUsers = async (params: SearchAdminUsersParams, options?: RequestInit): Promise<AdminUserSearchResult[]> => {
+
+  return customFetch<AdminUserSearchResult[]>(getSearchAdminUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchAdminUsersQueryKey = (params?: SearchAdminUsersParams,) => {
+    return [
+    `/api/admin/users/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchAdminUsersQueryOptions = <TData = Awaited<ReturnType<typeof searchAdminUsers>>, TError = ErrorType<unknown>>(params: SearchAdminUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchAdminUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchAdminUsersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchAdminUsers>>> = ({ signal }) => searchAdminUsers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchAdminUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchAdminUsersQueryResult = NonNullable<Awaited<ReturnType<typeof searchAdminUsers>>>
+export type SearchAdminUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Search users by email or ID (for combobox)
+ */
+
+export function useSearchAdminUsers<TData = Awaited<ReturnType<typeof searchAdminUsers>>, TError = ErrorType<unknown>>(
+ params: SearchAdminUsersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchAdminUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchAdminUsersQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

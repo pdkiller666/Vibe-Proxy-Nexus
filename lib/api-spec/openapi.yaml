@@ -1185,6 +1185,37 @@ paths:
                 items:
                   $ref: "#/components/schemas/AdminNotification"
 
+  /admin/users/search:
+    get:
+      operationId: searchAdminUsers
+      tags: [admin]
+      summary: Search users by email or ID (for combobox)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUserSearchResult"
+
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -2789,6 +2820,14 @@ components:
         referralCount: { type: integer }
         # Sum of referral commissions credited this calendar month (in rubles).
         referralCommissionsThisMonthRub: { type: integer }
+
+    AdminUserSearchResult:
+      type: object
+      required: [id, email, isBanned]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        isBanned: { type: boolean }
 
     AdminUserNoteUpdate:
       type: object

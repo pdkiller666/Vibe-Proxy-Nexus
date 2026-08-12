@@ -765,6 +765,12 @@ export interface DashboardSummary {
   referralCommissionsThisMonthRub: number;
 }
 
+export interface AdminUserSearchResult {
+  id: number;
+  email: string;
+  isBanned: boolean;
+}
+
 export interface AdminUserNoteUpdate {
   /** @nullable */
   note: string | null;
@@ -1276,6 +1282,19 @@ userId?: number;
 
 export type GetAdminNotificationsParams = {
 since?: string;
+};
+
+export type SearchAdminUsersParams = {
+/**
+ * @minLength 1
+ * @maxLength 100
+ */
+q: string;
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
 };
 
 export type ListAdminVpnKeysParams = {

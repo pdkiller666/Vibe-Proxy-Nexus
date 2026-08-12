@@ -68,6 +68,7 @@ import {
   useSendAdminBroadcast,
   useListAdminBroadcasts,
   getListAdminBroadcastsQueryKey,
+  useSearchAdminUsers,
   useProvisionVpnNode,
   useGetVpnNodeSystemStatus,
   useGetVpnNodeSystemLogs,
@@ -81,12 +82,14 @@ import {
   useGetMe,
   AdminAuditLogAction,
 } from "@workspace/api-client-react";
-import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser, AdminAuditLogEntry } from "@workspace/api-client-react";
+import type { Plan, VpnNode, SupportTicket, TicketStatus, AdminUser, AdminBalanceTransaction, AdminNotification, AdminInviteLink, AdminInviteLinkUser, AdminAuditLogEntry, AdminUserSearchResult } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Key, Copy, MessageCircle, Send, ArrowLeft, Bell, Image as ImageIcon, AlertTriangle, TrendingUp, Clock, Wallet, Share2, CheckSquare, Square, ChevronDown, ChevronUp, Link2, Activity, RefreshCw, Terminal, RotateCcw, Zap, Server, LineChart as LineChartIcon, ClipboardList, Download } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -5866,6 +5869,120 @@ function AuditLogRow({ entry }: { entry: AdminAuditLogEntry }) {
 }
 
 // ─── Broadcasts Tab ───────────────────────────────────────────────────────────
+/** Inline multi-select combobox for picking specific broadcast recipients */
+function UserSearchCombobox({
+  selected,
+  onChange,
+}: {
+  selected: AdminUserSearchResult[];
+  onChange: (users: AdminUserSearchResult[]) => void;
+}) {
+  const [open,  setOpen]  = useState(false);
+  const [query, setQuery] = useState("");
+
+  const { data: results = [], isFetching } = useSearchAdminUsers(
+    { q: query || "_", limit: 20 },
+    { query: { enabled: query.trim().length >= 1, staleTime: 10_000, queryKey: ["admin-user-search", query] } },
+  );
+
+  const selectedIds = new Set(selected.map((u) => u.id));
+
+  const toggle = (user: AdminUserSearchResult) => {
+    if (selectedIds.has(user.id)) {
+      onChange(selected.filter((u) => u.id !== user.id));
+    } else {
+      onChange([...selected, user]);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Selected chips */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((u) => (
+            <span
+              key={u.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-muted border border-border rounded-sm"
+            >
+              <span className="text-muted-foreground">#{u.id}</span>
+              <span>{u.email}</span>
+              <button
+                type="button"
+                onClick={() => onChange(selected.filter((s) => s.id !== u.id))}
+                className="ml-0.5 hover:text-destructive"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="w-full flex items-center justify-between border border-border px-3 py-2 text-sm text-left hover:bg-muted transition-colors"
+          >
+            <span className="text-muted-foreground">
+              {selected.length === 0
+                ? "Поиск по email или ID…"
+                : `Выбрано: ${selected.length} польз.`}
+            </span>
+            <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[380px] p-0 rounded-none" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Email или ID пользователя…"
+              value={query}
+              onValueChange={setQuery}
+            />
+            <CommandList>
+              {query.trim().length < 1 ? (
+                <CommandEmpty className="text-muted-foreground py-4 text-xs text-center">
+                  Введите email или ID для поиска
+                </CommandEmpty>
+              ) : isFetching ? (
+                <CommandEmpty className="py-4 text-xs text-center text-muted-foreground">
+                  Поиск…
+                </CommandEmpty>
+              ) : results.length === 0 ? (
+                <CommandEmpty>Пользователи не найдены</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {results.map((user) => {
+                    const isSelected = selectedIds.has(user.id);
+                    return (
+                      <CommandItem
+                        key={user.id}
+                        value={String(user.id)}
+                        onSelect={() => toggle(user)}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <div className={`flex h-4 w-4 items-center justify-center border ${isSelected ? "bg-primary border-primary" : "border-border"}`}>
+                          {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                        </div>
+                        <span className="flex-1 truncate">{user.email}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">#{user.id}</span>
+                        {user.isBanned && (
+                          <span className="text-xs text-destructive shrink-0">banned</span>
+                        )}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function BroadcastsTab() {
   const { toast } = useToast();
   const { data: plans } = useListAdminPlans();
@@ -5876,7 +5993,7 @@ function BroadcastsTab() {
   const [targetType, setTargetType] = useState<"all" | "filtered" | "specific">("all");
   const [filterHasActiveSub, setFilterHasActiveSub] = useState<"" | "true" | "false">("");
   const [filterPlanId,       setFilterPlanId]       = useState<string>("");
-  const [specificIds,        setSpecificIds]         = useState("");
+  const [selectedUsers,      setSelectedUsers]       = useState<AdminUserSearchResult[]>([]);
 
   // ── History state ──
   const [page,    setPage]    = useState(1);
@@ -5899,7 +6016,7 @@ function BroadcastsTab() {
         setTargetType("all");
         setFilterHasActiveSub("");
         setFilterPlanId("");
-        setSpecificIds("");
+        setSelectedUsers([]);
         refetchHistory();
         queryClient.invalidateQueries({ queryKey: getListAdminBroadcastsQueryKey() });
       },
@@ -5922,14 +6039,11 @@ function BroadcastsTab() {
 
     const userIds =
       targetType === "specific"
-        ? specificIds
-            .split(/[\s,]+/)
-            .map((s) => parseInt(s.trim(), 10))
-            .filter((n) => !isNaN(n) && n > 0)
+        ? selectedUsers.map((u) => u.id)
         : undefined;
 
     if (targetType === "specific" && (!userIds || userIds.length === 0)) {
-      toast({ title: "Укажите ID пользователей", variant: "destructive" });
+      toast({ title: "Выберите хотя бы одного пользователя", variant: "destructive" });
       return;
     }
 
@@ -5937,7 +6051,7 @@ function BroadcastsTab() {
     const targetLabel =
       targetType === "all"      ? "ВСЕМ пользователям" :
       targetType === "filtered" ? "отфильтрованным пользователям" :
-                                  `конкретным пользователям (${userIds?.length ?? 0} ID)`;
+                                  `конкретным пользователям (${userIds?.length ?? 0})`;
     if (!window.confirm(`Отправить рассылку "${title.trim()}" — ${targetLabel}?\n\nЭто действие необратимо.`)) {
       return;
     }
@@ -6042,16 +6156,11 @@ function BroadcastsTab() {
           </div>
         )}
 
-        {/* Specific user IDs */}
+        {/* Specific user picker */}
         {targetType === "specific" && (
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">ID пользователей (через запятую или пробел)</label>
-            <Input
-              className="rounded-none"
-              placeholder="1, 42, 107"
-              value={specificIds}
-              onChange={(e) => setSpecificIds(e.target.value)}
-            />
+            <label className="text-xs text-muted-foreground">Получатели</label>
+            <UserSearchCombobox selected={selectedUsers} onChange={setSelectedUsers} />
           </div>
         )}
 

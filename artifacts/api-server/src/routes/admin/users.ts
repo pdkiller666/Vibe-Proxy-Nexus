@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   passwordResetTokensTable,
@@ -274,6 +274,31 @@ async function isLastRemainingAdmin(userId: number): Promise<boolean> {
     .where(eq(usersTable.role, "admin"));
   return count <= 1;
 }
+
+router.get("/admin/users/search", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const q     = String(req.query.q     ?? "").trim();
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+
+  if (!q) {
+    res.status(400).json({ error: "q is required" });
+    return;
+  }
+
+  const numericId = /^\d+$/.test(q) ? parseInt(q, 10) : null;
+
+  const rows = await db
+    .select({ id: usersTable.id, email: usersTable.email, isBanned: usersTable.isBanned })
+    .from(usersTable)
+    .where(
+      numericId !== null
+        ? eq(usersTable.id, numericId)
+        : ilike(usersTable.email, `%${q}%`),
+    )
+    .orderBy(usersTable.email)
+    .limit(limit);
+
+  res.json(rows);
+});
 
 router.get("/admin/users", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const users = await db.select().from(usersTable).orderBy(desc(usersTable.createdAt));

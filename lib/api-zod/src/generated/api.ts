@@ -1601,6 +1601,29 @@ export const GetAdminNotificationsResponse = zod.array(GetAdminNotificationsResp
 
 
 /**
+ * @summary Search users by email or ID (for combobox)
+ */
+export const searchAdminUsersQueryQMax = 100;
+
+export const searchAdminUsersQueryLimitDefault = 20;
+export const searchAdminUsersQueryLimitMax = 50;
+
+
+
+export const SearchAdminUsersQueryParams = zod.object({
+  "q": zod.coerce.string().min(1).max(searchAdminUsersQueryQMax),
+  "limit": zod.coerce.number().min(1).max(searchAdminUsersQueryLimitMax).default(searchAdminUsersQueryLimitDefault)
+})
+
+export const SearchAdminUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "isBanned": zod.boolean()
+})
+export const SearchAdminUsersResponse = zod.array(SearchAdminUsersResponseItem)
+
+
+/**
  * @summary List all users
  */
 export const ListAdminUsersResponseItem = zod.object({
