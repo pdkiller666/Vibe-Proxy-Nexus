@@ -126,8 +126,9 @@ router.get("/admin/system-events/history", requireAuth, requireAdmin, async (req
  * Idempotent: already-acknowledged events return 200 unchanged.
  */
 router.post("/admin/system-events/:id/acknowledge", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const id = parseInt(req.params["id"] as string, 10);
-  if (isNaN(id)) {
+  const raw = req.params["id"] as string;
+  const id  = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+  if (isNaN(id) || id <= 0) {
     res.status(400).json({ error: "Invalid event id" });
     return;
   }

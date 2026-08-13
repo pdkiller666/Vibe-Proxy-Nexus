@@ -2725,7 +2725,8 @@ function formatUptime(seconds: number): string {
   const m = Math.floor((seconds % 3600) / 60);
   if (d > 0) return `${d}д ${h}ч ${m}м`;
   if (h > 0) return `${h}ч ${m}м`;
-  return `${m}м`;
+  if (m > 0) return `${m}м`;
+  return `< 1м`;
 }
 
 function formatBytesShort(bytes: number): string {
@@ -2787,8 +2788,8 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   });
 
   const cpuBarWidth = status ? Math.min(100, status.cpuPercent) : 0;
-  const ramPercent = status ? Math.round((status.ramUsedBytes / status.ramTotalBytes) * 100) : 0;
-  const diskPercent = status ? Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100) : 0;
+  const ramPercent  = status && status.ramTotalBytes  > 0 ? Math.min(100, Math.round((status.ramUsedBytes  / status.ramTotalBytes)  * 100)) : 0;
+  const diskPercent = status && status.diskTotalBytes > 0 ? Math.min(100, Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100)) : 0;
 
   return (
     <div className="mt-3 border border-border bg-muted/30 p-4 space-y-4">
@@ -2865,7 +2866,7 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
           </button>
           {/* Uptime — not charted */}
           <div className="bg-background border border-border p-3">
-            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Uptime</div>
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Аптайм</div>
             <div className="text-lg font-bold">{formatUptime(status.uptimeSeconds)}</div>
           </div>
         </div>
