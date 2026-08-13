@@ -5768,42 +5768,52 @@ function NotificationBell() {
 // ── Audit Log ─────────────────────────────────────────────────────────────────
 
 const ACTION_LABELS: Record<string, string> = {
-  update_user_role: "Роль пользователя",
-  update_user_profile: "Профиль пользователя",
-  delete_user: "Удаление пользователя",
-  update_user_subscription: "Подписка",
-  update_user_extra_slots: "Слоты",
-  set_user_balance: "Баланс",
-  reset_user_password: "Сброс пароля",
-  update_user_note: "Заметка",
-  ban_user: "Бан",
-  unban_user: "Разбан",
-  force_logout: "Принудительный выход",
-  create_plan: "Создание тарифа",
-  update_plan: "Редактирование тарифа",
-  delete_plan: "Удаление тарифа",
-  create_vpn_node: "Создание узла",
-  update_vpn_node: "Редактирование узла",
-  delete_vpn_node: "Удаление узла",
-  restart_xray: "Перезапуск Xray",
-  provision_vpn_node: "Провизионирование узла",
-  issue_vpn_key: "Выдача ключа VPN",
-  revoke_vpn_key: "Отзыв ключа VPN",
-  create_invite_link: "Создание инвайта",
-  update_invite_link: "Редактирование инвайта",
-  delete_invite_link: "Удаление инвайта",
-  update_payment_settings: "Настройки платежей",
-  upload_sbp_qr: "Загрузка QR СБП",
-  delete_sbp_qr: "Удаление QR СБП",
-  confirm_payment: "Подтверждение платежа",
-  reject_payment: "Отклонение платежа",
-  update_payment_note: "Заметка к платежу",
-  reply_to_ticket: "Ответ на тикет",
-  update_ticket_status: "Статус тикета",
-  generate_password_reset_link: "Ссылка сброса пароля",
-  acknowledge_system_event: "Подтверждение события",
-  send_broadcast: "Рассылка уведомления",
-  unknown_action: "Неизвестное действие",
+  // ── Пользователи ──────────────────────────────────────────────────────────
+  update_user_role:             "Изменение роли пользователя",
+  update_user_profile:          "Изменение профиля пользователя",
+  delete_user:                  "Удаление пользователя",
+  update_user_subscription:     "Изменение подписки пользователя",
+  update_user_extra_slots:      "Изменение доп. устройств",
+  set_user_balance:             "Установка баланса",
+  reset_user_password:          "Сброс пароля пользователя",
+  update_user_note:             "Изменение заметки о пользователе",
+  ban_user:                     "Блокировка пользователя",
+  unban_user:                   "Снятие блокировки пользователя",
+  force_logout:                 "Принудительный выход из аккаунта",
+  generate_password_reset_link: "Создание ссылки сброса пароля",
+  // ── Тарифы ────────────────────────────────────────────────────────────────
+  create_plan:                  "Создание тарифа",
+  update_plan:                  "Редактирование тарифа",
+  delete_plan:                  "Удаление тарифа",
+  // ── VPN-узлы ──────────────────────────────────────────────────────────────
+  create_vpn_node:              "Создание VPN-узла",
+  update_vpn_node:              "Редактирование VPN-узла",
+  delete_vpn_node:              "Удаление VPN-узла",
+  restart_xray:                 "Перезапуск Xray на узле",
+  provision_vpn_node:           "Установка нового VPN-узла",
+  // ── Ключи VPN ─────────────────────────────────────────────────────────────
+  issue_vpn_key:                "Выдача ключа VPN",
+  revoke_vpn_key:               "Отзыв ключа VPN",
+  // ── Инвайты ───────────────────────────────────────────────────────────────
+  create_invite_link:           "Создание инвайт-ссылки",
+  update_invite_link:           "Редактирование инвайт-ссылки",
+  delete_invite_link:           "Удаление инвайт-ссылки",
+  // ── Платежи ───────────────────────────────────────────────────────────────
+  update_payment_settings:      "Изменение настроек платежей",
+  upload_sbp_qr:                "Загрузка QR-кода СБП",
+  delete_sbp_qr:                "Удаление QR-кода СБП",
+  confirm_payment:              "Подтверждение платежа",
+  reject_payment:               "Отклонение платежа",
+  update_payment_note:          "Изменение заметки к платежу",
+  // ── Поддержка ─────────────────────────────────────────────────────────────
+  reply_to_ticket:              "Ответ на тикет поддержки",
+  update_ticket_status:         "Изменение статуса тикета",
+  // ── Системные события ─────────────────────────────────────────────────────
+  acknowledge_system_event:     "Закрытие системного события",
+  // ── Рассылки ──────────────────────────────────────────────────────────────
+  send_broadcast:               "Отправка рассылки",
+  // ── Прочее ────────────────────────────────────────────────────────────────
+  unknown_action:               "Неизвестное действие",
 };
 
 function AuditLogRow({ entry }: { entry: AdminAuditLogEntry }) {
