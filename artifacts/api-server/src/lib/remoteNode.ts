@@ -28,6 +28,8 @@ export const remoteNodePollingHealth = new Map<string, RemoteNodePollHealth>();
 
 export type RemoteNodeRef = Pick<VpnNode, "managementApiUrl" | "managementApiSecret" | "name">;
 
+const REMOTE_FETCH_TIMEOUT_MS = 15_000;
+
 async function remoteNodeFetch(
   node: RemoteNodeRef,
   path: string,
@@ -38,7 +40,13 @@ async function remoteNodeFetch(
   if (node.managementApiSecret) {
     headers.set("X-Management-Secret", node.managementApiSecret);
   }
-  return fetch(url, { ...options, headers });
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), REMOTE_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, headers, signal: ac.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

@@ -84,8 +84,15 @@ function EditKeyForm({
             onClose();
           },
           onError: (err: unknown) => {
-            const msg = err instanceof Error ? err.message : undefined;
-            toast({ title: msg ?? "Не удалось переместить ключ", variant: "destructive" });
+            // ApiError carries .status; show a friendly message for node-side failures
+            const status = (err as { status?: number })?.status;
+            let msg: string;
+            if (status === 502 || status === 503 || status === 504) {
+              msg = "Сервер недоступен. Попробуйте другой сервер или повторите позже.";
+            } else {
+              msg = err instanceof Error ? err.message : "Не удалось переместить ключ";
+            }
+            toast({ title: msg, variant: "destructive" });
           },
         },
       );
@@ -851,9 +858,10 @@ export default function Keys() {
             >
               <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 font-bold min-w-0 break-words">
+                  <div className="flex items-center gap-2 font-bold min-w-0">
                     <KeyRound className="w-4 h-4 text-primary shrink-0" />
-                    {key.label} <span className="text-muted-foreground font-normal font-mono text-sm">· {key.nodeName}</span>
+                    <span className="truncate min-w-0">{key.label}</span>
+                    <span className="text-muted-foreground font-normal font-mono text-sm shrink-0 whitespace-nowrap">· {key.nodeName}</span>
                     {!key.revokedAt && editingKeyId !== key.id && (
                       <button
                         onClick={() => setEditingKeyId(key.id)}
