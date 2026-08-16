@@ -3973,7 +3973,7 @@ function UsersManagement() {
         </select>
         <button
           onClick={() => {
-            const header = "ID,Дата регистрации,Email,Имя,Роль,Баланс (₽),Тариф,Трафик всего (байт),Реф. код,Приглашён";
+            const header = "ID,Дата регистрации,Email,Имя,Роль,Баланс (₽),Тариф,Трафик всего (байт),Реф. код,Приглашён,Инвайт-ссылка";
             const rows = filtered.map((u) =>
               [
                 u.id,
@@ -3986,6 +3986,7 @@ function UsersManagement() {
                 u.trafficUpBytes + u.trafficDownBytes,
                 u.referralCode,
                 u.referredByEmail ?? "",
+                u.inviteLinkCode ?? "",
               ]
                 .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
                 .join(","),
@@ -4161,11 +4162,22 @@ function UsersManagement() {
                 Реф. код: <span className="text-foreground font-bold">{user.referralCode}</span>
                 {user.referredUserCount > 0 && ` · пригласил(а) ${user.referredUserCount}`}
               </span>
-              {user.referredByEmail && (
+              {user.inviteLinkCode ? (
+                <span className="text-muted-foreground">
+                  Ссылка:{" "}
+                  <span className="text-foreground font-mono font-semibold">{user.inviteLinkCode}</span>
+                  {user.inviteLinkNote && (
+                    <span className="text-foreground"> ({user.inviteLinkNote})</span>
+                  )}
+                  {user.referredByEmail && (
+                    <span className="text-muted-foreground"> · {user.referredByEmail}</span>
+                  )}
+                </span>
+              ) : user.referredByEmail ? (
                 <span className="text-muted-foreground">
                   Приглашён(а): <span className="text-foreground">{user.referredByEmail}</span>
                 </span>
-              )}
+              ) : null}
             </div>
             <div className="flex items-center gap-3 pt-1">
               <span className="text-xs text-muted-foreground font-mono">Доп. устройства:</span>

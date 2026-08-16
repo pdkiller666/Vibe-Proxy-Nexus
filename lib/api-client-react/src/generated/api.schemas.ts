@@ -653,6 +653,10 @@ export interface AdminUser {
   referralCode: string;
   /** @nullable */
   referredByEmail?: string | null;
+  /** @nullable */
+  inviteLinkCode?: string | null;
+  /** @nullable */
+  inviteLinkNote?: string | null;
   referredUserCount: number;
   role: UserRole;
   createdAt: string;

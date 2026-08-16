@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
+  inviteLinksTable,
   passwordResetTokensTable,
   paymentsTable,
   plansTable,
@@ -162,6 +163,16 @@ async function enrichUsersWithTraffic(users: User[]) {
     : [];
   const referrerEmailById = new Map(referrerRows.map((r) => [r.id, r.email]));
 
+  // Invite link codes — for users who registered via an admin invite link,
+  // surface the link's code so the admin panel can show "Ссылка: CODE"
+  // instead of the (confusingly identical) admin referrer email.
+  const inviteLinkIds = [...new Set(users.map((u) => u.inviteLinkId).filter((id): id is number => id != null))];
+  const inviteLinkRows = inviteLinkIds.length > 0
+    ? await db.select({ id: inviteLinksTable.id, code: inviteLinksTable.code, note: inviteLinksTable.note }).from(inviteLinksTable).where(inArray(inviteLinksTable.id, inviteLinkIds))
+    : [];
+  const inviteLinkCodeById = new Map(inviteLinkRows.map((r) => [r.id, r.code]));
+  const inviteLinkNoteById = new Map(inviteLinkRows.map((r) => [r.id, r.note]));
+
   const referredCountRows = await db
     .select({ referredByUserId: usersTable.referredByUserId, count: sql<number>`count(*)::int` })
     .from(usersTable)
@@ -242,6 +253,8 @@ async function enrichUsersWithTraffic(users: User[]) {
       activeSubscriptionStartsAt: activeSubscriptionStartsAtByUser.get(user.id) ?? null,
       activeSubscriptionLastBilledAt: activeSubscriptionLastBilledAtByUser.get(user.id) ?? null,
       referredByEmail: user.referredByUserId != null ? (referrerEmailById.get(user.referredByUserId) ?? null) : null,
+      inviteLinkCode: user.inviteLinkId != null ? (inviteLinkCodeById.get(user.inviteLinkId) ?? null) : null,
+      inviteLinkNote: user.inviteLinkId != null ? (inviteLinkNoteById.get(user.inviteLinkId) ?? null) : null,
       referredUserCount: referredCountByUser.get(user.id) ?? 0,
       planId: current?.planId ?? null,
       planName: current?.planName ?? null,

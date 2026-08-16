@@ -2655,6 +2655,13 @@ components:
         referralCode: { type: string }
         # Who referred this user in, if anyone (null for the root admin).
         referredByEmail: { type: ["string", "null"] }
+        # If the user registered via an admin invite link, this is the link's
+        # 12-char code (e.g. "AIFROS99GRKL"). Null for users who joined via a
+        # plain user referral code or have no referrer at all.
+        inviteLinkCode: { type: ["string", "null"] }
+        # Admin memo set on the invite link (e.g. "Huawei (Размышляев)").
+        # Null when no note was set or the user didn't come via an invite link.
+        inviteLinkNote: { type: ["string", "null"] }
         # Number of accounts registered using this user's own referral code.
         referredUserCount: { type: integer }
         role:
