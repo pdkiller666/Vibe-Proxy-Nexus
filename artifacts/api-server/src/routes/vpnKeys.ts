@@ -86,6 +86,7 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
     parsed.data.nodeId ?? undefined,
     parsed.data.label ?? undefined,
     parsed.data.description ?? undefined,
+    parsed.data.idempotencyKey ?? undefined,
   );
 
   if (!result.ok) {
@@ -230,7 +231,10 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
 // Inline Zod schemas — avoid api-zod composite-tsconfig resolution issues for
 // the new schemas that haven't been codegen'd into api-zod yet.
 const RelocateVpnKeyParams = z.object({ keyId: z.coerce.number().int().positive() });
-const RelocateVpnKeyBody = z.object({ nodeId: z.number().int().positive() });
+const RelocateVpnKeyBody = z.object({
+  nodeId: z.number().int().positive(),
+  idempotencyKey: z.string().min(8).max(128).optional(),
+});
 
 /**
  * POST /vpn-keys/:keyId/relocate
@@ -257,7 +261,7 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
   }
 
   const { keyId } = params.data;
-  const { nodeId: targetNodeId } = body.data;
+  const { nodeId: targetNodeId, idempotencyKey } = body.data;
 
   // Load the existing key + its current node.
   const [existing] = await db
@@ -294,12 +298,15 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
 
   // Issue the new key first — old key stays active so the user is never left
   // without a working connection during the swap.
+  // idempotencyKey (client-generated UUID per click) prevents Amvera's proxy
+  // retries from issuing a duplicate key on the target node.
   const result = await issueKeyForUser(
     user.id,
     totalSlots,
     targetNodeId,
     existing.key.label,
     existing.key.description ?? undefined,
+    idempotencyKey,
   );
 
   if (!result.ok) {

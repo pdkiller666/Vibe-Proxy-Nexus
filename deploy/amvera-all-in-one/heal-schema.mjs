@@ -989,6 +989,32 @@ try {
   `);
   console.log("heal-schema: M-38 subscriptions_one_pending_per_user_idx (partial unique)");
 
+  // ── M-39: vpn_keys.idempotency_key — dedupe Amvera proxy retries ─────────
+  // Amvera retries slow POSTs; POST /vpn-keys could run twice for one click
+  // and issue two keys for users with >= 2 free slots. The client now sends
+  // a UUID-per-click; this unique index (NULLs ignored) blocks the duplicate
+  // insert and issueKeyForUser returns the first-created key instead.
+  await client.query(`
+    ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS idempotency_key text
+  `);
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS vpn_keys_idempotency_key_unique
+      ON vpn_keys(idempotency_key)
+  `);
+  // provisioned_at marks when the key became fully usable (Xray client added).
+  // Idempotent replays only return provisioned keys; NULL + not revoked means
+  // "provisioning in flight". Backfill existing non-revoked keys as
+  // provisioned — they were all issued under the old code path where the 201
+  // implied provisioning succeeded.
+  await client.query(`
+    ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS provisioned_at timestamptz
+  `);
+  await client.query(`
+    UPDATE vpn_keys SET provisioned_at = created_at
+     WHERE provisioned_at IS NULL AND revoked_at IS NULL
+  `);
+  console.log("heal-schema: M-39 vpn_keys.idempotency_key + unique index + provisioned_at");
+
   // ── M-40: purge inaccurate node metric snapshots captured before cgroup fix ──
   //
   // Before 2026-08-17 the local Amvera node's system status was read from

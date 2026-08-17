@@ -64,6 +64,21 @@ export const vpnKeysTable = pgTable(
     // signal for automatic start/stop of hourly billing — a key is
     // considered idle once this falls outside the billing grace window.
     lastTrafficAt: timestamp("last_traffic_at", { withTimezone: true }),
+    // Client-generated UUID-per-click for POST /vpn-keys. Amvera's proxy
+    // retries slow POSTs, so the same click can hit the server twice; the
+    // unique index below makes the second insert fail with 23505, and
+    // issueKeyForUser returns the already-created key instead of a duplicate.
+    // Null for keys issued without a client key (registration auto-issue,
+    // admin issuance, relocate) — Postgres unique indexes ignore NULLs.
+    idempotencyKey: text("idempotency_key"),
+    // When the key became fully usable: set at insert time when no Xray
+    // provisioning is needed (dev), otherwise set only after the Xray client
+    // was successfully added. A row with provisionedAt IS NULL and
+    // revokedAt IS NULL is "provisioning in flight" — idempotent replays must
+    // not return it as a success yet (see keyIssuance.ts). On provisioning
+    // failure the row is revoked AND its idempotency_key is cleared, so a
+    // retry of the same click performs a fresh issuance attempt.
+    provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
   },
   (table) => [
     index("vpn_keys_user_id_idx").on(table.userId),
@@ -71,6 +86,8 @@ export const vpnKeysTable = pgTable(
     index("vpn_keys_node_id_idx").on(table.nodeId),
     // VLESS auth depends on UUID uniqueness; index pre-created via heal-schema.mjs.
     uniqueIndex("vpn_keys_uuid_unique").on(table.uuid),
+    // Dedupe retried POST /vpn-keys requests; pre-created via heal-schema.mjs.
+    uniqueIndex("vpn_keys_idempotency_key_unique").on(table.idempotencyKey),
   ],
 );
 

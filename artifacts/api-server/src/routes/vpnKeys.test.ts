@@ -491,3 +491,127 @@ describe("Global slot limit enforced across different nodes", () => {
     createdKeyIds.push(winner.body.id);
   });
 });
+
+describe("Idempotent key issuance (Amvera proxy retry)", () => {
+  let userId: number;
+  let userCookie: string;
+  let planId: number;
+  let nodeId: number;
+  const createdKeyIds: number[] = [];
+
+  async function createLoggedInUser(): Promise<{ id: number; cookie: string }> {
+    const email = `vpnkeys-idem-${randomBytes(6).toString("hex")}@example.com`;
+    const password = "correct-horse-battery-staple";
+    const passwordHash = await hashPassword(password);
+    const [user] = await db
+      .insert(usersTable)
+      .values({ email, passwordHash, role: "user", referralCode: randomBytes(8).toString("hex") })
+      .returning({ id: usersTable.id });
+    const res = await request.post("/api/auth/login").send({ email, password });
+    expect(res.status).toBe(200);
+    const setCookie = res.headers["set-cookie"];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+    const sessionCookie = cookies.find((c: string) => c.startsWith("vpn_session="));
+    if (!sessionCookie) throw new Error("Login did not set session cookie");
+    return { id: user.id, cookie: sessionCookie.split(";")[0] };
+  }
+
+  beforeAll(async () => {
+    const owner = await createLoggedInUser();
+    userId = owner.id;
+    userCookie = owner.cookie;
+
+    // 3 device slots — the exact production scenario: a user with free slots
+    // whose retried request would previously pass the slot check twice.
+    const [plan] = await db
+      .insert(plansTable)
+      .values({
+        name: `Idem test plan ${randomBytes(4).toString("hex")}`,
+        priceRub: 10000,
+        durationDays: 30,
+        devicesIncluded: 3,
+      })
+      .returning({ id: plansTable.id });
+    planId = plan.id;
+
+    await db.insert(subscriptionsTable).values({
+      userId,
+      planId,
+      status: "active",
+      startsAt: new Date(),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+
+    const [node] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Idem-test node ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "idem.example.com",
+        sni: "idem.example.com",
+        isActive: true,
+        maxUsers: null,
+      })
+      .returning({ id: vpnNodesTable.id });
+    nodeId = node.id;
+  });
+
+  afterAll(async () => {
+    await db.delete(vpnKeysTable).where(eq(vpnKeysTable.userId, userId));
+    await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
+    await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
+    await db.delete(plansTable).where(eq(plansTable.id, planId));
+    await db.delete(usersTable).where(eq(usersTable.id, userId));
+  });
+
+  it("returns the same key for a sequential retry with the same idempotencyKey", async () => {
+    const idempotencyKey = randomBytes(16).toString("hex");
+
+    const first = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", userCookie)
+      .send({ nodeId, idempotencyKey });
+    expect(first.status).toBe(201);
+    createdKeyIds.push(first.body.id);
+
+    // Simulated Amvera proxy retry of the same click.
+    const retry = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", userCookie)
+      .send({ nodeId, idempotencyKey });
+    expect(retry.status).toBe(201);
+    expect(retry.body.id).toBe(first.body.id);
+    expect(retry.body.uuid).toBe(first.body.uuid);
+
+    // Exactly one active key exists despite two successful responses.
+    const rows = await db
+      .select({ id: vpnKeysTable.id })
+      .from(vpnKeysTable)
+      .where(eq(vpnKeysTable.userId, userId));
+    expect(rows.length).toBe(1);
+  });
+
+  it("creates exactly one key when the retry races the original concurrently", async () => {
+    const idempotencyKey = randomBytes(16).toString("hex");
+
+    const [resA, resB] = await Promise.all([
+      request.post("/api/vpn-keys").set("Cookie", userCookie).send({ nodeId, idempotencyKey }),
+      request.post("/api/vpn-keys").set("Cookie", userCookie).send({ nodeId, idempotencyKey }),
+    ]);
+
+    expect(resA.status).toBe(201);
+    expect(resB.status).toBe(201);
+    expect(resA.body.id).toBe(resB.body.id);
+  });
+
+  it("still issues distinct keys for distinct idempotencyKeys (separate clicks)", async () => {
+    // The user has 3 slots and 2 keys so far (from the tests above) — a real
+    // second click with a new UUID must produce a new key, not a replay.
+    const res = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", userCookie)
+      .send({ nodeId, idempotencyKey: randomBytes(16).toString("hex") });
+    expect(res.status).toBe(201);
+    expect(createdKeyIds).not.toContain(res.body.id);
+  });
+});

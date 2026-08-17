@@ -16,6 +16,134 @@ export type IssueKeyResult =
   | { ok: true; key: typeof vpnKeysTable.$inferSelect; nodeName: string }
   | { ok: false; status: number; error: string };
 
+// Per-user in-process serialization of key issuance. Amvera's proxy retries
+// slow POSTs, so one click can hit this process twice concurrently; chaining
+// the second call behind the first makes the idempotency-key lookup (below)
+// see the first call's committed row instead of racing it. This complements —
+// not replaces — the DB-level FOR UPDATE locks and the unique index on
+// idempotency_key, which remain the cross-process guarantees.
+const userIssueLocks = new Map<number, Promise<unknown>>();
+
+async function withUserIssueLock<T>(
+  userId: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const prev = userIssueLocks.get(userId) ?? Promise.resolve();
+  const run = prev.then(fn, fn); // run regardless of predecessor outcome
+  // Keep the map from growing forever: clear the entry once the chain drains.
+  const cleanup = run.catch(() => {}).finally(() => {
+    if (userIssueLocks.get(userId) === cleanup) userIssueLocks.delete(userId);
+  });
+  userIssueLocks.set(userId, cleanup);
+  return run;
+}
+
+type ReplayLookup =
+  | { kind: "hit"; result: IssueKeyResult & { ok: true } }
+  | { kind: "pending" } // row committed but Xray provisioning still in flight
+  | { kind: "miss" };
+
+/**
+ * Looks up a previously issued key by (userId, idempotencyKey).
+ *
+ * Only a PROVISIONED key counts as a replayable success:
+ * - provisionedAt set → "hit" (revoked-or-not: the original click succeeded;
+ *   a user-revoked key is still the honest answer for that click).
+ * - provisionedAt null + not revoked → "pending": the original request is
+ *   still inside its post-commit Xray call; its outcome (201 or 502+revoke)
+ *   is not decided yet, so we must not fabricate a success.
+ * - no row (or provisioning failed — failure clears idempotency_key when
+ *   revoking, see below) → "miss": caller proceeds with a fresh attempt.
+ */
+async function findKeyByIdempotencyKey(
+  userId: number,
+  idempotencyKey: string,
+): Promise<ReplayLookup> {
+  const [existing] = await db
+    .select({ key: vpnKeysTable, nodeName: vpnNodesTable.name })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(
+      and(
+        eq(vpnKeysTable.userId, userId),
+        eq(vpnKeysTable.idempotencyKey, idempotencyKey),
+      ),
+    );
+  if (!existing) return { kind: "miss" };
+  if (!existing.key.provisionedAt && !existing.key.revokedAt) {
+    return { kind: "pending" };
+  }
+  if (!existing.key.provisionedAt && existing.key.revokedAt) {
+    // Revoked before ever being provisioned — a failed original whose
+    // idempotency_key was not cleared (e.g. the clearing update itself
+    // failed). Never replay it as success.
+    return { kind: "miss" };
+  }
+  return {
+    kind: "hit",
+    result: { ok: true, key: existing.key, nodeName: existing.nodeName },
+  };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// How long a retry waits for a cross-process original that is still
+// provisioning before giving up with a retriable 409 (~5 s total).
+let replayPendingPollMs = 500;
+let replayPendingMaxPolls = 10;
+
+/** Test-only: shrink the pending-replay poll window so tests stay fast. */
+export function setReplayPollingForTests(pollMs: number, maxPolls: number): void {
+  replayPendingPollMs = pollMs;
+  replayPendingMaxPolls = maxPolls;
+}
+
+const PENDING_RETRY_RESULT: IssueKeyResult = {
+  ok: false,
+  status: 409,
+  error: "Ключ ещё выпускается. Подождите несколько секунд и обновите список устройств.",
+};
+
+/**
+ * Resolves an idempotent replay, waiting out a "pending" original:
+ * - hit → the original's key (201 replay).
+ * - pending that resolves within the poll window → hit or miss accordingly.
+ * - pending that never resolves → retriable 409 (never a fabricated 201).
+ * - miss → null: caller proceeds (fresh attempt or its own failure result).
+ */
+async function awaitReplay(
+  userId: number,
+  idempotencyKey: string,
+): Promise<IssueKeyResult | null> {
+  for (let attempt = 0; ; attempt++) {
+    const lookup = await findKeyByIdempotencyKey(userId, idempotencyKey);
+    if (lookup.kind === "hit") return lookup.result;
+    if (lookup.kind === "miss") return null;
+    if (attempt >= replayPendingMaxPolls) return PENDING_RETRY_RESULT;
+    await sleep(replayPendingPollMs);
+  }
+}
+
+/**
+ * Returns the already-issued key for this (userId, idempotencyKey) if one
+ * exists, otherwise the given fallback failure. Every slot/capacity rejection
+ * path must go through this: on a cross-process retry (second Amvera
+ * instance) the original request may commit *between* the top-of-function
+ * replay lookup and a later slot/capacity check — the retry must then replay
+ * the original 201, not 409 with "slots full".
+ */
+async function replayOrFail(
+  userId: number,
+  idempotencyKey: string | undefined,
+  fallback: IssueKeyResult,
+): Promise<IssueKeyResult> {
+  if (idempotencyKey) {
+    const replay = await awaitReplay(userId, idempotencyKey);
+    if (replay) return replay;
+  }
+  return fallback;
+}
+
 /**
  * Core key-issuance logic shared between the user-facing POST /vpn-keys route
  * and the automatic key created on registration.
@@ -31,7 +159,44 @@ export async function issueKeyForUser(
   preferNodeId?: number,
   preferLabel?: string,
   description?: string,
+  idempotencyKey?: string,
 ): Promise<IssueKeyResult> {
+  return withUserIssueLock(userId, () =>
+    issueKeyForUserInner(
+      userId,
+      totalSlots,
+      preferNodeId,
+      preferLabel,
+      description,
+      idempotencyKey,
+    ),
+  );
+}
+
+/**
+ * Test-only export: the issuance logic WITHOUT the in-process per-user lock.
+ * Racing two calls to this simulates two separate API processes (e.g. two
+ * Amvera instances), where only the DB-level guarantees (FOR UPDATE locks,
+ * in-tx idempotency re-check, unique index on idempotency_key) apply.
+ */
+export const issueKeyForUserUnlockedForTests = issueKeyForUserInner;
+
+async function issueKeyForUserInner(
+  userId: number,
+  totalSlots: number,
+  preferNodeId?: number,
+  preferLabel?: string,
+  description?: string,
+  idempotencyKey?: string,
+): Promise<IssueKeyResult> {
+  // Idempotent replay: a retried request (same client-generated UUID) gets
+  // the key issued by the first attempt instead of a duplicate. Checked
+  // before any slot/capacity logic so a replay never 409s on "slots full".
+  if (idempotencyKey) {
+    const replay = await awaitReplay(userId, idempotencyKey);
+    if (replay) return replay;
+  }
+
   const activeCounts = db
     .select({
       nodeId: vpnKeysTable.nodeId,
@@ -73,13 +238,13 @@ export async function issueKeyForUser(
             eq(vpnNodesTable.isActive, true),
           ),
         );
-      return {
+      return replayOrFail(userId, idempotencyKey, {
         ok: false,
         status: exists ? 409 : 404,
         error: exists
           ? "Selected VPN node has reached its user capacity"
           : "No available VPN node found",
-      };
+      });
     }
 
     // Count total active keys for this user across ALL nodes (not just the
@@ -96,11 +261,11 @@ export async function issueKeyForUser(
       );
 
     if (slotCount >= totalSlots) {
-      return {
+      return replayOrFail(userId, idempotencyKey, {
         ok: false,
         status: 409,
         error: `Все слоты устройств заняты (${slotCount} из ${totalSlots}). Обратитесь к администратору для расширения.`,
-      };
+      });
     }
   } else {
     const candidateNodes = await db
@@ -114,7 +279,11 @@ export async function issueKeyForUser(
       .then((rows) => rows.map((r) => r.node));
 
     if (candidateNodes.length === 0) {
-      return { ok: false, status: 404, error: "No available VPN node found" };
+      return replayOrFail(userId, idempotencyKey, {
+        ok: false,
+        status: 404,
+        error: "No available VPN node found",
+      });
     }
 
     const userKeyCounts = await db
@@ -130,11 +299,11 @@ export async function issueKeyForUser(
     // anyway. This catches retries that arrive after the first request commits.
     const totalExisting = userKeyCounts.reduce((sum, r) => sum + r.cnt, 0);
     if (totalExisting >= totalSlots) {
-      return {
+      return replayOrFail(userId, idempotencyKey, {
         ok: false,
         status: 409,
         error: `Все слоты устройств заняты (${totalExisting} из ${totalSlots}). Обратитесь к администратору для расширения.`,
-      };
+      });
     }
 
     const userCountMap = new Map(userKeyCounts.map((r) => [r.nodeId, r.cnt]));
@@ -143,11 +312,11 @@ export async function issueKeyForUser(
     );
 
     if (!node) {
-      return {
+      return replayOrFail(userId, idempotencyKey, {
         ok: false,
         status: 409,
         error: `Все слоты устройств заняты (${totalSlots} из ${totalSlots}). Обратитесь к администратору для расширения.`,
-      };
+      });
     }
   }
 
@@ -167,6 +336,11 @@ export async function issueKeyForUser(
   // as possible. If Xray fails we immediately mark the committed key revoked;
   // that leaves the DB as the authoritative source of truth (key non-existent
   // from the user's perspective) rather than an orphaned Xray client.
+  // Whether the key needs an Xray client added post-commit. When it does not
+  // (dev without local Xray), the key is fully usable at commit time and is
+  // marked provisioned in the same INSERT.
+  const shouldProvision = node.managementApiUrl != null || isLocalXrayEnabled();
+
   // eslint-disable-next-line prefer-const
   let key!: typeof vpnKeysTable.$inferSelect;
   try {
@@ -178,6 +352,24 @@ export async function issueKeyForUser(
       await tx.execute(
         sql`SELECT id FROM subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1 FOR UPDATE`,
       );
+
+      // Idempotency re-check INSIDE the lock: a cross-process retry can pass
+      // the top-of-function replay lookup before the original commits, then
+      // block here on the subscription lock. Once the lock is granted the
+      // original's key is committed and visible — return it instead of
+      // proceeding into slot/capacity checks that would now 409.
+      if (idempotencyKey) {
+        const [dup] = await tx
+          .select()
+          .from(vpnKeysTable)
+          .where(
+            and(
+              eq(vpnKeysTable.userId, userId),
+              eq(vpnKeysTable.idempotencyKey, idempotencyKey),
+            ),
+          );
+        if (dup) throw Object.assign(new Error("IDEMPOTENT_REPLAY"), { dup });
+      }
 
       // Re-count inside the lock — the safe, authoritative slot count.
       // IMPORTANT: count across ALL nodes, not just the selected one.
@@ -219,22 +411,50 @@ export async function issueKeyForUser(
           description: description?.trim() || null,
           vlessLink,
           deepLink,
+          idempotencyKey: idempotencyKey ?? null,
+          provisionedAt: shouldProvision ? null : new Date(),
         })
         .returning();
       if (!row) throw new Error("INSERT_FAILED");
       return row;
     });
   } catch (err) {
+    if (err instanceof Error && err.message === "IDEMPOTENT_REPLAY") {
+      // Re-resolve via the shared helper: it waits out a still-provisioning
+      // original and carries the node name the ORIGINAL request used.
+      const replay = await awaitReplay(userId, idempotencyKey!);
+      if (replay) return replay;
+      // The original's provisioning failed while we waited (its row was
+      // revoked and its idempotency_key cleared) — retriable.
+      return PENDING_RETRY_RESULT;
+    }
     if (err instanceof Error && err.message === "SLOTS_EXCEEDED") {
       const e = err as Error & { slotCount: number; totalSlots: number };
-      return {
+      return replayOrFail(userId, idempotencyKey, {
         ok: false,
         status: 409,
         error: `Все слоты устройств заняты (${e.slotCount} из ${e.totalSlots}). Обратитесь к администратору для расширения.`,
-      };
+      });
     }
     if (err instanceof Error && err.message === "NODE_FULL") {
-      return { ok: false, status: 409, error: "Selected VPN node has reached its user capacity" };
+      return replayOrFail(userId, idempotencyKey, {
+        ok: false,
+        status: 409,
+        error: "Selected VPN node has reached its user capacity",
+      });
+    }
+    // Unique-index race on idempotency_key: another process (or a request the
+    // in-process lock can't see, e.g. a second Amvera instance) committed the
+    // same click first. Return that key — the user gets exactly one.
+    if (
+      idempotencyKey &&
+      typeof err === "object" &&
+      err !== null &&
+      (err as { code?: string }).code === "23505"
+    ) {
+      const replay = await awaitReplay(userId, idempotencyKey);
+      if (replay) return replay;
+      return PENDING_RETRY_RESULT;
     }
     logger.error({ err }, "issueKeyForUser: failed to persist VPN key");
     return { ok: false, status: 500, error: "Failed to issue VPN key" };
@@ -246,7 +466,6 @@ export async function issueKeyForUser(
   //
   // Routing: remote nodes (managementApiUrl != null) receive a REST call to
   // their Management API; the local Amvera node writes to its on-disk config.
-  const shouldProvision = node.managementApiUrl != null || isLocalXrayEnabled();
   if (shouldProvision) {
     try {
       if (node.managementApiUrl) {
@@ -260,12 +479,23 @@ export async function issueKeyForUser(
         // limitIp: 1 enforces one simultaneous source IP per key (= one device).
         await addXrayClient(uuid, uuid, 1);
       }
+      // Mark the key usable only now — replays of this idempotency key must
+      // not report success while this network call was still undecided.
+      const provisionedAt = new Date();
+      await db
+        .update(vpnKeysTable)
+        .set({ provisionedAt })
+        .where(eq(vpnKeysTable.id, key.id));
+      key = { ...key, provisionedAt };
     } catch (err) {
       logger.error({ err, remote: !!node.managementApiUrl }, "issueKeyForUser: Xray provisioning failed; revoking committed DB key");
       try {
+        // Clear idempotency_key alongside the revoke: a retry of the same
+        // click must run a FRESH issuance attempt (provisioning may succeed
+        // the second time), not replay this failed row as a success.
         await db
           .update(vpnKeysTable)
-          .set({ revokedAt: new Date(), revokedReason: "admin" })
+          .set({ revokedAt: new Date(), revokedReason: "admin", idempotencyKey: null })
           .where(eq(vpnKeysTable.id, key.id));
       } catch (dbErr) {
         logger.error({ err: dbErr, uuid }, "issueKeyForUser: DB revoke also failed — orphaned key in DB");

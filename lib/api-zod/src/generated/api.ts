@@ -655,10 +655,16 @@ export const ListMyVpnKeysResponse = zod.array(ListMyVpnKeysResponseItem)
 /**
  * @summary Issue a new VPN key on a node (requires an active subscription)
  */
+export const createVpnKeyBodyIdempotencyKeyMin = 8;
+export const createVpnKeyBodyIdempotencyKeyMax = 128;
+
+
+
 export const CreateVpnKeyBody = zod.object({
   "nodeId": zod.number().optional(),
   "label": zod.string().optional(),
-  "description": zod.string().optional()
+  "description": zod.string().optional(),
+  "idempotencyKey": zod.string().min(createVpnKeyBodyIdempotencyKeyMin).max(createVpnKeyBodyIdempotencyKeyMax).optional()
 })
 
 export const CreateVpnKeyResponse = zod.object({
@@ -737,8 +743,14 @@ export const RelocateVpnKeyParams = zod.object({
   "keyId": zod.coerce.number()
 })
 
+export const relocateVpnKeyBodyIdempotencyKeyMin = 8;
+export const relocateVpnKeyBodyIdempotencyKeyMax = 128;
+
+
+
 export const RelocateVpnKeyBody = zod.object({
-  "nodeId": zod.number()
+  "nodeId": zod.number(),
+  "idempotencyKey": zod.string().min(relocateVpnKeyBodyIdempotencyKeyMin).max(relocateVpnKeyBodyIdempotencyKeyMax).optional()
 })
 
 export const RelocateVpnKeyResponse = zod.object({

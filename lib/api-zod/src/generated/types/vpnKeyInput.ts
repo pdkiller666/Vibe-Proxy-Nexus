@@ -10,4 +10,9 @@ export interface VpnKeyInput {
   nodeId?: number;
   label?: string;
   description?: string;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  idempotencyKey?: string;
 }

@@ -2587,6 +2587,10 @@ components:
         nodeId: { type: integer }
         label: { type: string }
         description: { type: string }
+        # Client-generated UUID per click. Amvera's proxy retries slow POSTs;
+        # the server returns the already-issued key when it sees the same
+        # idempotencyKey again instead of issuing a duplicate.
+        idempotencyKey: { type: string, minLength: 8, maxLength: 128 }
 
     VpnKeyRenameInput:
       type: object
@@ -2599,6 +2603,10 @@ components:
       required: [nodeId]
       properties:
         nodeId: { type: integer }
+        # Client-generated UUID per click. Amvera's proxy retries slow POSTs;
+        # the server returns the already-issued key when it sees the same
+        # idempotencyKey again instead of issuing a duplicate.
+        idempotencyKey: { type: string, minLength: 8, maxLength: 128 }
 
     SubscriptionUrl:
       type: object

@@ -8,4 +8,9 @@
 
 export interface VpnKeyRelocateInput {
   nodeId: number;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  idempotencyKey?: string;
 }

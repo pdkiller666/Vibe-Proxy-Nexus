@@ -600,6 +600,11 @@ export interface VpnKeyInput {
   nodeId?: number;
   label?: string;
   description?: string;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  idempotencyKey?: string;
 }
 
 export interface VpnKeyRenameInput {
@@ -610,6 +615,11 @@ export interface VpnKeyRenameInput {
 
 export interface VpnKeyRelocateInput {
   nodeId: number;
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  idempotencyKey?: string;
 }
 
 export interface SubscriptionUrl {

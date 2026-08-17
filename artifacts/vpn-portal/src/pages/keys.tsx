@@ -74,8 +74,10 @@ function EditKeyForm({
 
     if (nodeChanged) {
       // Relocate: issue a new key on the selected node, revoke the old one.
+      // A fresh UUID is generated per click so Amvera proxy retries are
+      // idempotent and never produce a duplicate key on the target node.
       relocateKey(
-        { keyId, data: { nodeId: selectedNodeId } },
+        { keyId, data: { nodeId: selectedNodeId, idempotencyKey: crypto.randomUUID() } },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
@@ -432,7 +434,19 @@ export default function Keys() {
 
   function handleCreate(label: string, description: string, nodeId: number | undefined) {
     createKey(
-      { data: { nodeId, label: label || undefined, description: description || undefined } },
+      {
+        data: {
+          nodeId,
+          label: label || undefined,
+          description: description || undefined,
+          // UUID-per-click: if Amvera's proxy retries this POST, the server
+          // returns the already-issued key instead of creating a duplicate.
+          idempotencyKey:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        },
+      },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
