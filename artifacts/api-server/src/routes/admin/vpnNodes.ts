@@ -295,8 +295,6 @@ router.get("/admin/vpn-nodes/:nodeId/health", requireAuth, requireAdmin, async (
 
 // ─── System management endpoints ──────────────────────────────────────────────
 
-// ─── Fallback: host-level CPU via /proc/stat (used when cgroup v2 unavailable) ─
-
 /** Fetch recent log lines for the given process from supervisorctl. */
 async function getLocalSystemLogs(process: string, lines: number): Promise<string[]> {
   const byteBudget = Math.max(lines * 250, 8192);
