@@ -25,17 +25,12 @@
  */
 
 import { and, asc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
-import os from "node:os";
-import { promises as fs } from "node:fs";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable, nodeMetricSnapshotsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { issueKeyForUser, resolveTotalSlots } from "./keyIssuance";
 import { removeXrayClient, isLocalXrayEnabled } from "./xray";
 import { removeRemoteXrayClient } from "./remoteNode";
-
-const execAsync = promisify(exec);
+import { getLocalSystemStatus, type SystemStatus } from "./sysStatus";
 
 const NODE_MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -77,54 +72,7 @@ export async function maybeRecordMetricSnapshot(
   }
 }
 
-interface SystemStatus {
-  cpuPercent: number;
-  ramUsedBytes: number;
-  ramTotalBytes: number;
-  diskUsedBytes: number;
-  diskTotalBytes: number;
-}
-
 // ─── Status fetchers ──────────────────────────────────────────────────────────
-
-/** Sample /proc/stat twice ~200 ms apart for real CPU utilisation. */
-async function getCpuPercent(): Promise<number> {
-  const readStat = async () => {
-    const text = await fs.readFile("/proc/stat", "utf8").catch(() => "");
-    const line = text.split("\n")[0] ?? "";
-    const nums = line.replace(/^cpu\s+/, "").split(/\s+/).map(Number).filter(n => !isNaN(n));
-    const idle = (nums[3] ?? 0) + (nums[4] ?? 0); // idle + iowait
-    const total = nums.reduce((a, b) => a + b, 0);
-    return { idle, total };
-  };
-  const before = await readStat();
-  await new Promise<void>(resolve => setTimeout(resolve, 200));
-  const after = await readStat();
-  const totalDelta = after.total - before.total;
-  const idleDelta = after.idle - before.idle;
-  if (totalDelta <= 0) return 0;
-  return Math.min(100, Math.round((1 - idleDelta / totalDelta) * 1000) / 10);
-}
-
-async function getLocalSystemStatus(): Promise<SystemStatus> {
-  const cpuPercent = await getCpuPercent();
-
-  const memInfo = await fs.readFile("/proc/meminfo", "utf8").catch(() => "");
-  const getValue = (key: string) => {
-    const m = memInfo.match(new RegExp(`^${key}:\\s+(\\d+)`, "m"));
-    return m ? parseInt(m[1]) * 1024 : 0;
-  };
-  const ramTotalBytes = getValue("MemTotal");
-  const ramUsedBytes = ramTotalBytes - getValue("MemAvailable");
-
-  // Disk: df -B1 /
-  const dfOut = await execAsync("df -B1 / | tail -1", { timeout: 5_000 }).catch(() => ({ stdout: "" }));
-  const dfParts = dfOut.stdout.trim().split(/\s+/);
-  const diskTotalBytes = parseInt(dfParts[1] ?? "0") || 0;
-  const diskUsedBytes = parseInt(dfParts[2] ?? "0") || 0;
-
-  return { cpuPercent, ramUsedBytes, ramTotalBytes, diskUsedBytes, diskTotalBytes };
-}
 
 async function fetchRemoteSystemStatus(
   managementApiUrl: string,
