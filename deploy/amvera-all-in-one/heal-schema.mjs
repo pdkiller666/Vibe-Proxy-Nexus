@@ -989,6 +989,35 @@ try {
   `);
   console.log("heal-schema: M-38 subscriptions_one_pending_per_user_idx (partial unique)");
 
+  // ── M-40: purge inaccurate node metric snapshots captured before cgroup fix ──
+  //
+  // Before 2026-08-17 the local Amvera node's system status was read from
+  // /proc/stat and /proc/meminfo — host-level metrics that reflect the
+  // 64 GB bare-metal hypervisor, not the 2 GB container. This produced
+  // systematically wrong values (RAM ~2%, CPU ~0%) that make the historical
+  // charts misleading and prevent overload alerts from ever firing.
+  //
+  // The fix (lib/sysStatus.ts, deployed 2026-08-17) switched to cgroup v2
+  // (memory.current / memory.max, cpu.stat) which gives accurate container
+  // metrics. All snapshots recorded before the fix cutoff for local nodes
+  // (management_api_url IS NULL) are garbage and should be deleted.
+  //
+  // Remote VPS nodes used psutil on a dedicated host — those values were
+  // always correct and are intentionally left untouched.
+  //
+  // The cutoff '2026-08-17T04:00:00Z' is safely after the Amvera rebuild
+  // (push → build + deploy ≈ 10–15 min; we give 4 h of headroom).
+  //
+  // Idempotent: DELETE on an already-empty set is a no-op.
+  const { rowCount: deletedMetrics } = await client.query(`
+    DELETE FROM node_metric_snapshots
+    WHERE node_id IN (
+      SELECT id FROM vpn_nodes WHERE management_api_url IS NULL
+    )
+    AND recorded_at < '2026-08-17T04:00:00Z'::timestamptz
+  `);
+  console.log(`heal-schema: M-40 purged ${deletedMetrics} stale local-node metric snapshots (pre-cgroup-fix)`);
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
