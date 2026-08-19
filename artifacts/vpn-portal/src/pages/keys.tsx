@@ -631,21 +631,58 @@ export default function Keys() {
       {/* ── Android tab ───────────────────────────────────────────────────── */}
       {platform === "android" && (
         <>
+          <div className="bg-card border border-border p-5 space-y-3">
+            <div className="flex items-center gap-2 font-bold">
+              <ExternalLink className="w-4 h-4 text-primary" />
+              Приложения для подключения
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Установите приложение, в которое вы добавите ссылку подписки ниже.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={paymentSettings?.appDownloadLinks?.happAndroid ?? FALLBACK_LINKS.happAndroid}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+              >
+                Happ
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <a
+                href={paymentSettings?.appDownloadLinks?.v2rayng ?? FALLBACK_LINKS.v2rayng}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+              >
+                v2rayNG
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <a
+                href={paymentSettings?.appDownloadLinks?.v2rayn ?? FALLBACK_LINKS.v2rayn}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+              >
+                v2rayN (Windows)*
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              * Приложение для Windows — ссылку можно использовать на компьютере.
+            </p>
+          </div>
+
           <OnboardingTip
             id="keys-intro-android"
             icon={<Zap className="w-4 h-4" />}
             title="Быстрый старт — Android"
           >
             <p>
-              <strong>1.</strong> Установите приложение:{" "}
-              <a href={paymentSettings?.appDownloadLinks?.happAndroid ?? FALLBACK_LINKS.happAndroid} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Happ</a>,{" "}
-              <a href={paymentSettings?.appDownloadLinks?.v2rayng ?? FALLBACK_LINKS.v2rayng} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">v2rayNG</a>.
+              <strong>1.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже → в приложении нажмите <strong>«Добавить подписку»</strong> → вставьте. Ключи обновляются автоматически.
             </p>
             <p>
-              <strong>2.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже → в приложении нажмите <strong>«Добавить подписку»</strong> → вставьте. Ключи обновляются автоматически.
-            </p>
-            <p>
-              <strong>3.</strong> Хотите, чтобы российские сайты работали без VPN? Используйте <strong>Xray-конфиг с автообходом РФ</strong> — ссылки ниже, отдельно для каждого устройства.
+              <strong>2.</strong> Хотите, чтобы российские сайты работали без VPN? Используйте <strong>Xray-конфиг с автообходом РФ</strong> — ссылки ниже, отдельно для каждого устройства.
             </p>
           </OnboardingTip>
 
@@ -681,7 +718,8 @@ export default function Keys() {
                 <CopyButton text={subscription.url} />
               </div>
               <p className="text-xs text-muted-foreground">
-                В приложении: нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+                <strong>Happ или v2rayNG:</strong> нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+                <strong className="ml-1">v2rayN:</strong> откройте <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавьте новую подписку.
                 Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
               </p>
             </div>
@@ -757,21 +795,37 @@ export default function Keys() {
       {/* ── iOS tab ───────────────────────────────────────────────────────── */}
       {platform === "ios" && (
         <>
+          <div className="bg-card border border-border p-5 space-y-3">
+            <div className="flex items-center gap-2 font-bold">
+              <ExternalLink className="w-4 h-4 text-primary" />
+              Приложение для подключения
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Установите Happ из App Store, затем добавьте в него ссылку подписки ниже.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={paymentSettings?.appDownloadLinks?.happIos ?? FALLBACK_LINKS.happIos}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+              >
+                Happ
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+
           <OnboardingTip
             id="keys-intro-ios"
             icon={<Zap className="w-4 h-4" />}
             title="Быстрый старт — iOS"
           >
             <p>
-              <strong>1.</strong> Установите{" "}
-              <a href={paymentSettings?.appDownloadLinks?.happIos ?? FALLBACK_LINKS.happIos} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Happ</a>{" "}
-              из App Store (версия 4.11+, ядро Xray).
+              <strong>1.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже и добавьте в Happ — это настраивает VPN-соединение.
             </p>
             <p>
-              <strong>2.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже и добавьте в Happ — это настраивает VPN-соединение.
-            </p>
-            <p>
-              <strong>3.</strong> Нажмите <strong>«Настроить маршрутизацию»</strong> — откроется Happ и автоматически применит профиль обхода РФ (Сбербанк, Госуслуги, Яндекс и др. идут напрямую).
+              <strong>2.</strong> Нажмите <strong>«Настроить маршрутизацию»</strong> — откроется Happ и автоматически применит профиль обхода РФ (Сбербанк, Госуслуги, Яндекс и др. идут напрямую).
             </p>
           </OnboardingTip>
 
