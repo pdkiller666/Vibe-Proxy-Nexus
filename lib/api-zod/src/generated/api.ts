@@ -39,6 +39,14 @@ export const RegisterResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
+  "subscriptionState": zod.enum(['active', 'expired', 'none']),
+  "expiredSubscription": zod.union([zod.object({
+  "id": zod.number(),
+  "endsAt": zod.coerce.date().nullable(),
+  "planName": zod.string(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "isTrial": zod.boolean()
+}),zod.null()]),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
@@ -80,6 +88,14 @@ export const LoginResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
+  "subscriptionState": zod.enum(['active', 'expired', 'none']),
+  "expiredSubscription": zod.union([zod.object({
+  "id": zod.number(),
+  "endsAt": zod.coerce.date().nullable(),
+  "planName": zod.string(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "isTrial": zod.boolean()
+}),zod.null()]),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
@@ -149,6 +165,14 @@ export const GetMeResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
+  "subscriptionState": zod.enum(['active', 'expired', 'none']),
+  "expiredSubscription": zod.union([zod.object({
+  "id": zod.number(),
+  "endsAt": zod.coerce.date().nullable(),
+  "planName": zod.string(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "isTrial": zod.boolean()
+}),zod.null()]),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
@@ -185,6 +209,14 @@ export const UpdateMeResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
+  "subscriptionState": zod.enum(['active', 'expired', 'none']),
+  "expiredSubscription": zod.union([zod.object({
+  "id": zod.number(),
+  "endsAt": zod.coerce.date().nullable(),
+  "planName": zod.string(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "isTrial": zod.boolean()
+}),zod.null()]),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
@@ -226,6 +258,14 @@ export const ChangeMyEmailResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
+  "subscriptionState": zod.enum(['active', 'expired', 'none']),
+  "expiredSubscription": zod.union([zod.object({
+  "id": zod.number(),
+  "endsAt": zod.coerce.date().nullable(),
+  "planName": zod.string(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "isTrial": zod.boolean()
+}),zod.null()]),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),
@@ -282,6 +322,14 @@ export const PatchMeAutoRenewResponse = zod.object({
   "name": zod.string().nullish(),
   "role": zod.enum(['user', 'admin']),
   "hasActiveSubscription": zod.boolean(),
+  "subscriptionState": zod.enum(['active', 'expired', 'none']),
+  "expiredSubscription": zod.union([zod.object({
+  "id": zod.number(),
+  "endsAt": zod.coerce.date().nullable(),
+  "planName": zod.string(),
+  "billingType": zod.enum(['monthly', 'hourly']),
+  "isTrial": zod.boolean()
+}),zod.null()]),
   "currentPlanName": zod.string().nullish(),
   "subscriptionEndsAt": zod.coerce.date().nullish(),
   "currentPlanBillingType": zod.union([zod.enum(['monthly', 'hourly']),zod.null()]).optional(),

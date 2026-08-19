@@ -488,6 +488,83 @@ function AutoRenewBanners() {
 }
 
 /**
+ * Shows an expiry event only for the subscription that is currently expired.
+ * A user may renew before seeing a notification; matching the subscription ID
+ * keeps that historical event from contradicting the fresh active state.
+ * Hourly billing remains owned by BalanceBanners.
+ */
+function SubscriptionExpiryBanners() {
+  const { data: me } = useGetMe();
+  const { data: notifications } = useListMyNotifications();
+  const { mutate: acknowledge } = useAcknowledgeNotification({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
+      },
+    },
+  });
+
+  const expiredSubscription =
+    me?.subscriptionState === "expired" &&
+    me.expiredSubscription?.billingType !== "hourly"
+      ? me.expiredSubscription
+      : null;
+  const expiryEvents = (notifications ?? []).filter((notification) => {
+    if (notification.eventType !== "subscription_expired" || !expiredSubscription) {
+      return false;
+    }
+    const metadata = notification.metadata as { subscriptionId?: number };
+    return metadata.subscriptionId === expiredSubscription.id;
+  });
+
+  if (expiryEvents.length === 0 || !expiredSubscription) return null;
+
+  return (
+    <div className="space-y-2">
+      {expiryEvents.map((notification) => {
+        const metadata = notification.metadata as {
+          planName?: string;
+          endedAt?: string | null;
+          isTrial?: boolean;
+        };
+        const isTrial = Boolean(metadata.isTrial ?? expiredSubscription.isTrial);
+        return (
+          <div
+            key={notification.id}
+            className="flex items-start gap-3 bg-red-50 border border-red-300 p-4 text-sm text-red-800"
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+            <div className="flex-1 min-w-0">
+              <span className="font-semibold">
+                {isTrial ? "Пробный период закончился." : "Подписка закончилась."}
+              </span>{" "}
+              {metadata.planName || expiredSubscription.planName
+                ? `Тариф «${metadata.planName || expiredSubscription.planName}» `
+                : ""}
+              {metadata.endedAt || expiredSubscription.endsAt
+                ? `завершился ${formatDate(metadata.endedAt || expiredSubscription.endsAt)}. `
+                : ""}
+              <Link href="/plans" className="underline font-semibold hover:opacity-80">
+                Выберите тариф
+              </Link>{" "}
+              для восстановления доступа.
+            </div>
+            <button
+              type="button"
+              aria-label="Закрыть уведомление"
+              onClick={() => acknowledge({ id: notification.id })}
+              className="shrink-0 text-red-500 hover:text-red-800 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Shows dismissible banners for balance_low and balance_exhausted events.
  * balance_low  — emitted by the hourly billing tick when < 3 hours of balance remain.
  * balance_exhausted — emitted when the balance ran out and VPN keys were revoked.
@@ -559,70 +636,6 @@ function BalanceBanners() {
   );
 }
 
-/**
- * Shows one dismissible banner per unacknowledged "key_migrated" notification.
- * Each banner explains that the user's key was automatically moved to a new server.
- */
-function ServerMigrationBanners() {
-  const { data: notifications } = useListMyNotifications();
-  const { mutate: acknowledge } = useAcknowledgeNotification({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
-      },
-    },
-  });
-
-  const migrationEvents = (notifications ?? []).filter(
-    (n) => n.eventType === "key_migrated",
-  );
-
-  if (migrationEvents.length === 0) return null;
-
-  return (
-    <div className="space-y-2">
-      {migrationEvents.map((n) => {
-        const meta = n.metadata as {
-          oldNodeName?: string;
-          newNodeName?: string;
-        };
-        return (
-          <div
-            key={n.id}
-            className="flex items-start gap-3 bg-blue-50 border border-blue-200 p-4 text-sm text-blue-800"
-          >
-            <Server className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
-            <div className="flex-1 min-w-0">
-              <span className="font-semibold">Ваш сервер изменился.</span>{" "}
-              {meta.oldNodeName && meta.newNodeName ? (
-                <>
-                  Сервер <strong>{meta.oldNodeName}</strong> был выведен из
-                  эксплуатации — ваш ключ VPN автоматически перенесён на{" "}
-                  <strong>{meta.newNodeName}</strong>. Обновите конфигурацию в
-                  приложении, чтобы подключиться.
-                </>
-              ) : (
-                <>
-                  Один из ваших ключей VPN автоматически перенесён на другой
-                  сервер. Обновите конфигурацию в приложении.
-                </>
-              )}
-            </div>
-            <button
-              type="button"
-              aria-label="Закрыть уведомление"
-              onClick={() => acknowledge({ id: n.id })}
-              className="shrink-0 text-blue-500 hover:text-blue-800 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // Collapsed by default on mobile (to avoid a long scroll before reaching
 // Тарифы/Ключи/Платежи) but expanded by default on desktop, where there's
 // plenty of room. Purely a display toggle — content stays mounted either way.
@@ -645,7 +658,12 @@ function CollapsibleOnMobile({ title, children }: { title: string; children: Rea
 }
 
 export default function Dashboard() {
-  const { data: me, isLoading: meLoading } = useGetMe();
+  const { data: me, isLoading: meLoading } = useGetMe({
+    query: {
+      queryKey: getGetMeQueryKey(),
+      refetchInterval: 60_000,
+    },
+  });
   const { data: keys, isLoading: keysLoading } = useListMyVpnKeys();
   const { data: plans, isLoading: plansLoading } = useListPlans();
   const { data: payments } = useListMyPayments();
@@ -656,7 +674,12 @@ export default function Dashboard() {
   const activeKeys = keys?.filter((k) => !k.revokedAt) ?? [];
   const daysLeft = getDaysLeft(me?.subscriptionEndsAt as string | null | undefined);
   const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 5;
-  const isExpired = daysLeft !== null && daysLeft < 0;
+  const expiredSubscription =
+    me?.subscriptionState === "expired" &&
+    me.expiredSubscription?.billingType !== "hourly"
+      ? me.expiredSubscription
+      : null;
+  const isExpired = Boolean(expiredSubscription);
 
   // Low-balance warnings for hourly billing
   const isHourly = me?.currentPlanBillingType === "hourly";
@@ -730,6 +753,13 @@ export default function Dashboard() {
             <Link href="/keys" className="underline font-semibold">Ключи VPN</Link>{" "}
             — первый ключ уже готов, подключитесь к интернету за минуту.
           </p>
+        ) : expiredSubscription ? (
+          <p>
+            <strong>{expiredSubscription.isTrial ? "Пробный период закончился:" : "Подписка закончилась:"}</strong>{" "}
+            перейдите в раздел{" "}
+            <Link href="/plans" className="underline font-semibold">Тарифы</Link>{" "}
+            и выберите новый план для восстановления доступа.
+          </p>
         ) : (
           <p>
             <strong>Следующий шаг:</strong> перейдите в раздел{" "}
@@ -739,11 +769,11 @@ export default function Dashboard() {
         )}
       </OnboardingTip>
 
-      {/* Server migration notifications */}
-      <ServerMigrationBanners />
-
       {/* Auto-renew notifications */}
       <AutoRenewBanners />
+
+        {/* Monthly/trial expiry event — deliberately separate from hourly balance events */}
+        <SubscriptionExpiryBanners />
 
       {/* Hourly balance warnings (balance_low / balance_exhausted) */}
       <BalanceBanners />
@@ -970,6 +1000,42 @@ export default function Dashboard() {
                 <TrafficSection />
               </div>
             )}
+          </div>
+        </div>
+      ) : expiredSubscription ? (
+        <div className="bg-red-50 border border-red-300 overflow-hidden">
+          <div className="h-1 w-full bg-red-500" />
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-red-700">
+                  {expiredSubscription.isTrial ? "Пробный период" : "Подписка"}
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                  <AlertTriangle className="w-3 h-3" />
+                  Завершена
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-red-600 shrink-0" />
+                <div className="text-2xl font-black tracking-tight">
+                  {expiredSubscription.isTrial ? "Пробный период закончился" : "Подписка закончилась"}
+                </div>
+              </div>
+              <p className="text-sm text-red-800 mt-1.5">
+                {expiredSubscription.planName && <>Тариф «{expiredSubscription.planName}» завершён</>}
+                {expiredSubscription.endsAt
+                  ? `${expiredSubscription.planName ? " " : ""}${formatDate(expiredSubscription.endsAt)}. `
+                  : ". "}
+                Выберите тариф, чтобы восстановить доступ к VPN.
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="shrink-0 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap"
+            >
+              Выбрать тариф
+            </Link>
           </div>
         </div>
       ) : hasUnusedPromo && promoPlan ? (

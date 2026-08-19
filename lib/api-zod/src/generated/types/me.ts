@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ExpiredSubscription } from './expiredSubscription';
+import type { MeSubscriptionState } from './meSubscriptionState';
 import type { PlanBillingType } from './planBillingType';
 import type { UserRole } from './userRole';
 
@@ -15,6 +17,8 @@ export interface Me {
   name?: string | null;
   role: UserRole;
   hasActiveSubscription: boolean;
+  subscriptionState: MeSubscriptionState;
+  expiredSubscription: ExpiredSubscription | null;
   /** @nullable */
   currentPlanName?: string | null;
   /** @nullable */

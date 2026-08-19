@@ -23,7 +23,9 @@ import {
 import {
   db,
   paymentsTable,
+  plansTable,
   subscriptionsTable,
+  systemEventsTable,
   vpnKeysTable,
   vpnNodesTable,
 } from "@workspace/db";
@@ -60,17 +62,53 @@ const KEY_REVOKE_GRACE_PERIOD_HOURS = 24;
 export async function expireOverdueSubscriptions(): Promise<number> {
   const now = new Date();
 
-  const expired = await db
-    .update(subscriptionsTable)
-    .set({ status: "expired" })
-    .where(
-      and(
-        eq(subscriptionsTable.status, "active"),
-        isNotNull(subscriptionsTable.endsAt),
-        lt(subscriptionsTable.endsAt, now),
-      ),
-    )
-    .returning({ userId: subscriptionsTable.userId });
+  // Persist the transition and its user-facing event together. The status
+  // predicate makes repeated sweeps a no-op, while the transaction prevents a
+  // crashed run from marking the subscription expired without creating the
+  // corresponding notification.
+  const expired = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(subscriptionsTable)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(subscriptionsTable.status, "active"),
+          isNotNull(subscriptionsTable.endsAt),
+          lt(subscriptionsTable.endsAt, now),
+        ),
+      )
+      .returning({
+        id: subscriptionsTable.id,
+        userId: subscriptionsTable.userId,
+        planId: subscriptionsTable.planId,
+        endsAt: subscriptionsTable.endsAt,
+        isTrial: subscriptionsTable.isTrial,
+      });
+
+    if (rows.length === 0) return rows;
+
+    const planIds = [...new Set(rows.map((row) => row.planId))];
+    const plans = await tx
+      .select({ id: plansTable.id, name: plansTable.name })
+      .from(plansTable)
+      .where(inArray(plansTable.id, planIds));
+    const planNames = new Map(plans.map((plan) => [plan.id, plan.name]));
+
+    await tx.insert(systemEventsTable).values(
+      rows.map((row) => ({
+        eventType: "subscription_expired",
+        userId: row.userId,
+        metadata: {
+          subscriptionId: row.id,
+          planName: planNames.get(row.planId) ?? "Подписка",
+          endedAt: row.endsAt?.toISOString() ?? null,
+          isTrial: row.isTrial,
+        },
+      })),
+    );
+
+    return rows;
+  });
 
   return expired.length;
 }

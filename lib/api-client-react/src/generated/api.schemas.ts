@@ -91,6 +91,15 @@ export interface ChangePasswordResult {
   message: string;
 }
 
+export type MeSubscriptionState = typeof MeSubscriptionState[keyof typeof MeSubscriptionState];
+
+
+export const MeSubscriptionState = {
+  active: 'active',
+  expired: 'expired',
+  none: 'none',
+} as const;
+
 export type PlanBillingType = typeof PlanBillingType[keyof typeof PlanBillingType];
 
 
@@ -99,6 +108,15 @@ export const PlanBillingType = {
   hourly: 'hourly',
 } as const;
 
+export interface ExpiredSubscription {
+  id: number;
+  /** @nullable */
+  endsAt: string | null;
+  planName: string;
+  billingType: PlanBillingType;
+  isTrial: boolean;
+}
+
 export interface Me {
   id: number;
   email: string;
@@ -106,6 +124,8 @@ export interface Me {
   name?: string | null;
   role: UserRole;
   hasActiveSubscription: boolean;
+  subscriptionState: MeSubscriptionState;
+  expiredSubscription: ExpiredSubscription | null;
   /** @nullable */
   currentPlanName?: string | null;
   /** @nullable */

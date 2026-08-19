@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   db,
   plansTable,
   subscriptionsTable,
+  systemEventsTable,
   usersTable,
   vpnKeysTable,
   vpnNodesTable,
@@ -17,6 +18,7 @@ import {
 describe("expireOverdueSubscriptions", () => {
   let userId: number;
   let planId: number;
+  let planName: string;
   let nodeId: number;
   const subscriptionIds: number[] = [];
   const vpnKeyIds: number[] = [];
@@ -32,10 +34,11 @@ describe("expireOverdueSubscriptions", () => {
       .returning({ id: usersTable.id });
     userId = user.id;
 
+    planName = `Lifecycle plan ${randomBytes(4).toString("hex")}`;
     const [plan] = await db
       .insert(plansTable)
       .values({
-        name: `Lifecycle plan ${randomBytes(4).toString("hex")}`,
+        name: planName,
         priceRub: 10000,
         durationDays: 30,
       })
@@ -56,6 +59,7 @@ describe("expireOverdueSubscriptions", () => {
   });
 
   afterEach(async () => {
+    await db.delete(systemEventsTable).where(eq(systemEventsTable.userId, userId));
     for (const id of vpnKeyIds.splice(0)) {
       await db.delete(vpnKeysTable).where(eq(vpnKeysTable.id, id));
     }
@@ -123,6 +127,50 @@ describe("expireOverdueSubscriptions", () => {
       .from(vpnKeysTable)
       .where(eq(vpnKeysTable.id, keyId));
     expect(key?.revokedAt).toBeNull();
+  });
+
+  it("creates one user-scoped expiry event for a subscription transition", async () => {
+    const subscriptionId = await seedSubscription(
+      "active",
+      new Date(Date.now() - 60 * 60 * 1000),
+    );
+
+    await expireOverdueSubscriptions();
+    await expireOverdueSubscriptions();
+
+    const events = await db
+      .select()
+      .from(systemEventsTable)
+      .where(eq(systemEventsTable.userId, userId));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      eventType: "subscription_expired",
+      userId,
+      metadata: expect.objectContaining({
+        subscriptionId,
+        planName,
+        isTrial: false,
+      }),
+    });
+    expect((events[0].metadata as { endedAt?: string }).endedAt).toEqual(expect.any(String));
+  });
+
+  it("creates one event when concurrent expiry sweeps race for the same subscription", async () => {
+    await seedSubscription("active", new Date(Date.now() - 60 * 60 * 1000));
+
+    await Promise.all([expireOverdueSubscriptions(), expireOverdueSubscriptions()]);
+
+    const events = await db
+      .select()
+      .from(systemEventsTable)
+      .where(
+        and(
+          eq(systemEventsTable.userId, userId),
+          eq(systemEventsTable.eventType, "subscription_expired"),
+        ),
+      );
+    expect(events).toHaveLength(1);
   });
 
   it("does not touch a subscription that has not expired yet", async () => {

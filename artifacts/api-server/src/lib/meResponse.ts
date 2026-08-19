@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNull, or, sum } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, isNull, lt, or, sum } from "drizzle-orm";
 import { db, balanceTransactionsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
 import { resolvePublicAddress } from "./domain";
 
@@ -41,6 +41,45 @@ export async function buildMeData(user: User, requestHost?: string) {
     )
     .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
     .limit(1);
+
+  // Return a meaningful state while the expiry sweep is between runs too:
+  // subscriptions with a past endsAt count as expired here even before their
+  // persisted status flips from active to expired. We deliberately retain
+  // hourly rows in this data model, but their balance_exhausted notification
+  // remains the UI owner of that billing-specific state.
+  const [expiredSubscription] = activeSubscription
+    ? []
+    : await db
+        .select({
+          id: subscriptionsTable.id,
+          endsAt: subscriptionsTable.endsAt,
+          planName: plansTable.name,
+          billingType: plansTable.billingType,
+          isTrial: subscriptionsTable.isTrial,
+        })
+        .from(subscriptionsTable)
+        .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
+        .where(
+          and(
+            eq(subscriptionsTable.userId, user.id),
+            or(
+              eq(subscriptionsTable.status, "expired"),
+              and(
+                eq(subscriptionsTable.status, "active"),
+                isNotNull(subscriptionsTable.endsAt),
+                lt(subscriptionsTable.endsAt, new Date()),
+              ),
+            ),
+          ),
+        )
+        .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+        .limit(1);
+
+  const subscriptionState = activeSubscription
+    ? "active" as const
+    : expiredSubscription
+      ? "expired" as const
+      : "none" as const;
 
   const [keyCountResult] = await db
     .select({
@@ -92,6 +131,8 @@ export async function buildMeData(user: User, requestHost?: string) {
     name: user.name,
     role: user.role,
     hasActiveSubscription: Boolean(activeSubscription),
+    subscriptionState,
+    expiredSubscription: expiredSubscription ?? null,
     currentPlanName: activeSubscription?.planName ?? null,
     subscriptionEndsAt: activeSubscription?.endsAt ?? null,
     currentPlanBillingType: activeSubscription?.billingType ?? null,

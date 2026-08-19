@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, lt, or } from "drizzle-orm";
 import {
   db,
   plansTable,
@@ -106,6 +106,35 @@ router.get(
             .where(eq(plansTable.id, activeSubscription.planId))
         )[0]
       : undefined;
+    // An expired dated subscription needs an explicit client message. This
+    // query also catches the small window before the lifecycle sweep persists
+    // the status change. Hourly billing deliberately keeps its existing
+    // balance-warning ownership and does not use this announcement.
+    const [expiredSubscription] = activeSubscription
+      ? []
+      : await db
+          .select({
+            planName: plansTable.name,
+            billingType: plansTable.billingType,
+            isTrial: subscriptionsTable.isTrial,
+          })
+          .from(subscriptionsTable)
+          .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
+          .where(
+            and(
+              eq(subscriptionsTable.userId, userId),
+              or(
+                eq(subscriptionsTable.status, "expired"),
+                and(
+                  eq(subscriptionsTable.status, "active"),
+                  isNotNull(subscriptionsTable.endsAt),
+                  lt(subscriptionsTable.endsAt, new Date()),
+                ),
+              ),
+            ),
+          )
+          .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+          .limit(1);
     const profileTitle = activePlan?.name
       ? `${BRAND_NAME} — ${activePlan.name}`
       : BRAND_NAME;
@@ -118,7 +147,15 @@ router.get(
     // strictly and can't carry arbitrary fields like a money balance.
     const cabinetText = `Управляйте ключами и тарифом в личном кабинете ${BRAND_NAME}`;
     let announceText = cabinetText;
-    if (activePlan?.billingType === "hourly") {
+    if (
+      !activeSubscription &&
+      expiredSubscription &&
+      expiredSubscription.billingType !== "hourly"
+    ) {
+      announceText = expiredSubscription.isTrial
+        ? `⚠️ Пробный период закончился. Выберите тариф в личном кабинете, чтобы восстановить доступ. ${cabinetText}`
+        : `⚠️ Подписка${expiredSubscription.planName ? ` «${expiredSubscription.planName}»` : ""} закончилась. Продлите её в личном кабинете, чтобы восстановить доступ. ${cabinetText}`;
+    } else if (activePlan?.billingType === "hourly") {
       const [user] = await db
         .select({ balanceKopecks: usersTable.balanceKopecks })
         .from(usersTable)

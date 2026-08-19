@@ -39,6 +39,10 @@ import { usersTable } from "./users";
  *                           metadata: { remainingKopecks, hourlyRateKopecks }
  *  - "balance_exhausted":   emitted by hourlyBilling.ts right after VPN keys are revoked
  *                           due to zero balance. Signals that VPN was cut off.
+ *  - "subscription_expired": emitted by subscriptionLifecycle.ts when a dated monthly
+ *                           or trial subscription becomes expired. One event is written
+ *                           per subscription transition. metadata: { subscriptionId,
+ *                           planName, endedAt, isTrial }.
  *
  * The acknowledgedAt column is set to NOW() when an admin (or user) dismisses the event;
  * the GET endpoint for the bell only returns rows with acknowledgedAt IS NULL.

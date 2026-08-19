@@ -423,6 +423,11 @@ export default function Keys() {
   const activeKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => !k.revokedAt);
   const visibleKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => isAdmin || !k.revokedAt);
   const canIssue = !!me?.hasActiveSubscription;
+  const expiredSubscription =
+    me?.subscriptionState === "expired" &&
+    me.expiredSubscription?.billingType !== "hourly"
+      ? me.expiredSubscription
+      : null;
   const activeNodes = (nodes ?? []).filter((n: { isActive: boolean }) => n.isActive);
 
   const deviceSlots = me?.deviceSlots ?? 1;
@@ -583,6 +588,22 @@ export default function Keys() {
         </div>
       )}
 
+      {expiredSubscription && (
+        <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 px-4 py-3 text-sm">
+          <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1 text-red-800 dark:text-red-200">
+            <strong>{expiredSubscription.isTrial ? "Пробный период закончился." : "Подписка закончилась."}</strong>{" "}
+            Выпуск и обновление конфигураций недоступны до продления. Существующие ключи остаются в списке ниже.
+          </div>
+          <a
+            href="/plans"
+            className="shrink-0 text-red-700 dark:text-red-300 font-semibold underline underline-offset-2 hover:text-red-900 dark:hover:text-red-100 whitespace-nowrap"
+          >
+            Выбрать тариф →
+          </a>
+        </div>
+      )}
+
       {/* ── Platform tab switcher ──────────────────────────────────────────── */}
       <div className="flex items-center gap-1 bg-muted/50 border border-border p-1 w-fit">
         <button
@@ -628,14 +649,14 @@ export default function Keys() {
             </p>
           </OnboardingTip>
 
-          {!canIssue && (
+          {!canIssue && !expiredSubscription && (
             <p className="text-sm text-muted-foreground bg-card border border-border p-4">
               Для выпуска ключей нужна активная подписка. Перейдите в раздел «Тарифы».
             </p>
           )}
 
           {/* Subscription URL — Android */}
-          {subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && activeKeys.length > 0 && (
             <div className="bg-card border border-border p-5 space-y-3">
               <div className="flex items-center gap-2 font-bold">
                 <RefreshCw className="w-4 h-4 text-primary" />
@@ -667,7 +688,7 @@ export default function Keys() {
           )}
 
           {/* Xray config with Russian bypass — Android / Windows */}
-          {subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && activeKeys.length > 0 && (
             <div className="bg-card border border-border p-5 space-y-4">
               <div className="flex items-center gap-2 font-bold">
                 <Route className="w-4 h-4 text-green-500" />
@@ -754,14 +775,14 @@ export default function Keys() {
             </p>
           </OnboardingTip>
 
-          {!canIssue && (
+          {!canIssue && !expiredSubscription && (
             <p className="text-sm text-muted-foreground bg-card border border-border p-4">
               Для выпуска ключей нужна активная подписка. Перейдите в раздел «Тарифы».
             </p>
           )}
 
           {/* Subscription URL — iOS */}
-          {subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && activeKeys.length > 0 && (
             <div className="bg-card border border-border p-5 space-y-3">
               <div className="flex items-center gap-2 font-bold">
                 <RefreshCw className="w-4 h-4 text-primary" />
@@ -792,7 +813,7 @@ export default function Keys() {
           )}
 
           {/* iOS Happ routing profile */}
-          {subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && activeKeys.length > 0 && (
             <div className="bg-card border border-border p-5 space-y-4">
               <div className="flex items-center gap-2 font-bold">
                 <Route className="w-4 h-4 text-green-500" />

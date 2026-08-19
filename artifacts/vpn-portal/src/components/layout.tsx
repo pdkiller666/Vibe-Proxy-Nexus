@@ -175,7 +175,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto overflow-x-hidden">
         <div className="max-w-5xl mx-auto">
-          {/* User notification banners (payment confirmed/rejected + key migrations) */}
+          {/* User notification banners (payment confirmed/rejected + key migrations).
+              subscription_expired intentionally belongs to Dashboard, where it
+              is matched to the current expired subscription and cannot conflict
+              with the persistent access-state card. */}
           {unreadNotifications
             .filter((n) =>
               n.eventType === "payment_rejected" ||

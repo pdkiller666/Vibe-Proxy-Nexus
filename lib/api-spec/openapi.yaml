@@ -2040,6 +2040,8 @@ components:
           isBanned,
           isTrialSubscription,
           autoRenewFromBalance,
+          subscriptionState,
+          expiredSubscription,
         ]
       properties:
         id: { type: integer }
@@ -2048,6 +2050,21 @@ components:
         role:
           $ref: "#/components/schemas/UserRole"
         hasActiveSubscription: { type: boolean }
+        # The current access state. "expired" is distinct from "none" so the
+        # cabinet can explain why access stopped rather than treating a former
+        # subscriber like a user who never selected a plan.
+        subscriptionState:
+          type: string
+          enum: [active, expired, none]
+        # Most recent ended subscription when subscriptionState is "expired".
+        # Kept nullable for active and never-subscribed users. Hourly
+        # subscriptions may have endsAt = null because their billing is
+        # balance-driven; their existing balance_exhausted UI remains the
+        # user-facing owner of that state.
+        expiredSubscription:
+          oneOf:
+            - $ref: "#/components/schemas/ExpiredSubscription"
+            - type: "null"
         currentPlanName: { type: ["string", "null"] }
         subscriptionEndsAt: { type: ["string", "null"], format: date-time }
         currentPlanBillingType:
@@ -2100,6 +2117,17 @@ components:
         # Opt-in automatic monthly renewal from the wallet balance.
         # When true the autoRenewJob debits the plan price ~24 h before expiry.
         autoRenewFromBalance: { type: boolean }
+
+    ExpiredSubscription:
+      type: object
+      required: [id, endsAt, planName, billingType, isTrial]
+      properties:
+        id: { type: integer }
+        endsAt: { type: ["string", "null"], format: date-time }
+        planName: { type: string }
+        billingType:
+          $ref: "#/components/schemas/PlanBillingType"
+        isTrial: { type: boolean }
 
     PlanBillingType:
       type: string
