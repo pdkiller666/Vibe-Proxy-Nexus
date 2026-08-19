@@ -24,6 +24,16 @@ const HistoryQuery = z.object({
   pageSize: z.coerce.number().min(1).max(100).default(20),
 });
 
+const DetailParams = z.object({
+  broadcastId: z.string().uuid(),
+});
+
+const DetailQuery = z.object({
+  recipientPage:     z.coerce.number().min(1).default(1),
+  recipientPageSize: z.coerce.number().min(1).max(100).default(50),
+  search:            z.string().trim().max(100).default(""),
+});
+
 /**
  * POST /admin/broadcasts
  * Sends an admin_message notification to the resolved set of users.
@@ -114,12 +124,138 @@ router.post("/admin/broadcasts", requireAuth, requireAdmin, async (req, res): Pr
   await db.insert(systemEventsTable).values(
     targetUserIds.map((userId) => ({
       eventType: "admin_message",
-      metadata:  { title, message, broadcastId, sentAt } as Record<string, unknown>,
+      metadata:  {
+        title,
+        message,
+        broadcastId,
+        sentAt,
+        targetType,
+        ...(targetType === "filtered" && filters ? { filters } : {}),
+      } as Record<string, unknown>,
       userId,
     })),
   );
 
   res.json({ sentCount: targetUserIds.length, skippedBannedCount });
+});
+
+/**
+ * GET /admin/broadcasts/:broadcastId
+ * Returns the full broadcast content and a paginated list of existing users
+ * who received it. Deleted users are intentionally absent because their
+ * user-scoped system event rows are removed by the existing FK cascade.
+ */
+router.get("/admin/broadcasts/:broadcastId", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const params = DetailParams.safeParse(req.params);
+  const query = DetailQuery.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Некорректные параметры рассылки" });
+    return;
+  }
+
+  const { broadcastId } = params.data;
+  const { recipientPage, recipientPageSize, search } = query.data;
+  const offset = (recipientPage - 1) * recipientPageSize;
+  const searchPattern = `%${search}%`;
+
+  const [summaryResult, recipientsResult, recipientCountResult, filteredRecipientCountResult] = await Promise.all([
+    db.execute<{
+      title: string;
+      message: string;
+      sentAt: Date | string;
+      targetType: string | null;
+      filters: Record<string, unknown> | null;
+    }>(sql`
+      SELECT
+        metadata->>'title' AS title,
+        metadata->>'message' AS message,
+        created_at AS "sentAt",
+        metadata->>'targetType' AS "targetType",
+        metadata->'filters' AS filters
+      FROM system_events
+      WHERE event_type = 'admin_message'
+        AND user_id IS NOT NULL
+        AND metadata->>'broadcastId' = ${broadcastId}
+      ORDER BY created_at ASC
+      LIMIT 1
+    `),
+    db.execute<{
+      userId: number;
+      email: string;
+      name: string | null;
+      acknowledgedAt: Date | string | null;
+    }>(sql`
+      SELECT
+        u.id AS "userId",
+        u.email,
+        u.name,
+        se.acknowledged_at AS "acknowledgedAt"
+      FROM system_events se
+      INNER JOIN users u ON u.id = se.user_id
+      WHERE se.event_type = 'admin_message'
+        AND se.user_id IS NOT NULL
+        AND se.metadata->>'broadcastId' = ${broadcastId}
+        AND (
+          ${search} = ''
+          OR u.email ILIKE ${searchPattern}
+          OR CAST(u.id AS TEXT) ILIKE ${searchPattern}
+          OR COALESCE(u.name, '') ILIKE ${searchPattern}
+        )
+      ORDER BY LOWER(u.email), u.id
+      LIMIT ${recipientPageSize} OFFSET ${offset}
+    `),
+    db.execute<{ count: number }>(sql`
+      SELECT COUNT(*)::int AS count
+      FROM system_events
+      WHERE event_type = 'admin_message'
+        AND user_id IS NOT NULL
+        AND metadata->>'broadcastId' = ${broadcastId}
+    `),
+    db.execute<{ count: number }>(sql`
+      SELECT COUNT(*)::int AS count
+      FROM system_events se
+      INNER JOIN users u ON u.id = se.user_id
+      WHERE se.event_type = 'admin_message'
+        AND se.user_id IS NOT NULL
+        AND se.metadata->>'broadcastId' = ${broadcastId}
+        AND (
+          ${search} = ''
+          OR u.email ILIKE ${searchPattern}
+          OR CAST(u.id AS TEXT) ILIKE ${searchPattern}
+          OR COALESCE(u.name, '') ILIKE ${searchPattern}
+        )
+    `),
+  ]);
+
+  const summary = summaryResult.rows[0];
+  if (!summary) {
+    res.status(404).json({ error: "Рассылка не найдена" });
+    return;
+  }
+
+  const recipientTotal = recipientCountResult.rows[0]?.count ?? 0;
+  const recipientFilteredTotal = filteredRecipientCountResult.rows[0]?.count ?? 0;
+  res.json({
+    broadcastId,
+    title: summary.title,
+    message: summary.message,
+    sentAt: new Date(summary.sentAt).toISOString(),
+    recipientCount: recipientTotal,
+    targetType: summary.targetType,
+    filters: summary.filters,
+    recipients: recipientsResult.rows.map((recipient) => ({
+      userId: recipient.userId,
+      email: recipient.email,
+      name: recipient.name,
+      acknowledgedAt: recipient.acknowledgedAt
+        ? new Date(recipient.acknowledgedAt).toISOString()
+        : null,
+    })),
+    recipientTotal,
+    recipientFilteredTotal,
+    recipientPage,
+    recipientPageSize,
+  });
 });
 
 /**

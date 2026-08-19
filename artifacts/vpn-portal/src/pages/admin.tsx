@@ -67,6 +67,8 @@ import {
   getGetAdminSystemEventsHistoryQueryKey,
   useSendAdminBroadcast,
   useListAdminBroadcasts,
+  useGetAdminBroadcastDetails,
+  getGetAdminBroadcastDetailsQueryKey,
   getListAdminBroadcastsQueryKey,
   useSearchAdminUsers,
   useProvisionVpnNode,
@@ -88,6 +90,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6013,6 +6016,182 @@ function UserSearchCombobox({
   );
 }
 
+function BroadcastDetailsDialog({
+  broadcastId,
+  plans,
+  onOpenChange,
+}: {
+  broadcastId: string;
+  plans: Plan[] | undefined;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [recipientPage, setRecipientPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+      setRecipientPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setRecipientPage(1);
+    setSearchInput("");
+    setSearch("");
+  }, [broadcastId]);
+
+  const detailParams = { recipientPage, recipientPageSize: 50, search };
+  const { data: details, isLoading, isError } = useGetAdminBroadcastDetails(
+    broadcastId,
+    detailParams,
+    { query: { queryKey: getGetAdminBroadcastDetailsQueryKey(broadcastId, detailParams), staleTime: 15_000 } },
+  );
+
+  const audienceLabel = (() => {
+    if (!details?.targetType) return "Условия аудитории не сохранены";
+    if (details.targetType === "all") return "Все пользователи";
+    if (details.targetType === "specific") return "Конкретные пользователи";
+
+    const filters = details.filters as {
+      hasActiveSubscription?: boolean;
+      planId?: number;
+    } | null | undefined;
+    const subscriptionLabel =
+      filters?.hasActiveSubscription === true ? "С активной подпиской" :
+      filters?.hasActiveSubscription === false ? "Без активной подписки" :
+      "По фильтру";
+    const plan = filters?.planId
+      ? plans?.find((candidate) => candidate.id === filters.planId)
+      : undefined;
+    return plan ? `${subscriptionLabel}, тариф «${plan.name}»` : subscriptionLabel;
+  })();
+
+  const recipientTotal = details?.recipientTotal ?? 0;
+  const filteredTotal = details?.recipientFilteredTotal ?? 0;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / 50));
+  const recipientLabel = search
+    ? `${filteredTotal} из ${recipientTotal}`
+    : String(recipientTotal);
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-4xl overflow-y-auto rounded-none p-4 sm:rounded-lg sm:p-6">
+        <DialogHeader className="pr-8">
+          <DialogTitle>Подробности рассылки</DialogTitle>
+          <DialogDescription>
+            {details ? `Отправлено ${formatDate(details.sentAt)}` : "Загрузка данных рассылки…"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">Загрузка рассылки…</div>
+        ) : isError || !details ? (
+          <div className="border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+            Не удалось загрузить подробности рассылки. Попробуйте открыть её ещё раз.
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <section className="space-y-1.5">
+              <div className="text-xs font-medium uppercase text-muted-foreground">Заголовок</div>
+              <p className="break-words text-base font-semibold">{details.title}</p>
+            </section>
+
+            <section className="space-y-1.5">
+              <div className="text-xs font-medium uppercase text-muted-foreground">Аудитория</div>
+              <div className="border border-border bg-muted/30 p-3 text-sm">
+                <div>{audienceLabel}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Получателей на момент просмотра: {details.recipientCount}
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-1.5">
+              <div className="text-xs font-medium uppercase text-muted-foreground">Текст сообщения</div>
+              <div className="max-h-72 overflow-y-auto border border-border bg-muted/20 p-3 text-sm leading-6 whitespace-pre-wrap break-words">
+                {details.message}
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <div className="text-xs font-medium uppercase text-muted-foreground">Получатели</div>
+                  <div className="mt-1 text-sm font-medium">{recipientLabel} пользователей</div>
+                </div>
+                <div className="w-full sm:w-72">
+                  <label className="sr-only" htmlFor="broadcast-recipient-search">Поиск получателя</label>
+                  <Input
+                    id="broadcast-recipient-search"
+                    className="rounded-none"
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Поиск по email, имени или ID…"
+                  />
+                </div>
+              </div>
+
+              {details.recipients.length === 0 ? (
+                <div className="border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+                  {search ? "Получатели по этому запросу не найдены" : "Получателей не найдено"}
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto border border-border">
+                  {details.recipients.map((recipient) => (
+                    <div
+                      key={recipient.userId}
+                      className="flex items-start justify-between gap-3 border-b border-border p-3 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{recipient.email}</div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+                          <span>#{recipient.userId}</span>
+                          {recipient.name && <span className="truncate">{recipient.name}</span>}
+                        </div>
+                      </div>
+                      <div className={`shrink-0 text-right text-xs ${recipient.acknowledgedAt ? "text-emerald-700" : "text-muted-foreground"}`}>
+                        <div>{recipient.acknowledgedAt ? "Прочитано" : "Не прочитано"}</div>
+                        {recipient.acknowledgedAt && (
+                          <div className="mt-0.5 hidden sm:block">{formatDate(recipient.acknowledgedAt)}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {filteredTotal > 50 && (
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-xs text-muted-foreground">
+                    Страница {recipientPage} из {totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="px-3 py-1 border rounded-none disabled:opacity-40"
+                      disabled={recipientPage <= 1}
+                      onClick={() => setRecipientPage((currentPage) => currentPage - 1)}
+                    >←</button>
+                    <button
+                      type="button"
+                      className="px-3 py-1 border rounded-none disabled:opacity-40"
+                      disabled={recipientPage >= totalPages}
+                      onClick={() => setRecipientPage((currentPage) => currentPage + 1)}
+                    >→</button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function BroadcastsTab() {
   const { toast } = useToast();
   const { data: plans } = useListAdminPlans();
@@ -6027,6 +6206,7 @@ function BroadcastsTab() {
 
   // ── History state ──
   const [page,    setPage]    = useState(1);
+  const [selectedBroadcastId, setSelectedBroadcastId] = useState<string | null>(null);
   const pageSize = 20;
 
   const { data: history, isLoading: historyLoading, refetch: refetchHistory } = useListAdminBroadcasts(
@@ -6212,34 +6392,65 @@ function BroadcastsTab() {
         ) : !history || history.entries.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">Рассылок пока не было</div>
         ) : (
-          <div className="overflow-x-auto border rounded-none">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="bg-muted/50 border-b text-left text-xs font-semibold">
-                  <th className="p-2 whitespace-nowrap">Отправлено</th>
-                  <th className="p-2">Заголовок</th>
-                  <th className="p-2">Текст</th>
-                  <th className="p-2 text-right whitespace-nowrap">Получателей</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {history.entries.map((b) => (
-                  <tr key={b.broadcastId} className="hover:bg-muted/20">
-                    <td className="p-2 text-xs text-muted-foreground font-mono whitespace-nowrap">
-                      {formatDate(b.sentAt.toString())}
-                    </td>
-                    <td className="p-2 font-medium max-w-[180px] truncate" title={b.title}>
-                      {b.title}
-                    </td>
-                    <td className="p-2 text-xs text-muted-foreground max-w-[300px] truncate" title={b.message}>
-                      {b.message}
-                    </td>
-                    <td className="p-2 text-right font-mono text-xs">{b.recipientCount}</td>
+          <>
+            <div className="space-y-2 sm:hidden">
+              {history.entries.map((broadcast) => (
+                <button
+                  key={broadcast.broadcastId}
+                  type="button"
+                  onClick={() => setSelectedBroadcastId(broadcast.broadcastId)}
+                  className="w-full border border-border p-3 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{formatDate(broadcast.sentAt)}</span>
+                    <span className="shrink-0 text-xs font-mono text-muted-foreground">
+                      {broadcast.recipientCount} получ.
+                    </span>
+                  </div>
+                  <div className="mt-2 break-words text-sm font-semibold">{broadcast.title}</div>
+                  <div className="mt-1 max-h-10 overflow-hidden break-words text-xs leading-5 text-muted-foreground">
+                    {broadcast.message}
+                  </div>
+                  <div className="mt-2 text-xs font-medium text-primary">Подробнее →</div>
+                </button>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto border rounded-none sm:block">
+              <table className="w-full min-w-[680px] text-sm">
+                <thead>
+                  <tr className="bg-muted/50 border-b text-left text-xs font-semibold">
+                    <th className="p-2 whitespace-nowrap">Отправлено</th>
+                    <th className="p-2">Заголовок</th>
+                    <th className="p-2">Текст</th>
+                    <th className="p-2 text-right whitespace-nowrap">Получателей</th>
+                    <th className="p-2"><span className="sr-only">Подробности</span></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {history.entries.map((broadcast) => (
+                    <tr key={broadcast.broadcastId} className="hover:bg-muted/20">
+                      <td className="p-2 text-xs text-muted-foreground font-mono whitespace-nowrap">
+                        {formatDate(broadcast.sentAt)}
+                      </td>
+                      <td className="p-2 font-medium max-w-[180px] truncate">{broadcast.title}</td>
+                      <td className="p-2 text-xs text-muted-foreground max-w-[300px] truncate">{broadcast.message}</td>
+                      <td className="p-2 text-right font-mono text-xs">{broadcast.recipientCount}</td>
+                      <td className="p-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBroadcastId(broadcast.broadcastId)}
+                          className="whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                        >
+                          Подробнее
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {total > pageSize && (
@@ -6260,6 +6471,16 @@ function BroadcastsTab() {
               >→</button>
             </div>
           </div>
+        )}
+
+        {selectedBroadcastId && (
+          <BroadcastDetailsDialog
+            broadcastId={selectedBroadcastId}
+            plans={plans}
+            onOpenChange={(open) => {
+              if (!open) setSelectedBroadcastId(null);
+            }}
+          />
         )}
       </div>
     </div>

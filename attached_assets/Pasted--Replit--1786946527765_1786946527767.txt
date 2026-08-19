@@ -1,0 +1,143 @@
+Проверил все файлы — агент Replit **не применил** правки для кейсов. Вот что реально есть:
+
+## ❌ Что отсутствует
+
+| Файл | Что должно быть | Что есть |
+|---|---|---|
+| `admin/config.yml` | Поля `photo` и `gallery` в блоке «Кейсы (данные)» | Только title, task, solution, result, result_note, meta |
+| `content/site.json` | У кейсов поля `photo` и `gallery` | Только стандартные поля (без фото и галереи) |
+| `index.html` → `renderCases` | Логика фона и кнопки «📸 Фото кейса» | Рендерит только текст, игнорирует `photo` и `gallery` |
+| `photos.js` | `window.__openLb` для разных списков | `initLightbox` принимает только один список |
+
+## ✅ Что нужно сделать (4 правки)
+
+### 1. `admin/config.yml`
+
+Найдите блок:
+```yaml
+          - name: "cases"
+            label: "Кейсы (данные)"
+            widget: list
+            summary: "{{fields.title}}"
+            fields:
+              - {name: title, label: "Заголовок", widget: string}
+              - {name: task, label: "Задача", widget: text}
+              - {name: solution, label: "Решение", widget: text}
+              - {name: result, label: "Результат крупно", widget: string}
+              - {name: result_note, label: "Подпись под результатом", widget: string}
+              - {name: meta, label: "Мета", widget: string}
+```
+
+После строки `- {name: meta, label: "Мета", widget: string}` добавьте:
+
+```yaml
+              - {name: photo, label: "Фоновое фото блока", widget: image, required: false}
+              - name: gallery
+                label: "Галерея кейса (открывается кнопкой)"
+                widget: list
+                required: false
+                fields:
+                  - {name: photo, label: "Фото", widget: image, required: false}
+                  - {name: caption, label: "Подпись", widget: string, required: false}
+```
+
+### 2. `index.html` — замените функцию `renderCases`
+
+Найдите:
+```javascript
+function renderCases(list){
+  const box = document.getElementById('casesList');
+  if (!box || !Array.isArray(list) || !list.length) return;
+  box.innerHTML = list.map((c, i) =>
+    '<article class="case reveal"><div class="case-main"><span class="f-num">Кейс ' +
+    String(i + 1).padStart(2, '0') + '</span><h3>' + escapeHtml(c.title || '') +
+    '</h3><p><b>Задача:</b> ' + escapeHtml(c.task || '') + ' <b>Решение:</b> ' +
+    escapeHtml(c.solution || '') + '</p></div><div class="case-side"><div class="case-res">' +
+    escapeHtml(c.result || '') + '<small>' + escapeHtml(c.result_note || '') +
+    '</small></div><span class="case-meta">' + escapeHtml(c.meta || '') +
+    '</span></div></article>'
+  ).join('');
+}
+```
+
+Замените на:
+```javascript
+function renderCases(list){
+  const box = document.getElementById('casesList');
+  if (!box || !Array.isArray(list) || !list.length) return;
+  box.innerHTML = list.map((c, i) => {
+    const bgStyle = c.photo ? ' style="background-image:linear-gradient(rgba(20,17,20,.84),rgba(20,17,20,.88)),url(\'' + mediaUrl(c.photo) + '\');background-size:cover;background-position:center"' : '';
+    const galleryBtn = (Array.isArray(c.gallery) && c.gallery.length) ? '<button class="case-gallery-btn" data-case-idx="' + i + '">📸 Фото кейса · ' + c.gallery.length + '</button>' : '';
+    return '<article class="case reveal"' + bgStyle + '><div class="case-main"><span class="f-num">Кейс ' +
+      String(i + 1).padStart(2, '0') + '</span><h3>' + escapeHtml(c.title || '') +
+      '</h3><p><b>Задача:</b> ' + escapeHtml(c.task || '') + ' <b>Решение:</b> ' +
+      escapeHtml(c.solution || '') + '</p>' + galleryBtn + '</div><div class="case-side"><div class="case-res">' +
+      escapeHtml(c.result || '') + '<small>' + escapeHtml(c.result_note || '') +
+      '</small></div><span class="case-meta">' + escapeHtml(c.meta || '') +
+      '</span></div></article>';
+  }).join('');
+}
+```
+
+### 3. `index.html` — добавьте обработчик кликов по кнопкам галерей кейсов
+
+Сразу после вызова `renderCases(data.cases);` внутри `applyCmsContent` добавьте:
+```javascript
+    // Обработчик кнопок галерей кейсов
+    const casesList = document.getElementById('casesList');
+    if (casesList) {
+      casesList.addEventListener('click', function(e) {
+        if (e.target.classList.contains('case-gallery-btn')) {
+          const idx = +e.target.getAttribute('data-case-idx');
+          if (data.cases && data.cases[idx] && Array.isArray(data.cases[idx].gallery)) {
+            if (window.__openLb) {
+              window.__openLb(data.cases[idx].gallery, 0);
+            }
+          }
+        }
+      });
+    }
+```
+
+### 4. `photos.js` — добавьте `window.__openLb`
+
+Найдите в функции `initLightbox` строку:
+```js
+function openLb(i) { show(i); lb.classList.add('open'); document.body.style.overflow = 'hidden'; }
+```
+
+Сразу после неё добавьте:
+```js
+    window.__openLb = openLb;
+```
+
+### 5. `index.html` — исправьте `mediaUrl`
+
+Найдите:
+```javascript
+function mediaUrl(value){
+  const url = String(value || '');
+  return /^(https?:\/\/|\/|\.\/)/i.test(url) ? url : '';
+}
+```
+
+Замените на:
+```javascript
+function mediaUrl(value){
+  const url = String(value || '');
+  if (!/^(https?:\/\/|\/|\.\/)/i.test(url)) return '';
+  if (url.charAt(0) === '/' && url.charAt(1) !== '/') {
+    const base = window.location.pathname.replace(/[^/]*$/, '');
+    return base + url.slice(1);
+  }
+  return url;
+}
+```
+
+## После всех правок
+
+1. Commit → Push
+2. `<script src="photos.js?v=12"></script>` в `index.html`
+3. Ctrl+Shift+R на сайте
+
+Тогда в админке появятся поля фото в кейсах, на сайте — фон и кнопка галереи, и всё будет работать через единый просмотрщик. Передайте эти правки агенту или примените сами.

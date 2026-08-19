@@ -1198,6 +1198,49 @@ export interface AdminBroadcastListResponse {
   pageSize: number;
 }
 
+export interface AdminBroadcastRecipient {
+  userId: number;
+  email: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  acknowledgedAt: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AdminBroadcastDetailsTargetType = typeof AdminBroadcastDetailsTargetType[keyof typeof AdminBroadcastDetailsTargetType] | null;
+
+
+export const AdminBroadcastDetailsTargetType = {
+  all: 'all',
+  filtered: 'filtered',
+  specific: 'specific',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminBroadcastDetailsFilters = { [key: string]: unknown } | null;
+
+export interface AdminBroadcastDetails {
+  broadcastId: string;
+  title: string;
+  message: string;
+  sentAt: string;
+  recipientCount: number;
+  /** @nullable */
+  targetType?: AdminBroadcastDetailsTargetType;
+  /** @nullable */
+  filters?: AdminBroadcastDetailsFilters;
+  recipients: AdminBroadcastRecipient[];
+  recipientTotal: number;
+  recipientFilteredTotal: number;
+  recipientPage: number;
+  recipientPageSize: number;
+}
+
 export type AdminAuditLogEntryMethod = typeof AdminAuditLogEntryMethod[keyof typeof AdminAuditLogEntryMethod];
 
 
@@ -1340,6 +1383,22 @@ page?: number;
  * @maximum 100
  */
 pageSize?: number;
+};
+
+export type GetAdminBroadcastDetailsParams = {
+/**
+ * @minimum 1
+ */
+recipientPage?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+recipientPageSize?: number;
+/**
+ * @maxLength 100
+ */
+search?: string;
 };
 
 export type GetVpnNodeMetricsParams = {

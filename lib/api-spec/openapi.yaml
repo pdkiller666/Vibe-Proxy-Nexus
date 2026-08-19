@@ -1647,6 +1647,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminBroadcastListResponse"
 
+  /admin/broadcasts/{broadcastId}:
+    get:
+      operationId: getAdminBroadcastDetails
+      tags: [admin]
+      summary: Get full broadcast content and its existing recipients
+      parameters:
+        - name: broadcastId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: recipientPage
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: recipientPageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 100, default: "" }
+      responses:
+        "200":
+          description: Full broadcast details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBroadcastDetails"
+        "404":
+          description: Broadcast not found
+
   /admin/health/traffic-polling:
     get:
       operationId: getAdminTrafficPollingHealth
@@ -3334,6 +3363,37 @@ components:
         total: { type: integer }
         page: { type: integer }
         pageSize: { type: integer }
+
+    AdminBroadcastRecipient:
+      type: object
+      required: [userId, email, acknowledgedAt]
+      properties:
+        userId: { type: integer }
+        email: { type: string, format: email }
+        name: { type: ["string", "null"] }
+        acknowledgedAt: { type: ["string", "null"], format: date-time }
+
+    AdminBroadcastDetails:
+      type: object
+      required:
+        [broadcastId, title, message, sentAt, recipientCount, recipients,
+         recipientTotal, recipientFilteredTotal, recipientPage, recipientPageSize]
+      properties:
+        broadcastId: { type: string, format: uuid }
+        title: { type: string }
+        message: { type: string }
+        sentAt: { type: string, format: date-time }
+        recipientCount: { type: integer }
+        targetType: { type: ["string", "null"], enum: [all, filtered, specific, null] }
+        filters: { type: ["object", "null"], additionalProperties: true }
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminBroadcastRecipient"
+        recipientTotal: { type: integer }
+        recipientFilteredTotal: { type: integer }
+        recipientPage: { type: integer }
+        recipientPageSize: { type: integer }
 
     AdminAuditLogEntry:
       type: object

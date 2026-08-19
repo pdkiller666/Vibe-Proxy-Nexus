@@ -2245,6 +2245,50 @@ export const ListAdminBroadcastsResponse = zod.object({
 
 
 /**
+ * @summary Get full broadcast content and its existing recipients
+ */
+export const GetAdminBroadcastDetailsParams = zod.object({
+  "broadcastId": zod.coerce.string().uuid()
+})
+
+export const getAdminBroadcastDetailsQueryRecipientPageDefault = 1;
+
+export const getAdminBroadcastDetailsQueryRecipientPageSizeDefault = 50;
+export const getAdminBroadcastDetailsQueryRecipientPageSizeMax = 100;
+
+export const getAdminBroadcastDetailsQuerySearchDefault = ``;
+export const getAdminBroadcastDetailsQuerySearchMax = 100;
+
+
+
+export const GetAdminBroadcastDetailsQueryParams = zod.object({
+  "recipientPage": zod.coerce.number().min(1).default(getAdminBroadcastDetailsQueryRecipientPageDefault),
+  "recipientPageSize": zod.coerce.number().min(1).max(getAdminBroadcastDetailsQueryRecipientPageSizeMax).default(getAdminBroadcastDetailsQueryRecipientPageSizeDefault),
+  "search": zod.coerce.string().max(getAdminBroadcastDetailsQuerySearchMax).default(getAdminBroadcastDetailsQuerySearchDefault)
+})
+
+export const GetAdminBroadcastDetailsResponse = zod.object({
+  "broadcastId": zod.string().uuid(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "sentAt": zod.coerce.date(),
+  "recipientCount": zod.number(),
+  "targetType": zod.union([zod.literal('all'),zod.literal('filtered'),zod.literal('specific'),zod.literal(null)]).nullish(),
+  "filters": zod.record(zod.string(), zod.unknown()).nullish(),
+  "recipients": zod.array(zod.object({
+  "userId": zod.number(),
+  "email": zod.string().email(),
+  "name": zod.string().nullish(),
+  "acknowledgedAt": zod.coerce.date().nullable()
+})),
+  "recipientTotal": zod.number(),
+  "recipientFilteredTotal": zod.number(),
+  "recipientPage": zod.number(),
+  "recipientPageSize": zod.number()
+})
+
+
+/**
  * @summary Get traffic polling health status (last success time + consecutive failure count)
  */
 export const GetAdminTrafficPollingHealthResponse = zod.object({

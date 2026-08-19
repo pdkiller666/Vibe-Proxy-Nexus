@@ -23,6 +23,7 @@ import type {
   AcknowledgeAllSystemEventsResult,
   AdminAuditLogListResponse,
   AdminBalanceTransaction,
+  AdminBroadcastDetails,
   AdminBroadcastInput,
   AdminBroadcastListResponse,
   AdminInviteLink,
@@ -62,6 +63,7 @@ import type {
   ForgotPasswordInput,
   ForgotPasswordResult,
   GetAdminAuditLogParams,
+  GetAdminBroadcastDetailsParams,
   GetAdminNotificationsParams,
   GetAdminSystemEventsHistoryParams,
   GetVpnNodeMetricsParams,
@@ -6347,6 +6349,95 @@ export function useListAdminBroadcasts<TData = Awaited<ReturnType<typeof listAdm
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAdminBroadcastsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminBroadcastDetailsUrl = (broadcastId: string,
+    params?: GetAdminBroadcastDetailsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/broadcasts/${broadcastId}?${stringifiedParams}` : `/api/admin/broadcasts/${broadcastId}`
+}
+
+/**
+ * @summary Get full broadcast content and its existing recipients
+ */
+export const getAdminBroadcastDetails = async (broadcastId: string,
+    params?: GetAdminBroadcastDetailsParams, options?: RequestInit): Promise<AdminBroadcastDetails> => {
+
+  return customFetch<AdminBroadcastDetails>(getGetAdminBroadcastDetailsUrl(broadcastId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminBroadcastDetailsQueryKey = (broadcastId: string,
+    params?: GetAdminBroadcastDetailsParams,) => {
+    return [
+    `/api/admin/broadcasts/${broadcastId}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminBroadcastDetailsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminBroadcastDetails>>, TError = ErrorType<void>>(broadcastId: string,
+    params?: GetAdminBroadcastDetailsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminBroadcastDetails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminBroadcastDetailsQueryKey(broadcastId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminBroadcastDetails>>> = ({ signal }) => getAdminBroadcastDetails(broadcastId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: broadcastId !== null && broadcastId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminBroadcastDetails>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminBroadcastDetailsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminBroadcastDetails>>>
+export type GetAdminBroadcastDetailsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get full broadcast content and its existing recipients
+ */
+
+export function useGetAdminBroadcastDetails<TData = Awaited<ReturnType<typeof getAdminBroadcastDetails>>, TError = ErrorType<void>>(
+ broadcastId: string,
+    params?: GetAdminBroadcastDetailsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminBroadcastDetails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminBroadcastDetailsQueryOptions(broadcastId,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
