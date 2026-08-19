@@ -20,8 +20,8 @@ const BroadcastInputSchema = z.object({
 });
 
 const HistoryQuery = z.object({
-  page:     z.coerce.number().min(1).default(1),
-  pageSize: z.coerce.number().min(1).max(100).default(20),
+  page:     z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 const DetailParams = z.object({
@@ -29,8 +29,8 @@ const DetailParams = z.object({
 });
 
 const DetailQuery = z.object({
-  recipientPage:     z.coerce.number().min(1).default(1),
-  recipientPageSize: z.coerce.number().min(1).max(100).default(50),
+  recipientPage:     z.coerce.number().int().min(1).default(1),
+  recipientPageSize: z.coerce.number().int().min(1).max(100).default(50),
   search:            z.string().trim().max(100).default(""),
 });
 
@@ -158,101 +158,126 @@ router.get("/admin/broadcasts/:broadcastId", requireAuth, requireAdmin, async (r
   const offset = (recipientPage - 1) * recipientPageSize;
   const searchPattern = `%${search}%`;
 
-  const [summaryResult, recipientsResult, recipientCountResult, filteredRecipientCountResult] = await Promise.all([
-    db.execute<{
-      title: string;
-      message: string;
-      sentAt: Date | string;
-      targetType: string | null;
-      filters: Record<string, unknown> | null;
-    }>(sql`
-      SELECT
-        metadata->>'title' AS title,
-        metadata->>'message' AS message,
-        created_at AS "sentAt",
-        metadata->>'targetType' AS "targetType",
-        metadata->'filters' AS filters
-      FROM system_events
-      WHERE event_type = 'admin_message'
-        AND user_id IS NOT NULL
-        AND metadata->>'broadcastId' = ${broadcastId}
-      ORDER BY created_at ASC
-      LIMIT 1
-    `),
-    db.execute<{
+  const detailsResult = await db.execute<{
+    title: string | null;
+    message: string | null;
+    sentAt: Date | string | null;
+    targetType: string | null;
+    filters: Record<string, unknown> | null;
+    recipientTotal: number;
+    recipientFilteredTotal: number;
+    recipients: Array<{
       userId: number;
       email: string;
       name: string | null;
-      acknowledgedAt: Date | string | null;
-    }>(sql`
+      acknowledgedAt: string | null;
+    }>;
+  }>(sql`
+    WITH broadcast_events AS MATERIALIZED (
       SELECT
-        u.id AS "userId",
+        se.id,
+        se.user_id AS "userId",
+        se.acknowledged_at AS "acknowledgedAt",
+        se.created_at AS "createdAt",
+        se.metadata->>'title' AS title,
+        se.metadata->>'message' AS message,
+        se.metadata->>'targetType' AS "targetType",
+        se.metadata->'filters' AS filters,
         u.email,
-        u.name,
-        se.acknowledged_at AS "acknowledgedAt"
+        u.name
       FROM system_events se
       INNER JOIN users u ON u.id = se.user_id
       WHERE se.event_type = 'admin_message'
         AND se.user_id IS NOT NULL
         AND se.metadata->>'broadcastId' = ${broadcastId}
-        AND (
-          ${search} = ''
-          OR u.email ILIKE ${searchPattern}
-          OR CAST(u.id AS TEXT) ILIKE ${searchPattern}
-          OR COALESCE(u.name, '') ILIKE ${searchPattern}
-        )
-      ORDER BY LOWER(u.email), u.id
+    ),
+    summary AS (
+      SELECT
+        title,
+        message,
+        "createdAt" AS "sentAt",
+        "targetType",
+        filters
+      FROM broadcast_events
+      ORDER BY "createdAt", id
+      LIMIT 1
+    ),
+    recipient_counts AS (
+      SELECT
+        COUNT(*)::int AS "recipientTotal",
+        COUNT(*) FILTER (
+          WHERE
+            ${search} = ''
+            OR email ILIKE ${searchPattern}
+            OR CAST("userId" AS TEXT) ILIKE ${searchPattern}
+            OR COALESCE(name, '') ILIKE ${searchPattern}
+        )::int AS "recipientFilteredTotal"
+      FROM broadcast_events
+    ),
+    filtered_page AS (
+      SELECT
+        "userId",
+        email,
+        name,
+        "acknowledgedAt"
+      FROM broadcast_events
+      WHERE
+        ${search} = ''
+        OR email ILIKE ${searchPattern}
+        OR CAST("userId" AS TEXT) ILIKE ${searchPattern}
+        OR COALESCE(name, '') ILIKE ${searchPattern}
+      ORDER BY LOWER(email), "userId"
       LIMIT ${recipientPageSize} OFFSET ${offset}
-    `),
-    db.execute<{ count: number }>(sql`
-      SELECT COUNT(*)::int AS count
-      FROM system_events
-      WHERE event_type = 'admin_message'
-        AND user_id IS NOT NULL
-        AND metadata->>'broadcastId' = ${broadcastId}
-    `),
-    db.execute<{ count: number }>(sql`
-      SELECT COUNT(*)::int AS count
-      FROM system_events se
-      INNER JOIN users u ON u.id = se.user_id
-      WHERE se.event_type = 'admin_message'
-        AND se.user_id IS NOT NULL
-        AND se.metadata->>'broadcastId' = ${broadcastId}
-        AND (
-          ${search} = ''
-          OR u.email ILIKE ${searchPattern}
-          OR CAST(u.id AS TEXT) ILIKE ${searchPattern}
-          OR COALESCE(u.name, '') ILIKE ${searchPattern}
-        )
-    `),
-  ]);
+    )
+    SELECT
+      summary.title,
+      summary.message,
+      summary."sentAt",
+      summary."targetType",
+      summary.filters,
+      recipient_counts."recipientTotal",
+      recipient_counts."recipientFilteredTotal",
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'userId', "userId",
+              'email', email,
+              'name', name,
+              'acknowledgedAt', "acknowledgedAt"
+            )
+            ORDER BY LOWER(email), "userId"
+          )
+          FROM filtered_page
+        ),
+        '[]'::json
+      ) AS recipients
+    FROM summary
+    CROSS JOIN recipient_counts
+  `);
 
-  const summary = summaryResult.rows[0];
-  if (!summary) {
+  const details = detailsResult.rows[0];
+  if (!details?.title || !details.message || !details.sentAt) {
     res.status(404).json({ error: "Рассылка не найдена" });
     return;
   }
 
-  const recipientTotal = recipientCountResult.rows[0]?.count ?? 0;
-  const recipientFilteredTotal = filteredRecipientCountResult.rows[0]?.count ?? 0;
   res.json({
     broadcastId,
-    title: summary.title,
-    message: summary.message,
-    sentAt: new Date(summary.sentAt).toISOString(),
-    recipientCount: recipientTotal,
-    targetType: summary.targetType,
-    filters: summary.filters,
-    recipients: recipientsResult.rows.map((recipient) => ({
-      userId: recipient.userId,
-      email: recipient.email,
-      name: recipient.name,
+    title: details.title,
+    message: details.message,
+    sentAt: new Date(details.sentAt).toISOString(),
+    recipientCount: details.recipientTotal,
+    targetType: details.targetType,
+    filters: details.filters,
+    recipients: details.recipients.map((recipient) => ({
+      ...recipient,
       acknowledgedAt: recipient.acknowledgedAt
         ? new Date(recipient.acknowledgedAt).toISOString()
         : null,
     })),
-    recipientTotal,
-    recipientFilteredTotal,
+    recipientTotal: details.recipientTotal,
+    recipientFilteredTotal: details.recipientFilteredTotal,
     recipientPage,
     recipientPageSize,
   });
