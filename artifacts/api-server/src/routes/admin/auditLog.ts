@@ -4,6 +4,12 @@ import { z } from "zod/v4";
 import { db, adminAuditLogTable } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { GetAdminAuditLogResponse } from "@workspace/api-zod";
+import {
+  AUDIT_CSV_MAX_ROWS,
+  getAuditCsvExportMetadata,
+  limitAuditCsvRows,
+  serializeAuditCsvCell,
+} from "../../lib/auditCsv";
 
 // Кастомная схема валидации запроса.
 // Используем zod.coerce.date() для since/until — query params всегда строки,
@@ -57,14 +63,16 @@ router.get(
     const whereClause =
       conditions.length > 0 ? and(...conditions) : undefined;
 
-    // CSV export — без пагинации, с safety cap 10k строк
+    // CSV export — без пагинации, с safety cap. Запрашиваем одну лишнюю строку,
+    // чтобы явно сообщить UI об усечении без отдельного count(*) запроса.
     if (format === "csv") {
-      const rows = await db
+      const fetchedRows = await db
         .select()
         .from(adminAuditLogTable)
         .where(whereClause)
         .orderBy(desc(adminAuditLogTable.createdAt))
-        .limit(10_000);
+        .limit(AUDIT_CSV_MAX_ROWS + 1);
+      const { rows, truncated } = limitAuditCsvRows(fetchedRows);
 
       const headers = [
         "id",
@@ -80,6 +88,7 @@ router.get(
         "responseStatus",
         "durationMs",
         "ipAddress",
+        "userAgent",
         "details",
       ];
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -87,17 +96,16 @@ router.get(
         "Content-Disposition",
         "attachment; filename=audit-log.csv",
       );
-      res.write(headers.join(",") + "\n");
+      for (const [header, value] of Object.entries(
+        getAuditCsvExportMetadata(truncated),
+      )) {
+        res.setHeader(header, value);
+      }
+      res.write(`\uFEFF${headers.join(",")}\n`);
       for (const r of rows) {
-        const line = headers.map((h) => {
-          const v = (r as Record<string, unknown>)[h];
-          if (v == null) return "";
-          const s =
-            typeof v === "object" ? JSON.stringify(v) : String(v);
-          return s.includes(",") || s.includes('"') || s.includes("\n")
-            ? `"${s.replace(/"/g, '""')}"`
-            : s;
-        });
+        const line = headers.map((h) =>
+          serializeAuditCsvCell((r as Record<string, unknown>)[h]),
+        );
         res.write(line.join(",") + "\n");
       }
       res.end();

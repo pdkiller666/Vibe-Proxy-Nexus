@@ -1348,6 +1348,7 @@ export const AdminAuditLogAction = {
   update_ticket_status: 'update_ticket_status',
   generate_password_reset_link: 'generate_password_reset_link',
   acknowledge_system_event: 'acknowledge_system_event',
+  acknowledge_all_system_events: 'acknowledge_all_system_events',
   send_broadcast: 'send_broadcast',
   unknown_action: 'unknown_action',
 } as const;

@@ -73,6 +73,7 @@ const ACTION_MAP: Record<string, string> = {
 
   // System events
   "POST /admin/system-events/:id/acknowledge": "acknowledge_system_event",
+  "POST /admin/system-events/acknowledge-all": "acknowledge_all_system_events",
 
   // Broadcasts
   "POST /admin/broadcasts": "send_broadcast",
@@ -122,15 +123,42 @@ function inferTargetType(path: string): string | null {
   return null;
 }
 
-function sanitizeBody(body: unknown): Record<string, unknown> | undefined {
+export function sanitizeAuditBody(
+  body: unknown,
+): Record<string, unknown> | undefined {
   if (!body || typeof body !== "object") return undefined;
+
+  return sanitizeAuditValue(body, new WeakSet<object>()) as Record<
+    string,
+    unknown
+  >;
+}
+
+function sanitizeAuditValue(value: unknown, seen: WeakSet<object>): unknown {
+  if (!value || typeof value !== "object") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (seen.has(value)) return "[CIRCULAR]";
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeAuditValue(item, seen));
+  }
+
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(
-    body as Record<string, unknown>,
+  for (const [key, nestedValue] of Object.entries(
+    value as Record<string, unknown>,
   )) {
-    out[key] = SENSITIVE_FIELDS.has(key) ? "[REDACTED]" : value;
+    out[key] = SENSITIVE_FIELDS.has(key)
+      ? "[REDACTED]"
+      : sanitizeAuditValue(nestedValue, seen);
   }
   return out;
+}
+
+export function getAuditActionForRoute(method: string, path: string): string {
+  return (
+    ACTION_MAP[`${method} ${normalizeRoutePath(path)}`] ?? "unknown_action"
+  );
 }
 
 async function buildTargetDescription(
@@ -201,7 +229,7 @@ async function logAdminAction(
   // Do NOT use req.baseUrl — it adds an extra "/api" prefix.
   const rawPath = req.route?.path ?? req.path;
   const routePattern = `${req.method} ${normalizeRoutePath(rawPath)}`;
-  const action = ACTION_MAP[routePattern] ?? "unknown_action";
+  const action = getAuditActionForRoute(req.method, rawPath);
   if (action === "unknown_action") {
     logger.warn(
       { routePattern, rawPath, method: req.method, path: req.path },
@@ -224,7 +252,7 @@ async function logAdminAction(
   }
 
   const details: Record<string, unknown> = {};
-  const sanitized = sanitizeBody(req.body);
+  const sanitized = sanitizeAuditBody(req.body);
   if (sanitized) details.requestBody = sanitized;
   if (req.query && Object.keys(req.query).length > 0) {
     details.queryParams = req.query;

@@ -5826,6 +5826,7 @@ const ACTION_LABELS: Record<string, string> = {
   update_ticket_status:         "Изменение статуса тикета",
   // ── Системные события ─────────────────────────────────────────────────────
   acknowledge_system_event:     "Закрытие системного события",
+    acknowledge_all_system_events: "Закрытие всех системных событий",
   // ── Рассылки ──────────────────────────────────────────────────────────────
   send_broadcast:               "Отправка рассылки",
   // ── Прочее ────────────────────────────────────────────────────────────────
@@ -6641,18 +6642,34 @@ function EventHistoryTab() {
 }
 
 function AuditLogTab() {
+  const { toast } = useToast();
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const [actionFilter, setActionFilter] = useState<string>("");
   const [since, setSince] = useState("");
   const [until, setUntil] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const toUtcIso = (dateTimeLocal: string): string | undefined => {
+    if (!dateTimeLocal) return undefined;
+    const date = new Date(dateTimeLocal);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  };
+
+  const sinceUtc = toUtcIso(since);
+  const untilUtc = toUtcIso(until);
 
   const params = {
     page,
     pageSize,
-    ...(actionFilter ? { action: actionFilter as typeof AdminAuditLogAction[keyof typeof AdminAuditLogAction] } : {}),
-    ...(since ? { since: since } : {}),
-    ...(until ? { until: until } : {}),
+    ...(actionFilter
+      ? {
+          action:
+            actionFilter as (typeof AdminAuditLogAction)[keyof typeof AdminAuditLogAction],
+        }
+      : {}),
+    ...(sinceUtc ? { since: sinceUtc } : {}),
+    ...(untilUtc ? { until: untilUtc } : {}),
   };
 
   const { data: rawData, isLoading } = useGetAdminAuditLog(params);
@@ -6666,10 +6683,45 @@ function AuditLogTab() {
     const q = new URLSearchParams();
     q.set("format", "csv");
     if (actionFilter) q.set("action", actionFilter);
-    if (since) q.set("since", new Date(since).toISOString());
-    if (until) q.set("until", new Date(until).toISOString());
+    if (sinceUtc) q.set("since", sinceUtc);
+    if (untilUtc) q.set("until", untilUtc);
     return `/api/admin/audit-log?${q.toString()}`;
   })();
+
+  const exportCsv = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch(csvHref, { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Не удалось подготовить CSV-экспорт");
+      }
+
+      const url = URL.createObjectURL(await response.blob());
+      const download = document.createElement("a");
+      download.href = url;
+      download.download = "audit-log.csv";
+      download.click();
+      URL.revokeObjectURL(url);
+
+      if (response.headers.get("X-Audit-Export-Truncated") === "true") {
+        const limit =
+          response.headers.get("X-Audit-Export-Row-Limit") ?? "10 000";
+        toast({
+          title: "Экспорт ограничен",
+          description: `Скачаны новые ${limit} записей. Уточните фильтры, чтобы выгрузить остальные.`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Не удалось скачать CSV",
+        description:
+          error instanceof Error ? error.message : "Повторите попытку позже.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -6698,13 +6750,14 @@ function AuditLogTab() {
           onChange={(e) => { setUntil(e.target.value); setPage(1); }}
           placeholder="По"
         />
-        <a
-          href={csvHref}
-          download="audit-log.csv"
+        <button
+          type="button"
+          onClick={() => void exportCsv()}
+          disabled={isExporting}
           className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-none bg-background hover:bg-muted"
         >
-          <Download className="w-4 h-4" /> Экспорт CSV
-        </a>
+          <Download className="w-4 h-4" /> {isExporting ? "Подготовка..." : "Экспорт CSV"}
+        </button>
       </div>
 
       {isLoading ? (
