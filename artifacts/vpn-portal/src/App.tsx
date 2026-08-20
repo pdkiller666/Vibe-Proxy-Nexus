@@ -23,6 +23,7 @@ import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
 import { Layout } from "@/components/layout";
 import { queryClient } from "@/lib/query-client";
+import { Seo, homeSeo } from "@/components/seo";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -37,7 +38,7 @@ function HomeRedirect() {
     return <Redirect to="/dashboard" />;
   }
 
-  return <Home />;
+  return <><Seo {...homeSeo} /><Home /></>;
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {

@@ -1,2 +1,17 @@
 User-agent: *
 Allow: /
+Disallow: /dashboard
+Disallow: /plans
+Disallow: /checkout
+Disallow: /balance-topup
+Disallow: /payments
+Disallow: /keys
+Disallow: /support
+Disallow: /profile
+Disallow: /admin
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /forgot-password
+Disallow: /reset-password
+
+Sitemap: https://vpnexus.pro/sitemap.xml

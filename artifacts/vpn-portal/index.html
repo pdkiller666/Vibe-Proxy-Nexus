@@ -3,15 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>VPNexus</title>
-    <meta name="description" content="VPNexus — приватный VPN-сервис. Быстрый, надёжный, без логов." />
+    <title>VPNexus — быстрый VPN без логов</title>
+    <meta name="description" content="VPNexus — быстрый и приватный VPN без логов. Защищённое подключение, стабильная скорость и простой старт." />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="VPNexus" />
-    <meta property="og:description" content="VPNexus — приватный VPN-сервис. Быстрый, надёжный, без логов." />
+    <link rel="canonical" href="https://vpnexus.pro/" />
+    <meta property="og:title" content="VPNexus — быстрый VPN без логов" />
+    <meta property="og:description" content="Быстрый и приватный VPN без логов. Защищённое подключение и простой старт." />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://vpnexus.pro/" />
+    <meta property="og:site_name" content="VPNexus" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:image" content="https://vpnexus.pro/opengraph.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="VPNexus" />
-    <meta name="twitter:description" content="VPNexus — приватный VPN-сервис. Быстрый, надёжный, без логов." />
+    <meta name="twitter:title" content="VPNexus — быстрый VPN без логов" />
+    <meta name="twitter:description" content="Быстрый и приватный VPN без логов. Защищённое подключение и простой старт." />
+    <meta name="twitter:image" content="https://vpnexus.pro/opengraph.jpg" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -23,9 +29,25 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@graph":[{"@type":"Organization","name":"VPNexus","url":"https://vpnexus.pro","logo":"https://vpnexus.pro/opengraph.jpg","description":"Приватный VPN-сервис без логов."},{"@type":"WebSite","name":"VPNexus","url":"https://vpnexus.pro","inLanguage":"ru-RU"},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Увидит ли провайдер, какие сайты я посещаю?","acceptedAnswer":{"@type":"Answer","text":"Нет. VPNexus шифрует весь трафик и скрывает его под обычный HTTPS."}},{"@type":"Question","name":"Что будет после окончания пробного периода?","acceptedAnswer":{"@type":"Answer","text":"Подписка деактивируется, автосписания нет."}},{"@type":"Question","name":"Нужен ли инвайт для регистрации?","acceptedAnswer":{"@type":"Answer","text":"Да, регистрация открыта по приглашению действующего пользователя."}}]}</script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main>
+        <h1>VPNexus — быстрый VPN без логов</h1>
+        <p>Приватный VPN с защищённым подключением, стабильной скоростью и простым стартом.</p>
+      </main>
+    </div>
+    <script>
+      (function () {
+        var privatePath = /^\/(dashboard|plans|checkout|balance-topup|payments|keys|support|profile|admin|sign-in|sign-up|forgot-password|reset-password)(\/|$)/;
+        if (privatePath.test(window.location.pathname)) {
+          var robots = document.querySelector('meta[name="robots"]');
+          if (robots) robots.setAttribute("content", "noindex, nofollow");
+        }
+      }());
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

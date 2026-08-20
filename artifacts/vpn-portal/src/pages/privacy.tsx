@@ -1,5 +1,9 @@
+import { Seo } from "@/components/seo";
+
 export default function PrivacyPage() {
   return (
+    <>
+      <Seo title="Политика конфиденциальности — VPNexus" description="Как VPNexus обрабатывает и защищает персональные данные пользователей сервиса." path="/privacy" />
     <div className="min-h-screen bg-[#F4F4F5] py-12 px-4 font-sans">
       <div className="max-w-3xl mx-auto bg-white border border-black/10 p-8 md:p-12">
         <div className="mb-8">
@@ -111,5 +115,6 @@ export default function PrivacyPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
