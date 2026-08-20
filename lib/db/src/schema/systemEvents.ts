@@ -27,6 +27,12 @@ import { usersTable } from "./users";
  *                           metadata: { oldNodeName, oldNodeId, newNodeName, newNodeId, oldKeyId, newKeyId }
  *  - "payment_confirmed":   emitted by confirmPayment.ts when any payment type is confirmed.
  *                           metadata: { paymentId, amountRub, type }
+ *  - "referral_payment_offer": emitted after each eligible subscription or wallet-topup
+ *                           payment while referral commission is enabled. Claimed independently
+ *                           from payment_confirmed so the normal confirmation is retained.
+ *                           metadata: { paymentId, type }
+ *  - "referral_first_payment_offer": emitted once after the first eligible successful
+ *                           subscription or wallet-topup payment while referral commission is enabled.
  *  - "payment_rejected":    emitted by admin payments route on rejection.
  *                           metadata: { paymentId, amountRub, type, reason? }
  *  - "auto_renew_success":  emitted by autoRenew.ts on successful balance-charged renewal.

@@ -13,17 +13,67 @@ import {
 } from "@workspace/db";
 import { ensureActiveKeyForUser } from "./keyIssuance";
 
-/** Insert a user-facing "payment confirmed" notification. Best-effort — never throws. */
-async function notifyPaymentConfirmed(payment: Payment): Promise<void> {
+type PaymentNotificationOptions = {
+  /** Background renewals use their own Dashboard notification and must never open the first-payment modal. */
+  suppressReferralFirstOffer?: boolean;
+};
+
+/** Insert user-facing confirmation events. Best-effort — never throws. */
+async function notifyPaymentConfirmed(payment: Payment, options: PaymentNotificationOptions = {}): Promise<void> {
   try {
-    await db.insert(systemEventsTable).values({
-      eventType: "payment_confirmed",
-      userId: payment.userId,
-      metadata: {
-        paymentId: payment.id,
-        amountRub: payment.amountRub,
-        type: payment.type,
-      },
+    await db.transaction(async (tx) => {
+      await tx.insert(systemEventsTable).values({
+        eventType: "payment_confirmed",
+        userId: payment.userId,
+        metadata: {
+          paymentId: payment.id,
+          amountRub: payment.amountRub,
+          type: payment.type,
+        },
+      });
+
+      if (
+        options.suppressReferralFirstOffer ||
+        (payment.type !== "subscription" && payment.type !== "balance_topup")
+      ) {
+        return;
+      }
+
+      // Serialise referral-offer creation per user. This prevents two concurrent
+      // confirmed payments from creating duplicate first-payment dialogs.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${payment.userId})`);
+      const [settings] = await tx
+        .select({ referralCommissionPercent: paymentSettingsTable.referralCommissionPercent })
+        .from(paymentSettingsTable)
+        .limit(1);
+      if ((settings?.referralCommissionPercent ?? 0) <= 0) return;
+
+      // This event is intentionally separate from payment_confirmed. The
+      // referral card claims it cross-device, while the normal payment
+      // confirmation stays visible until the user dismisses it themselves.
+      await tx.insert(systemEventsTable).values({
+        eventType: "referral_payment_offer",
+        userId: payment.userId,
+        metadata: { paymentId: payment.id, type: payment.type },
+      });
+
+      const [alreadyOffered] = await tx
+        .select({ id: systemEventsTable.id })
+        .from(systemEventsTable)
+        .where(
+          and(
+            eq(systemEventsTable.userId, payment.userId),
+            eq(systemEventsTable.eventType, "referral_first_payment_offer"),
+          ),
+        )
+        .limit(1);
+      if (alreadyOffered) return;
+
+      await tx.insert(systemEventsTable).values({
+        eventType: "referral_first_payment_offer",
+        userId: payment.userId,
+        metadata: { paymentId: payment.id, type: payment.type },
+      });
     });
   } catch {
     // non-critical
@@ -42,6 +92,7 @@ export type ConfirmResult =
  */
 export async function confirmPaymentById(
   paymentId: number,
+  notificationOptions: PaymentNotificationOptions = {},
 ): Promise<ConfirmResult> {
   const [payment] = await db
     .select()
@@ -91,7 +142,7 @@ export async function confirmPaymentById(
         if (!updatedPay) throw new Error("Payment state changed concurrently");
         return updatedPay;
       });
-      await notifyPaymentConfirmed(updatedPayment);
+      await notifyPaymentConfirmed(updatedPayment, notificationOptions);
       return { ok: true, payment: updatedPayment };
     } catch (err) {
       if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
@@ -191,7 +242,7 @@ export async function confirmPaymentById(
       // make sure they end up with at least one usable key again now that
       // the cap has been raised.
       await ensureActiveKeyForUser(updatedPayment.userId);
-      await notifyPaymentConfirmed(updatedPayment.updatedPay);
+      await notifyPaymentConfirmed(updatedPayment.updatedPay, notificationOptions);
       return { ok: true, payment: updatedPayment.updatedPay };
     } catch (err) {
       if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
@@ -253,7 +304,7 @@ export async function confirmPaymentById(
           );
         return updatedPay;
       });
-      await notifyPaymentConfirmed(updatedPayment);
+      await notifyPaymentConfirmed(updatedPayment, notificationOptions);
       return { ok: true, payment: updatedPayment };
     } catch {
       return {
@@ -436,7 +487,7 @@ export async function confirmPaymentById(
     // confirmed payment. See ensureActiveKeyForUser's doc comment for why
     // this guarantee is needed even though nothing here deletes keys.
     await ensureActiveKeyForUser(subscription.userId);
-    await notifyPaymentConfirmed(updatedPayment);
+    await notifyPaymentConfirmed(updatedPayment, notificationOptions);
 
     return { ok: true, payment: updatedPayment };
   } catch {

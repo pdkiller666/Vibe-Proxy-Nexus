@@ -62,6 +62,11 @@ export type BalanceCheckoutOutcome =
   | { ok: true; result: BalanceCheckoutResult }
   | { ok: false } & BalanceCheckoutError;
 
+export type BalanceCheckoutOptions = {
+  /** Auto-renewal has its own Dashboard prompt and must not trigger the first-payment modal. */
+  suppressReferralFirstOffer?: boolean;
+};
+
 // ── Internal types ───────────────────────────────────────────────────────────
 
 /** Resolved BEFORE the tx — no DB writes, only validation reads. */
@@ -100,6 +105,7 @@ const DEDUP_WINDOW_MS = 60_000;
 export async function checkoutFromBalance(
   userId: number,
   target: BalanceCheckoutTarget,
+  options: BalanceCheckoutOptions = {},
 ): Promise<BalanceCheckoutOutcome> {
   // 1. Feature flag
   const [settings] = await db.select().from(paymentSettingsTable).limit(1);
@@ -273,7 +279,7 @@ export async function checkoutFromBalance(
   const { paymentId, subscriptionId } = txOutcome;
 
   // 6. Confirm outside tx (activates subscription / grants slot-traffic / referral)
-  const confirmResult = await confirmPaymentById(paymentId);
+  const confirmResult = await confirmPaymentById(paymentId, options);
 
   if (!confirmResult.ok) {
     await compensate(paymentId, userId, requiredKopecks, confirmResult.error);

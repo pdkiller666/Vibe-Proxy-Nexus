@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import {
   useListMyPayments,
   useGetPaymentSettings,
   useUpdatePaymentNote,
   getListMyPaymentsQueryKey,
+  getListMyNotificationsQueryKey,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +14,7 @@ import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
 import { YooMoneyPaymentButtons } from "@/components/yoomoney-payment-buttons";
+import { ReferralPaymentOffer } from "@/components/referral-offer";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
@@ -63,6 +65,15 @@ export default function Checkout() {
   const payment = payments
     ?.filter((p) => p.subscriptionId === subscriptionId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+  // The layout polls notifications only once a minute. As soon as this page
+  // sees its payment turn confirmed, refresh them so the server-claimed
+  // referral dialog can open in the already active browser tab.
+  useEffect(() => {
+    if (payment?.status === "confirmed") {
+      void queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
+    }
+  }, [payment?.id, payment?.status, queryClient]);
 
   // #5 — User-initiated cancellation of their own pending_payment subscription.
   const { mutate: cancelSubscription, isPending: cancelling } = useMutation({
@@ -161,6 +172,8 @@ export default function Checkout() {
         <StatusIcon className="w-5 h-5" />
         {status.label}
       </div>
+
+      {payment.status === "confirmed" && <ReferralPaymentOffer paymentId={payment.id} />}
 
       {payment.status === "rejected" && payment.rejectionReason && (
         <div className="bg-destructive/10 border border-destructive/30 p-4 text-sm text-destructive">

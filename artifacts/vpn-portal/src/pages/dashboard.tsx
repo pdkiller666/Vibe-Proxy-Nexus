@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
   useGetMe,
@@ -35,6 +35,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { useToast } from "@/hooks/use-toast";
+import { ReferralOfferCard } from "@/components/referral-offer";
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function formatDate(iso?: string | null) {
   if (!iso) return "—";
@@ -246,11 +249,16 @@ function ReferralSection() {
   const [copied, setCopied] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   // Collapsed by default on mobile (same pattern as CollapsibleOnMobile)
-  const [open, setOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
+  const [location] = useLocation();
+  const [open, setOpen] = useState(
+    () =>
+      (typeof window !== "undefined" && window.innerWidth >= 768) ||
+      location.includes("referrals=1"),
+  );
 
-  if (!me?.referralCode) return null;
+  if (!me?.referralCode || me.referralCommissionPercent <= 0) return null;
 
-  const referralLink = `https://${me.referralLinkHost}/sign-up?ref=${me.referralCode}`;
+  const referralLink = `https://${me.referralLinkHost}${basePath}/sign-up?ref=${me.referralCode}`;
   const commission  = me.referralCommissionPercent;
   const invited     = me.referredUserCount;
   const earned      = me.referralEarningsKopecks;
@@ -419,9 +427,56 @@ function ReferralSection() {
 }
 
 /**
+ * A successful background renewal gets one server-claimed referral prompt.
+ * Claiming the event before rendering prevents a refresh or second device from
+ * repeating the offer; the regular auto-renew banner still handles failures
+ * and the success message when referrals are disabled.
+ */
+function AutoRenewReferralOffer() {
+  const { data: me } = useGetMe();
+  const { data: notifications } = useListMyNotifications();
+  const { mutate: acknowledge } = useAcknowledgeNotification({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
+      },
+    },
+  });
+  const [claimedEventId, setClaimedEventId] = useState<number | null>(null);
+  const claimAttempted = useRef<number | null>(null);
+  const event = (notifications ?? []).find((notification) => notification.eventType === "auto_renew_success");
+  const referralEnabled = Boolean(me?.referralCode && (me.referralCommissionPercent ?? 0) > 0);
+
+  useEffect(() => {
+    if (!referralEnabled || !event || claimAttempted.current === event.id) return;
+    claimAttempted.current = event.id;
+    acknowledge(
+      { id: event.id },
+      {
+        onSuccess: () => setClaimedEventId(event.id),
+      },
+    );
+  }, [acknowledge, event, referralEnabled]);
+
+  if (!referralEnabled || !claimedEventId) return null;
+
+  return (
+    <div className="flex items-start gap-3 p-4 text-sm border bg-green-50 border-green-200 text-green-800">
+      <RefreshCw className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
+      <div className="flex-1 min-w-0">
+        <span className="font-semibold">Подписка автоматически продлена.</span>{" "}
+        Поделитесь своей ссылкой, чтобы будущие оплаты друзей помогали покрывать её стоимость.
+        <ReferralOfferCard compact />
+      </div>
+    </div>
+  );
+}
+
+/**
  * Shows dismissible banners for auto_renew_success and auto_renew_failed events.
  */
 function AutoRenewBanners() {
+  const { data: me } = useGetMe();
   const { data: notifications } = useListMyNotifications();
   const { mutate: acknowledge } = useAcknowledgeNotification({
     mutation: {
@@ -431,8 +486,11 @@ function AutoRenewBanners() {
     },
   });
 
+  const referralEnabled = Boolean(me?.referralCode && (me.referralCommissionPercent ?? 0) > 0);
   const renewEvents = (notifications ?? []).filter(
-    (n) => n.eventType === "auto_renew_success" || n.eventType === "auto_renew_failed",
+    (n) =>
+      n.eventType === "auto_renew_failed" ||
+      (n.eventType === "auto_renew_success" && !referralEnabled),
   );
 
   if (renewEvents.length === 0) return null;
@@ -770,6 +828,7 @@ export default function Dashboard() {
       </OnboardingTip>
 
       {/* Auto-renew notifications */}
+      <AutoRenewReferralOffer />
       <AutoRenewBanners />
 
         {/* Monthly/trial expiry event — deliberately separate from hourly balance events */}

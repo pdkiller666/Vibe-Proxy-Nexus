@@ -103,7 +103,11 @@ async function processCandidate(
     }
   }
 
-  const result = await checkoutFromBalance(cand.userId, { kind: "subscription", planId: cand.planId });
+  const result = await checkoutFromBalance(
+    cand.userId,
+    { kind: "subscription", planId: cand.planId },
+    { suppressReferralFirstOffer: true },
+  );
 
   if (result.ok) {
     // Emit user-facing success notification

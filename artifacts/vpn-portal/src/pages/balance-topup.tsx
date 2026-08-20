@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import {
   useListMyPayments,
@@ -6,6 +6,8 @@ import {
   useUpdatePaymentNote,
   useDeleteBalanceTopupOrder,
   useGetMe,
+  getListMyPaymentsQueryKey,
+  getListMyNotificationsQueryKey,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +17,7 @@ import { YooMoneyPaymentButtons } from "@/components/yoomoney-payment-buttons";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
+import { ReferralPaymentOffer } from "@/components/referral-offer";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
@@ -42,7 +45,15 @@ export default function BalanceTopup() {
   const { id } = useParams<{ id: string }>();
   const paymentId = Number(id);
   const [, setLocation] = useLocation();
-  const { data: payments, isLoading: paymentsLoading } = useListMyPayments();
+  const { data: payments, isLoading: paymentsLoading } = useListMyPayments({
+    query: {
+      queryKey: getListMyPaymentsQueryKey(),
+      refetchInterval: (query) => {
+        const current = query.state.data?.find((candidate) => candidate.id === paymentId);
+        return !current || current.status === "pending" ? 15_000 : false;
+      },
+    },
+  });
   const { data: settings, isLoading: settingsLoading } = useGetPaymentSettings();
   const { mutate: updateNote, isPending: notePending } = useUpdatePaymentNote();
   const { mutate: cancelOrder, isPending: cancelling } = useDeleteBalanceTopupOrder();
@@ -53,6 +64,14 @@ export default function BalanceTopup() {
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const payment = payments?.find((p) => p.id === paymentId);
+
+  // Keep the referral notification fresh when an administrator or payment
+  // webhook confirms a top-up while this tab is already open.
+  useEffect(() => {
+    if (payment?.status === "confirmed") {
+      void queryClient.invalidateQueries({ queryKey: getListMyNotificationsQueryKey() });
+    }
+  }, [payment?.id, payment?.status, queryClient]);
 
   function handleSubmitNote() {
     if (!payment) return;
@@ -136,9 +155,12 @@ export default function BalanceTopup() {
       </div>
 
       {payment.status === "confirmed" && (
-        <div className="bg-green-50 border border-green-200 p-4 text-sm text-green-800">
-          Баланс пополнен на {payment.amountRub} ₽. Вы можете использовать средства для оплаты услуг.
-        </div>
+        <>
+          <div className="bg-green-50 border border-green-200 p-4 text-sm text-green-800">
+            Баланс пополнен на {payment.amountRub} ₽. Вы можете использовать средства для оплаты услуг.
+          </div>
+          <ReferralPaymentOffer paymentId={payment.id} />
+        </>
       )}
 
       {payment.status === "rejected" && payment.rejectionReason && (

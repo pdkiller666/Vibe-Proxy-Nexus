@@ -182,7 +182,7 @@ function ReferralSection() {
   const [copied, setCopied] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  if (!me?.referralCode) return null;
+  if (!me?.referralCode || me.referralCommissionPercent <= 0) return null;
 
   // Use the backend-resolved host (admin's configured primary domain, or the
   // technical domain as a safety-net fallback) instead of window.location —

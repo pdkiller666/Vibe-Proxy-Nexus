@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Check, CreditCard, Zap, Wallet, CheckCircle2, Sparkles, X } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { cn } from "@/lib/utils";
+import { ReferralPaymentOffer } from "@/components/referral-offer";
 
 function formatKopecks(kopecks: number): string {
   const rubles = Math.floor(kopecks / 100);
@@ -36,6 +37,7 @@ export default function Plans() {
   const [topupPlanId, setTopupPlanId] = useState<number | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [balanceCheckoutPaymentId, setBalanceCheckoutPaymentId] = useState<number | null>(null);
 
   const trackRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -195,6 +197,8 @@ export default function Plans() {
           Оплата картой или через СБП. Активация сразу после оплаты.
         </p>
       </div>
+
+      {balanceCheckoutPaymentId && <ReferralPaymentOffer paymentId={balanceCheckoutPaymentId} />}
 
       <OnboardingTip
         id="plans-how-to-pay"
@@ -423,7 +427,10 @@ export default function Plans() {
                             priceRub={plan.priceRub}
                             balanceKopecks={me?.balanceKopecks ?? 0}
                             enabled={paymentSettings?.balancePaymentsEnabled ?? false}
-                            onSuccess={() => setLocation("/dashboard")}
+                            onSuccess={(paymentId) => {
+                              setBalanceCheckoutPaymentId(paymentId);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
                           />
                         )}
                       </div>
