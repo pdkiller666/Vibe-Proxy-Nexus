@@ -230,7 +230,7 @@ export async function enforceTrafficLimits(): Promise<number> {
 
     await jobsDb
       .update(vpnKeysTable)
-      .set({ revokedAt: now, revokedReason: "traffic_limit" })
+       .set({ revokedAt: now, revokedReason: "traffic_limit", xrayCleanupPendingAt: now })
       .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
 
     // Persist the "blocked" flag on the subscription itself — this is what

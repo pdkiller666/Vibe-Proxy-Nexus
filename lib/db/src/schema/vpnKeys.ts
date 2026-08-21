@@ -38,6 +38,9 @@ export const vpnKeysTable = pgTable(
     // *why* access was cut (e.g. "traffic limit reached" vs "you removed
     // this device") instead of just showing a bare "revoked" label.
     revokedReason: text("revoked_reason", { enum: revokedReasonValues }),
+    // Set when DB revoke committed before Xray cleanup. The node monitor retries
+    // this durable operation until the client is removed successfully.
+    xrayCleanupPendingAt: timestamp("xray_cleanup_pending_at", { withTimezone: true }),
     // Traffic counters, populated by the background poll of Xray's Stats API
     // (see src/lib/trafficPolling.ts). No-ops (stay 0) when Xray isn't running
     // locally (e.g. Replit dev). "Lifetime" accumulates forever; "period"

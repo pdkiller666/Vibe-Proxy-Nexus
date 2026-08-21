@@ -604,6 +604,8 @@ export interface VpnKey {
   createdAt: string;
   /** @nullable */
   revokedAt?: string | null;
+  /** @nullable */
+  xrayCleanupPendingAt?: string | null;
   revokedReason?: RevokedReason | null;
   userId: number;
   userEmail?: string;

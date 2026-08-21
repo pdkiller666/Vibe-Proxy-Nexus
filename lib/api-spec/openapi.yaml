@@ -2617,6 +2617,7 @@ components:
         deepLink: { type: string }
         createdAt: { type: string, format: date-time }
         revokedAt: { type: ["string", "null"], format: date-time }
+        xrayCleanupPendingAt: { type: ["string", "null"], format: date-time }
         # Why this key was revoked, null while active. See RevokedReason enum
         # for what each value means to the end user.
         revokedReason:

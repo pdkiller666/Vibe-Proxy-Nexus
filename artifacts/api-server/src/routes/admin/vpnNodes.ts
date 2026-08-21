@@ -192,7 +192,7 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
         try {
           await db
             .update(vpnKeysTable)
-            .set({ revokedAt: new Date(), revokedReason: "admin" })
+            .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
             .where(eq(vpnKeysTable.id, key.id));
         } catch (err) {
           logger.error(
@@ -204,12 +204,14 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
         if (node.managementApiUrl) {
           try {
             await removeRemoteXrayClient(node, key.uuid);
+            await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, key.id));
           } catch (err) {
             logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: remote Xray removal of migrated key failed (ignored)");
           }
         } else if (isLocalXrayEnabled()) {
           try {
             await removeXrayClient(key.uuid);
+            await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, key.id));
           } catch (err) {
             logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: local Xray removal of migrated key failed (ignored)");
           }

@@ -156,19 +156,21 @@ router.delete("/admin/vpn-keys/:keyId", requireAuth, requireAdmin, async (req, r
   // write order as the user-facing DELETE /vpn-keys/:keyId route.
   await db
     .update(vpnKeysTable)
-    .set({ revokedAt: new Date(), revokedReason: "admin" })
+    .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
     .where(eq(vpnKeysTable.id, keyId));
 
   if (!existing.key.revokedAt) {
     if (existing.node.managementApiUrl) {
       try {
         await removeRemoteXrayClient(existing.node, existing.key.uuid);
+        await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, keyId));
       } catch (err) {
         logger.warn({ err, keyId, uuid: existing.key.uuid }, "admin revoke: DB updated but remote node removal failed");
       }
     } else if (isLocalXrayEnabled()) {
       try {
         await removeXrayClient(existing.key.uuid);
+        await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, keyId));
       } catch (err) {
         // Non-fatal: DB is already the source of truth. Log so ops can notice
         // and clean up the stale Xray entry if needed.

@@ -169,7 +169,7 @@ export async function reconcilePendingKeyReplacements(): Promise<void> {
 
     const [revoked] = await db
       .update(vpnKeysTable)
-      .set({ revokedAt: new Date(), revokedReason: "admin" })
+      .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
       .where(
         and(
           eq(vpnKeysTable.id, source.key.id),
@@ -193,6 +193,7 @@ export async function reconcilePendingKeyReplacements(): Promise<void> {
     if (source.node.managementApiUrl) {
       try {
         await removeRemoteXrayClient(source.node, source.key.uuid);
+        await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, source.key.id));
       } catch (err) {
         logger.warn(
           { err, uuid: source.key.uuid, nodeId: source.key.nodeId },
@@ -202,12 +203,40 @@ export async function reconcilePendingKeyReplacements(): Promise<void> {
     } else if (isLocalXrayEnabled()) {
       try {
         await removeXrayClient(source.key.uuid);
+        await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, source.key.id));
       } catch (err) {
         logger.warn(
           { err, uuid: source.key.uuid, nodeId: source.key.nodeId },
           "nodeMonitoring: reconciled key DB revoke but old local Xray removal failed",
         );
       }
+    }
+  }
+}
+
+/**
+ * Retry DB-revoked keys whose Xray client removal failed after the revoke.
+ * The pending timestamp is the durable operation marker, so this survives
+ * process restarts and works for both local and remote nodes.
+ */
+export async function reconcilePendingXrayCleanups(): Promise<void> {
+  const pending = await db
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(and(isNotNull(vpnKeysTable.revokedAt), isNotNull(vpnKeysTable.xrayCleanupPendingAt)));
+
+  for (const { key, node } of pending) {
+    try {
+      if (node.managementApiUrl) {
+        await removeRemoteXrayClient(node, key.uuid);
+      } else if (isLocalXrayEnabled()) {
+        await removeXrayClient(key.uuid);
+      }
+      await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, key.id));
+      logger.info({ keyId: key.id, nodeId: node.id }, "nodeMonitoring: completed pending Xray cleanup");
+    } catch (err) {
+      logger.warn({ err, keyId: key.id, nodeId: node.id }, "nodeMonitoring: pending Xray cleanup still failed");
     }
   }
 }
@@ -333,7 +362,7 @@ async function migrateKeysFromDeactivatedNode(node: {
       try {
         await db
           .update(vpnKeysTable)
-          .set({ revokedAt: new Date(), revokedReason: "admin" })
+          .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
           .where(eq(vpnKeysTable.id, key.id));
       } catch (err) {
         logger.error(
@@ -524,6 +553,12 @@ async function pollNode(node: {
 // ─── Job entry point ──────────────────────────────────────────────────────────
 
 async function runNodeMonitoringCycle(): Promise<void> {
+  try {
+    await reconcilePendingXrayCleanups();
+  } catch (err) {
+    logger.error({ err }, "nodeMonitoring: pending Xray cleanup reconciliation failed");
+  }
+
   try {
     await reconcilePendingKeyReplacements();
   } catch (err) {

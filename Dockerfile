@@ -17,6 +17,12 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
+# Build workspace library declarations before the frontend build. The
+# workspace packages export source in development, but Vite's TypeScript
+# project references consume their emitted declarations during a clean image
+# build.
+RUN pnpm run typecheck:libs
+
 # Frontend: Vite requires PORT + BASE_PATH at build time; served at domain root.
 RUN PORT=3000 BASE_PATH=/ \
     pnpm --filter @workspace/vpn-portal run build

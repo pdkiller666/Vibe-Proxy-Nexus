@@ -692,7 +692,7 @@ router.post("/admin/users/:userId/ban", requireAuth, requireAdmin, async (req, r
     if (activeKeys.length > 0) {
       await tx
         .update(vpnKeysTable)
-        .set({ revokedAt: new Date() })
+        .set({ revokedAt: new Date(), xrayCleanupPendingAt: new Date() })
         .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
     }
     await tx.delete(sessionsTable).where(eq(sessionsTable.userId, userId));

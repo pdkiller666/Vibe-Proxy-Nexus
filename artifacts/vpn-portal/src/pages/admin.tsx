@@ -3047,6 +3047,11 @@ function UserKeysAndPayments({ userId }: { userId: number }) {
                        key.revokedReason}
                     </span>
                   )}
+                  {key.xrayCleanupPendingAt && (
+                    <div className="mt-1 text-amber-600 dark:text-amber-400">
+                      Ожидается удаление клиента из Xray: {formatDate(key.xrayCleanupPendingAt)}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -5038,6 +5043,7 @@ interface AdminVpnKey {
   createdAt: string;
   revokedAt: string | null;
   revokedReason: string | null;
+  xrayCleanupPendingAt: string | null;
   nodeName: string;
   userEmail: string;
   trafficUpBytes: number;

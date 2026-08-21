@@ -206,7 +206,7 @@ export async function revokeKeysPastGracePeriod(): Promise<number> {
 
     await db
       .update(vpnKeysTable)
-      .set({ revokedAt: now, revokedReason: "expired" })
+      .set({ revokedAt: now, revokedReason: "expired", xrayCleanupPendingAt: now })
       .where(
         and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)),
       );

@@ -19,6 +19,8 @@ export interface VpnKey {
   createdAt: Date;
   /** @nullable */
   revokedAt?: Date | null;
+  /** @nullable */
+  xrayCleanupPendingAt?: Date | null;
   revokedReason?: RevokedReason | null;
   userId: number;
   userEmail?: string;

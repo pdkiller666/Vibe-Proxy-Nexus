@@ -48,6 +48,7 @@ const statements = [
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false`,
   `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text`,
   `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS replaces_key_id integer`,
+  `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS xray_cleanup_pending_at timestamptz`,
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS min_hourly_topup_rub integer NOT NULL DEFAULT 0`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT ''`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id)`,

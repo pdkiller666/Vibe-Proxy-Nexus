@@ -197,7 +197,7 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
   try {
     await db
       .update(vpnKeysTable)
-      .set({ revokedAt: new Date(), revokedReason: "user" })
+      .set({ revokedAt: new Date(), revokedReason: "user", xrayCleanupPendingAt: new Date() })
       .where(and(eq(vpnKeysTable.id, existing.key.id), eq(vpnKeysTable.userId, user.id)));
   } catch (err) {
     req.log.error({ err, keyId: existing.key.id }, "Failed to revoke VPN key in DB");
@@ -211,12 +211,14 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
   if (existing.node.managementApiUrl) {
     try {
       await removeRemoteXrayClient(existing.node, existing.key.uuid);
+      await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, existing.key.id));
     } catch (err) {
       req.log.warn({ err, uuid: existing.key.uuid }, "Key revoked in DB but remote node removal failed");
     }
   } else if (isLocalXrayEnabled()) {
     try {
       await removeXrayClient(existing.key.uuid);
+      await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, existing.key.id));
     } catch (err) {
       req.log.warn(
         { err, uuid: existing.key.uuid },
@@ -359,7 +361,7 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
   try {
     await db
       .update(vpnKeysTable)
-      .set({ revokedAt: new Date(), revokedReason: "user" })
+    .set({ revokedAt: new Date(), revokedReason: "user", xrayCleanupPendingAt: new Date() })
       .where(and(eq(vpnKeysTable.id, existing.key.id), eq(vpnKeysTable.userId, user.id)));
   } catch (err) {
     logger.error({ err, oldKeyId: existing.key.id, newKeyId: result.key.id },
@@ -367,11 +369,17 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
   }
 
   if (existing.node.managementApiUrl) {
-    try { await removeRemoteXrayClient(existing.node, existing.key.uuid); } catch (err) {
+    try {
+      await removeRemoteXrayClient(existing.node, existing.key.uuid);
+      await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, existing.key.id));
+    } catch (err) {
       logger.warn({ err, uuid: existing.key.uuid }, "relocate: old remote Xray client removal failed (ignored)");
     }
   } else if (isLocalXrayEnabled()) {
-    try { await removeXrayClient(existing.key.uuid); } catch (err) {
+    try {
+      await removeXrayClient(existing.key.uuid);
+      await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, existing.key.id));
+    } catch (err) {
       logger.warn({ err, uuid: existing.key.uuid }, "relocate: old local Xray client removal failed (ignored)");
     }
   }
