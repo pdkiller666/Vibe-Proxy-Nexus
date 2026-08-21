@@ -5044,6 +5044,8 @@ interface AdminVpnKey {
   trafficDownBytes: number;
   periodUpBytes: number;
   periodDownBytes: number;
+  replacesKeyId: number | null;
+  replacementPending: boolean;
 }
 
 function VpnKeysManagement() {
@@ -5314,6 +5316,16 @@ function VpnKeysManagement() {
                         </span>
                       )}
                     </>
+                  )}
+                  {key.replacementPending && (
+                    <span className="ml-2 px-1 bg-amber-100 text-amber-800 rounded text-[10px]">
+                      Ожидает очистки после замены
+                    </span>
+                  )}
+                  {!key.revokedAt && key.replacesKeyId !== null && (
+                    <span className="ml-2 px-1 bg-blue-100 text-blue-800 rounded text-[10px]">
+                      Замена ключа #{key.replacesKeyId}
+                    </span>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">

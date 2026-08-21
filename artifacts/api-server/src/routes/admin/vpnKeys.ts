@@ -52,7 +52,19 @@ router.get("/admin/vpn-keys", requireAuth, requireAdmin, async (req, res): Promi
     .where(userId != null ? eq(vpnKeysTable.userId, userId) : undefined)
     .orderBy(desc(vpnKeysTable.createdAt));
 
-  res.json(rows.map(({ key, nodeName, userEmail }) => ({ ...key, nodeName, userEmail })));
+  const pendingSourceIds = new Set(
+    rows
+      .filter(({ key }) => !key.revokedAt && key.replacesKeyId !== null)
+      .map(({ key }) => key.replacesKeyId as number),
+  );
+  res.json(
+    rows.map(({ key, nodeName, userEmail }) => ({
+      ...key,
+      nodeName,
+      userEmail,
+      replacementPending: pendingSourceIds.has(key.id),
+    })),
+  );
 });
 
 router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res): Promise<void> => {

@@ -416,6 +416,7 @@ async function issueKeyForUserInner(
           description: description?.trim() || null,
           vlessLink,
           deepLink,
+          replacesKeyId: replaceKeyId ?? null,
           idempotencyKey: idempotencyKey ?? null,
           provisionedAt: shouldProvision ? null : new Date(),
         })

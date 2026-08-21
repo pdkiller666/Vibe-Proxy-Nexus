@@ -47,6 +47,7 @@ const statements = [
   `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_device_slots integer NOT NULL DEFAULT 0`,
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS allow_free_extra_device_slot boolean NOT NULL DEFAULT false`,
   `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS description text`,
+  `ALTER TABLE vpn_keys ADD COLUMN IF NOT EXISTS replaces_key_id integer`,
   `ALTER TABLE payment_settings ADD COLUMN IF NOT EXISTS min_hourly_topup_rub integer NOT NULL DEFAULT 0`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT ''`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id integer REFERENCES users(id)`,
@@ -54,6 +55,7 @@ const statements = [
   // FK / lookup indexes added 2026-07-16
   `CREATE INDEX IF NOT EXISTS payments_subscription_id_idx ON payments(subscription_id)`,
   `CREATE INDEX IF NOT EXISTS vpn_keys_node_id_idx ON vpn_keys(node_id)`,
+  `CREATE INDEX IF NOT EXISTS vpn_keys_replaces_key_id_idx ON vpn_keys(replaces_key_id)`,
   `CREATE INDEX IF NOT EXISTS subscriptions_plan_id_idx ON subscriptions(plan_id)`,
   `CREATE INDEX IF NOT EXISTS users_referred_by_user_id_idx ON users(referred_by_user_id)`,
   // ── M-39: free traffic grant rate-limiting settings ─────────────────────────

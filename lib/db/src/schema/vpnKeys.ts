@@ -64,6 +64,10 @@ export const vpnKeysTable = pgTable(
     // signal for automatic start/stop of hourly billing — a key is
     // considered idle once this falls outside the billing grace window.
     lastTrafficAt: timestamp("last_traffic_at", { withTimezone: true }),
+    // Set on a replacement key after its DB row is created. The background
+    // reconciler uses this durable relationship to finish revoking the source
+    // key if the first relocation/migration request lost the DB update.
+    replacesKeyId: integer("replaces_key_id"),
     // Client-generated UUID-per-click for POST /vpn-keys. Amvera's proxy
     // retries slow POSTs, so the same click can hit the server twice; the
     // unique index below makes the second insert fail with 23505, and
@@ -84,6 +88,7 @@ export const vpnKeysTable = pgTable(
     index("vpn_keys_user_id_idx").on(table.userId),
     // Capacity checks and subscription-to-node joins filter on nodeId.
     index("vpn_keys_node_id_idx").on(table.nodeId),
+    index("vpn_keys_replaces_key_id_idx").on(table.replacesKeyId),
     // VLESS auth depends on UUID uniqueness; index pre-created via heal-schema.mjs.
     uniqueIndex("vpn_keys_uuid_unique").on(table.uuid),
     // Dedupe retried POST /vpn-keys requests; pre-created via heal-schema.mjs.

@@ -24,7 +24,7 @@
  * consecutiveFailures counter is reset to 0 on any successful poll.
  */
 
-import { and, asc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable, nodeMetricSnapshotsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { issueKeyForUser, resolveTotalSlots } from "./keyIssuance";
@@ -134,6 +134,85 @@ async function emitEvent(
 // ─── Key migration ────────────────────────────────────────────────────────────
 
 /**
+ * Finish replacement operations whose new key was provisioned but whose
+ * source-key revoke did not commit. The relationship lives on the replacement
+ * row, so this works after a restart and does not depend on a process-local
+ * queue.
+ */
+export async function reconcilePendingKeyReplacements(): Promise<void> {
+  const replacements = await db
+    .select()
+    .from(vpnKeysTable)
+    .where(
+      and(
+        isNull(vpnKeysTable.revokedAt),
+        isNotNull(vpnKeysTable.provisionedAt),
+        isNotNull(vpnKeysTable.replacesKeyId),
+      ),
+    );
+
+  for (const replacement of replacements) {
+    if (replacement.replacesKeyId === null) continue;
+
+    const [source] = await db
+      .select({ key: vpnKeysTable, node: vpnNodesTable })
+      .from(vpnKeysTable)
+      .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+      .where(
+        and(
+          eq(vpnKeysTable.id, replacement.replacesKeyId),
+          eq(vpnKeysTable.userId, replacement.userId),
+        ),
+      );
+
+    if (!source || source.key.revokedAt) continue;
+
+    const [revoked] = await db
+      .update(vpnKeysTable)
+      .set({ revokedAt: new Date(), revokedReason: "admin" })
+      .where(
+        and(
+          eq(vpnKeysTable.id, source.key.id),
+          isNull(vpnKeysTable.revokedAt),
+        ),
+      )
+      .returning({ id: vpnKeysTable.id });
+
+    if (!revoked) continue;
+
+    logger.warn(
+      {
+        oldKeyId: source.key.id,
+        newKeyId: replacement.id,
+        oldNodeId: source.key.nodeId,
+        newNodeId: replacement.nodeId,
+      },
+      "nodeMonitoring: reconciled pending key replacement and revoked old key",
+    );
+
+    if (source.node.managementApiUrl) {
+      try {
+        await removeRemoteXrayClient(source.node, source.key.uuid);
+      } catch (err) {
+        logger.warn(
+          { err, uuid: source.key.uuid, nodeId: source.key.nodeId },
+          "nodeMonitoring: reconciled key DB revoke but old remote Xray removal failed",
+        );
+      }
+    } else if (isLocalXrayEnabled()) {
+      try {
+        await removeXrayClient(source.key.uuid);
+      } catch (err) {
+        logger.warn(
+          { err, uuid: source.key.uuid, nodeId: source.key.nodeId },
+          "nodeMonitoring: reconciled key DB revoke but old local Xray removal failed",
+        );
+      }
+    }
+  }
+}
+
+/**
  * When a node is auto-deactivated, migrate all its active VPN keys to other
  * healthy nodes so affected users regain connectivity without admin intervention.
  *
@@ -224,6 +303,8 @@ async function migrateKeysFromDeactivatedNode(node: {
         sameRegionNode?.id,
         key.label,
         key.description ?? undefined,
+        undefined,
+        key.id,
       );
 
       // Attempt 2: same-region failed → let auto-select pick globally.
@@ -234,6 +315,8 @@ async function migrateKeysFromDeactivatedNode(node: {
           undefined,
           key.label,
           key.description ?? undefined,
+          undefined,
+          key.id,
         );
       }
 
@@ -441,6 +524,12 @@ async function pollNode(node: {
 // ─── Job entry point ──────────────────────────────────────────────────────────
 
 async function runNodeMonitoringCycle(): Promise<void> {
+  try {
+    await reconcilePendingKeyReplacements();
+  } catch (err) {
+    logger.error({ err }, "nodeMonitoring: pending key replacement reconciliation failed");
+  }
+
   // Probe all active nodes + any inactive nodes that were auto-deactivated
   // (consecutiveFailures > 0) so we can detect recovery.
   // Nodes that an admin manually set to isActive=false have consecutiveFailures=0
