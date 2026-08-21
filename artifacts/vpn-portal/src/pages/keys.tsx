@@ -87,14 +87,29 @@ function EditKeyForm({
           },
           onError: (err: unknown) => {
             // ApiError carries .status; show a friendly message for node-side failures
-            const status = (err as { status?: number })?.status;
-            let msg: string;
+            const apiError = err as {
+              status?: number;
+              data?: { error?: unknown } | null;
+            };
+            const status = apiError?.status;
+            const serverMessage =
+              typeof apiError?.data?.error === "string" ? apiError.data.error : undefined;
             if (status === 502 || status === 503 || status === 504) {
-              msg = "Сервер недоступен. Попробуйте другой сервер или повторите позже.";
-            } else {
-              msg = err instanceof Error ? err.message : "Не удалось переместить ключ";
+              toast({
+                title: "Сервер недоступен",
+                description: "Попробуйте другой сервер или повторите позже.",
+                variant: "destructive",
+              });
+              return;
             }
-            toast({ title: msg, variant: "destructive" });
+            const msg =
+              serverMessage === "Selected VPN node has reached its user capacity"
+                ? "Выбранный сервер переполнен. Попробуйте другой сервер."
+                : serverMessage === "No available VPN node found"
+                  ? "Сейчас нет доступного сервера. Попробуйте позже."
+                  : serverMessage ??
+                    (err instanceof Error ? err.message : "Не удалось переместить ключ");
+            toast({ title: "Не удалось переместить ключ", description: msg, variant: "destructive" });
           },
         },
       );

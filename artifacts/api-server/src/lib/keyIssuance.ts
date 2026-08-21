@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import {
   db,
   plansTable,
@@ -152,6 +152,8 @@ async function replayOrFail(
  * @param totalSlots    - devicesIncluded + extraDeviceSlots for this user.
  * @param preferNodeId  - Optional explicit node id (undefined → auto-select).
  * @param preferLabel   - Optional label override (undefined → branded default).
+ * @param replaceKeyId  - Relocation-only source key excluded from the slot count
+ *                        while its replacement is being provisioned.
  */
 export async function issueKeyForUser(
   userId: number,
@@ -160,6 +162,7 @@ export async function issueKeyForUser(
   preferLabel?: string,
   description?: string,
   idempotencyKey?: string,
+  replaceKeyId?: number,
 ): Promise<IssueKeyResult> {
   return withUserIssueLock(userId, () =>
     issueKeyForUserInner(
@@ -169,6 +172,7 @@ export async function issueKeyForUser(
       preferLabel,
       description,
       idempotencyKey,
+      replaceKeyId,
     ),
   );
 }
@@ -188,6 +192,7 @@ async function issueKeyForUserInner(
   preferLabel?: string,
   description?: string,
   idempotencyKey?: string,
+  replaceKeyId?: number,
 ): Promise<IssueKeyResult> {
   // Idempotent replay: a retried request (same client-generated UUID) gets
   // the key issued by the first attempt instead of a duplicate. Checked
@@ -250,15 +255,15 @@ async function issueKeyForUserInner(
     // Count total active keys for this user across ALL nodes (not just the
     // selected node) so that a retry landing on a different node cannot bypass
     // the slot limit that was already exhausted on the first attempt.
+    const slotConditions = [
+      eq(vpnKeysTable.userId, userId),
+      isNull(vpnKeysTable.revokedAt),
+      ...(replaceKeyId !== undefined ? [ne(vpnKeysTable.id, replaceKeyId)] : []),
+    ];
     const [{ slotCount }] = await db
       .select({ slotCount: count() })
       .from(vpnKeysTable)
-      .where(
-        and(
-          eq(vpnKeysTable.userId, userId),
-          isNull(vpnKeysTable.revokedAt),
-        ),
-      );
+      .where(and(...slotConditions));
 
     if (slotCount >= totalSlots) {
       return replayOrFail(userId, idempotencyKey, {
@@ -376,15 +381,15 @@ async function issueKeyForUserInner(
       // A per-node count allows a concurrent retry (e.g. Amvera proxy retry)
       // to slip through by landing on a different node after the first request
       // has already committed a key on the originally selected node.
+      const slotConditions = [
+        eq(vpnKeysTable.userId, userId),
+        isNull(vpnKeysTable.revokedAt),
+        ...(replaceKeyId !== undefined ? [ne(vpnKeysTable.id, replaceKeyId)] : []),
+      ];
       const [{ slotCount }] = await tx
         .select({ slotCount: count() })
         .from(vpnKeysTable)
-        .where(
-          and(
-            eq(vpnKeysTable.userId, userId),
-            isNull(vpnKeysTable.revokedAt),
-          ),
-        );
+        .where(and(...slotConditions));
       if (slotCount >= totalSlots) {
         throw Object.assign(new Error("SLOTS_EXCEEDED"), { slotCount, totalSlots });
       }

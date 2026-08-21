@@ -236,6 +236,21 @@ const RelocateVpnKeyBody = z.object({
   idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
+async function findRelocationReplay(userId: number, idempotencyKey: string, targetNodeId: number) {
+  const [row] = await db
+    .select({ key: vpnKeysTable, node: vpnNodesTable })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(
+      and(
+        eq(vpnKeysTable.userId, userId),
+        eq(vpnKeysTable.idempotencyKey, idempotencyKey),
+        eq(vpnKeysTable.nodeId, targetNodeId),
+      ),
+    );
+  return row;
+}
+
 /**
  * POST /vpn-keys/:keyId/relocate
  *
@@ -243,9 +258,10 @@ const RelocateVpnKeyBody = z.object({
  * (preserving label/description), then revokes the old key.
  *
  * Order — new key first, old key revoked after:
- *  - Per-node slot check in issueKeyForUser counts keys on the TARGET node.
- *    Since the user has 0 keys there, the check passes even if they're at
- *    their total slot limit.
+ *  - The source key is excluded from the user's total slot count only for this
+ *    replacement operation. It remains active in DB/Xray until the new key is
+ *    fully provisioned, so a one-device plan can be moved without granting a
+ *    second device slot.
  *  - Revoking after guarantees the user always has at least one working key
  *    during the swap. If the revoke fails the old key becomes a supernumerary
  *    that the admin can clean up, but the user is never left key-less.
@@ -263,6 +279,30 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
   const { keyId } = params.data;
   const { nodeId: targetNodeId, idempotencyKey } = body.data;
 
+  // The proxy can retry a slow POST after the first relocation has already
+  // provisioned the replacement and revoked the source key. Replay the
+  // completed operation before checking the source key's revokedAt, otherwise
+  // the retry is incorrectly reported as "Cannot relocate a revoked key".
+  if (idempotencyKey) {
+    const replay = await findRelocationReplay(user.id, idempotencyKey, targetNodeId);
+    if (replay) {
+      if (replay.key.provisionedAt && !replay.key.revokedAt) {
+        res.json(CreateVpnKeyResponse.parse({ ...replay.key, nodeName: replay.node.name }));
+        return;
+      }
+      if (!replay.key.provisionedAt && !replay.key.revokedAt) {
+        res.status(409).json({
+          error: "Перемещение ключа ещё выполняется. Повторите попытку через несколько секунд.",
+        });
+        return;
+      }
+      res.status(409).json({
+        error: "Эта операция перемещения уже завершена, но новый ключ больше не активен.",
+      });
+      return;
+    }
+  }
+
   // Load the existing key + its current node.
   const [existing] = await db
     .select({ key: vpnKeysTable, node: vpnNodesTable })
@@ -275,7 +315,7 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
     return;
   }
   if (existing.key.revokedAt) {
-    res.status(409).json({ error: "Cannot relocate a revoked key" });
+    res.status(409).json({ error: "Нельзя переместить уже отозванный ключ." });
     return;
   }
   if (existing.key.nodeId === targetNodeId) {
@@ -307,6 +347,7 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
     existing.key.label,
     existing.key.description ?? undefined,
     idempotencyKey,
+    existing.key.id,
   );
 
   if (!result.ok) {

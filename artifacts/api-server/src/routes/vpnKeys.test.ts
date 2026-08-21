@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import {
@@ -613,5 +613,195 @@ describe("Idempotent key issuance (Amvera proxy retry)", () => {
       .send({ nodeId, idempotencyKey: randomBytes(16).toString("hex") });
     expect(res.status).toBe(201);
     expect(createdKeyIds).not.toContain(res.body.id);
+  });
+});
+
+describe("VPN key relocation", () => {
+  const userIds: number[] = [];
+  const subscriptionIds: number[] = [];
+  const keyIds: number[] = [];
+  const nodeIds: number[] = [];
+  let planId: number;
+  let sourceNodeId: number;
+  let targetNodeId: number;
+
+  async function createLoggedInUser(): Promise<{ id: number; cookie: string }> {
+    const email = `vpnkeys-relocate-${randomBytes(6).toString("hex")}@example.com`;
+    const password = "correct-horse-battery-staple";
+    const passwordHash = await hashPassword(password);
+    const [user] = await db
+      .insert(usersTable)
+      .values({ email, passwordHash, role: "user", referralCode: randomBytes(8).toString("hex") })
+      .returning({ id: usersTable.id });
+    userIds.push(user.id);
+
+    const res = await request.post("/api/auth/login").send({ email, password });
+    expect(res.status).toBe(200);
+    const setCookie = res.headers["set-cookie"];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+    const sessionCookie = cookies.find((c: string) => c.startsWith("vpn_session="));
+    if (!sessionCookie) throw new Error("Login did not set a session cookie");
+    return { id: user.id, cookie: sessionCookie.split(";")[0] };
+  }
+
+  beforeAll(async () => {
+    const [plan] = await db
+      .insert(plansTable)
+      .values({
+        name: `Relocation one-slot plan ${randomBytes(4).toString("hex")}`,
+        priceRub: 1000,
+        durationDays: 30,
+        devicesIncluded: 1,
+      })
+      .returning({ id: plansTable.id });
+    planId = plan.id;
+
+    const [source] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Relocation source ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "relocation-source.example.com",
+        sni: "relocation-source.example.com",
+        isActive: true,
+      })
+      .returning({ id: vpnNodesTable.id });
+    sourceNodeId = source.id;
+    nodeIds.push(sourceNodeId);
+
+    const [target] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Relocation target ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "relocation-target.example.com",
+        sni: "relocation-target.example.com",
+        isActive: true,
+      })
+      .returning({ id: vpnNodesTable.id });
+    targetNodeId = target.id;
+    nodeIds.push(targetNodeId);
+  });
+
+  afterAll(async () => {
+    for (const id of keyIds) {
+      await db.delete(vpnKeysTable).where(eq(vpnKeysTable.id, id));
+    }
+    for (const id of subscriptionIds) {
+      await db.delete(subscriptionsTable).where(eq(subscriptionsTable.id, id));
+    }
+    for (const id of nodeIds) {
+      await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, id));
+    }
+    await db.delete(plansTable).where(eq(plansTable.id, planId));
+    for (const id of userIds) {
+      await db.delete(usersTable).where(eq(usersTable.id, id));
+    }
+  });
+
+  it.each([
+    { label: "trial", isTrial: true },
+    { label: "monthly", isTrial: false },
+  ])("relocates a one-slot $label subscription and replays the completed request", async ({ isTrial }) => {
+    const owner = await createLoggedInUser();
+    const [subscription] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId: owner.id,
+        planId,
+        status: "active",
+        startsAt: new Date(),
+        endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        isTrial,
+      })
+      .returning({ id: subscriptionsTable.id });
+    subscriptionIds.push(subscription.id);
+
+    const first = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", owner.cookie)
+      .send({ nodeId: sourceNodeId });
+    expect(first.status).toBe(201);
+    const oldKeyId = first.body.id as number;
+    keyIds.push(oldKeyId);
+
+    const idempotencyKey = randomBytes(16).toString("hex");
+    const relocationPath = `/api/vpn-keys/${oldKeyId}/relocate`;
+    const relocationBody = { nodeId: targetNodeId, idempotencyKey };
+    const relocated = await request
+      .post(relocationPath)
+      .set("Cookie", owner.cookie)
+      .send(relocationBody);
+    expect(relocated.status).toBe(200);
+    expect(relocated.body.nodeId).toBe(targetNodeId);
+    const newKeyId = relocated.body.id as number;
+    keyIds.push(newKeyId);
+
+    const replay = await request
+      .post(relocationPath)
+      .set("Cookie", owner.cookie)
+      .send(relocationBody);
+    expect(replay.status).toBe(200);
+    expect(replay.body.id).toBe(newKeyId);
+    expect(replay.body.uuid).toBe(relocated.body.uuid);
+
+    const rows = await db
+      .select({ id: vpnKeysTable.id, revokedAt: vpnKeysTable.revokedAt, nodeId: vpnKeysTable.nodeId })
+      .from(vpnKeysTable)
+      .where(eq(vpnKeysTable.userId, owner.id));
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.revokedAt === null)).toEqual([
+      expect.objectContaining({ id: newKeyId, nodeId: targetNodeId }),
+    ]);
+    expect(rows.find((row) => row.id === oldKeyId)?.revokedAt).not.toBeNull();
+  });
+
+  it("deduplicates concurrent relocation requests for a one-slot subscription", async () => {
+    const owner = await createLoggedInUser();
+    const [subscription] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId: owner.id,
+        planId,
+        status: "active",
+        startsAt: new Date(),
+        endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: subscriptionsTable.id });
+    subscriptionIds.push(subscription.id);
+
+    const first = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", owner.cookie)
+      .send({ nodeId: sourceNodeId });
+    expect(first.status).toBe(201);
+    const oldKeyId = first.body.id as number;
+    keyIds.push(oldKeyId);
+
+    const relocationPath = `/api/vpn-keys/${oldKeyId}/relocate`;
+    const relocationBody = {
+      nodeId: targetNodeId,
+      idempotencyKey: randomBytes(16).toString("hex"),
+    };
+    const [responseA, responseB] = await Promise.all([
+      request.post(relocationPath).set("Cookie", owner.cookie).send(relocationBody),
+      request.post(relocationPath).set("Cookie", owner.cookie).send(relocationBody),
+    ]);
+
+    expect(responseA.status).toBe(200);
+    expect(responseB.status).toBe(200);
+    expect(responseA.body.id).toBe(responseB.body.id);
+
+    const activeKeys = await db
+      .select({ id: vpnKeysTable.id })
+      .from(vpnKeysTable)
+      .where(
+        and(
+          eq(vpnKeysTable.userId, owner.id),
+          isNull(vpnKeysTable.revokedAt),
+        ),
+      );
+    expect(activeKeys).toEqual([{ id: responseA.body.id }]);
+    keyIds.push(responseA.body.id);
   });
 });
