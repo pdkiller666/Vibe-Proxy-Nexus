@@ -3,7 +3,7 @@ import { Seo } from "@/components/seo";
 export default function TermsPage() {
   return (
     <>
-      <Seo title="Публичная оферта — VPNexus" description="Условия оказания услуг VPNexus, порядок оплаты, возврата и использования сервиса." path="/terms" />
+      <Seo title="Публичная оферта — VPNexus" description="Условия оказания услуг VPNexus, порядок оплаты, возврата и использования сервиса." path="/terms/" />
     <div className="min-h-screen bg-[#F4F4F5] py-12 px-4 font-sans">
       <div className="max-w-3xl mx-auto bg-white border border-black/10 p-8 md:p-12">
         <div className="mb-8">

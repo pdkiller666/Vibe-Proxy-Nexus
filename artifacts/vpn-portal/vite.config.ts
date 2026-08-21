@@ -52,7 +52,7 @@ function generatePublicRouteHtml() {
           .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*/, "")
           .replace(/<title>[^<]*<\/title>/, `<title>${page.title}</title>`)
           .replace(/<meta name="description" content="[^"]*"\s*\/>/, `<meta name="description" content="${page.description}" />`)
-          .replace(/<link rel="canonical" href="[^"]*"\s*\/>/, `<link rel="canonical" href="https://vpnexus.pro/${route}" />`)
+          .replace(/<link rel="canonical" href="[^"]*"\s*\/>/, `<link rel="canonical" href="https://vpnexus.pro/${route}/" />`)
           .replace(/<meta property="og:title" content="[^"]*"\s*\/>/, `<meta property="og:title" content="${page.title}" />`)
           .replace(/<meta property="og:description" content="[^"]*"\s*\/>/, `<meta property="og:description" content="${page.description}" />`)
           .replace(/<meta property="og:url" content="[^"]*"\s*\/>/, `<meta property="og:url" content="https://vpnexus.pro/${route}" />`)
@@ -70,7 +70,7 @@ function generatePublicRouteHtml() {
         const html = template
           .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*/, "")
           .replace(/<meta name="robots" content="[^"]*"\s*\/>/, '<meta name="robots" content="noindex, nofollow" />')
-          .replace(/<link rel="canonical" href="[^"]*"\s*\/>/, `<link rel="canonical" href="https://vpnexus.pro/${route}" />`)
+          .replace(/<link rel="canonical" href="[^"]*"\s*\/>/, `<link rel="canonical" href="https://vpnexus.pro/${route}/" />`)
           .replace(/<div id="root">[\s\S]*?<\/div>\s*<script>/, `<div id="root"><main><h1>VPNexus</h1></main></div>\n    <script>`);
         await mkdir(path.join(outputDir, route), { recursive: true });
         await writeFile(path.join(outputDir, route, "index.html"), html);
