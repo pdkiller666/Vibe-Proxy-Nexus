@@ -12,12 +12,12 @@ import {
   useCreateExtraSlotOrder,
 } from "@workspace/api-client-react";
 
-type Platform = "android" | "ios";
+type Platform = "android" | "ios" | "windows";
 
 function getInitialPlatform(): Platform {
   try {
     const stored = localStorage.getItem("vpn-platform");
-    if (stored === "android" || stored === "ios") return stored;
+    if (stored === "android" || stored === "ios" || stored === "windows") return stored;
   } catch {
     // localStorage unavailable in some contexts
   }
@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
 import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
-import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, ExternalLink, Zap, Pencil, Route, AlertTriangle, Gift } from "lucide-react";
+import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, ExternalLink, Zap, Pencil, Route, AlertTriangle } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
 
@@ -224,7 +224,7 @@ function EditKeyForm({
   );
 }
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, showLabel = false }: { text: string; showLabel?: boolean }) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
@@ -238,10 +238,13 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+      className={`shrink-0 inline-flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors ${
+        showLabel ? "text-xs font-semibold" : ""
+      }`}
       title="Копировать"
     >
       {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+      {showLabel && (copied ? "Скопировано" : "Скопировать")}
     </button>
   );
 }
@@ -350,7 +353,7 @@ function AddDeviceModal({
           disabled={submitting}
           className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
         >
-          {submitting ? "Выпускаем..." : "Выпустить ключ"}
+          {submitting ? "Подключаем..." : "Подключить устройство"}
         </button>
       </div>
     </div>
@@ -373,13 +376,13 @@ function QRModal({ url, onClose }: { url: string; onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-base">QR-код подписки</h3>
+          <h3 className="font-bold text-base">QR-код для подключения</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
         <p className="text-sm text-muted-foreground">
-          Отсканируйте в приложении (v2rayNG, Happ, Sing-Box) через «Добавить подписку».
+          Отсканируйте этот код в приложении через «Добавить подписку».
         </p>
         <div className="flex justify-center">
           {dataUrl ? (
@@ -409,6 +412,15 @@ const FALLBACK_LINKS = {
   v2rayng: "https://play.google.com/store/apps/details?id=com.v2ray.ang",
   v2rayn: "https://github.com/2dust/v2rayN/releases/latest",
 };
+
+function formatDate(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
 
 export default function Keys() {
   const { data: me } = useGetMe();
@@ -443,6 +455,10 @@ export default function Keys() {
     me.expiredSubscription?.billingType !== "hourly"
       ? me.expiredSubscription
       : null;
+  const hourlyBalanceExhausted =
+    !me?.hasActiveSubscription &&
+    me?.subscriptionState === "expired" &&
+    (me.expiredSubscription?.billingType === "hourly" || me.currentPlanBillingType === "hourly");
   const activeNodes = (nodes ?? []).filter((n: { isActive: boolean }) => n.isActive);
 
   const deviceSlots = me?.deviceSlots ?? 1;
@@ -451,6 +467,35 @@ export default function Keys() {
   const slotPrice = paymentSettings?.extraDeviceSlotPriceRub ?? 0;
   const allowFreeSlot = paymentSettings?.allowFreeExtraDeviceSlot ?? false;
   const slotButtonDisabled = slotPrice <= 0 && !allowFreeSlot;
+
+  function scrollToConnection() {
+    document.getElementById("connection-start")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function handleAddSlot() {
+    createSlotOrder(undefined, {
+      onSuccess: (data) => {
+        if (data.freeGranted) {
+          queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+          setShowAddDeviceModal(true);
+          toast({ title: "Дополнительное место добавлено" });
+          return;
+        }
+        setLocation(`/checkout/slot/${data.paymentId}`);
+      },
+      onError: (err: unknown) => {
+        const body = err as { paymentId?: number; message?: string };
+        if (body?.paymentId) {
+          setLocation(`/checkout/slot/${body.paymentId}`);
+          return;
+        }
+        toast({
+          title: err instanceof Error ? err.message : "Не удалось создать заявку",
+          variant: "destructive",
+        });
+      },
+    });
+  }
 
   function handleCreate(label: string, description: string, nodeId: number | undefined) {
     createKey(
@@ -472,12 +517,12 @@ export default function Keys() {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setShowAddDeviceModal(false);
-          toast({ title: "Ключ выпущен", description: "Импортируйте его в клиент VLESS." });
+          toast({ title: "Устройство подключено", description: "Добавьте ссылку для подключения в приложение ниже." });
         },
         onError: (err: unknown) => {
           queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           const msg = err instanceof Error ? err.message : undefined;
-          toast({ title: msg ?? "Не удалось выпустить ключ", variant: "destructive" });
+          toast({ title: msg ?? "Не удалось подключить устройство", variant: "destructive" });
         },
       },
     );
@@ -525,102 +570,100 @@ export default function Keys() {
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Ключи VPN</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Подключение VPN</h1>
           <p className="text-muted-foreground font-mono text-sm mt-1">
-            Добавьте ссылку подписки в свой клиент — конфигурация подключится автоматически.
+            Установите приложение, добавьте ссылку и включите VPN.
           </p>
         </div>
-        {canIssue && (
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-sm font-mono text-muted-foreground">
-              Устройства: {activeKeyCount} / {deviceSlots}
-            </span>
-            {hasSlotAvailable ? (
-              <button
-                onClick={() => setShowAddDeviceModal(true)}
-                disabled={creating}
-                className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
-              >
-                <Plus className="w-4 h-4" />
-                Добавить устройство
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  createSlotOrder(undefined, {
-                    onSuccess: (data) => {
-                      if (data.freeGranted) {
-                        queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
-                        setShowAddDeviceModal(true);
-                        toast({ title: "Слот добавлен бесплатно" });
-                        return;
-                      }
-                      setLocation(`/checkout/slot/${data.paymentId}`);
-                    },
-                    onError: (err: unknown) => {
-                      const body = err as { paymentId?: number; message?: string };
-                      if (body?.paymentId) {
-                        setLocation(`/checkout/slot/${body.paymentId}`);
-                        return;
-                      }
-                      toast({
-                        title: err instanceof Error ? err.message : "Не удалось создать заявку",
-                        variant: "destructive",
-                      });
-                    },
-                  });
-                }}
-                disabled={orderingSlot || slotButtonDisabled}
-                title={slotButtonDisabled ? "Покупка дополнительных устройств временно недоступна" : undefined}
-                className="flex items-center gap-2 bg-primary text-primary-foreground font-bold px-5 py-2.5 hover:opacity-90 transition-opacity disabled:opacity-40"
-              >
-                <Plus className="w-4 h-4" />
-                {orderingSlot
-                  ? "Создаём заявку..."
-                  : slotPrice > 0
-                    ? `Добавить устройство — ${slotPrice} ₽`
-                    : "Добавить устройство"}
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* ── Trial period strip ─────────────────────────────────────────────── */}
-      {me?.isTrialSubscription && me.hasActiveSubscription && (
-        <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3 text-sm">
-          <Gift className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span className="flex-1 text-emerald-800 dark:text-emerald-200">
-            <strong>Пробный период</strong> — бесплатный доступ.
-            После окончания VPN будет приостановлен.
-          </span>
-          <a
-            href="/plans"
-            className="shrink-0 text-emerald-700 dark:text-emerald-300 font-semibold underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-100 whitespace-nowrap"
-          >
-            Купить тариф →
-          </a>
+      {me?.hasActiveSubscription ? (
+        <div className="bg-card border border-border overflow-hidden">
+          <div className={`h-1 w-full ${me.isTrialSubscription ? "bg-emerald-500" : "bg-primary"}`} />
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                  {me.isTrialSubscription ? "Пробный период" : "Подписка"}
+                </span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                  me.isTrialSubscription
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-green-100 text-green-700"
+                }`}>
+                  Активна
+                </span>
+              </div>
+              <p className="text-lg font-bold mt-1">
+                {me.currentPlanName ?? "Доступ к VPN"}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {me.subscriptionEndsAt
+                  ? `${me.isTrialSubscription ? "Пробный доступ" : "Доступ"} до ${formatDate(me.subscriptionEndsAt as string)}`
+                  : "Можно подключить VPN на доступных устройствах"}
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              {activeKeys.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={scrollToConnection}
+                  className="bg-primary text-primary-foreground font-bold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity"
+                >
+                  Подключить VPN
+                </button>
+              ) : hasSlotAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAddDeviceModal(true)}
+                  disabled={creating}
+                  className="bg-primary text-primary-foreground font-bold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
+                >
+                  Подключить это устройство
+                </button>
+              ) : null}
+              <a
+                href="/plans"
+                className="border border-border px-4 py-2.5 text-sm font-semibold text-center hover:border-primary hover:text-primary transition-colors"
+              >
+                {me.isTrialSubscription ? "Выбрать тариф" : "Продлить подписку"}
+              </a>
+            </div>
+          </div>
         </div>
-      )}
-
-      {expiredSubscription && (
-        <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 px-4 py-3 text-sm">
-          <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-          <div className="flex-1 text-red-800 dark:text-red-200">
-            <strong>{expiredSubscription.isTrial ? "Пробный период закончился." : "Подписка закончилась."}</strong>{" "}
-            Выпуск и обновление конфигураций недоступны до продления. Существующие ключи остаются в списке ниже.
+      ) : (
+        <div className="bg-card border border-border p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex-1">
+            <p className="font-bold">
+              {hourlyBalanceExhausted
+                ? "Недостаточно средств на балансе"
+                : expiredSubscription
+                  ? "Подписка закончилась"
+                  : "Сначала выберите тариф"}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {hourlyBalanceExhausted
+                ? "Пополните баланс, чтобы почасовой доступ к VPN снова заработал."
+                : expiredSubscription
+                  ? "Выберите тариф, чтобы снова подключить VPN."
+                  : "После оплаты вы сможете подключить VPN на своих устройствах."}
+            </p>
           </div>
           <a
-            href="/plans"
-            className="shrink-0 text-red-700 dark:text-red-300 font-semibold underline underline-offset-2 hover:text-red-900 dark:hover:text-red-100 whitespace-nowrap"
+            href={hourlyBalanceExhausted ? "/payments" : "/plans"}
+            className="shrink-0 bg-primary text-primary-foreground font-bold px-5 py-2.5 text-sm text-center hover:opacity-90 transition-opacity"
           >
-            Выбрать тариф →
+            {hourlyBalanceExhausted
+              ? "Пополнить баланс"
+              : expiredSubscription
+                ? "Возобновить подписку"
+                : "Выбрать тариф"}
           </a>
         </div>
       )}
 
       {/* ── Platform tab switcher ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 bg-muted/50 border border-border p-1 w-fit">
+      <div id="connection-start" className="scroll-mt-4 flex items-center gap-1 bg-muted/50 border border-border p-1 w-fit">
         <button
           onClick={() => switchPlatform("android")}
           className={`px-4 py-1.5 text-sm font-semibold transition-colors ${
@@ -639,7 +682,17 @@ export default function Keys() {
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          iOS
+          iPhone
+        </button>
+        <button
+          onClick={() => switchPlatform("windows")}
+          className={`px-4 py-1.5 text-sm font-semibold transition-colors ${
+            platform === "windows"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Windows
         </button>
       </div>
 
@@ -649,10 +702,10 @@ export default function Keys() {
           <div className="bg-card border border-border p-5 space-y-3">
             <div className="flex items-center gap-2 font-bold">
               <ExternalLink className="w-4 h-4 text-primary" />
-              Приложения для подключения
+              1. Установите приложение
             </div>
             <p className="text-sm text-muted-foreground">
-              Установите приложение, в которое вы добавите ссылку подписки ниже.
+              Выберите приложение для своего телефона. После установки вы добавите в него ссылку ниже.
             </p>
             <div className="flex flex-wrap gap-2">
               <a
@@ -661,7 +714,7 @@ export default function Keys() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
               >
-                Happ
+                Скачать Happ
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
               <a
@@ -670,22 +723,10 @@ export default function Keys() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
               >
-                v2rayNG
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href={paymentSettings?.appDownloadLinks?.v2rayn ?? FALLBACK_LINKS.v2rayn}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
-              >
-                v2rayN (Windows)*
+                Скачать v2rayNG
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
-            <p className="text-xs text-muted-foreground">
-              * Приложение для Windows — ссылку можно использовать на компьютере.
-            </p>
           </div>
 
           <OnboardingTip
@@ -694,32 +735,26 @@ export default function Keys() {
             title="Быстрый старт — Android"
           >
             <p>
-              <strong>1.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже → в приложении нажмите <strong>«Добавить подписку»</strong> → вставьте. Ключи обновляются автоматически.
+              <strong>2.</strong> Скопируйте ссылку ниже → в приложении нажмите <strong>«Добавить подписку»</strong> → вставьте ссылку.
             </p>
             <p>
-              <strong>2.</strong> Хотите, чтобы российские сайты работали без VPN? Используйте <strong>Xray-конфиг с автообходом РФ</strong> — ссылки ниже, отдельно для каждого устройства.
+              <strong>3.</strong> Включите VPN в приложении. Дополнительные настройки находятся ниже.
             </p>
           </OnboardingTip>
-
-          {!canIssue && !expiredSubscription && (
-            <p className="text-sm text-muted-foreground bg-card border border-border p-4">
-              Для выпуска ключей нужна активная подписка. Перейдите в раздел «Тарифы».
-            </p>
-          )}
 
           {/* Subscription URL — Android */}
           {canIssue && subscription?.url && activeKeys.length > 0 && (
             <div className="bg-card border border-border p-5 space-y-3">
               <div className="flex items-center gap-2 font-bold">
                 <RefreshCw className="w-4 h-4 text-primary" />
-                Ссылка подписки
+                2. Добавьте ссылку для подключения
                 <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  все Android-приложения
+                  Android
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Добавьте один раз — приложение само подтягивает актуальные ключи.
-                Подходит для <strong>Happ</strong>, <strong>v2rayNG</strong> и любого другого VLESS-клиента.
+                Добавьте ссылку один раз — приложение будет само получать актуальные настройки VPN.
+                Подходит для <strong>Happ</strong> и <strong>v2rayNG</strong>.
               </p>
               <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
                 <span className="truncate flex-1">{subscription.url}</span>
@@ -730,11 +765,10 @@ export default function Keys() {
                 >
                   <QrCode className="w-4 h-4" />
                 </button>
-                <CopyButton text={subscription.url} />
+                <CopyButton text={subscription.url} showLabel />
               </div>
               <p className="text-xs text-muted-foreground">
-                <strong>Happ или v2rayNG:</strong> нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
-                <strong className="ml-1">v2rayN:</strong> откройте <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавьте новую подписку.
+                В приложении нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
                 Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
               </p>
             </div>
@@ -745,14 +779,14 @@ export default function Keys() {
             <div className="bg-card border border-border p-5 space-y-4">
               <div className="flex items-center gap-2 font-bold">
                 <Route className="w-4 h-4 text-green-500" />
-                Xray-конфиг с автообходом РФ
+                Дополнительный режим: обход российских сайтов
                 <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  Happ Android · v2rayN Windows
+                  Happ Android
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Российские сервисы (Сбербанк, Госуслуги, Яндекс, ВКонтакте) идут напрямую — без VPN.
-                Всё остальное — через туннель. Для каждого устройства своя ссылка.
+                Всё остальное — через VPN. Этот режим нужен только если вам требуется обход российских сайтов.
               </p>
 
               <div className="flex gap-3 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 text-sm">
@@ -794,14 +828,118 @@ export default function Keys() {
                   скопируйте ссылку своего устройства (или отсканируйте QR) →
                   в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong>.
                 </p>
-                <p>
-                  <strong className="text-foreground">v2rayN (Windows):</strong>{" "}
-                  <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку.
-                </p>
                 <p className="text-muted-foreground/60">
                   При смене сервера ссылка не меняется — конфиг обновится автоматически при следующем обновлении подписки.
                 </p>
               </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Windows tab ───────────────────────────────────────────────────── */}
+      {platform === "windows" && (
+        <>
+          <div className="bg-card border border-border p-5 space-y-3">
+            <div className="flex items-center gap-2 font-bold">
+              <ExternalLink className="w-4 h-4 text-primary" />
+              1. Установите приложение
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Установите v2rayN на компьютер, затем добавьте в него ссылку ниже.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={paymentSettings?.appDownloadLinks?.v2rayn ?? FALLBACK_LINKS.v2rayn}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+              >
+                Скачать v2rayN
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+
+          <OnboardingTip
+            id="keys-intro-windows"
+            icon={<Zap className="w-4 h-4" />}
+            title="Быстрый старт — Windows"
+          >
+            <p>
+              <strong>2.</strong> Скопируйте ссылку ниже → откройте в v2rayN раздел <strong>«Подписки»</strong> → добавьте новую подписку.
+            </p>
+            <p>
+              <strong>3.</strong> Обновите список профилей и включите VPN в v2rayN.
+            </p>
+          </OnboardingTip>
+
+          {canIssue && subscription?.url && activeKeys.length > 0 && (
+            <div className="bg-card border border-border p-5 space-y-3">
+              <div className="flex items-center gap-2 font-bold">
+                <RefreshCw className="w-4 h-4 text-primary" />
+                2. Добавьте ссылку для подключения
+                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
+                  Windows
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                После добавления v2rayN будет автоматически получать актуальные настройки VPN.
+              </p>
+              <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                <span className="truncate flex-1">{subscription.url}</span>
+                <button
+                  onClick={() => setShowQR(true)}
+                  className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                  title="Показать QR-код"
+                >
+                  <QrCode className="w-4 h-4" />
+                </button>
+                <CopyButton text={subscription.url} showLabel />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                В v2rayN: <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку.
+              </p>
+            </div>
+          )}
+
+          {canIssue && subscription?.url && activeKeys.length > 0 && (
+            <div className="bg-card border border-border p-5 space-y-4">
+              <div className="flex items-center gap-2 font-bold">
+                <Route className="w-4 h-4 text-green-500" />
+                Дополнительный режим: обход российских сайтов
+                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
+                  Windows
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                В этом режиме российские сервисы (Сбербанк, Госуслуги, Яндекс, ВКонтакте) работают напрямую,
+                без VPN. Всё остальное идёт через VPN.
+              </p>
+              <div className="space-y-2">
+                {activeKeys.map((key) => {
+                  const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
+                  return (
+                    <div key={key.id} className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground">{key.label}</p>
+                      <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                        <span className="truncate flex-1">{xrayUrl}</span>
+                        <button
+                          onClick={() => setXrayQRUrl(xrayUrl)}
+                          className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                          title="Показать QR-код"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </button>
+                        <CopyButton text={xrayUrl} showLabel />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                В v2rayN: <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку для нужного устройства.
+              </p>
             </div>
           )}
         </>
@@ -813,10 +951,10 @@ export default function Keys() {
           <div className="bg-card border border-border p-5 space-y-3">
             <div className="flex items-center gap-2 font-bold">
               <ExternalLink className="w-4 h-4 text-primary" />
-              Приложение для подключения
+              1. Установите приложение
             </div>
             <p className="text-sm text-muted-foreground">
-              Установите Happ из App Store, затем добавьте в него ссылку подписки ниже.
+              Установите Happ из App Store. Затем добавьте в него ссылку ниже.
             </p>
             <div className="flex flex-wrap gap-2">
               <a
@@ -825,7 +963,7 @@ export default function Keys() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
               >
-                Happ
+                Скачать Happ
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -837,31 +975,25 @@ export default function Keys() {
             title="Быстрый старт — iOS"
           >
             <p>
-              <strong>1.</strong> Скопируйте <strong>Ссылку подписки</strong> ниже и добавьте в Happ — это настраивает VPN-соединение.
+              <strong>2.</strong> Скопируйте ссылку ниже и добавьте её в Happ.
             </p>
             <p>
-              <strong>2.</strong> Нажмите <strong>«Настроить маршрутизацию»</strong> — откроется Happ и автоматически применит профиль обхода РФ (Сбербанк, Госуслуги, Яндекс и др. идут напрямую).
+              <strong>3.</strong> Включите VPN в Happ. Дополнительную маршрутизацию можно настроить ниже.
             </p>
           </OnboardingTip>
-
-          {!canIssue && !expiredSubscription && (
-            <p className="text-sm text-muted-foreground bg-card border border-border p-4">
-              Для выпуска ключей нужна активная подписка. Перейдите в раздел «Тарифы».
-            </p>
-          )}
 
           {/* Subscription URL — iOS */}
           {canIssue && subscription?.url && activeKeys.length > 0 && (
             <div className="bg-card border border-border p-5 space-y-3">
               <div className="flex items-center gap-2 font-bold">
                 <RefreshCw className="w-4 h-4 text-primary" />
-                Ссылка подписки
+                2. Добавьте ссылку для подключения
                 <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  шаг 1 из 2
+                  iPhone
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Добавьте в Happ один раз — соединение настроится автоматически.
+                Добавьте ссылку в Happ один раз — приложение будет само получать актуальные настройки VPN.
               </p>
               <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
                 <span className="truncate flex-1">{subscription.url}</span>
@@ -872,10 +1004,10 @@ export default function Keys() {
                 >
                   <QrCode className="w-4 h-4" />
                 </button>
-                <CopyButton text={subscription.url} />
+                <CopyButton text={subscription.url} showLabel />
               </div>
               <p className="text-xs text-muted-foreground">
-                В Happ: нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+                В Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
                 Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
               </p>
             </div>
@@ -943,13 +1075,59 @@ export default function Keys() {
         </>
       )}
 
+      {(canIssue || visibleKeys.length > 0) && (
+        <div className="bg-card border border-border p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="font-bold">Мои устройства</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Подключено устройств: {activeKeyCount} из {deviceSlots}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Для каждого телефона или компьютера нужен отдельный VPN-доступ.
+              </p>
+            </div>
+            {canIssue && (
+              hasSlotAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAddDeviceModal(true)}
+                  disabled={creating}
+                  className="shrink-0 inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors disabled:opacity-40"
+                >
+                  <Plus className="w-4 h-4" />
+                  Добавить ещё устройство
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAddSlot}
+                  disabled={orderingSlot || slotButtonDisabled}
+                  title={slotButtonDisabled ? "Покупка дополнительных устройств временно недоступна" : undefined}
+                  className="shrink-0 inline-flex items-center gap-2 border border-primary text-primary px-4 py-2 text-sm font-semibold hover:bg-primary/5 transition-colors disabled:opacity-40"
+                >
+                  <Plus className="w-4 h-4" />
+                  {orderingSlot
+                    ? "Создаём заявку..."
+                    : slotPrice > 0
+                      ? `Добавить место — ${slotPrice} ₽`
+                      : "Добавить место для устройства"}
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-28 w-full" />
           <Skeleton className="h-28 w-full" />
         </div>
       ) : !visibleKeys || visibleKeys.length === 0 ? (
-        <p className="text-muted-foreground">Ключей пока нет.</p>
+        <p className="text-sm text-muted-foreground bg-card border border-border p-4">
+          Пока нет подключённых устройств. Нажмите «Подключить это устройство» выше, чтобы создать первый VPN-доступ.
+        </p>
       ) : (
         <div className="space-y-3">
           {visibleKeys.map((key, i) => (
@@ -1012,7 +1190,7 @@ export default function Keys() {
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Для подключения используйте «Ссылку подписки» выше.
+                   Для подключения используйте ссылку выше.
                 </p>
               )}
             </div>

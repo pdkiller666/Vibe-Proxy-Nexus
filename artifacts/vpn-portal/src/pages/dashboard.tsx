@@ -800,7 +800,7 @@ export default function Dashboard() {
           <p>
             У вас активен <strong>бесплатный пробный период</strong>. Первый VPN-ключ уже выпущен —
             откройте раздел{" "}
-            <Link href="/keys" className="underline font-semibold">Ключи VPN</Link>{" "}
+            <Link href="/keys" className="underline font-semibold">Подключение</Link>{" "}
             и подключитесь прямо сейчас. Чтобы продолжить пользоваться после пробного периода,
             выберите{" "}
             <Link href="/plans" className="underline font-semibold">подходящий тариф</Link>.
@@ -808,7 +808,7 @@ export default function Dashboard() {
         ) : me?.hasActiveSubscription ? (
           <p>
             <strong>Следующий шаг:</strong> откройте раздел{" "}
-            <Link href="/keys" className="underline font-semibold">Ключи VPN</Link>{" "}
+            <Link href="/keys" className="underline font-semibold">Подключение</Link>{" "}
             — первый ключ уже готов, подключитесь к интернету за минуту.
           </p>
         ) : expiredSubscription ? (
@@ -1190,14 +1190,14 @@ export default function Dashboard() {
         >
           <div>
             <div className="font-bold flex items-center gap-2">
-              Ключи VPN
+              Подключение
               {!keysLoading && (
                 <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold bg-primary/10 text-primary rounded-full">
                   {activeKeys.length}
                 </span>
               )}
             </div>
-            <div className="text-sm text-muted-foreground">Управление доступом</div>
+            <div className="text-sm text-muted-foreground">Подключить VPN и управлять устройствами</div>
           </div>
           <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
         </Link>

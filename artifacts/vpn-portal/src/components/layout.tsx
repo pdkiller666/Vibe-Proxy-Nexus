@@ -55,7 +55,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/dashboard", label: "Панель", icon: LayoutDashboard, badge: 0 },
     { href: "/plans", label: "Тарифы", icon: Shield, badge: 0 },
-    { href: "/keys", label: "Ключи VPN", icon: Key, badge: 0 },
+    { href: "/keys", label: "Подключение", icon: Key, badge: 0 },
     { href: "/payments", label: "Платежи", icon: CreditCard, badge: paymentBadgeCount },
     { href: "/support", label: "Поддержка", icon: MessageCircle, badge: 0 },
     { href: "/profile", label: "Профиль", icon: UserCircle, badge: 0 },
