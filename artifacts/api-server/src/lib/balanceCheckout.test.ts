@@ -55,6 +55,7 @@ describe("checkoutFromBalance", () => {
   // Track created rows for afterEach cleanup.
   const userIds: number[] = [];
   const subIds: number[] = [];
+  const planIds: number[] = [];
   const paymentIds: number[] = [];
   const txIds: number[] = [];
 
@@ -62,6 +63,8 @@ describe("checkoutFromBalance", () => {
   let settingsId: number | null = null;
   let settingsInserted = false;
   let originalEnabled = false;
+  let originalExtraTrafficPriceRub = 0;
+  let originalExtraTrafficPackageGb = 0;
 
   // Default mock: simulates a successful confirm by writing confirmed status to DB.
   // Set in beforeEach so afterEach resets leave a clean slate.
@@ -87,6 +90,8 @@ describe("checkoutFromBalance", () => {
       await db.delete(subscriptionsTable).where(eq(subscriptionsTable.id, id));
     for (const id of userIds.splice(0))
       await db.delete(usersTable).where(eq(usersTable.id, id));
+    for (const id of planIds.splice(0))
+      await db.delete(plansTable).where(eq(plansTable.id, id));
   });
 
   beforeAll(async () => {
@@ -102,10 +107,22 @@ describe("checkoutFromBalance", () => {
     } else {
       settingsId = existing.id;
       originalEnabled = existing.balancePaymentsEnabled;
+      originalExtraTrafficPriceRub = existing.extraTrafficPriceRub;
+      originalExtraTrafficPackageGb = existing.extraTrafficPackageGb;
       await db
         .update(paymentSettingsTable)
-        .set({ balancePaymentsEnabled: true })
+        .set({
+          balancePaymentsEnabled: true,
+          extraTrafficPriceRub: 50,
+          extraTrafficPackageGb: 10,
+        })
         .where(eq(paymentSettingsTable.id, settingsId!));
+    }
+    if (settingsId !== null && settingsInserted) {
+      await db
+        .update(paymentSettingsTable)
+        .set({ extraTrafficPriceRub: 50, extraTrafficPackageGb: 10 })
+        .where(eq(paymentSettingsTable.id, settingsId));
     }
 
     const [mp] = await db
@@ -129,7 +146,11 @@ describe("checkoutFromBalance", () => {
     } else if (settingsId !== null) {
       await db
         .update(paymentSettingsTable)
-        .set({ balancePaymentsEnabled: originalEnabled })
+        .set({
+          balancePaymentsEnabled: originalEnabled,
+          extraTrafficPriceRub: originalExtraTrafficPriceRub,
+          extraTrafficPackageGb: originalExtraTrafficPackageGb,
+        })
         .where(eq(paymentSettingsTable.id, settingsId));
     }
   });
@@ -400,6 +421,104 @@ describe("checkoutFromBalance", () => {
     if (outcome.ok) return;
     expect(outcome.status).toBe(400);
     expect(outcome.error).toMatch(/подписк/i);
+
+    await collectCreated(userId);
+  });
+
+  it("scenario 6c: balance payment replaces an existing pending manual traffic order", async () => {
+    const [trafficPlan] = await db
+      .insert(plansTable)
+      .values({
+        name: `Traffic balance switch plan ${uid()}`,
+        priceRub: PLAN_PRICE_RUB,
+        durationDays: 30,
+        billingType: "monthly",
+        trafficLimitGb: 100,
+      })
+      .returning({ id: plansTable.id });
+    planIds.push(trafficPlan!.id);
+
+    const initialBalance = 20_000;
+    const { id: userId } = await seedUser(initialBalance);
+    const [subscription] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId,
+        planId: trafficPlan!.id,
+        status: "active",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: subscriptionsTable.id });
+    subIds.push(subscription!.id);
+
+    const [manualPayment] = await db
+      .insert(paymentsTable)
+      .values({
+        userId,
+        subscriptionId: subscription!.id,
+        type: "extra_traffic",
+        provider: "manual_sbp",
+        amountRub: 50,
+        extraTrafficGb: 10,
+        status: "pending",
+        reference: `manual-${uid()}`,
+      })
+      .returning({ id: paymentsTable.id });
+    paymentIds.push(manualPayment!.id);
+
+    const outcome = await checkoutFromBalance(userId, {
+      kind: "extra_traffic",
+      pendingPaymentId: manualPayment!.id,
+    });
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.result.type).toBe("extra_traffic");
+    expect(outcome.result.amountRub).toBe(50);
+
+    const [updatedManualPayment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, manualPayment!.id));
+    expect(updatedManualPayment!.status).toBe("rejected");
+    expect(updatedManualPayment!.rejectionReason).toBe("Заменён оплатой с баланса");
+
+    const [balancePayment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, outcome.result.paymentId));
+    expect(balancePayment!.provider).toBe("balance");
+    expect(balancePayment!.status).toBe("confirmed");
+    expect(balancePayment!.subscriptionId).toBe(subscription!.id);
+    expect(balancePayment!.extraTrafficGb).toBe(10);
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    expect(user!.balanceKopecks).toBe(initialBalance - 50 * 100);
+
+    // Simulate the other lock order: manual confirmation won before the
+    // balance request acquired the source payment row. The named source is no
+    // longer pending, so checkout must not create another payment or debit.
+    await db
+      .update(paymentsTable)
+      .set({ status: "confirmed" })
+      .where(eq(paymentsTable.id, manualPayment!.id));
+    const retry = await checkoutFromBalance(userId, {
+      kind: "extra_traffic",
+      pendingPaymentId: manualPayment!.id,
+    });
+    expect(retry.ok).toBe(false);
+    if (!retry.ok) {
+      expect(retry.status).toBe(409);
+      expect(retry.error).toBe("pending_payment_not_pending");
+    }
+    const [userAfterRetry] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    expect(userAfterRetry!.balanceKopecks).toBe(initialBalance - 50 * 100);
+    const paymentsAfterRetry = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.userId, userId));
+    expect(paymentsAfterRetry).toHaveLength(2);
 
     await collectCreated(userId);
   });

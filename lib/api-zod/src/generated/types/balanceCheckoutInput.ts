@@ -10,4 +10,6 @@ import type { BalanceCheckoutInputTarget } from './balanceCheckoutInputTarget';
 export interface BalanceCheckoutInput {
   target: BalanceCheckoutInputTarget;
   planId?: number;
+  /** @minimum 1 */
+  pendingPaymentId?: number;
 }

@@ -58,3 +58,6 @@ Thumbs.db
 !PROJECT_MAP.md
 !deploy/**/README.md
 !docs/**/*.md
+
+# Diagnostic screenshots attached during support conversations stay local.
+/attached_assets/Screenshot_*.jpg

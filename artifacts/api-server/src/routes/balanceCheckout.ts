@@ -28,7 +28,7 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const { target, planId } = parsed.data;
+  const { target, planId, pendingPaymentId } = parsed.data;
 
   // Validate planId presence for subscription target
   if (target === "subscription" && !planId) {
@@ -41,7 +41,7 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
       ? { kind: "subscription" as const, planId: planId! }
       : target === "extra_device_slot"
         ? { kind: "extra_device_slot" as const }
-        : { kind: "extra_traffic" as const };
+        : { kind: "extra_traffic" as const, pendingPaymentId };
 
   const outcome = await checkoutFromBalance(user.id, checkoutTarget);
 
@@ -55,7 +55,14 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
       return;
     }
     if (outcome.status === 409) {
-      res.status(409).json({ error: "Оплата с баланса временно недоступна." });
+      const messages = {
+        feature_disabled: "Оплата с баланса временно отключена.",
+        payment_in_progress: "Оплата с баланса уже обрабатывается. Подождите несколько секунд.",
+        pending_payment_not_found: "Этот платёж за трафик не найден. Обновите страницу.",
+        pending_payment_not_pending: "Этот платёж уже обработан. Обновите страницу, чтобы увидеть актуальный статус.",
+        pending_payment_id_required: "Для оплаты этой заявки с баланса обновите страницу и попробуйте ещё раз.",
+      } as const;
+      res.status(409).json({ error: messages[outcome.error] });
       return;
     }
     res.status(outcome.status).json({ error: outcome.error });

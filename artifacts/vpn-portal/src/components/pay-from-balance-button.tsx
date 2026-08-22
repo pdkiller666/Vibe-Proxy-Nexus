@@ -20,6 +20,8 @@ interface Props {
   target: Target;
   /** planId — required for target=subscription, ignored otherwise */
   planId?: number;
+  /** Pending traffic order being replaced by this balance payment. */
+  pendingPaymentId?: number;
   /** Price of the item being purchased (rubles). Button is hidden when 0 or undefined. */
   priceRub: number;
   /** User's current balance in kopecks. */
@@ -34,14 +36,18 @@ interface Props {
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-async function postBalanceCheckout(target: Target, planId?: number): Promise<{
+async function postBalanceCheckout(target: Target, planId?: number, pendingPaymentId?: number): Promise<{
   paymentId: number; type: string; amountRub: number;
 }> {
   const res = await fetch(`${basePath}/api/balance-checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ target, planId }),
+    body: JSON.stringify({
+      target,
+      ...(planId ? { planId } : {}),
+      ...(pendingPaymentId ? { pendingPaymentId } : {}),
+    }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -50,7 +56,7 @@ async function postBalanceCheckout(target: Target, planId?: number): Promise<{
       throw new Error(`Недостаточно средств. Нужно ${rubles} ₽ — пополните баланс и попробуйте снова.`);
     }
     if (res.status === 409) {
-      throw new Error("Оплата с баланса временно отключена.");
+      throw new Error(body.error ?? "Оплата с баланса временно недоступна.");
     }
     throw new Error(body.error ?? "Ошибка при оплате с баланса");
   }
@@ -60,6 +66,7 @@ async function postBalanceCheckout(target: Target, planId?: number): Promise<{
 export function PayFromBalanceButton({
   target,
   planId,
+  pendingPaymentId,
   priceRub,
   balanceKopecks,
   enabled,
@@ -73,7 +80,7 @@ export function PayFromBalanceButton({
   const sufficient = balanceKopecks >= priceRub * 100;
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => postBalanceCheckout(target, planId),
+    mutationFn: () => postBalanceCheckout(target, planId, pendingPaymentId),
     onSuccess: (data) => {
       // Invalidate everything that could have changed
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });

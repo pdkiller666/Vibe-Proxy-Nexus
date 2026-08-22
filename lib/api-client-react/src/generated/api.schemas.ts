@@ -350,6 +350,8 @@ export const BalanceCheckoutInputTarget = {
 export interface BalanceCheckoutInput {
   target: BalanceCheckoutInputTarget;
   planId?: number;
+  /** @minimum 1 */
+  pendingPaymentId?: number;
 }
 
 export type PaymentType = typeof PaymentType[keyof typeof PaymentType];

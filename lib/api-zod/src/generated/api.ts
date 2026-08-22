@@ -356,9 +356,13 @@ export const PatchMeAutoRenewResponse = zod.object({
 /**
  * @summary Pay for a subscription, extra device slot, or extra traffic from the wallet balance
  */
+
+
+
 export const PostBalanceCheckoutBody = zod.object({
   "target": zod.enum(['subscription', 'extra_device_slot', 'extra_traffic']),
-  "planId": zod.number().optional()
+  "planId": zod.number().optional(),
+  "pendingPaymentId": zod.number().min(1).optional()
 })
 
 export const PostBalanceCheckoutResponse = zod.object({

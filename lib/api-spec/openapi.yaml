@@ -2359,6 +2359,9 @@ components:
           enum: [subscription, extra_device_slot, extra_traffic]
         # Required when target=subscription
         planId: { type: integer }
+        # Required when replacing a pending manual extra-traffic order from its checkout page.
+        # The server locks this exact payment and refuses the switch if it was already confirmed.
+        pendingPaymentId: { type: integer, minimum: 1 }
 
     BalanceCheckoutResult:
       type: object

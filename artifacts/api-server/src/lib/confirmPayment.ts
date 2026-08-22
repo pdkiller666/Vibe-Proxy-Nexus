@@ -172,6 +172,18 @@ export async function confirmPaymentById(
     const grantedGb = payment.extraTrafficGb ?? 0;
     try {
       const updatedPayment = await db.transaction(async (tx) => {
+        // The balance checkout path may replace a pending manual-SBP order
+        // while this confirmation is in flight. Lock and re-check the payment
+        // before granting traffic so a stale read cannot grant twice.
+        const [lockedPayment] = await tx
+          .select({ status: paymentsTable.status })
+          .from(paymentsTable)
+          .where(eq(paymentsTable.id, payment.id))
+          .for("update");
+        if (!lockedPayment || lockedPayment.status !== "pending") {
+          throw new Error("PAYMENT_STATE_CHANGED");
+        }
+
         const [sub] = await tx
           .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, userId: subscriptionsTable.userId })
           .from(subscriptionsTable)

@@ -43,7 +43,7 @@ import { logger } from "./logger";
 export type BalanceCheckoutTarget =
   | { kind: "subscription"; planId: number }
   | { kind: "extra_device_slot" }
-  | { kind: "extra_traffic" };
+  | { kind: "extra_traffic"; pendingPaymentId?: number };
 
 export type BalanceCheckoutResult = {
   paymentId: number;
@@ -53,7 +53,15 @@ export type BalanceCheckoutResult = {
 };
 
 export type BalanceCheckoutError =
-  | { status: 409; error: "feature_disabled" | "payment_in_progress" }
+  | {
+      status: 409;
+      error:
+        | "feature_disabled"
+        | "payment_in_progress"
+        | "pending_payment_not_found"
+        | "pending_payment_not_pending"
+        | "pending_payment_id_required";
+    }
   | { status: 400; error: string }
   | { status: 402; error: "insufficient_balance"; balanceKopecks: number; requiredKopecks: number }
   | { status: 500; error: string };
@@ -128,10 +136,16 @@ export async function checkoutFromBalance(
   }
 
   const requiredKopecks = amountRub * 100;
+  const pendingPaymentId = target.kind === "extra_traffic" ? target.pendingPaymentId : undefined;
 
   // 3. Fast-path dedup (confirmed only) — skips the lock for sequential retries
-  const fastDedup = await checkDedup(userId, paymentType, amountRub, false);
-  if (fastDedup) return { ok: true, result: fastDedup };
+  // A checkout page replacing a named manual order must always reach the
+  // locked source-payment check below. A previous same-price payment must not
+  // short-circuit that replacement decision.
+  if (!pendingPaymentId) {
+    const fastDedup = await checkDedup(userId, paymentType, amountRub, false);
+    if (fastDedup) return { ok: true, result: fastDedup };
+  }
 
   // 4. tx1: lock → inner dedup → create sub (if new) → check balance → debit
   let txOutcome: TxOutcome;
@@ -144,43 +158,109 @@ export async function checkoutFromBalance(
         .where(eq(usersTable.id, userId))
         .for("update");
 
-      // Inner dedup: re-check after lock (catches concurrent races).
-      // Covers both confirmed and pending so a concurrent in-flight request
-      // is detected before a second debit occurs.
-      const since = new Date(Date.now() - DEDUP_WINDOW_MS);
-      const [existingPayment] = await tx
-        .select({ id: paymentsTable.id, status: paymentsTable.status, subscriptionId: paymentsTable.subscriptionId })
-        .from(paymentsTable)
-        .where(
-          and(
-            eq(paymentsTable.userId, userId),
-            eq(paymentsTable.provider, "balance"),
-            eq(paymentsTable.type, paymentType),
-            eq(paymentsTable.amountRub, amountRub),
-            gt(paymentsTable.createdAt, since),
-            or(eq(paymentsTable.status, "confirmed"), eq(paymentsTable.status, "pending")),
-          ),
-        )
-        .limit(1);
+      if (!pendingPaymentId) {
+        // Inner dedup: re-check after lock (catches concurrent races).
+        // Covers both confirmed and pending so a concurrent in-flight request
+        // is detected before a second debit occurs.
+        const since = new Date(Date.now() - DEDUP_WINDOW_MS);
+        const [existingPayment] = await tx
+          .select({ id: paymentsTable.id, status: paymentsTable.status, subscriptionId: paymentsTable.subscriptionId })
+          .from(paymentsTable)
+          .where(
+            and(
+              eq(paymentsTable.userId, userId),
+              eq(paymentsTable.provider, "balance"),
+              eq(paymentsTable.type, paymentType),
+              eq(paymentsTable.amountRub, amountRub),
+              gt(paymentsTable.createdAt, since),
+              or(eq(paymentsTable.status, "confirmed"), eq(paymentsTable.status, "pending")),
+            ),
+          )
+          .limit(1);
 
-      if (existingPayment) {
-        if (existingPayment.status === "confirmed") {
-          return {
-            kind: "dedup_confirmed" as const,
-            paymentId: existingPayment.id,
-            subscriptionId: existingPayment.subscriptionId ?? null,
-          };
+        if (existingPayment) {
+          if (existingPayment.status === "confirmed") {
+            return {
+              kind: "dedup_confirmed" as const,
+              paymentId: existingPayment.id,
+              subscriptionId: existingPayment.subscriptionId ?? null,
+            };
+          }
+          // Pending = concurrent request in-flight — block the second one
+          return { kind: "dedup_pending" as const };
         }
-        // Pending = concurrent request in-flight — block the second one
-        return { kind: "dedup_pending" as const };
       }
 
       // ── New payment path ─────────────────────────────────────────────────
 
-      // Balance check (after lock, so value is fresh)
-      const balance = user?.balanceKopecks ?? 0;
-      if (balance < requiredKopecks) {
-        throw Object.assign(new Error("INSUFFICIENT_BALANCE"), { balanceKopecks: balance, requiredKopecks });
+      // The traffic checkout page identifies the exact manual order it wants
+      // to replace. Lock it before debiting so a simultaneous manual
+      // confirmation either wins before the charge or loses cleanly.
+      if (paymentType === "extra_traffic") {
+        const [pendingAlternative] = await tx
+          .select({ id: paymentsTable.id, provider: paymentsTable.provider })
+          .from(paymentsTable)
+          .where(
+            and(
+              pendingPaymentId ? eq(paymentsTable.id, pendingPaymentId) : sql`true`,
+              eq(paymentsTable.userId, userId),
+              eq(paymentsTable.type, "extra_traffic"),
+              eq(paymentsTable.status, "pending"),
+            ),
+          )
+          .for("update")
+          .limit(1);
+
+        if (pendingPaymentId && !pendingAlternative) {
+          const [sourcePayment] = await tx
+            .select({ id: paymentsTable.id })
+            .from(paymentsTable)
+            .where(
+              and(
+                eq(paymentsTable.id, pendingPaymentId),
+                eq(paymentsTable.userId, userId),
+                eq(paymentsTable.type, "extra_traffic"),
+              ),
+            )
+            .limit(1);
+          throw new Error(sourcePayment ? "PENDING_PAYMENT_NOT_PENDING" : "PENDING_PAYMENT_NOT_FOUND");
+        }
+        if (!pendingPaymentId && pendingAlternative) {
+          // Older clients do not identify their source payment. Reject rather
+          // than guessing, because a manual confirmation could race a guess.
+          throw new Error("PENDING_PAYMENT_ID_REQUIRED");
+        }
+
+        // Balance check after both user and source-payment locks.
+        const balance = user?.balanceKopecks ?? 0;
+        if (balance < requiredKopecks) {
+          throw Object.assign(new Error("INSUFFICIENT_BALANCE"), { balanceKopecks: balance, requiredKopecks });
+        }
+
+        if (pendingAlternative) {
+          await tx
+            .update(paymentsTable)
+            .set({
+              status: "rejected",
+              rejectionReason: "Заменён оплатой с баланса",
+            })
+            .where(
+              and(
+                eq(paymentsTable.id, pendingAlternative.id),
+                eq(paymentsTable.status, "pending"),
+              ),
+            );
+          logger.info(
+            { userId, paymentId: pendingAlternative.id, provider: pendingAlternative.provider },
+            "balance_checkout: replaced pending extra-traffic payment",
+          );
+        }
+      } else {
+        // Balance check (after the user lock, so value is fresh).
+        const balance = user?.balanceKopecks ?? 0;
+        if (balance < requiredKopecks) {
+          throw Object.assign(new Error("INSUFFICIENT_BALANCE"), { balanceKopecks: balance, requiredKopecks });
+        }
       }
 
       // Create pending_payment subscription INSIDE tx (only for subscription type).
@@ -259,6 +339,15 @@ export async function checkoutFromBalance(
         balanceKopecks: e.balanceKopecks,
         requiredKopecks: e.requiredKopecks,
       };
+    }
+    if (err instanceof Error) {
+      const switchErrors = {
+        PENDING_PAYMENT_NOT_FOUND: "pending_payment_not_found",
+        PENDING_PAYMENT_NOT_PENDING: "pending_payment_not_pending",
+        PENDING_PAYMENT_ID_REQUIRED: "pending_payment_id_required",
+      } as const;
+      const error = switchErrors[err.message as keyof typeof switchErrors];
+      if (error) return { ok: false, status: 409, error };
     }
     logger.error({ err, userId }, "balance_checkout: tx1 failed");
     return { ok: false, status: 500, error: "Ошибка при обработке платежа. Попробуйте позже." };

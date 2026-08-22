@@ -184,6 +184,7 @@ export default function TrafficCheckout() {
           {/* Instant balance payment */}
           <PayFromBalanceButton
             target="extra_traffic"
+            pendingPaymentId={payment.id}
             priceRub={payment.amountRub}
             balanceKopecks={me?.balanceKopecks ?? 0}
             enabled={settings?.balancePaymentsEnabled ?? false}
