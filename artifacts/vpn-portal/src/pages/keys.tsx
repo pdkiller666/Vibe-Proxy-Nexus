@@ -468,10 +468,6 @@ export default function Keys() {
   const allowFreeSlot = paymentSettings?.allowFreeExtraDeviceSlot ?? false;
   const slotButtonDisabled = slotPrice <= 0 && !allowFreeSlot;
 
-  function scrollToConnection() {
-    document.getElementById("connection-start")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   function handleAddSlot() {
     createSlotOrder(undefined, {
       onSuccess: (data) => {
@@ -578,58 +574,28 @@ export default function Keys() {
       </div>
 
       {me?.hasActiveSubscription ? (
-        <div className="bg-card border border-border overflow-hidden">
-          <div className={`h-1 w-full ${me.isTrialSubscription ? "bg-emerald-500" : "bg-primary"}`} />
-          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
-                  {me.isTrialSubscription ? "Пробный период" : "Подписка"}
-                </span>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  me.isTrialSubscription
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-green-100 text-green-700"
-                }`}>
-                  Активна
-                </span>
-              </div>
-              <p className="text-lg font-bold mt-1">
-                {me.currentPlanName ?? "Доступ к VPN"}
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {me.subscriptionEndsAt
-                  ? `${me.isTrialSubscription ? "Пробный доступ" : "Доступ"} до ${formatDate(me.subscriptionEndsAt as string)}`
-                  : "Можно подключить VPN на доступных устройствах"}
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-              {activeKeys.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={scrollToConnection}
-                  className="bg-primary text-primary-foreground font-bold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity"
-                >
-                  Подключить VPN
-                </button>
-              ) : hasSlotAvailable ? (
-                <button
-                  type="button"
-                  onClick={() => setShowAddDeviceModal(true)}
-                  disabled={creating}
-                  className="bg-primary text-primary-foreground font-bold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
-                >
-                  Подключить это устройство
-                </button>
-              ) : null}
-              <a
-                href="/plans"
-                className="border border-border px-4 py-2.5 text-sm font-semibold text-center hover:border-primary hover:text-primary transition-colors"
-              >
-                {me.isTrialSubscription ? "Выбрать тариф" : "Продлить подписку"}
-              </a>
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-border border-l-4 border-l-primary bg-card px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" aria-hidden="true" />
+            <span className="text-sm font-semibold shrink-0">Доступ активен</span>
+            <span className="text-sm text-muted-foreground truncate">
+              {me.currentPlanBillingType === "hourly"
+                ? "Почасовой доступ · списание с баланса"
+                : me.subscriptionEndsAt
+                  ? `до ${formatDate(me.subscriptionEndsAt as string)}`
+                  : "можно подключить VPN"}
+            </span>
           </div>
+          {activeKeys.length === 0 && hasSlotAvailable ? (
+            <button
+              type="button"
+              onClick={() => setShowAddDeviceModal(true)}
+              disabled={creating}
+              className="shrink-0 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              Подключить это устройство
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="bg-card border border-border p-5 flex flex-col sm:flex-row sm:items-center gap-4">
