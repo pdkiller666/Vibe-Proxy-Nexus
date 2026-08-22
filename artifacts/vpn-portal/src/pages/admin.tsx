@@ -98,6 +98,7 @@ import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Ke
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { SupportMessageAttachmentDisplay } from "@/components/support-attachment-picker";
+import type { SubscriptionFilter } from "./admin-users";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -485,7 +486,7 @@ function NodeAlertsBanner() {
   );
 }
 
-function SummarySection() {
+function SummarySection({ onOpenExpiringUsers }: { onOpenExpiringUsers: () => void }) {
   const { data, isLoading } = useGetAdminDashboardSummary({
     query: { queryKey: getGetAdminDashboardSummaryQueryKey(), refetchInterval: 30_000 },
   });
@@ -570,10 +571,17 @@ function SummarySection() {
           {data.expiringIn3Days > 0 && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-300 p-4">
               <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
-              <div>
+              <div className="flex-1 min-w-0">
                 <div className="text-xs font-mono uppercase font-bold text-red-700">Истекают через 3 дня</div>
                 <div className="text-2xl font-bold text-red-700">{data.expiringIn3Days}</div>
                 <div className="text-xs text-red-600 mt-0.5">месячных подписок</div>
+                <button
+                  type="button"
+                  onClick={onOpenExpiringUsers}
+                  className="mt-2 text-xs font-bold text-red-700 underline underline-offset-2 hover:text-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                >
+                  Открыть список пользователей →
+                </button>
               </div>
             </div>
           )}
@@ -1697,712 +1705,8 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   );
 }
 
-function NodesManagement() {
-  const { data: nodes, isLoading } = useListVpnNodes();
-  const { mutate: deleteNode } = useDeleteVpnNode();
-  const { toast } = useToast();
-  const [editingId, setEditingId] = useState<number | "new" | null>(null);
-  const [managingId, setManagingId] = useState<number | null>(null);
-  const [newNodeMode, setNewNodeMode] = useState<null | "provision" | "manual">(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [regionFilter, setRegionFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
-  const [sort, setSort] = useState<"default" | "clients_desc" | "name">("default");
-
-  function handleDelete(nodeId: number) {
-    if (confirmDeleteId !== nodeId) {
-      setConfirmDeleteId(nodeId);
-      return;
-    }
-    setConfirmDeleteId(null);
-    deleteNode(
-      { nodeId },
-      {
-        onSuccess: (data) => {
-          queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
-          if (data.failedMigrations > 0) {
-            toast({
-              title: `Узел удалён (ключей перенесено: ${data.migratedKeys}, не удалось: ${data.failedMigrations})`,
-              description: "Пользователи с непереноситыми ключами остались без VPN. Проверьте логи.",
-              variant: "destructive",
-            });
-          } else if (data.migratedKeys > 0) {
-            toast({
-              title: `Узел удалён`,
-              description: `${data.migratedKeys} ${data.migratedKeys === 1 ? "ключ перенесён" : "ключей перенесено"} на другие серверы.`,
-            });
-          } else {
-            toast({ title: "Узел удалён" });
-          }
-        },
-        onError: (err: unknown) => {
-          const msg =
-            err && typeof err === "object" && "message" in err
-              ? (err as { message: string }).message
-              : "Ошибка удаления узла";
-          toast({ title: msg, variant: "destructive" });
-        },
-      },
-    );
-  }
-
-  if (isLoading) return <Skeleton className="h-40 w-full" />;
-
-  const regions = [...new Set((nodes ?? []).map((n) => n.region))];
-
-  const filteredNodes = (nodes ?? [])
-    .filter((n) => regionFilter === "all" || n.region === regionFilter)
-    .filter((n) => statusFilter === "all" || (statusFilter === "active" ? n.isActive : !n.isActive))
-    .sort((a, b) => {
-      switch (sort) {
-        case "clients_desc":
-          return (b.activeUserCount ?? 0) - (a.activeUserCount ?? 0);
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "default":
-        default:
-          return 0;
-      }
-    });
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3 flex-wrap">
-        <select
-          value={regionFilter}
-          onChange={(e) => setRegionFilter(e.target.value)}
-          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
-        >
-          <option value="all">Все регионы</option>
-          {regions.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
-        >
-          <option value="all">Все статусы</option>
-          <option value="active">Активные</option>
-          <option value="inactive">Неактивные</option>
-        </select>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as typeof sort)}
-          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
-        >
-          <option value="default">Без сортировки</option>
-          <option value="clients_desc">По числу клиентов</option>
-          <option value="name">По названию</option>
-        </select>
-      </div>
-      {filteredNodes.map((node) =>
-        editingId === node.id ? (
-          <NodeForm key={node.id} node={node} onDone={() => setEditingId(null)} />
-        ) : (
-          <div key={node.id} className="bg-card border border-border">
-            <div className="p-4 flex items-center justify-between gap-4 flex-wrap">
-              <div className="min-w-0 break-words">
-                <div className="font-bold flex items-center gap-2 flex-wrap">
-                  <span>{node.name}</span>
-                  <span className="text-muted-foreground font-normal">· {node.region}</span>
-                  {!node.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
-                  {node.managementApiUrl && <NodePollingHealthIndicator nodeName={node.name} />}
-                  {/* Warn when a remote node uses a self-signed cert (provisioner
-                      stores the SHA256 fingerprint in certSha256 only for self-signed;
-                      LE-cert nodes have certSha256 = null). */}
-                  {node.managementApiUrl && node.certSha256 && (
-                    <span
-                      title={"Самоподписанный сертификат — VPN-клиенты не смогут подключиться!\nЗайди на сервер и выполни: certbot --nginx -d " + node.sni}
-                      className="text-xs font-normal bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-800 px-1.5 py-0.5 cursor-help"
-                    >
-                      ⚠️ Self-signed cert
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground font-mono break-all">
-                  {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
-                </div>
-                {node.managementApiUrl && (
-                  <div className="text-xs text-blue-600 font-mono break-all">
-                    Remote: {node.managementApiUrl}
-                  </div>
-                )}
-                <div className="text-sm text-muted-foreground">
-                  Клиентов: {node.activeUserCount}
-                  {node.maxUsers != null ? ` / ${node.maxUsers}` : ""}
-                </div>
-              </div>
-              <div className="flex gap-2 shrink-0 items-center">
-                <NodeHealthButton nodeId={node.id} />
-                <button
-                  onClick={() => setManagingId(managingId === node.id ? null : node.id)}
-                  className={`flex items-center gap-1 text-xs px-2 py-1 border transition-colors ${
-                    managingId === node.id
-                      ? "border-primary text-primary bg-primary/5"
-                      : "border-border text-muted-foreground hover:text-primary hover:border-primary"
-                  }`}
-                  title="Управление узлом"
-                >
-                  <Activity className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Управление</span>
-                </button>
-                <button onClick={() => { setEditingId(node.id); setManagingId(null); }} className="p-2 text-muted-foreground hover:text-primary">
-                  <Pencil className="w-4 h-4" />
-                </button>
-                {confirmDeleteId === node.id ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-destructive">
-                      {(node.activeUserCount ?? 0) > 0
-                        ? `Удалить узел и ${node.activeUserCount} акт. ключей?`
-                        : "Удалить узел?"}
-                    </span>
-                    <button
-                      onClick={() => handleDelete(node.id)}
-                      className="text-xs px-2 py-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Да
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="text-xs px-2 py-1 border border-border hover:bg-muted"
-                    >
-                      Нет
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleDelete(node.id)}
-                    className="p-2 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-            {managingId === node.id && (
-              <div className="px-4 pb-4">
-                <NodeManagementPanel nodeId={node.id} />
-              </div>
-            )}
-          </div>
-        ),
-      )}
-      {editingId === "new" ? (
-        newNodeMode === "provision" ? (
-          <NodeProvisioningWizard onDone={() => { setEditingId(null); setNewNodeMode(null); }} />
-        ) : newNodeMode === "manual" ? (
-          <NodeForm onDone={() => { setEditingId(null); setNewNodeMode(null); }} />
-        ) : (
-          /* Mode selection */
-          <div className="border border-dashed border-border p-4 space-y-3">
-            <p className="text-sm text-muted-foreground text-center">Как добавить узел?</p>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <button
-                onClick={() => setNewNodeMode("provision")}
-                className="flex flex-col items-center gap-2 border border-border p-4 text-sm hover:border-primary hover:text-primary transition-colors group"
-              >
-                <Zap className="w-5 h-5 text-primary" />
-                <span className="font-bold">Авто-развертывание</span>
-                <span className="text-xs text-muted-foreground text-center group-hover:text-primary/70">
-                  Введите IP и пароль VPS — всё остальное автоматически
-                </span>
-              </button>
-              <button
-                onClick={() => setNewNodeMode("manual")}
-                className="flex flex-col items-center gap-2 border border-border p-4 text-sm hover:border-primary hover:text-primary transition-colors group"
-              >
-                <Server className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
-                <span className="font-bold">Вручную</span>
-                <span className="text-xs text-muted-foreground text-center group-hover:text-primary/70">
-                  Сервер уже настроен — введите параметры подключения
-                </span>
-              </button>
-            </div>
-            <div className="flex justify-center">
-              <button
-                onClick={() => setEditingId(null)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Отмена
-              </button>
-            </div>
-          </div>
-        )
-      ) : (
-        <button
-          onClick={() => { setEditingId("new"); setNewNodeMode(null); }}
-          className="flex items-center gap-2 border border-dashed border-border px-4 py-3 text-sm font-medium text-muted-foreground hover:text-primary hover:border-primary transition-colors w-full justify-center"
-        >
-          <Plus className="w-4 h-4" /> Новый узел
-        </button>
-      )}
-    </div>
-  );
-}
-
-function UserSubscriptionEditor({ user }: { user: AdminUser }) {
-  const { data: plans } = useListPlans();
-  const { mutate: updateSubscription, isPending } = useUpdateUserSubscription();
-  const { toast } = useToast();
-  const [fixingBilling, setFixingBilling] = useState(false);
-  // Default to the genuinely active plan (not a cancelled/pending one).
-  const [planId, setPlanId] = useState<string>(
-    user.activePlanId ? String(user.activePlanId) : user.planId ? String(user.planId) : "",
-  );
-  const [durationDays, setDurationDays] = useState("");
-
-  // Detect hourly subscriptions whose startsAt is in the future — this causes
-  // ticksElapsed to be negative and billing to silently skip forever.
-  // Use activeSubscription* fields (sourced from the status=active row) rather
-  // than subscriptionStartsAt/BillingType (sourced from the most-recently-
-  // CREATED subscription regardless of status), because a cancelled pending
-  // row with startsAt=null sorts first in DESC and masks the real active one.
-  const billingStartInFuture =
-    user.activeSubscriptionBillingType === "hourly" &&
-    user.activeSubscriptionId != null &&
-    user.activeSubscriptionStartsAt != null &&
-    new Date(user.activeSubscriptionStartsAt) > new Date();
-
-  async function handleFixBillingStart() {
-    if (!user.activeSubscriptionId) return;
-    setFixingBilling(true);
-    try {
-      const res = await fetch(`/api/admin/debug/billing/fix/${user.activeSubscriptionId}`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}), // reset to now
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        toast({ title: `Ошибка сброса биллинга: ${body.error ?? res.status}`, variant: "destructive" });
-        return;
-      }
-      const data = await res.json();
-      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-      toast({
-        title: "Биллинг сброшен ✓",
-        description: `starts_at сброшен с ${data.previousStartsAt ? new Date(data.previousStartsAt).toLocaleString("ru") : "—"} на текущее время. Списание начнётся в течение 5 минут.`,
-      });
-    } catch {
-      toast({ title: "Ошибка сброса биллинга", variant: "destructive" });
-    } finally {
-      setFixingBilling(false);
-    }
-  }
-
-  function handleAssign() {
-    if (!planId) return;
-    updateSubscription(
-      {
-        userId: user.id,
-        data: { planId: Number(planId), ...(durationDays ? { durationDays: Number(durationDays) } : {}) },
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-          toast({ title: "Подписка обновлена" });
-          setDurationDays("");
-        },
-        onError: () => toast({ title: "Ошибка обновления подписки", variant: "destructive" }),
-      },
-    );
-  }
-
-  const statusLabel: Record<string, string> = {
-    pending_payment: "Ожидает оплаты",
-    active: "Активна",
-    expired: "Истекла",
-    cancelled: "Отменена",
-    rejected: "Отклонена",
-  };
-
-  // Show the genuinely active plan prominently; if there's also a most-recent
-  // subscription with a different status (e.g. a cancelled request), show it
-  // as secondary info so admins aren't confused by the two differing.
-  const hasActiveplan = Boolean(user.activePlanName);
-  const hasDifferentCurrent = user.planName && user.planName !== user.activePlanName;
-
-  return (
-    <div className="space-y-2">
-      {hasActiveplan ? (
-        <div className="text-xs font-mono text-muted-foreground">
-          Активный тариф:{" "}
-          <span className="font-bold text-foreground">{user.activePlanName}</span>
-          {user.subscriptionStatus === "active" && user.subscriptionEndsAt && ` · до ${formatDate(user.subscriptionEndsAt)}`}
-          {hasDifferentCurrent && (
-            <span className="ml-2 text-muted-foreground/70">
-              · последняя заявка: {user.planName}{" "}
-              {user.subscriptionStatus && `· ${statusLabel[user.subscriptionStatus] ?? user.subscriptionStatus}`}
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="text-xs font-mono text-muted-foreground">
-          {user.planName ? (
-            <>
-              Последняя подписка:{" "}
-              <span className="font-bold text-foreground">{user.planName}</span>
-              {user.subscriptionStatus && ` · ${statusLabel[user.subscriptionStatus] ?? user.subscriptionStatus}`}
-              {user.subscriptionEndsAt && ` · до ${formatDate(user.subscriptionEndsAt)}`}
-            </>
-          ) : (
-            <span>Подписок нет</span>
-          )}
-        </div>
-      )}
-      {user.activeSubscriptionBillingType === "hourly" && user.activeSubscriptionId != null && (
-        <div className={`flex items-center gap-2 flex-wrap rounded border px-3 py-2 ${
-          billingStartInFuture
-            ? "border-yellow-500/50 bg-yellow-500/10"
-            : "border-border bg-muted/30"
-        }`}>
-          <span className={`text-xs flex-1 font-mono ${billingStartInFuture ? "text-yellow-700 dark:text-yellow-400" : "text-muted-foreground"}`}>
-            {billingStartInFuture ? (
-              <>⚠ Биллинг заморожен: <code>starts_at</code> в будущем ({new Date(user.activeSubscriptionStartsAt!).toLocaleString("ru")})</>
-            ) : (
-              <>✓ Почасовой биллинг активен{user.activeSubscriptionLastBilledAt
-                ? ` · последнее списание: ${new Date(user.activeSubscriptionLastBilledAt).toLocaleString("ru")}`
-                : " · ещё не списывалось"
-              }</>
-            )}
-          </span>
-          {billingStartInFuture && (
-            <button
-              onClick={handleFixBillingStart}
-              disabled={fixingBilling}
-              className="bg-yellow-500 text-white font-bold px-3 py-1 text-xs hover:bg-yellow-600 transition-colors disabled:opacity-50 shrink-0"
-            >
-              {fixingBilling ? "Сброс…" : "Исправить биллинг"}
-            </button>
-          )}
-        </div>
-      )}
-      <div className="flex items-center gap-2 flex-wrap">
-        <select
-          value={planId}
-          onChange={(e) => setPlanId(e.target.value)}
-          className="border border-border bg-background px-3 py-2 text-sm rounded-none"
-        >
-          <option value="">— Выберите тариф —</option>
-          {plans?.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} · {p.durationDays} дн.
-            </option>
-          ))}
-        </select>
-        <Input
-          type="number"
-          min={1}
-          placeholder="Дней (необязательно)"
-          value={durationDays}
-          onChange={(e) => setDurationDays(e.target.value)}
-          className="rounded-none w-44"
-        />
-        <button
-          onClick={handleAssign}
-          disabled={!planId || isPending}
-          className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          Назначить / продлить
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function UserBalanceEditor({ user }: { user: AdminUser }) {
-  const { mutate: setBalance, isPending } = useAdminSetUserBalance();
-  const { toast } = useToast();
-  // Input in rubles, backend expects kopecks
-  const [value, setValue] = useState(String((user.balanceKopecks / 100).toFixed(2)));
-
-  function handleSave() {
-    const rubles = parseFloat(value.replace(",", "."));
-    if (isNaN(rubles) || rubles < 0) {
-      toast({ title: "Некорректное значение", variant: "destructive" });
-      return;
-    }
-    const kopecks = Math.round(rubles * 100);
-    setBalance(
-      { userId: user.id, data: { balanceKopecks: kopecks } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-          toast({ title: `Баланс установлен: ${rubles.toFixed(2)} ₽` });
-        },
-        onError: (err: unknown) =>
-          toast({
-            title: err instanceof Error ? err.message : "Ошибка изменения баланса",
-            variant: "destructive",
-          }),
-      },
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <Input
-        type="number"
-        min="0"
-        step="0.01"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        className="rounded-none w-36 font-mono"
-        placeholder="0.00"
-      />
-      <span className="text-sm text-muted-foreground">₽</span>
-      <button
-        onClick={handleSave}
-        disabled={isPending}
-        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-      >
-        Установить
-      </button>
-    </div>
-  );
-}
-
-function UserSetPasswordEditor({ user }: { user: AdminUser }) {
-  const { mutate: setPassword, isPending } = useAdminSetUserPassword();
-  const { toast } = useToast();
-  const [password, setPasswordValue] = useState("");
-
-  function handleSave() {
-    if (password.length < 8) {
-      toast({ title: "Минимум 8 символов", variant: "destructive" });
-      return;
-    }
-    setPassword(
-      { userId: user.id, data: { password } },
-      {
-        onSuccess: () => {
-          setPasswordValue("");
-          toast({ title: "Пароль установлен. Все сессии пользователя завершены." });
-        },
-        onError: (err: unknown) =>
-          toast({
-            title: err instanceof Error ? err.message : "Ошибка смены пароля",
-            variant: "destructive",
-          }),
-      },
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <Input
-        type="password"
-        value={password}
-        onChange={(e) => setPasswordValue(e.target.value)}
-        className="rounded-none max-w-64"
-        placeholder="Новый пароль (мин. 8 символов)"
-      />
-      <button
-        onClick={handleSave}
-        disabled={isPending || password.length < 8}
-        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-      >
-        Задать пароль
-      </button>
-      <span className="text-xs text-muted-foreground">Все сессии пользователя будут завершены.</span>
-    </div>
-  );
-}
-
-function UserProfileEditor({ user }: { user: AdminUser }) {
-  const { mutate: updateProfile, isPending } = useUpdateUserProfile();
-  const { toast } = useToast();
-  const [name, setName] = useState(user.name ?? "");
-  const [email, setEmail] = useState(user.email);
-
-  function handleSave() {
-    const data: { name?: string | null; email?: string } = {};
-    if (name !== (user.name ?? "")) data.name = name || null;
-    if (email !== user.email) data.email = email;
-    if (Object.keys(data).length === 0) return;
-
-    updateProfile(
-      { userId: user.id, data },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-          toast({ title: "Профиль обновлён" });
-        },
-        onError: (err: unknown) =>
-          toast({
-            title: err instanceof Error ? err.message : "Ошибка обновления профиля",
-            variant: "destructive",
-          }),
-      },
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <Input
-        placeholder="Имя"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="rounded-none max-w-48"
-      />
-      <Input
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="rounded-none max-w-64"
-      />
-      <button
-        onClick={handleSave}
-        disabled={isPending}
-        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-      >
-        Сохранить
-      </button>
-    </div>
-  );
-}
-
-function BalanceTransactionRow({ tx }: { tx: AdminBalanceTransaction }) {
-  const isCredit = tx.amountKopecks > 0;
-  const typeLabel: Record<string, string> = {
-    topup: "Пополнение",
-    debit: "Списание",
-    refund: "Возврат",
-    referral: "Реферал",
-  };
-  return (
-    <div className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
-      <div className="min-w-0">
-        <div className="font-medium">{typeLabel[tx.type] ?? tx.type}</div>
-        {tx.description && <div className="text-muted-foreground truncate">{tx.description}</div>}
-        <div className="text-muted-foreground font-mono">{formatDate(tx.createdAt)}</div>
-      </div>
-      <div className={`font-mono font-bold shrink-0 ${isCredit ? "text-green-600" : "text-muted-foreground"}`}>
-        {isCredit ? "+" : ""}{(tx.amountKopecks / 100).toFixed(2)} ₽
-      </div>
-    </div>
-  );
-}
-
-function ForceLogoutButton({ userId }: { userId: number }) {
-  const { mutate, isPending } = useAdminForceLogout();
-  const { toast } = useToast();
-  return (
-    <button
-      onClick={() =>
-        mutate(
-          { userId },
-          {
-            onSuccess: () => toast({ title: "Все сессии пользователя завершены" }),
-            onError: () => toast({ title: "Ошибка принудительного выхода", variant: "destructive" }),
-          },
-        )
-      }
-      disabled={isPending}
-      className="border border-border px-4 py-2 text-sm font-medium hover:border-destructive hover:text-destructive transition-colors disabled:opacity-50"
-    >
-      Выйти со всех устройств
-    </button>
-  );
-}
-
-function BanButton({ userId, isBanned }: { userId: number; isBanned: boolean }) {
-  const { mutate: ban, isPending: banning } = useAdminBanUser();
-  const { mutate: unban, isPending: unbanning } = useAdminUnbanUser();
-  const { toast } = useToast();
-  const isPending = banning || unbanning;
-
-  if (isBanned) {
-    return (
-      <button
-        onClick={() =>
-          unban(
-            { userId },
-            {
-              onSuccess: () => {
-                toast({ title: "Блокировка снята" });
-                queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-              },
-              onError: () => toast({ title: "Ошибка при разблокировке", variant: "destructive" }),
-            },
-          )
-        }
-        disabled={isPending}
-        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-      >
-        Разблокировать
-      </button>
-    );
-  }
-
-  return (
-    <button
-      onClick={() =>
-        ban(
-          { userId },
-          {
-            onSuccess: () => {
-              toast({ title: "Пользователь заблокирован" });
-              queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-            },
-            onError: () => toast({ title: "Ошибка при блокировке", variant: "destructive" }),
-          },
-        )
-      }
-      disabled={isPending}
-      className="border border-amber-500 text-amber-600 px-4 py-2 text-sm font-medium hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-50"
-    >
-      Заблокировать
-    </button>
-  );
-}
-
-function AdminNoteEditor({ userId, initialNote }: { userId: number; initialNote: string | null }) {
-  const [note, setNote] = useState(initialNote ?? "");
-  const { mutate, isPending } = useAdminSetUserNote();
-  const { toast } = useToast();
-
-  function handleSave() {
-    mutate(
-      { userId, data: { note: note.trim() || null } },
-      {
-        onSuccess: () => toast({ title: "Заметка сохранена" }),
-        onError: () => toast({ title: "Ошибка сохранения заметки", variant: "destructive" }),
-      },
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <Textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Внутренняя заметка для администраторов (не видна пользователю)..."
-        className="rounded-none text-sm min-h-[80px] resize-y"
-      />
-      <button
-        onClick={handleSave}
-        disabled={isPending}
-        className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-      >
-        Сохранить заметку
-      </button>
-    </div>
-  );
-}
-
 const NODE_POLL_STALE_MS = 5 * 60 * 1000; // 5 minutes
 
-/**
- * Shows the last background traffic-poll result for a specific remote node.
- * Uses the same polling-health query as the global banner so there's no extra
- * network request — React Query serves from cache.
- */
 function NodePollingHealthIndicator({ nodeName }: { nodeName: string }) {
   const { data } = useGetAdminTrafficPollingHealth({
     query: { queryKey: getGetAdminTrafficPollingHealthQueryKey(), refetchInterval: 60_000 },
@@ -2963,945 +2267,50 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
     </div>
   );
 }
-
-const KEYS_PAGE_SIZE = 8;
-const PAYMENTS_PAGE_SIZE = 10;
-const TXS_PAGE_SIZE = 10;
-
-function UserKeysAndPayments({ userId }: { userId: number }) {
-  const { data: keys } = useListAdminVpnKeys({ userId });
-  const { data: payments } = useListAdminPayments({ userId });
-  const { data: balanceTxs } = useListAdminUserBalanceTransactions(userId);
+function NodesManagement() {
+  const { data: nodes, isLoading } = useListVpnNodes();
+  const { mutate: deleteNode } = useDeleteVpnNode();
   const { toast } = useToast();
-  const [showAllKeys, setShowAllKeys] = useState(false);
-  const [paymentsPage, setPaymentsPage] = useState(1);
-  const [showAllTxs, setShowAllTxs] = useState(false);
-
-  const revokeMutation = useMutation({
-    mutationFn: async (keyId: number) => {
-      const res = await fetch(`/api/admin/vpn-keys/${keyId}`, { method: "DELETE", credentials: "include" });
-      if (!res.ok) throw new Error("Failed");
-    },
-    onSuccess: () => {
-      toast({ title: "Ключ отозван" });
-      queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey({ userId }) });
-      queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-    },
-    onError: () => toast({ title: "Ошибка отзыва ключа", variant: "destructive" }),
-  });
-
-  const userKeys = keys ?? [];
-  const userPayments = payments ?? [];
-  const visibleKeys = showAllKeys ? userKeys : userKeys.slice(0, KEYS_PAGE_SIZE);
-  const totalPaymentPages = Math.max(1, Math.ceil(userPayments.length / PAYMENTS_PAGE_SIZE));
-  const visiblePayments = userPayments.slice((paymentsPage - 1) * PAYMENTS_PAGE_SIZE, paymentsPage * PAYMENTS_PAGE_SIZE);
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="space-y-2">
-        <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">
-          Ключи VPN ({userKeys.length})
-        </div>
-        {userKeys.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Ключей нет.</p>
-        ) : (
-          visibleKeys.map((key) => (
-            <div key={key.id} className={`bg-muted/30 border border-border px-2 py-1.5 text-xs ${key.revokedAt ? "opacity-60" : ""}`}>
-              <div className="flex items-center justify-between gap-2 min-w-0">
-                <div className={`min-w-0 truncate ${key.revokedAt ? "text-muted-foreground line-through font-medium" : "font-medium"}`}>
-                  {key.label}
-                </div>
-                {!key.revokedAt && (
-                  <button
-                    onClick={() => revokeMutation.mutate(key.id)}
-                    disabled={revokeMutation.isPending}
-                    className="shrink-0 text-destructive hover:opacity-70 transition-opacity"
-                    title="Отозвать"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              <div className="mt-1 grid grid-cols-2 gap-x-3 text-muted-foreground font-mono">
-                <div>
-                  <span className="text-[10px] uppercase tracking-wide">Период</span>
-                  <div>↑ {formatBytes(key.periodUpBytes)}</div>
-                  <div>↓ {formatBytes(key.periodDownBytes)}</div>
-                  <div className="text-foreground/70">= {formatBytes(key.periodUpBytes + key.periodDownBytes)}</div>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase tracking-wide">Всего</span>
-                  <div>↑ {formatBytes(key.trafficUpBytes)}</div>
-                  <div>↓ {formatBytes(key.trafficDownBytes)}</div>
-                  <div className="text-foreground/70">= {formatBytes(key.trafficUpBytes + key.trafficDownBytes)}</div>
-                </div>
-              </div>
-              {key.revokedAt && (
-                <div className="mt-1 text-[10px] text-muted-foreground font-mono">
-                  Отозван: {formatDate(key.revokedAt)}
-                  {key.revokedReason && (
-                    <span className="ml-1 px-1 bg-muted rounded">
-                      {key.revokedReason === "admin" ? "вручную" :
-                       key.revokedReason === "traffic_limit" ? "лимит трафика" :
-                       key.revokedReason === "expired" ? "подписка истекла" :
-                       key.revokedReason}
-                    </span>
-                  )}
-                  {key.xrayCleanupPendingAt && (
-                    <div className="mt-1 text-amber-600 dark:text-amber-400">
-                      Ожидается удаление клиента из Xray: {formatDate(key.xrayCleanupPendingAt)}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-        {userKeys.length > KEYS_PAGE_SIZE && (
-          <button
-            onClick={() => setShowAllKeys((v) => !v)}
-            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-          >
-            {showAllKeys ? "Скрыть" : `Показать все ${userKeys.length} ключей`}
-          </button>
-        )}
-      </div>
-      <div className="space-y-2">
-        <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">
-          Платежи ({userPayments.length})
-        </div>
-        {userPayments.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Платежей нет.</p>
-        ) : (
-          <>
-            {visiblePayments.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-2 bg-muted/30 border border-border px-2 py-1.5 text-xs">
-                <div className="min-w-0">
-                  <div className="font-medium">
-                    {p.type === "extra_device_slot"
-                      ? "Доп. устройство"
-                      : p.type === "extra_traffic"
-                        ? `Доп. трафик${p.extraTrafficGb ? ` (+${p.extraTrafficGb} ГБ)` : ""}`
-                        : p.type === "balance_topup"
-                          ? "Пополнение баланса"
-                          : (p.planName ?? "Подписка")}
-                  </div>
-                  <div className="text-muted-foreground font-mono">{formatDate(p.createdAt)}</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-mono font-bold">{p.amountRub} ₽</div>
-                  <div
-                    className={
-                      p.status === "confirmed"
-                        ? "text-green-600"
-                        : p.status === "rejected"
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                    }
-                  >
-                    {p.status === "confirmed" ? "Оплачен" : p.status === "rejected" ? "Отклонён" : "Ожидает"}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {totalPaymentPages > 1 && (
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  onClick={() => setPaymentsPage((p) => Math.max(1, p - 1))}
-                  disabled={paymentsPage === 1}
-                  className="text-xs border border-border px-2 py-0.5 disabled:opacity-40 hover:bg-muted transition-colors"
-                >←</button>
-                <span className="text-xs text-muted-foreground">{paymentsPage} / {totalPaymentPages}</span>
-                <button
-                  onClick={() => setPaymentsPage((p) => Math.min(totalPaymentPages, p + 1))}
-                  disabled={paymentsPage === totalPaymentPages}
-                  className="text-xs border border-border px-2 py-0.5 disabled:opacity-40 hover:bg-muted transition-colors"
-                >→</button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-      <div className="space-y-2">
-        <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide flex items-center gap-1.5">
-          <Wallet className="w-3 h-3" /> История баланса ({balanceTxs?.length ?? 0})
-        </div>
-        {!balanceTxs || balanceTxs.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Транзакций нет.</p>
-        ) : (
-          <>
-            {(showAllTxs ? balanceTxs : balanceTxs.slice(0, TXS_PAGE_SIZE)).map((tx) => (
-              <BalanceTransactionRow key={tx.id} tx={tx} />
-            ))}
-            {balanceTxs.length > TXS_PAGE_SIZE && (
-              <button
-                onClick={() => setShowAllTxs((v) => !v)}
-                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-              >
-                {showAllTxs ? "Скрыть" : `Показать все ${balanceTxs.length} транзакций`}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Invite Links tab ─────────────────────────────────────────────────────────
-function InviteLinkRow({
-  link,
-  basePath,
-  isEditing,
-  isViewingUsers,
-  onToggleActive,
-  onDelete,
-  onCopyUrl,
-  onEdit,
-  onViewUsers,
-}: {
-  link: AdminInviteLink;
-  basePath: string;
-  isEditing: boolean;
-  isViewingUsers: boolean;
-  onToggleActive: () => void;
-  onDelete: () => void;
-  onCopyUrl: () => void;
-  onEdit: () => void;
-  onViewUsers: () => void;
-}) {
-  return (
-    <tr className={`hover:bg-muted/30 transition-colors ${!link.isActive ? "opacity-50" : ""} ${isEditing ? "bg-orange-50/40" : ""}`}>
-      <td className="px-4 py-2.5 max-w-[200px]">
-        <div className="font-medium truncate">{link.note ?? <span className="text-muted-foreground italic">без заметки</span>}</div>
-        <div className="flex items-center gap-1 mt-0.5">
-          <span className="font-mono text-xs text-muted-foreground tracking-widest">{link.code}</span>
-          <button
-            onClick={onCopyUrl}
-            title="Скопировать ссылку"
-            className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Copy className="w-3 h-3" />
-          </button>
-        </div>
-      </td>
-      <td className="px-4 py-2.5">
-        <div className="text-xs">
-          {link.planName ? (
-            <span className="font-medium">{link.planName}</span>
-          ) : (
-            <span className="text-muted-foreground">по умолч.</span>
-          )}
-        </div>
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {link.trialDays != null ? `${link.trialDays} дн.` : "стандарт"}
-        </div>
-      </td>
-      <td className="px-4 py-2.5 text-right font-mono">
-        <span className={link.maxUses != null && link.usedCount >= link.maxUses ? "text-red-500 font-bold" : ""}>
-          {link.usedCount}
-        </span>
-        {link.maxUses != null && (
-          <span className="text-muted-foreground">/{link.maxUses}</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5 text-center">
-        <button
-          onClick={onToggleActive}
-          className={`w-6 h-6 flex items-center justify-center mx-auto border transition-colors ${
-            link.isActive
-              ? "border-green-500 text-green-600 hover:bg-red-50 hover:border-red-400 hover:text-red-500"
-              : "border-border text-muted-foreground hover:border-green-400 hover:text-green-600"
-          }`}
-          title={link.isActive ? "Деактивировать" : "Активировать"}
-        >
-          {link.isActive ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-        </button>
-      </td>
-      <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-        {link.expiresAt ? formatDate(link.expiresAt) : "—"}
-      </td>
-      <td className="px-4 py-2.5">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onViewUsers}
-            className={`p-1 transition-colors ${isViewingUsers ? "text-blue-600" : "text-muted-foreground hover:text-foreground"}`}
-            title="Посмотреть пользователей этой ссылки"
-          >
-            <Users className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onEdit}
-            className={`p-1 transition-colors ${isEditing ? "text-orange-600" : "text-muted-foreground hover:text-foreground"}`}
-            title="Редактировать ссылку"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-muted-foreground hover:text-red-500 transition-colors"
-            title="Удалить ссылку"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-/** Expandable panel showing all users who registered via a specific invite link. */
-function InviteLinkUsersPanel({ linkId, linkCode }: { linkId: number; linkCode: string }) {
-  const { data: users, isLoading } = useGetAdminInviteLinkUsers(linkId);
-
-  return (
-    <tr className="bg-blue-50/40 border-b border-blue-100">
-      <td colSpan={6} className="px-4 py-3">
-        <div className="space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-            Пользователи по ссылке <span className="font-mono">{linkCode}</span>
-          </p>
-          {isLoading ? (
-            <div className="text-xs text-muted-foreground">Загрузка...</div>
-          ) : !users?.length ? (
-            <div className="text-xs text-muted-foreground italic">
-              Никто ещё не зарегистрировался по этой ссылке
-            </div>
-          ) : (
-            <div className="border border-blue-100 overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-blue-100 bg-blue-50/60">
-                    <th className="text-left px-3 py-1.5 font-bold uppercase text-muted-foreground">Пользователь</th>
-                    <th className="text-left px-3 py-1.5 font-bold uppercase text-muted-foreground">Email</th>
-                    <th className="text-left px-3 py-1.5 font-bold uppercase text-muted-foreground">Дата регистрации</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-blue-50">
-                  {(users as AdminInviteLinkUser[]).map((u) => (
-                    <tr key={u.id} className="hover:bg-blue-50/40">
-                      <td className="px-3 py-1.5 font-medium">{u.name ?? <span className="text-muted-foreground italic">без имени</span>}</td>
-                      <td className="px-3 py-1.5 font-mono text-muted-foreground">{u.email}</td>
-                      <td className="px-3 py-1.5 text-muted-foreground">{formatDate(u.createdAt as unknown as string)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="border-t border-blue-100 bg-blue-50/40">
-                  <tr>
-                    <td colSpan={3} className="px-3 py-1.5 text-muted-foreground">
-                      Всего: <span className="font-bold">{users.length}</span>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-/** Convert a UTC ISO string to a YYYY-MM-DDTHH:mm string in the browser's local timezone,
- *  suitable for use as the value of a <input type="datetime-local"> element. */
-function toLocalDatetimeInput(isoString: string | Date): string {
-  const d = typeof isoString === "string" ? new Date(isoString) : isoString;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function InviteLinkEditRow({
-  link,
-  plans,
-  onSave,
-  onCancel,
-  isSaving,
-}: {
-  link: AdminInviteLink;
-  plans: Plan[];
-  onSave: (data: { note?: string; planId?: number | null; trialDays?: number | null; maxUses?: number | null; expiresAt?: string | null }) => void;
-  onCancel: () => void;
-  isSaving: boolean;
-}) {
-  const [note, setNote] = useState(link.note ?? "");
-  const [planId, setPlanId] = useState(link.planId != null ? String(link.planId) : "");
-  const [trialDays, setTrialDays] = useState(link.trialDays != null ? String(link.trialDays) : "");
-  const [maxUses, setMaxUses] = useState(link.maxUses != null ? String(link.maxUses) : "");
-
-  // Initialize in local time so the displayed value matches the user's clock,
-  // and track the original value so we only send the field when it actually changed.
-  const initialExpiresAt = link.expiresAt ? toLocalDatetimeInput(link.expiresAt as unknown as string) : "";
-  const [expiresAt, setExpiresAt] = useState(initialExpiresAt);
-  const [expiresAtTouched, setExpiresAtTouched] = useState(false);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    // Only include expiresAt in the payload when the user explicitly changed it,
-    // to avoid accidentally overwriting or drifting an untouched expiry value.
-    const expiresAtPayload: { expiresAt?: string | null } = expiresAtTouched
-      ? { expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null }
-      : {};
-    onSave({
-      note: note.trim() || undefined,
-      planId: planId ? Number(planId) : null,
-      trialDays: trialDays ? Number(trialDays) : null,
-      maxUses: maxUses ? Number(maxUses) : null,
-      ...expiresAtPayload,
-    });
-  }
-
-  const monthlyPlans = plans.filter((p) => p.isActive && p.billingType === "monthly");
-
-  return (
-    <tr className="bg-orange-50/60 border-b border-orange-200">
-      <td colSpan={6} className="px-4 py-3">
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-orange-700">
-            Редактировать: <span className="font-mono">{link.code}</span>
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">Заметка</label>
-              <Input
-                placeholder="Например: Telegram-канал @vpnexus или Иван из команды"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="rounded-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Тариф <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <select
-                value={planId}
-                onChange={(e) => setPlanId(e.target.value)}
-                className="w-full border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="">По умолчанию (глобальная настройка)</option>
-                {monthlyPlans.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — {p.priceRub} ₽/мес{p.isPromo ? " · Промо" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Пробный период, дней <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <Input
-                type="number"
-                min={0}
-                max={365}
-                placeholder="Стандарт (из настроек)"
-                value={trialDays}
-                onChange={(e) => setTrialDays(e.target.value)}
-                className="rounded-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Лимит использований <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <Input
-                type="number"
-                min={1}
-                placeholder="Без лимита"
-                value={maxUses}
-                onChange={(e) => setMaxUses(e.target.value)}
-                className="rounded-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Действует до <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <Input
-                type="datetime-local"
-                value={expiresAt}
-                onChange={(e) => { setExpiresAt(e.target.value); setExpiresAtTouched(true); }}
-                className="rounded-none"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 justify-end pt-1">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-3 py-1.5 text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-4 py-1.5 text-sm bg-orange-600 hover:bg-orange-700 text-white font-mono transition-colors disabled:opacity-50"
-            >
-              {isSaving ? "Сохранение..." : "Сохранить"}
-            </button>
-          </div>
-        </form>
-      </td>
-    </tr>
-  );
-}
-
-function InviteLinksManagement() {
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const { data: links, isLoading } = useListAdminInviteLinks();
-  // Must use admin plans so promo plans appear in the edit-link dropdown too.
-  const { data: plans } = useListAdminPlans();
-  const { data: paymentSettings } = useGetPaymentSettings();
-  const { toast } = useToast();
-  const trialDisabled = paymentSettings !== undefined && !paymentSettings.trialEnabled;
-
-  const { mutate: createLink, isPending: creating } = useCreateAdminInviteLink({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() });
-        setShowForm(false);
-        setNote(""); setPlanId(""); setTrialDays(""); setMaxUses(""); setExpiresAt("");
-        toast({ title: "Ссылка создана" });
-      },
-      onError: () => toast({ title: "Ошибка создания", variant: "destructive" }),
-    },
-  });
-
-  const [editingLinkId, setEditingLinkId] = useState<number | null>(null);
-  const [viewingUsersLinkId, setViewingUsersLinkId] = useState<number | null>(null);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-  const { mutate: updateLink } = useUpdateAdminInviteLink({
-    mutation: {
-      onSuccess: (_data, variables) => {
-        queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() });
-        // Only close edit form and show toast when it was an edit (not a toggle)
-        if (editingLinkId === variables.linkId) {
-          setEditingLinkId(null);
-          toast({ title: "Ссылка обновлена" });
-        }
-        setIsSavingEdit(false);
-      },
-      onError: () => {
-        toast({ title: "Ошибка обновления", variant: "destructive" });
-        setIsSavingEdit(false);
-      },
-    },
-  });
-
-  const { mutate: deleteLink } = useDeleteAdminInviteLink({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListAdminInviteLinksQueryKey() });
-        toast({ title: "Ссылка удалена" });
-      },
-      onError: () => toast({ title: "Ошибка удаления", variant: "destructive" }),
-    },
-  });
-
-  const [showForm, setShowForm] = useState(false);
-  const [note, setNote] = useState("");
-  const [planId, setPlanId] = useState("");
-  const [trialDays, setTrialDays] = useState("");
-  const [maxUses, setMaxUses] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
-
-  function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    createLink({
-      data: {
-        ...(note.trim() ? { note: note.trim() } : {}),
-        ...(planId ? { planId: Number(planId) } : {}),
-        ...(trialDays ? { trialDays: Number(trialDays) } : {}),
-        ...(maxUses ? { maxUses: Number(maxUses) } : {}),
-        ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
-      },
-    });
-  }
-
-  // Use admin plans so promo plans are visible in the invite dropdown too.
-  const { data: adminPlans } = useListAdminPlans();
-  // All active monthly plans (regular + promo) — promo plans are hidden from
-  // the public plan page but should be selectable when creating invite links.
-  const monthlyPlans = (adminPlans ?? plans ?? []).filter((p) => p.isActive && p.billingType === "monthly");
-
-  return (
-    <div className="space-y-4">
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-sm text-muted-foreground max-w-xl">
-          Создавайте именные инвайт-ссылки для конкретных кампаний или людей — с индивидуальным тарифом,
-          длиной пробного периода и лимитом использований. Код 12 символов, уникальный для каждой ссылки.
-        </p>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-mono px-3 py-1.5 transition-colors shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" /> Создать
-        </button>
-      </div>
-
-      {/* Warning: global trial disabled, but per-link overrides still work */}
-      {trialDisabled && (
-        <div className="flex items-start gap-2.5 border border-amber-300 bg-amber-50/60 px-3 py-2.5 text-sm text-amber-800">
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
-          <span>
-            Глобальный пробный период <strong>выключен</strong> в Настройках. Ссылки с явно заданным тарифом или
-            длиной пробника всё равно выдадут пробник — остальные не выдадут.
-            Чтобы пробник работал для всех ссылок без оверрайда, включите его в{" "}
-            <button
-              type="button"
-              className="underline underline-offset-2 hover:text-amber-900 transition-colors"
-              onClick={() => {
-                const el = document.querySelector('[data-tab="settings"]') as HTMLButtonElement | null;
-                el?.click();
-              }}
-            >
-              Настройках
-            </button>.
-          </span>
-        </div>
-      )}
-
-      {/* Create form */}
-      {showForm && (
-        <form
-          onSubmit={handleCreate}
-          className="border border-orange-200 bg-orange-50/40 p-4 space-y-3"
-        >
-          <p className="text-xs font-bold uppercase tracking-wider text-orange-700">Новая инвайт-ссылка</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1 sm:col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">Заметка (для кого / зачем)</label>
-              <Input
-                placeholder="Например: Telegram-канал @vpnexus или Иван из команды"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="rounded-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Тариф пробника <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <select
-                value={planId}
-                onChange={(e) => setPlanId(e.target.value)}
-                className="w-full border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="">По умолчанию (глобальная настройка)</option>
-                {monthlyPlans.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — {p.priceRub} ₽/мес{p.isPromo ? " · Промо" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Пробный период, дней <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <Input
-                type="number"
-                min={0}
-                max={365}
-                placeholder="Стандарт (из настроек)"
-                value={trialDays}
-                onChange={(e) => setTrialDays(e.target.value)}
-                className="rounded-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Лимит использований <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <Input
-                type="number"
-                min={1}
-                placeholder="Без лимита"
-                value={maxUses}
-                onChange={(e) => setMaxUses(e.target.value)}
-                className="rounded-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                Действует до <span className="text-muted-foreground/60">(опционально)</span>
-              </label>
-              <Input
-                type="datetime-local"
-                value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
-                className="rounded-none"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 justify-end pt-1">
-            <button
-              type="button"
-              onClick={() => { setShowForm(false); setNote(""); setPlanId(""); setTrialDays(""); setMaxUses(""); setExpiresAt(""); }}
-              className="px-3 py-1.5 text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              disabled={creating}
-              className="px-4 py-1.5 text-sm bg-orange-600 hover:bg-orange-700 text-white font-mono transition-colors disabled:opacity-50"
-            >
-              {creating ? "Создание..." : "Создать ссылку"}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Links table */}
-      {isLoading ? (
-        <Skeleton className="h-40 w-full" />
-      ) : !links?.length ? (
-        <div className="bg-muted/50 border border-border p-10 text-center text-sm text-muted-foreground">
-          <Link2 className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
-          Нет инвайт-ссылок — нажмите «Создать»
-        </div>
-      ) : (
-        <div className="border border-border overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Заметка / Код</th>
-                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Тариф / Пробник</th>
-                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Исп.</th>
-                <th className="text-center px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Акт.</th>
-                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Истекает</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {links.map((link) => (
-                <>
-                  <InviteLinkRow
-                    key={link.id}
-                    link={link}
-                    basePath={basePath}
-                    isEditing={editingLinkId === link.id}
-                    isViewingUsers={viewingUsersLinkId === link.id}
-                    onToggleActive={() =>
-                      updateLink({ linkId: link.id, data: { isActive: !link.isActive } })
-                    }
-                    onDelete={() => deleteLink({ linkId: link.id })}
-                    onCopyUrl={() => {
-                      const url = `${window.location.origin}${basePath}/sign-up?ref=${link.code}`;
-                      navigator.clipboard.writeText(url).then(() =>
-                        toast({ title: "Ссылка скопирована", description: link.note ?? link.code }),
-                      );
-                    }}
-                    onEdit={() => setEditingLinkId(editingLinkId === link.id ? null : link.id)}
-                    onViewUsers={() => setViewingUsersLinkId(viewingUsersLinkId === link.id ? null : link.id)}
-                  />
-                  {viewingUsersLinkId === link.id && (
-                    <InviteLinkUsersPanel key={`users-${link.id}`} linkId={link.id} linkCode={link.code} />
-                  )}
-                  {editingLinkId === link.id && (
-                    <InviteLinkEditRow
-                      key={`edit-${link.id}`}
-                      link={link}
-                      plans={plans ?? []}
-                      isSaving={isSavingEdit}
-                      onCancel={() => setEditingLinkId(null)}
-                      onSave={(data) => {
-                        setIsSavingEdit(true);
-                        updateLink({ linkId: link.id, data });
-                      }}
-                    />
-                  )}
-                </>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Referrals tab ────────────────────────────────────────────────────────────
-function ReferralsManagement() {
-  const { data, isLoading } = useListAdminReferrals();
-
-  if (isLoading) return <Skeleton className="h-40 w-full" />;
-
-  const rows = data ?? [];
-
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Пользователи, которые привлекли хотя бы одного участника по реф. ссылке.
-        Доход — сумма подтверждённых платежей приглашённых пользователей; комиссия — начисления на баланс реферера.
-      </div>
-      {rows.length === 0 ? (
-        <div className="bg-muted/50 border border-border p-10 text-center text-sm text-muted-foreground">
-          <Share2 className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
-          Реферальных записей нет
-        </div>
-      ) : (
-        <div className="border border-border overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Реферер</th>
-                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Приглашено</th>
-                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Доход рефер.</th>
-                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Комиссия</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map((r) => (
-                <tr key={r.userId} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-2.5">
-                    <div className="font-medium">{r.name ?? r.email}</div>
-                    {r.name && <div className="text-xs text-muted-foreground font-mono">{r.email}</div>}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono font-bold">{r.referredCount}</td>
-                  <td className="px-4 py-2.5 text-right font-mono">{r.totalRevenueRub} ₽</td>
-                  <td className="px-4 py-2.5 text-right font-mono">
-                    <span className={r.commissionsRub > 0 ? "text-green-600 font-bold" : "text-muted-foreground"}>
-                      {r.commissionsRub} ₽
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t border-border bg-muted/20">
-              <tr>
-                <td className="px-4 py-2 text-xs text-muted-foreground">Итого рефереров: {rows.length}</td>
-                <td className="px-4 py-2 text-right font-mono font-bold text-xs">
-                  {rows.reduce((s, r) => s + r.referredCount, 0)}
-                </td>
-                <td className="px-4 py-2 text-right font-mono text-xs">
-                  {rows.reduce((s, r) => s + r.totalRevenueRub, 0)} ₽
-                </td>
-                <td className="px-4 py-2 text-right font-mono text-xs text-green-600 font-bold">
-                  {rows.reduce((s, r) => s + r.commissionsRub, 0)} ₽
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Users management ─────────────────────────────────────────────────────────
-function UsersManagement() {
-  const { data: users, isLoading } = useListAdminUsers();
-  const { mutate: updateRole } = useUpdateUserRole();
-  const { mutate: updateExtraSlots } = useUpdateUserExtraSlots();
-  const { mutate: resetPassword, isPending: resettingPassword } = useAdminResetUserPassword();
-  const { mutate: deleteUser, isPending: deleting } = useDeleteUser();
-  const { mutate: forceLogout } = useAdminForceLogout();
-  const { toast } = useToast();
-  const [resetLinks, setResetLinks] = useState<Record<number, string>>({});
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
-  const [subscriptionFilter, setSubscriptionFilter] = useState<"all" | "active" | "trial" | "none">("all");
-  const [sort, setSort] = useState<"date_desc" | "date_asc" | "email" | "traffic" | "online">("date_desc");
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const [managingId, setManagingId] = useState<number | null>(null);
+  const [newNodeMode, setNewNodeMode] = useState<null | "provision" | "manual">(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [sort, setSort] = useState<"default" | "clients_desc" | "name">("default");
 
-  function toggleSelected(id: number) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function bulkForceLogout() {
-    selectedIds.forEach((id) => forceLogout({ userId: id }));
-    toast({ title: `Выход выполнен для ${selectedIds.size} пользователей` });
-    setSelectedIds(new Set());
-  }
-
-  function bulkExportCsv() {
-    const selected = (users ?? []).filter((u) => selectedIds.has(u.id));
-    const header = "ID,Email,Имя,Роль,Баланс (₽),Тариф,Трафик (байт),Реф. код";
-    const rows = selected.map((u) =>
-      [u.id, u.email, u.name ?? "", u.role, (u.balanceKopecks / 100).toFixed(2), u.activePlanName ?? "", u.trafficUpBytes + u.trafficDownBytes, u.referralCode]
-        .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
-        .join(","),
-    );
-    const csv = [header, ...rows].join("\n");
-    const a = Object.assign(document.createElement("a"), {
-      href: URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" })),
-      download: `users-selected-${new Date().toISOString().slice(0, 10)}.csv`,
-    });
-    a.click(); URL.revokeObjectURL(a.href);
-  }
-
-  function toggleRole(userId: number, currentRole: string) {
-    const role = currentRole === "admin" ? "user" : "admin";
-    updateRole(
-      { userId, data: { role } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-          toast({ title: "Роль обновлена" });
-        },
-        onError: () => toast({ title: "Ошибка обновления роли", variant: "destructive" }),
-      },
-    );
-  }
-
-  function changeExtraSlots(userId: number, current: number, delta: number) {
-    const next = Math.max(0, current + delta);
-    updateExtraSlots(
-      { userId, data: { extraDeviceSlots: next } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-          toast({ title: `Дополнительных устройств: ${next}` });
-        },
-        onError: () => toast({ title: "Ошибка изменения устройств", variant: "destructive" }),
-      },
-    );
-  }
-
-  function generateResetLink(userId: number) {
-    resetPassword(
-      { userId },
-      {
-        onSuccess: (data) => {
-          setResetLinks((prev) => ({ ...prev, [userId]: `${window.location.origin}${data.resetUrl}` }));
-          toast({ title: "Ссылка для сброса пароля создана" });
-        },
-        onError: () => toast({ title: "Ошибка создания ссылки", variant: "destructive" }),
-      },
-    );
-  }
-
-  function handleDelete(userId: number) {
-    if (confirmDeleteId !== userId) {
-      setConfirmDeleteId(userId);
+  function handleDelete(nodeId: number) {
+    if (confirmDeleteId !== nodeId) {
+      setConfirmDeleteId(nodeId);
       return;
     }
-    deleteUser(
-      { userId },
+    setConfirmDeleteId(null);
+    deleteNode(
+      { nodeId },
       {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-          toast({ title: "Пользователь удалён" });
-          setConfirmDeleteId(null);
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
+          if (data.failedMigrations > 0) {
+            toast({
+              title: `Узел удалён (ключей перенесено: ${data.migratedKeys}, не удалось: ${data.failedMigrations})`,
+              description: "Пользователи с непереноситыми ключами остались без VPN. Проверьте логи.",
+              variant: "destructive",
+            });
+          } else if (data.migratedKeys > 0) {
+            toast({
+              title: `Узел удалён`,
+              description: `${data.migratedKeys} ${data.migratedKeys === 1 ? "ключ перенесён" : "ключей перенесено"} на другие серверы.`,
+            });
+          } else {
+            toast({ title: "Узел удалён" });
+          }
         },
         onError: (err: unknown) => {
-          toast({
-            title: err instanceof Error ? err.message : "Ошибка удаления пользователя",
-            variant: "destructive",
-          });
-          setConfirmDeleteId(null);
+          const msg =
+            err && typeof err === "object" && "message" in err
+              ? (err as { message: string }).message
+              : "Ошибка удаления узла";
+          toast({ title: msg, variant: "destructive" });
         },
       },
     );
@@ -3909,1127 +2318,214 @@ function UsersManagement() {
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
-  const filtered = (users ?? [])
-    .filter(
-      (u) => !search || u.email.toLowerCase().includes(search.toLowerCase()) || (u.name ?? "").toLowerCase().includes(search.toLowerCase()),
-    )
-    .filter((u) => roleFilter === "all" || u.role === roleFilter)
-    .filter((u) => {
-      if (subscriptionFilter === "active") return u.subscriptionStatus === "active" && !u.isOnTrial;
-      if (subscriptionFilter === "trial") return u.isOnTrial === true;
-      if (subscriptionFilter === "none") return u.subscriptionStatus !== "active" && !u.activePlanName;
-      return true;
-    })
+  const regions = [...new Set((nodes ?? []).map((n) => n.region))];
+
+  const filteredNodes = (nodes ?? [])
+    .filter((n) => regionFilter === "all" || n.region === regionFilter)
+    .filter((n) => statusFilter === "all" || (statusFilter === "active" ? n.isActive : !n.isActive))
     .sort((a, b) => {
       switch (sort) {
-        case "date_asc":
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case "email":
-          return a.email.localeCompare(b.email);
-        case "traffic":
-          return b.trafficUpBytes + b.trafficDownBytes - (a.trafficUpBytes + a.trafficDownBytes);
-        case "online":
-          return Number(b.isOnline) - Number(a.isOnline);
-        case "date_desc":
+        case "clients_desc":
+          return (b.activeUserCount ?? 0) - (a.activeUserCount ?? 0);
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "default":
         default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          return 0;
       }
     });
-
-  const totalPagesU = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
-  const effectivePageU = Math.min(page, totalPagesU);
-  const pagedUsers = filtered.slice((effectivePageU - 1) * ADMIN_PAGE_SIZE, effectivePageU * ADMIN_PAGE_SIZE);
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
-        <Input
-          placeholder="Поиск по email или имени..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="rounded-none max-w-xs"
-        />
         <select
-          value={roleFilter}
-          onChange={(e) => { setRoleFilter(e.target.value as typeof roleFilter); setPage(1); }}
+          value={regionFilter}
+          onChange={(e) => setRegionFilter(e.target.value)}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
-          <option value="all">Все роли</option>
-          <option value="admin">Администраторы</option>
-          <option value="user">Пользователи</option>
+          <option value="all">Все регионы</option>
+          {regions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
         </select>
         <select
-          value={subscriptionFilter}
-          onChange={(e) => { setSubscriptionFilter(e.target.value as typeof subscriptionFilter); setPage(1); }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
-          <option value="all">Все подписки</option>
-          <option value="active">С активной</option>
-          <option value="trial">Пробный период</option>
-          <option value="none">Без подписки</option>
+          <option value="all">Все статусы</option>
+          <option value="active">Активные</option>
+          <option value="inactive">Неактивные</option>
         </select>
         <select
           value={sort}
-          onChange={(e) => { setSort(e.target.value as typeof sort); setPage(1); }}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
           className="border border-border bg-background px-3 py-2 text-sm rounded-none"
         >
-          <option value="date_desc">Сначала новые</option>
-          <option value="date_asc">Сначала старые</option>
-          <option value="email">По email</option>
-          <option value="traffic">По трафику</option>
-          <option value="online">Сначала онлайн</option>
+          <option value="default">Без сортировки</option>
+          <option value="clients_desc">По числу клиентов</option>
+          <option value="name">По названию</option>
         </select>
-        <button
-          onClick={() => {
-            const header = "ID,Дата регистрации,Email,Имя,Роль,Баланс (₽),Тариф,Трафик всего (байт),Реф. код,Приглашён,Инвайт-ссылка";
-            const rows = filtered.map((u) =>
-              [
-                u.id,
-                u.createdAt,
-                u.email,
-                u.name ?? "",
-                u.role,
-                (u.balanceKopecks / 100).toFixed(2),
-                u.activePlanName ?? "",
-                u.trafficUpBytes + u.trafficDownBytes,
-                u.referralCode,
-                u.referredByEmail ?? "",
-                u.inviteLinkCode ?? "",
-              ]
-                .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
-                .join(","),
-            );
-            const csv = [header, ...rows].join("\n");
-            const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-            const a = Object.assign(document.createElement("a"), {
-              href: URL.createObjectURL(blob),
-              download: `users-${new Date().toISOString().slice(0, 10)}.csv`,
-            });
-            a.click(); URL.revokeObjectURL(a.href);
-          }}
-          className="border border-border px-3 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
-        >
-          Экспорт CSV
-        </button>
       </div>
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 flex-wrap bg-primary/5 border border-primary/30 p-3">
-          <span className="text-sm font-bold text-primary">{selectedIds.size} выбрано</span>
-          <button onClick={bulkForceLogout} className="border border-border px-3 py-1.5 text-sm hover:border-destructive hover:text-destructive transition-colors">
-            Выйти со всех устройств
-          </button>
-          <button onClick={bulkExportCsv} className="border border-border px-3 py-1.5 text-sm hover:border-primary hover:text-primary transition-colors">
-            Экспорт CSV
-          </button>
-          <button onClick={() => setSelectedIds(new Set())} className="text-sm text-muted-foreground hover:text-foreground transition-colors ml-auto">
-            Снять выделение
-          </button>
-        </div>
-      )}
-      {pagedUsers.map((user) => {
-        const expanded = expandedId === user.id;
-        const isSelected = selectedIds.has(user.id);
-        return (
-          <div key={user.id} className={`bg-card border p-4 space-y-3 transition-colors ${isSelected ? "border-primary/50 bg-primary/5" : "border-border"}`}>
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="min-w-0 break-words flex items-start gap-2">
-                <button
-                  onClick={() => toggleSelected(user.id)}
-                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                  title={isSelected ? "Снять выделение" : "Выбрать"}
-                >
-                  {isSelected ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                </button>
-                <div>
-                <div className="font-bold break-all flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                      user.activityStatus === "site"
-                        ? "bg-green-500"
-                        : user.activityStatus === "vpn"
-                          ? "bg-blue-500"
-                          : "bg-gray-300"
-                    }`}
-                    title={
-                      user.activityStatus === "site"
-                        ? "На сайте"
-                        : user.activityStatus === "vpn"
-                          ? "Использует VPN"
-                          : "Не в сети"
-                    }
-                  />
-                  {user.name ? `${user.name} · ` : ""}
-                  {user.email}
-                  {user.isBanned && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 rounded cursor-default">
-                      ЗАБЛ
-                    </span>
-                  )}
-                  {user.isOnTrial && (
+      {filteredNodes.map((node) =>
+        editingId === node.id ? (
+          <NodeForm key={node.id} node={node} onDone={() => setEditingId(null)} />
+        ) : (
+          <div key={node.id} className="bg-card border border-border">
+            <div className="p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0 break-words">
+                <div className="font-bold flex items-center gap-2 flex-wrap">
+                  <span>{node.name}</span>
+                  <span className="text-muted-foreground font-normal">· {node.region}</span>
+                  {!node.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
+                  {node.managementApiUrl && <NodePollingHealthIndicator nodeName={node.name} />}
+                  {/* Warn when a remote node uses a self-signed cert (provisioner
+                      stores the SHA256 fingerprint in certSha256 only for self-signed;
+                      LE-cert nodes have certSha256 = null). */}
+                  {node.managementApiUrl && node.certSha256 && (
                     <span
-                      title={user.trialEndsAt ? `Пробный период истекает ${new Date(user.trialEndsAt).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}` : "Пробный период"}
-                      className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-300 rounded cursor-default"
+                      title={"Самоподписанный сертификат — VPN-клиенты не смогут подключиться!\nЗайди на сервер и выполни: certbot --nginx -d " + node.sni}
+                      className="text-xs font-normal bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-800 px-1.5 py-0.5 cursor-help"
                     >
-                      ПРОБНЫЙ
-                    </span>
-                  )}
-                  {user.adminNote && (
-                    <span
-                      title={user.adminNote}
-                      className="inline-flex items-center px-1 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-300 rounded cursor-default"
-                    >
-                      📝
-                    </span>
-                  )}
-                  {user.activityStatus === "site" && (
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
-                      На сайте
-                    </span>
-                  )}
-                  {user.activityStatus === "vpn" && (
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full">
-                      Использует VPN
+                      ⚠️ Self-signed cert
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-muted-foreground font-mono">
-                  {user.role === "admin" ? "Администратор" : "Пользователь"} · с {formatDate(user.createdAt)}
-                  {user.activityStatus === "offline" && (() => {
-                    // Show whichever signal is more recent — site or VPN.
-                    const siteTs = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
-                    const vpnTs  = user.vpnLastActiveAt ? new Date(user.vpnLastActiveAt).getTime() : 0;
-                    if (siteTs === 0 && vpnTs === 0) return null;
-                    if (vpnTs > siteTs) return ` · VPN: ${formatDate(user.vpnLastActiveAt!)}`;
-                    return ` · был(а) на сайте ${formatDate(user.lastActiveAt!)}`;
-                  })()}
+                <div className="text-sm text-muted-foreground font-mono break-all">
+                  {node.host ?? "—"}:{node.port ?? 443} · SNI: {node.sni}
                 </div>
-                </div>{/* close inner text wrapper */}
-              </div>{/* close min-w-0 flex container */}
-              <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+                {node.managementApiUrl && (
+                  <div className="text-xs text-blue-600 font-mono break-all">
+                    Remote: {node.managementApiUrl}
+                  </div>
+                )}
+                <div className="text-sm text-muted-foreground">
+                  Клиентов: {node.activeUserCount}
+                  {node.maxUsers != null ? ` / ${node.maxUsers}` : ""}
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0 items-center">
+                <NodeHealthButton nodeId={node.id} />
                 <button
-                  onClick={() => setExpandedId(expanded ? null : user.id)}
-                  className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
-                >
-                  {expanded ? "Скрыть детали" : "Подробнее"}
-                </button>
-                <button
-                  onClick={() => generateResetLink(user.id)}
-                  disabled={resettingPassword}
-                  className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-                >
-                  Сбросить пароль
-                </button>
-                <button
-                  onClick={() => toggleRole(user.id, user.role)}
-                  className="border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
-                >
-                  {user.role === "admin" ? "Понизить" : "Назначить админом"}
-                </button>
-                <ForceLogoutButton userId={user.id} />
-                <BanButton userId={user.id} isBanned={user.isBanned} />
-                <button
-                  onClick={() => handleDelete(user.id)}
-                  disabled={deleting}
-                  className={`border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-                    confirmDeleteId === user.id
-                      ? "border-destructive bg-destructive text-destructive-foreground"
-                      : "border-border text-destructive hover:border-destructive"
+                  onClick={() => setManagingId(managingId === node.id ? null : node.id)}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 border transition-colors ${
+                    managingId === node.id
+                      ? "border-primary text-primary bg-primary/5"
+                      : "border-border text-muted-foreground hover:text-primary hover:border-primary"
                   }`}
+                  title="Управление узлом"
                 >
-                  {confirmDeleteId === user.id ? "Точно удалить?" : "Удалить"}
+                  <Activity className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Управление</span>
                 </button>
+                <button onClick={() => { setEditingId(node.id); setManagingId(null); }} className="p-2 text-muted-foreground hover:text-primary">
+                  <Pencil className="w-4 h-4" />
+                </button>
+                {confirmDeleteId === node.id ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-destructive">
+                      {(node.activeUserCount ?? 0) > 0
+                        ? `Удалить узел и ${node.activeUserCount} акт. ключей?`
+                        : "Удалить узел?"}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(node.id)}
+                      className="text-xs px-2 py-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Да
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-xs px-2 py-1 border border-border hover:bg-muted"
+                    >
+                      Нет
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleDelete(node.id)}
+                    className="p-2 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-4 flex-wrap pt-1 text-xs font-mono">
-              <span className={user.trafficLimitExceeded ? "text-destructive font-bold" : "text-muted-foreground"}>
-                За период: {formatBytes(user.periodUpBytes + user.periodDownBytes)}
-                {user.trafficLimitGb != null && ` / ${user.trafficLimitGb} ГБ`}
-                {user.extraTrafficGb > 0 && ` (+${user.extraTrafficGb} ГБ докуплено)`}
-                {user.trafficLimitExceeded && " · лимит превышен"}
-              </span>
-              {user.periodStartedAt && (
-                <span className="text-muted-foreground">
-                  Период с:{" "}
-                  <span className="text-foreground">
-                    {new Date(user.periodStartedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" })}
-                  </span>
-                </span>
-              )}
-              <span className="text-muted-foreground">
-                Всего: {formatBytes(user.trafficUpBytes + user.trafficDownBytes)}
-              </span>
-              {user.activePlanName && (
-                <span className="text-muted-foreground">
-                  Тариф: <span className="text-foreground font-bold">{user.activePlanName}</span>
-                </span>
-              )}
-              <span className="text-muted-foreground">
-                Баланс: <span className="text-foreground font-bold">{(user.balanceKopecks / 100).toFixed(2)} ₽</span>
-              </span>
-              <span className="text-muted-foreground">
-                Реф. код: <span className="text-foreground font-bold">{user.referralCode}</span>
-                {user.referredUserCount > 0 && ` · пригласил(а) ${user.referredUserCount}`}
-              </span>
-              {user.inviteLinkCode ? (
-                <span className="text-muted-foreground">
-                  Ссылка:{" "}
-                  <span className="text-foreground font-mono font-semibold">{user.inviteLinkCode}</span>
-                  {user.inviteLinkNote && (
-                    <span className="text-foreground"> ({user.inviteLinkNote})</span>
-                  )}
-                  {user.referredByEmail && (
-                    <span className="text-muted-foreground"> · {user.referredByEmail}</span>
-                  )}
-                </span>
-              ) : user.referredByEmail ? (
-                <span className="text-muted-foreground">
-                  Приглашён(а): <span className="text-foreground">{user.referredByEmail}</span>
-                </span>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-3 pt-1">
-              <span className="text-xs text-muted-foreground font-mono">Доп. устройства:</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, -1)}
-                  disabled={user.extraDeviceSlots === 0}
-                  className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors disabled:opacity-30"
-                >
-                  −
-                </button>
-                <span className="w-8 text-center text-sm font-mono font-bold">{user.extraDeviceSlots}</span>
-                <button
-                  onClick={() => changeExtraSlots(user.id, user.extraDeviceSlots, +1)}
-                  className="w-7 h-7 flex items-center justify-center border border-border text-sm font-bold hover:border-primary hover:text-primary transition-colors"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            {resetLinks[user.id] && (
-              <div className="bg-muted/30 border border-border p-3 space-y-1">
-                <p className="text-xs text-muted-foreground">
-                  Одноразовая ссылка для сброса пароля (действует 30 минут). Передайте её пользователю через
-                  доверенный канал (например, поддержку):
-                </p>
-                <p className="text-sm font-mono break-all text-primary">{resetLinks[user.id]}</p>
-              </div>
-            )}
-            {expanded && (
-              <div className="border-t border-border pt-3 space-y-4">
-                <div className="space-y-1.5">
-                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Профиль</div>
-                  <UserProfileEditor user={user} />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Баланс</div>
-                  <UserBalanceEditor user={user} />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Пароль</div>
-                  <UserSetPasswordEditor user={user} />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Заметка администратора</div>
-                  <AdminNoteEditor userId={user.id} initialNote={user.adminNote ?? null} />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="text-xs font-bold uppercase text-muted-foreground tracking-wide">Подписка</div>
-                  <UserSubscriptionEditor user={user} />
-                </div>
-                <UserKeysAndPayments userId={user.id} />
+            {managingId === node.id && (
+              <div className="px-4 pb-4">
+                <NodeManagementPanel nodeId={node.id} />
               </div>
             )}
           </div>
-        );
-      })}
-      <PaginationBar page={effectivePageU} total={filtered.length} onPage={setPage} />
-      {filtered.length === 0 && <p className="text-muted-foreground text-sm">Пользователи не найдены.</p>}
-    </div>
-  );
-}
-
-function PaymentSettingsForm() {
-  // Refetch every 60 s so the domain-health alert auto-clears once the domain
-  // is healthy again — same cadence as the server-side healthz cache TTL.
-  const { data: settings, isLoading } = useGetPaymentSettings({
-    query: { queryKey: getGetPaymentSettingsQueryKey(), refetchInterval: 60_000 },
-  });
-  const { data: plans } = useListPlans();
-  const { mutate: update, isPending } = useUpdatePaymentSettings();
-  const { toast } = useToast();
-  // Only monthly plans are valid for trial (hourly plans start at 0₽ and
-  // immediately cut off access when the user's balance=0 hits the first tick).
-  const monthlyPlans = (plans ?? []).filter((p) => p.billingType === "monthly" && p.isActive);
-  const [sbpPhone, setSbpPhone] = useState("");
-  const [sbpBank, setSbpBank] = useState("");
-  const [sbpRecipientName, setSbpRecipientName] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [extraDeviceSlotPriceRub, setExtraDeviceSlotPriceRub] = useState("");
-  const [allowFreeExtraDeviceSlot, setAllowFreeExtraDeviceSlot] = useState(false);
-  const [extraTrafficPriceRub, setExtraTrafficPriceRub] = useState("");
-  const [extraTrafficPackageGb, setExtraTrafficPackageGb] = useState("10");
-  const [allowFreeExtraTraffic, setAllowFreeExtraTraffic] = useState(false);
-  const [trialEnabled, setTrialEnabled] = useState(false);
-  const [trialDays, setTrialDays] = useState("5");
-  const [trialPlanId, setTrialPlanId] = useState<number | null>(null);
-  const [minHourlyTopupRub, setMinHourlyTopupRub] = useState("0");
-  const [primaryDomain, setPrimaryDomain] = useState("");
-  const [referralCommissionPercent, setReferralCommissionPercent] = useState("0");
-  const [sbpPaymentUrl, setSbpPaymentUrl] = useState("");
-  const [showManualSbpDetails, setShowManualSbpDetails] = useState(false);
-  const [yookassaEnabled, setYookassaEnabled] = useState(true);
-  const [sbpEnabled, setSbpEnabled] = useState(true);
-  const [balancePaymentsEnabled, setBalancePaymentsEnabled] = useState(false);
-  const [initialized, setInitialized] = useState(false);
-
-  if (settings && !initialized) {
-    setSbpPhone(settings.sbpPhone);
-    setSbpBank(settings.sbpBank);
-    setSbpRecipientName(settings.sbpRecipientName);
-    setInstructions(settings.instructions ?? "");
-    setExtraDeviceSlotPriceRub(String(settings.extraDeviceSlotPriceRub ?? 0));
-    setAllowFreeExtraDeviceSlot(settings.allowFreeExtraDeviceSlot ?? false);
-    setExtraTrafficPriceRub(String(settings.extraTrafficPriceRub ?? 0));
-    setExtraTrafficPackageGb(String(settings.extraTrafficPackageGb ?? 10));
-    setAllowFreeExtraTraffic(settings.allowFreeExtraTraffic ?? false);
-    setTrialEnabled(settings.trialEnabled ?? false);
-    setTrialDays(String(settings.trialDays ?? 5));
-    setTrialPlanId(settings.trialPlanId ?? null);
-    setMinHourlyTopupRub(String(settings.minHourlyTopupRub ?? 0));
-    setPrimaryDomain(settings.primaryDomain ?? "");
-    setReferralCommissionPercent(String(settings.referralCommissionPercent ?? 0));
-    setSbpPaymentUrl(settings.sbpPaymentUrl ?? "");
-    setShowManualSbpDetails(settings.showManualSbpDetails ?? false);
-    setYookassaEnabled(settings.yookassaEnabled ?? true);
-    setSbpEnabled(settings.sbpEnabled ?? true);
-    setBalancePaymentsEnabled(settings.balancePaymentsEnabled ?? false);
-    setInitialized(true);
-  }
-
-  function handleSubmit() {
-    update(
-      {
-        data: {
-          sbpPhone,
-          sbpBank,
-          sbpRecipientName,
-          instructions,
-          extraDeviceSlotPriceRub: Number(extraDeviceSlotPriceRub) || 0,
-          allowFreeExtraDeviceSlot,
-          extraTrafficPriceRub: Number(extraTrafficPriceRub) || 0,
-          extraTrafficPackageGb: Number(extraTrafficPackageGb) || 10,
-          allowFreeExtraTraffic,
-          trialEnabled,
-          trialDays: Number(trialDays) || 5,
-          trialPlanId: trialPlanId ?? null,
-          minHourlyTopupRub: Number(minHourlyTopupRub) || 0,
-          primaryDomain: primaryDomain.trim(),
-          referralCommissionPercent: Number(referralCommissionPercent) || 0,
-          sbpPaymentUrl: sbpPaymentUrl.trim(),
-          showManualSbpDetails,
-          yookassaEnabled,
-          sbpEnabled,
-          balancePaymentsEnabled,
-        },
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-          toast({ title: "Реквизиты обновлены" });
-        },
-        onError: () => toast({ title: "Ошибка сохранения реквизитов", variant: "destructive" }),
-      },
-    );
-  }
-
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
-
-  return (
-    <div className="bg-card border border-border p-5 space-y-3 max-w-xl">
-      {/* Domain health alert: shown when the primary domain fails the healthz check */}
-      {settings?.primaryDomainHealthy === false && (
-        <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/30 border border-red-400 dark:border-red-700 p-4">
-          <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
-              Основной домен недоступен
-            </p>
-            <p className="text-xs text-red-600 dark:text-red-400">
-              Домен <strong>{settings.primaryDomain || "vpnexus.pro"}</strong> не отвечает на
-              проверку работоспособности. Если он заблокирован — смените поле «Основной домен»
-              ниже на новый адрес и сохраните. Сервер немедленно начнёт выдавать новый URL
-              подписки, а клиенты с поддержкой автообновления подпишутся на него автоматически
-              при следующем рефреше (каждые 3 часа).
-            </p>
-          </div>
-        </div>
+        ),
       )}
-
-      {/* Payment method visibility toggles */}
-      <div className="border border-border p-4 space-y-3">
-        <p className="text-sm font-semibold">Способы оплаты</p>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Карта / SberPay (ЮMoney)</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Показывать тайл «Карта / SberPay» на страницах оплаты</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={yookassaEnabled}
-              onChange={(e) => setYookassaEnabled(e.target.checked)}
-            />
-            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
-          </label>
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">СБП</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Показывать тайл «СБП» на страницах оплаты</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={sbpEnabled}
-              onChange={(e) => setSbpEnabled(e.target.checked)}
-            />
-            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
-          </label>
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Оплата с баланса</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Разрешить мгновенную оплату с кошелька (без модерации)</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={balancePaymentsEnabled}
-              onChange={(e) => setBalancePaymentsEnabled(e.target.checked)}
-            />
-            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
-          </label>
-        </div>
-      </div>
-
-      {/* SBP online payment settings */}
-      <div className="border border-border p-4 space-y-3">
-        <p className="text-sm font-semibold">СБП — ссылка и QR</p>
-        <div>
-          <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Ссылка для кнопки «Перейти к оплате по СБП»</label>
-          <Input
-            placeholder="https://finance.ozon.ru/apps/sbp/... (пусто = Озон Банк по умолчанию)"
-            value={sbpPaymentUrl}
-            onChange={(e) => setSbpPaymentUrl(e.target.value)}
-            className="rounded-none"
-          />
-          <p className="text-xs text-muted-foreground mt-1">Оставьте пустым чтобы использовать встроенную ссылку Озон Банк.</p>
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Показывать реквизиты (телефон/банк/получатель)</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Отображать старую форму с реквизитами на страницах оплаты СБП</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={showManualSbpDetails}
-              onChange={(e) => setShowManualSbpDetails(e.target.checked)}
-            />
-            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
-          </label>
-        </div>
-      </div>
-
-      {/* Manual SBP requisites (shown only when showManualSbpDetails is on) */}
-      <Input placeholder="Телефон СБП" value={sbpPhone} onChange={(e) => setSbpPhone(e.target.value)} className="rounded-none" />
-      <Input placeholder="Банк" value={sbpBank} onChange={(e) => setSbpBank(e.target.value)} className="rounded-none" />
-      <Input
-        placeholder="Имя получателя"
-        value={sbpRecipientName}
-        onChange={(e) => setSbpRecipientName(e.target.value)}
-        className="rounded-none"
-      />
-      <Textarea
-        placeholder="Инструкции для пользователя"
-        value={instructions}
-        onChange={(e) => setInstructions(e.target.value)}
-        className="rounded-none"
-      />
-      <div>
-        <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Цена доп. устройства (₽)</label>
-        <Input
-          type="number"
-          min="0"
-          placeholder="0"
-          value={extraDeviceSlotPriceRub}
-          onChange={(e) => setExtraDeviceSlotPriceRub(e.target.value)}
-          className="rounded-none"
-        />
-      </div>
-
-      <div className="border border-border p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Бесплатные доп. устройства</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Если цена не задана (0 ₽), выдавать слот без оплаты вместо блокировки кнопки
-            </p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={allowFreeExtraDeviceSlot}
-              onChange={(e) => setAllowFreeExtraDeviceSlot(e.target.checked)}
-            />
-            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
-          </label>
-        </div>
-      </div>
-
-      <div className="border border-border p-4 space-y-3">
-        <p className="text-sm font-semibold">Доп. трафик</p>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Размер пакета (ГБ)</label>
-            <Input
-              type="number"
-              min="1"
-              placeholder="10"
-              value={extraTrafficPackageGb}
-              onChange={(e) => setExtraTrafficPackageGb(e.target.value.replace(/[^0-9]/g, ""))}
-              className="rounded-none"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Цена пакета (₽)</label>
-            <Input
-              type="number"
-              min="0"
-              placeholder="0"
-              value={extraTrafficPriceRub}
-              onChange={(e) => setExtraTrafficPriceRub(e.target.value)}
-              className="rounded-none"
-            />
-          </div>
-        </div>
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Если цена не задана (0 ₽), выдавать пакет без оплаты вместо блокировки кнопки
-          </p>
-          <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={allowFreeExtraTraffic}
-              onChange={(e) => setAllowFreeExtraTraffic(e.target.checked)}
-            />
-            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
-          </label>
-        </div>
-      </div>
-
-      <div className="border border-border p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Пробный период</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Новые пользователи получают бесплатную подписку при регистрации</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={trialEnabled}
-              onChange={(e) => setTrialEnabled(e.target.checked)}
-            />
-            <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
-          </label>
-        </div>
-        {trialEnabled && (
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Длительность пробного периода (дней)</label>
-              <Input
-                type="number"
-                min="1"
-                max="365"
-                placeholder="5"
-                value={trialDays}
-                onChange={(e) => setTrialDays(e.target.value.replace(/[^0-9]/g, ""))}
-                className="rounded-none max-w-[140px]"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-mono text-muted-foreground uppercase block mb-1">Тариф для пробного периода</label>
-              <select
-                value={trialPlanId ?? ""}
-                onChange={(e) => setTrialPlanId(e.target.value ? Number(e.target.value) : null)}
-                className="border border-border bg-background px-3 py-2 text-sm rounded-none w-full max-w-xs"
+      {editingId === "new" ? (
+        newNodeMode === "provision" ? (
+          <NodeProvisioningWizard onDone={() => { setEditingId(null); setNewNodeMode(null); }} />
+        ) : newNodeMode === "manual" ? (
+          <NodeForm onDone={() => { setEditingId(null); setNewNodeMode(null); }} />
+        ) : (
+          /* Mode selection */
+          <div className="border border-dashed border-border p-4 space-y-3">
+            <p className="text-sm text-muted-foreground text-center">Как добавить узел?</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => setNewNodeMode("provision")}
+                className="flex flex-col items-center gap-2 border border-border p-4 text-sm hover:border-primary hover:text-primary transition-colors group"
               >
-                <option value="">Авто — наиболее дешёвый месячный тариф</option>
-                {monthlyPlans.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                    {p.trafficLimitGb ? ` — ${p.trafficLimitGb} ГБ` : " — без лимита"}
-                    {`, ${p.devicesIncluded} уст.`}
-                  </option>
-                ))}
-              </select>
-              {monthlyPlans.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">Нет активных месячных тарифов. Создайте тариф заранее.</p>
-              )}
+                <Zap className="w-5 h-5 text-primary" />
+                <span className="font-bold">Авто-развертывание</span>
+                <span className="text-xs text-muted-foreground text-center group-hover:text-primary/70">
+                  Введите IP и пароль VPS — всё остальное автоматически
+                </span>
+              </button>
+              <button
+                onClick={() => setNewNodeMode("manual")}
+                className="flex flex-col items-center gap-2 border border-border p-4 text-sm hover:border-primary hover:text-primary transition-colors group"
+              >
+                <Server className="w-5 h-5 text-muted-foreground group-hover:text-primary" />
+                <span className="font-bold">Вручную</span>
+                <span className="text-xs text-muted-foreground text-center group-hover:text-primary/70">
+                  Сервер уже настроен — введите параметры подключения
+                </span>
+              </button>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={() => setEditingId(null)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Отмена
+              </button>
             </div>
           </div>
-        )}
-      </div>
-
-      <div className="border border-border p-4 space-y-3">
-        <div>
-          <p className="text-sm font-semibold">Минимальное пополнение для почасового тарифа</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Пользователь не сможет подключить почасовой тариф, пока баланс не достигнет этой суммы. 0 — без ограничения.
-          </p>
-        </div>
-        <Input
-          type="number"
-          min="0"
-          placeholder="0"
-          value={minHourlyTopupRub}
-          onChange={(e) => setMinHourlyTopupRub(e.target.value.replace(/[^0-9]/g, ""))}
-          className="rounded-none max-w-[140px]"
-        />
-      </div>
-
-      <div className="border border-border p-4 space-y-3">
-        <div>
-          <p className="text-sm font-semibold">Основной домен</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Показывается пользователям в ссылке подписки и ключах, пока доступен (проверяется автоматически). Если домен
-            заблокируют — измените здесь, сервер сразу переключится на резервный технический адрес, пока не примените новый.
-          </p>
-        </div>
-        <Input
-          placeholder="vpnexus.pro"
-          value={primaryDomain}
-          onChange={(e) => setPrimaryDomain(e.target.value)}
-          className="rounded-none max-w-[280px]"
-        />
-      </div>
-
-      <div className="border border-border p-4 space-y-3">
-        <div>
-          <p className="text-sm font-semibold">Реферальная программа</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Процент от суммы каждой реально оплаченной подписки, который начисляется на баланс пригласившего
-            пользователя. 0 — вознаграждение не начисляется.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min="0"
-            max="100"
-            placeholder="0"
-            value={referralCommissionPercent}
-            onChange={(e) => setReferralCommissionPercent(e.target.value.replace(/[^0-9]/g, ""))}
-            className="rounded-none max-w-[140px]"
-          />
-          <span className="text-sm text-muted-foreground">%</span>
-        </div>
-      </div>
-
-      <button
-        onClick={handleSubmit}
-        disabled={isPending}
-        className="bg-primary text-primary-foreground font-bold px-5 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-      >
-        Сохранить реквизиты
-      </button>
-
-      {/* QR code section — separate mutation, not part of the main form */}
-      <SbpQrSection />
-
-      {/* iOS Happ routing profile — separate mutation */}
-      <HappIosRoutingSection />
-
-      {/* App download links — separate mutation */}
-      <AppDownloadLinksSection />
-    </div>
-  );
-}
-
-function SbpQrSection() {
-  const { data: settings } = useGetPaymentSettings();
-  const { mutate: uploadQr, isPending: uploading } = useUploadSbpQr();
-  const { mutate: deleteQr, isPending: deleting } = useDeleteSbpQr();
-  const { toast } = useToast();
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const MAX_BYTES = 8 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
-      toast({ title: "Файл слишком большой (макс. 8 МБ)", variant: "destructive" });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1] ?? "";
-      uploadQr(
-        { data: { data: base64, mimeType: file.type } },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-            toast({ title: "QR-код загружен" });
-          },
-          onError: () => toast({ title: "Ошибка загрузки QR", variant: "destructive" }),
-        },
-      );
-    };
-    reader.readAsDataURL(file);
-    if (inputRef.current) inputRef.current.value = "";
-  }
-
-  return (
-    <div className="border border-border p-4 space-y-3 mt-2">
-      <p className="text-sm font-semibold">QR-код для СБП</p>
-      {settings?.hasSbpQr ? (
-        <div className="space-y-2">
-          <img
-            src="/api/payment-settings/sbp-qr-image"
-            alt="QR СБП"
-            className="w-40 h-40 object-contain border border-border bg-white p-1"
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={uploading}
-              onClick={() => inputRef.current?.click()}
-              className="border border-border px-3 py-1.5 text-sm hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              {uploading ? "Загружаем..." : "Заменить QR"}
-            </button>
-            <button
-              type="button"
-              disabled={deleting}
-              onClick={() =>
-                deleteQr(undefined as never, {
-                  onSuccess: () => {
-                    queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-                    toast({ title: "QR-код удалён" });
-                  },
-                  onError: () => toast({ title: "Ошибка удаления QR", variant: "destructive" }),
-                })
-              }
-              className="border border-destructive/50 text-destructive px-3 py-1.5 text-sm hover:bg-destructive/10 transition-colors disabled:opacity-50"
-            >
-              {deleting ? "Удаляем..." : "Удалить QR"}
-            </button>
-          </div>
-        </div>
+        )
       ) : (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">QR-код не загружен. После загрузки кнопка «Показать QR» появится на странице оплаты СБП.</p>
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => inputRef.current?.click()}
-            className="inline-flex items-center gap-2 border border-border px-3 py-1.5 text-sm hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            <ImageIcon className="w-4 h-4" />
-            {uploading ? "Загружаем..." : "Загрузить QR-код"}
-          </button>
-        </div>
+        <button
+          onClick={() => { setEditingId("new"); setNewNodeMode(null); }}
+          className="flex items-center gap-2 border border-dashed border-border px-4 py-3 text-sm font-medium text-muted-foreground hover:text-primary hover:border-primary transition-colors w-full justify-center"
+        >
+          <Plus className="w-4 h-4" /> Новый узел
+        </button>
       )}
-      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
     </div>
   );
 }
 
-// ── iOS Happ routing profile editor ──────────────────────────────────────────
-// Standalone section: admin edits the direct-bypass domain / CIDR list and the
-// profile name. Changes are saved via PATCH /admin/payment-settings and do NOT
-// require the main form to be submitted — separate "Save" button below.
 
-/** Strip "domain:" prefix for display; keep other prefixes (regexp:, etc.) intact. */
-function formatSitesForDisplay(sites: string[]): string {
-  return sites
-    .map((s) => (s.startsWith("domain:") ? s.slice(7) : s))
-    .join("\n");
-}
+// ─── Heavy tab sections — loaded only when the tab is first opened ──────────
+import { lazy, Suspense } from "react";
+const LazyUsersManagement = lazy(() => import("./admin-users").then(m => ({ default: m.UsersManagement })));
+const LazyInviteLinksManagement = lazy(() => import("./admin-users").then(m => ({ default: m.InviteLinksManagement })));
+const LazyReferralsManagement = lazy(() => import("./admin-users").then(m => ({ default: m.ReferralsManagement })));
+const LazyPaymentSettingsForm = lazy(() => import("./admin-settings").then(m => ({ default: m.PaymentSettingsForm })));
 
-/** Restore full Xray matcher format from a textarea value.
- *  Lines that already contain ":" are kept as-is (regexp:, full:, etc.).
- *  Plain domain names get the "domain:" prefix added back. */
-function parseSitesFromDisplay(text: string): string[] {
-  return text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-    .map((l) => (l.includes(":") ? l : `domain:${l}`));
-}
-
-function HappIosRoutingSection() {
-  const { data: settings } = useGetPaymentSettings();
-  const { mutate: update, isPending } = useUpdatePaymentSettings();
-  const { toast } = useToast();
-
-  const [profileName, setProfileName] = useState("");
-  const [directSitesText, setDirectSitesText] = useState("");
-  const [directIpText, setDirectIpText] = useState("");
-  const [initialized, setInitialized] = useState(false);
-
-  // Seed form from API (effective profile — always non-null from server).
-  if (settings && !initialized) {
-    const p = settings.happIosRoutingProfile;
-    setProfileName(p.name);
-    setDirectSitesText(formatSitesForDisplay(p.directsites));
-    setDirectIpText(p.directip.join("\n"));
-    setInitialized(true);
-  }
-
-  function handleSave() {
-    const profile = {
-      name: profileName.trim() || "VPNexus",
-      directsites: parseSitesFromDisplay(directSitesText),
-      directip: directIpText
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0),
-    };
-    update(
-      { data: { happIosRoutingProfile: profile } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-          toast({ title: "Профиль iOS маршрутизации сохранён" });
-        },
-        onError: () => toast({ title: "Ошибка сохранения профиля", variant: "destructive" }),
-      },
-    );
-  }
-
-  function handleReset() {
-    update(
-      { data: { happIosRoutingProfile: null } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-          setInitialized(false); // re-seed form from refreshed defaults
-          toast({ title: "Профиль сброшен до встроенных значений" });
-        },
-        onError: () => toast({ title: "Ошибка сброса профиля", variant: "destructive" }),
-      },
-    );
-  }
-
+function TabFallback() {
   return (
-    <div className="border border-border p-4 space-y-4 mt-2">
-      <div>
-        <p className="text-sm font-semibold">iOS Happ — профиль маршрутизации</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Управляйте списком сайтов и IP-адресов, которые будут проходить напрямую (обходить тоннель)
-          у iOS-пользователей. Изменения применяются мгновенно — пользователи переимпортируют
-          профиль нажатием кнопки на странице ключей.
-        </p>
-      </div>
-
-      {/* Current deep link preview */}
-      {settings?.happIosRoutingUrl && (
-        <div className="space-y-1">
-          <p className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Текущая ссылка профиля</p>
-          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-            <span className="truncate flex-1">{settings.happIosRoutingUrl}</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Пользователи открывают эту ссылку на iPhone — Happ применяет профиль автоматически.
-          </p>
-        </div>
-      )}
-
-      {/* Profile name */}
-      <div className="space-y-1">
-        <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-          Название профиля
-        </label>
-        <Input
-          value={profileName}
-          onChange={(e) => setProfileName(e.target.value)}
-          placeholder="VPNexus"
-          className="rounded-none max-w-[240px]"
-        />
-        <p className="text-xs text-muted-foreground">Отображается в Happ при импорте.</p>
-      </div>
-
-      {/* Direct sites textarea */}
-      <div className="space-y-1">
-        <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-          Сайты напрямую (по одному на строку)
-        </label>
-        <Textarea
-          value={directSitesText}
-          onChange={(e) => setDirectSitesText(e.target.value)}
-          placeholder={"avito.ru\nsberbankl.ru\nregexp:\\.ru$"}
-          rows={10}
-          className="rounded-none font-mono text-xs"
-        />
-        <p className="text-xs text-muted-foreground">
-          Просто доменное имя (без префикса) → будет добавлен <code>domain:</code>.
-          Строки с двоеточием (например <code>regexp:\\.ru$</code>) принимаются как есть.
-        </p>
-      </div>
-
-      {/* Direct IPs textarea */}
-      <div className="space-y-1">
-        <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-          IP-диапазоны напрямую (CIDR, по одному на строку)
-        </label>
-        <Textarea
-          value={directIpText}
-          onChange={(e) => setDirectIpText(e.target.value)}
-          placeholder={"10.0.0.0/8\n192.168.0.0/16"}
-          rows={4}
-          className="rounded-none font-mono text-xs"
-        />
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          onClick={handleSave}
-          disabled={isPending}
-          className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {isPending ? "Сохраняем..." : "Сохранить профиль"}
-        </button>
-        <button
-          onClick={handleReset}
-          disabled={isPending}
-          className="border border-border px-4 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
-        >
-          Сбросить до умолчаний
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── App download links editor ─────────────────────────────────────────────────
-// Admin configures the 4 recommended client app links shown in the keys page
-// "Quick start" banners and iOS routing instructions. Saved via
-// PATCH /admin/payment-settings. Separate Save/Reset from the main form.
-
-const APP_LINK_LABELS: Record<string, string> = {
-  happAndroid: "Happ — Android",
-  happIos: "Happ — iOS (App Store)",
-  v2rayng: "v2rayNG — Android",
-  v2rayn: "v2rayN — Windows",
-};
-
-function AppDownloadLinksSection() {
-  const { data: settings } = useGetPaymentSettings();
-  const { mutate: update, isPending } = useUpdatePaymentSettings();
-  const { toast } = useToast();
-
-  const [links, setLinks] = useState({
-    happAndroid: "",
-    happIos: "",
-    v2rayng: "",
-    v2rayn: "",
-  });
-  const [initialized, setInitialized] = useState(false);
-
-  if (settings && !initialized) {
-    const l = settings.appDownloadLinks;
-    setLinks({ happAndroid: l.happAndroid, happIos: l.happIos, v2rayng: l.v2rayng, v2rayn: l.v2rayn });
-    setInitialized(true);
-  }
-
-  function handleSave() {
-    update(
-      { data: { appDownloadLinks: { happAndroid: links.happAndroid.trim(), happIos: links.happIos.trim(), v2rayng: links.v2rayng.trim(), v2rayn: links.v2rayn.trim() } } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-          toast({ title: "Ссылки на приложения сохранены" });
-        },
-        onError: () => toast({ title: "Ошибка сохранения ссылок", variant: "destructive" }),
-      },
-    );
-  }
-
-  function handleReset() {
-    update(
-      { data: { appDownloadLinks: null } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-          setInitialized(false);
-          toast({ title: "Ссылки сброшены до встроенных значений" });
-        },
-        onError: () => toast({ title: "Ошибка сброса", variant: "destructive" }),
-      },
-    );
-  }
-
-  return (
-    <div className="border border-border p-4 space-y-4 mt-2">
-      <div>
-        <p className="text-sm font-semibold">Ссылки на приложения</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Настройте ссылки на скачивание VPN-клиентов, которые показываются пользователям
-          на странице ключей (баннер «Быстрый старт» и инструкции). Изменения применяются мгновенно.
-        </p>
-      </div>
-
-      {(["happAndroid", "happIos", "v2rayng", "v2rayn"] as const).map((key) => (
-        <div key={key} className="space-y-1">
-          <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            {APP_LINK_LABELS[key]}
-          </label>
-          <div className="flex items-center gap-2">
-            <Input
-              value={links[key]}
-              onChange={(e) => setLinks((prev) => ({ ...prev, [key]: e.target.value }))}
-              placeholder="https://..."
-              className="rounded-none font-mono text-xs"
-            />
-            {links[key] && (
-              <a
-                href={links[key]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-xs text-muted-foreground hover:text-primary underline underline-offset-2 whitespace-nowrap"
-              >
-                Открыть
-              </a>
-            )}
-          </div>
-        </div>
-      ))}
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          onClick={handleSave}
-          disabled={isPending}
-          className="bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {isPending ? "Сохраняем..." : "Сохранить ссылки"}
-        </button>
-        <button
-          onClick={handleReset}
-          disabled={isPending}
-          className="border border-border px-4 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50"
-        >
-          Сбросить до умолчаний
-        </button>
-      </div>
+    <div className="flex items-center justify-center py-16">
+      <div className="text-muted-foreground text-sm">Загрузка...</div>
     </div>
   );
 }
@@ -6837,6 +4333,15 @@ export default function Admin() {
   const { data: summary } = useGetAdminDashboardSummary();
   const pendingPayments = summary?.pendingPayments ?? 0;
   const openTickets = summary?.openTickets ?? 0;
+  const [activeTab, setActiveTab] = useState("payments");
+  const [usersSubscriptionFilter, setUsersSubscriptionFilter] = useState<SubscriptionFilter>("all");
+  const [usersFilterRequestId, setUsersFilterRequestId] = useState(0);
+
+  function openExpiringUsers() {
+    setUsersSubscriptionFilter("expiring_3_days");
+    setUsersFilterRequestId((requestId) => requestId + 1);
+    setActiveTab("users");
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -6852,9 +4357,9 @@ export default function Admin() {
       <XrayConfigRemountBanner />
       <NodeAlertsBanner />
 
-      <SummarySection />
+      <SummarySection onOpenExpiringUsers={openExpiringUsers} />
 
-      <Tabs defaultValue="payments">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="relative -mx-4 md:mx-0 sticky top-0 z-10 bg-background border-b border-border">
           <div className="overflow-x-auto px-4 md:px-0">
             <TabsList className="rounded-none w-max min-w-full md:w-auto border-b-0">
@@ -6913,16 +4418,22 @@ export default function Admin() {
           <VpnKeysManagement />
         </TabsContent>
         <TabsContent value="users" className="pt-4">
-          <UsersManagement />
+          <Suspense fallback={<TabFallback />}>
+            <LazyUsersManagement
+              subscriptionFilter={usersSubscriptionFilter}
+              filterRequestId={usersFilterRequestId}
+              onSubscriptionFilterChange={setUsersSubscriptionFilter}
+            />
+          </Suspense>
         </TabsContent>
         <TabsContent value="invites" className="pt-4">
-          <InviteLinksManagement />
+          <Suspense fallback={<TabFallback />}><LazyInviteLinksManagement /></Suspense>
         </TabsContent>
         <TabsContent value="referrals" className="pt-4">
-          <ReferralsManagement />
+          <Suspense fallback={<TabFallback />}><LazyReferralsManagement /></Suspense>
         </TabsContent>
         <TabsContent value="settings" className="pt-4">
-          <PaymentSettingsForm />
+          <Suspense fallback={<TabFallback />}><LazyPaymentSettingsForm /></Suspense>
         </TabsContent>
         <TabsContent value="support" className="pt-4">
           <SupportManagement />

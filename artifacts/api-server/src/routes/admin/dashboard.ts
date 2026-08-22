@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { and, count, eq, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
 import { db, balanceTransactionsTable, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse, GetAdminTrafficPollingHealthResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
 import { trafficPollingHealth } from "../../lib/trafficPolling";
 import { remoteNodePollingHealth } from "../../lib/remoteNode";
+import { isActiveMonthlySubscriptionExpiringWithin } from "../../lib/subscriptionExpiryCriteria";
 
 // Mirror the same threshold used in admin/users.ts for the per-user status badge.
 const VPN_ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
@@ -31,8 +32,9 @@ router.get("/admin/health/traffic-polling", requireAuth, requireAdmin, (_req, re
 });
 
 router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const now = new Date();
   // Calendar-month boundary in UTC — consistent regardless of server locale.
-  const startOfMonth = new Date();
+  const startOfMonth = new Date(now);
   startOfMonth.setUTCDate(1);
   startOfMonth.setUTCHours(0, 0, 0, 0);
 
@@ -53,7 +55,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     [totalVpnKeys],
     [openTickets],
     activityRows,
-    [expiringIn3Days],
+    expiringIn3DaysRows,
     [lowBalanceHourly],
     topTrafficRows,
     [newUsersLast7Days],
@@ -106,20 +108,21 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
         GROUP BY u.id, u.last_active_at
       ) t
     `),
-    // Active monthly subscriptions expiring within 3 days.
+    // Select the latest active subscription per user first, then apply the
+    // expiry predicate in JavaScript. This mirrors admin/users.ts, prevents
+    // duplicate active rows from inflating the user count, and ensures an
+    // older expiring row cannot win over a newer active row.
     db
-      .select({ value: count() })
+      .selectDistinctOn([subscriptionsTable.userId], {
+        userId: subscriptionsTable.userId,
+        status: subscriptionsTable.status,
+        billingType: plansTable.billingType,
+        endsAt: subscriptionsTable.endsAt,
+      })
       .from(subscriptionsTable)
       .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
-      .where(
-        and(
-          eq(subscriptionsTable.status, "active"),
-          eq(plansTable.billingType, "monthly"),
-          isNotNull(subscriptionsTable.endsAt),
-          gte(subscriptionsTable.endsAt, new Date()),
-          lte(subscriptionsTable.endsAt, new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)),
-        ),
-      ),
+      .where(eq(subscriptionsTable.status, "active"))
+      .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id)),
     // Active hourly-plan users with balance < 3 hours remaining at their plan rate.
     db
       .select({ value: sql<number>`count(distinct ${usersTable.id})::int` })
@@ -188,6 +191,10 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     revenueByDate.set(key, (revenueByDate.get(key) ?? 0) + p.amountRub);
   }
 
+  const expiringIn3Days = expiringIn3DaysRows.filter((subscription) =>
+    isActiveMonthlySubscriptionExpiringWithin(subscription, 3, now),
+  ).length;
+
   const revenueByDay: { date: string; amountRub: number }[] = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
@@ -207,7 +214,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       activeOnVpn: Number(activityRows.rows[0]?.active_on_vpn ?? 0),
       activeOnSite: Number(activityRows.rows[0]?.active_on_site ?? 0),
       activeNow: Number(activityRows.rows[0]?.active_on_vpn ?? 0) + Number(activityRows.rows[0]?.active_on_site ?? 0),
-      expiringIn3Days: expiringIn3Days?.value ?? 0,
+      expiringIn3Days,
       lowBalanceHourly: Number(lowBalanceHourly?.value ?? 0),
       topTrafficUsers: topTrafficRows.map((r) => ({
         userId: r.userId,

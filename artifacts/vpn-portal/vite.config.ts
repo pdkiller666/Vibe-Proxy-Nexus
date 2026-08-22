@@ -111,6 +111,46 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // React + core runtime — keep isolated so every page chunk can share it
+          if (
+            id.includes("/node_modules/react/") ||
+            id.includes("/node_modules/react-dom/") ||
+            id.includes("/node_modules/scheduler/")
+          ) {
+            return "vendor-react";
+          }
+          // Routing
+          if (id.includes("/node_modules/wouter/")) {
+            return "vendor-router";
+          }
+          // Data-fetching / state
+          if (id.includes("/node_modules/@tanstack/")) {
+            return "vendor-query";
+          }
+          // UI primitives (Radix + shadcn class helpers)
+          if (
+            id.includes("/node_modules/@radix-ui/") ||
+            id.includes("/node_modules/class-variance-authority/") ||
+            id.includes("/node_modules/clsx/") ||
+            id.includes("/node_modules/tailwind-merge/")
+          ) {
+            return "vendor-ui";
+          }
+          // Charting — heavy, only used by admin page
+          if (id.includes("/node_modules/recharts/") || id.includes("/node_modules/d3") || id.includes("/node_modules/victory")) {
+            return "vendor-charts";
+          }
+          // Icons — shared across many pages
+          if (id.includes("/node_modules/lucide-react/")) {
+            return "vendor-icons";
+          }
+        },
+      },
+    },
   },
   server: {
     port,

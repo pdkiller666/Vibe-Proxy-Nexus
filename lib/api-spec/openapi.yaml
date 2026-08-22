@@ -2807,6 +2807,10 @@ components:
         # Used to detect frozen billing: hourly + activeSubscriptionStartsAt in
         # the future → ticksElapsed < 0 → billing silently skips forever.
         activeSubscriptionStartsAt: { type: ["string", "null"], format: date-time }
+        # endsAt from the user's currently ACTIVE subscription. Unlike
+        # subscriptionEndsAt, this cannot be replaced by a newer pending or
+        # cancelled subscription row.
+        activeSubscriptionEndsAt: { type: ["string", "null"], format: date-time }
         activeSubscriptionLastBilledAt: { type: ["string", "null"], format: date-time }
         activeSubscriptionBillingType:
           oneOf:

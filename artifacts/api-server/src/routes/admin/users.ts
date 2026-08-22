@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   inviteLinksTable,
@@ -47,6 +47,7 @@ import { removeRemoteXrayClient } from "../../lib/remoteNode";
 import { ensureActiveKeyForUser } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
+import { hasSubscriptionNotEnded } from "../../lib/subscriptionExpiryCriteria";
 
 // VPN "actively using" threshold — 10 min gives enough headroom for the
 // 60-second traffic poll interval plus short idle bursts between packets.
@@ -65,6 +66,7 @@ const router: IRouter = Router();
 async function enrichUsersWithTraffic(users: User[]) {
   if (users.length === 0) return [];
   const userIds = users.map((u) => u.id);
+  const activeSubscriptionNow = new Date();
 
   // Lifetime + current-period traffic, summed across a user's own VPN keys
   // (revoked keys still count toward lifetime totals, but not toward the
@@ -107,7 +109,7 @@ async function enrichUsersWithTraffic(users: User[]) {
   // A user should only have one currently-active subscription, but pick the
   // most recently started one defensively (DISTINCT ON) so a data anomaly
   // can't fan this join out into multiple limit rows per user.
-  const activeRows = await db
+  const activeRows = (await db
     .selectDistinctOn([subscriptionsTable.userId], {
       userId: subscriptionsTable.userId,
       subscriptionId: subscriptionsTable.id,
@@ -128,11 +130,15 @@ async function enrichUsersWithTraffic(users: User[]) {
     .where(
       and(
         eq(subscriptionsTable.status, "active"),
-        or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, new Date())),
         inArray(subscriptionsTable.userId, userIds),
       ),
     )
-    .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id));
+    .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id)))
+    // Pick the latest active row before applying the end-date check. Filtering
+    // in SQL before DISTINCT ON would let an older still-dated row replace a
+    // newer active row that has already ended, diverging from the dashboard's
+    // user-level expiry criterion.
+    .filter((row) => hasSubscriptionNotEnded(row.endsAt, activeSubscriptionNow));
   const limitByUser = new Map(activeRows.map((r) => [r.userId, r.trafficLimitGb]));
   // The genuinely active plan (status=active, not expired) — separate from
   // `currentByUser` below, which can point at a cancelled/pending/rejected
@@ -148,6 +154,7 @@ async function enrichUsersWithTraffic(users: User[]) {
   const activeSubscriptionIdByUser = new Map(activeRows.map((r) => [r.userId, r.subscriptionId]));
   const activeSubscriptionBillingTypeByUser = new Map(activeRows.map((r) => [r.userId, r.billingType]));
   const activeSubscriptionStartsAtByUser = new Map(activeRows.map((r) => [r.userId, r.startsAt]));
+  const activeSubscriptionEndsAtByUser = new Map(activeRows.map((r) => [r.userId, r.endsAt]));
   const activeSubscriptionLastBilledAtByUser = new Map(activeRows.map((r) => [r.userId, r.lastBilledAt]));
   const extraDeviceSlotsByUser = new Map(activeRows.map((r) => [r.userId, r.extraDeviceSlots]));
   const extraTrafficGbByUser = new Map(activeRows.map((r) => [r.userId, r.extraTrafficGb]));
@@ -251,6 +258,7 @@ async function enrichUsersWithTraffic(users: User[]) {
       activeSubscriptionId: activeSubscriptionIdByUser.get(user.id) ?? null,
       activeSubscriptionBillingType: activeSubscriptionBillingTypeByUser.get(user.id) ?? null,
       activeSubscriptionStartsAt: activeSubscriptionStartsAtByUser.get(user.id) ?? null,
+      activeSubscriptionEndsAt: activeSubscriptionEndsAtByUser.get(user.id) ?? null,
       activeSubscriptionLastBilledAt: activeSubscriptionLastBilledAtByUser.get(user.id) ?? null,
       referredByEmail: user.referredByUserId != null ? (referrerEmailById.get(user.referredByUserId) ?? null) : null,
       inviteLinkCode: user.inviteLinkId != null ? (inviteLinkCodeById.get(user.inviteLinkId) ?? null) : null,
