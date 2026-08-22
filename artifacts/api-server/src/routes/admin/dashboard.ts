@@ -1,12 +1,11 @@
 import { Router, type IRouter } from "express";
-import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
 import { db, balanceTransactionsTable, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse, GetAdminTrafficPollingHealthResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
 import { trafficPollingHealth } from "../../lib/trafficPolling";
 import { remoteNodePollingHealth } from "../../lib/remoteNode";
-import { isActiveMonthlySubscriptionExpiringWithin } from "../../lib/subscriptionExpiryCriteria";
 
 // Mirror the same threshold used in admin/users.ts for the per-user status badge.
 const VPN_ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
@@ -45,6 +44,25 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
   const onlineThreshold = new Date(Date.now() - ONLINE_THRESHOLD_MS);
   const vpnOnlineThreshold = new Date(Date.now() - VPN_ONLINE_THRESHOLD_MS);
   const startOf14Days = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const expiringIn3DaysAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+  // Resolve the latest active subscription first. Applying the expiry
+  // predicate in this outer query is important: filtering the source rows
+  // before DISTINCT ON would let an older active subscription replace a newer
+  // one that has already ended, diverging from admin/users.ts.
+  const latestActiveSubscriptionForExpiry = db.$with("latest_active_subscription_for_expiry").as(
+    db
+      .selectDistinctOn([subscriptionsTable.userId], {
+        userId: subscriptionsTable.userId,
+        status: subscriptionsTable.status,
+        billingType: plansTable.billingType,
+        endsAt: subscriptionsTable.endsAt,
+      })
+      .from(subscriptionsTable)
+      .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
+      .where(eq(subscriptionsTable.status, "active"))
+      .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id)),
+  );
 
   const [
     [totalUsers],
@@ -55,7 +73,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     [totalVpnKeys],
     [openTickets],
     activityRows,
-    expiringIn3DaysRows,
+    [expiringIn3DaysRow],
     [lowBalanceHourly],
     topTrafficRows,
     [newUsersLast7Days],
@@ -108,21 +126,20 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
         GROUP BY u.id, u.last_active_at
       ) t
     `),
-    // Select the latest active subscription per user first, then apply the
-    // expiry predicate in JavaScript. This mirrors admin/users.ts, prevents
-    // duplicate active rows from inflating the user count, and ensures an
-    // older expiring row cannot win over a newer active row.
+    // Keep the latest-active-row selection separate from the expiry filter so
+    // duplicate active rows cannot inflate the count or change which row wins.
     db
-      .selectDistinctOn([subscriptionsTable.userId], {
-        userId: subscriptionsTable.userId,
-        status: subscriptionsTable.status,
-        billingType: plansTable.billingType,
-        endsAt: subscriptionsTable.endsAt,
-      })
-      .from(subscriptionsTable)
-      .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
-      .where(eq(subscriptionsTable.status, "active"))
-      .orderBy(subscriptionsTable.userId, desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id)),
+      .with(latestActiveSubscriptionForExpiry)
+      .select({ value: count() })
+      .from(latestActiveSubscriptionForExpiry)
+      .where(
+        and(
+          eq(latestActiveSubscriptionForExpiry.billingType, "monthly"),
+          isNotNull(latestActiveSubscriptionForExpiry.endsAt),
+          gt(latestActiveSubscriptionForExpiry.endsAt, now),
+          lte(latestActiveSubscriptionForExpiry.endsAt, expiringIn3DaysAt),
+        ),
+      ),
     // Active hourly-plan users with balance < 3 hours remaining at their plan rate.
     db
       .select({ value: sql<number>`count(distinct ${usersTable.id})::int` })
@@ -191,9 +208,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     revenueByDate.set(key, (revenueByDate.get(key) ?? 0) + p.amountRub);
   }
 
-  const expiringIn3Days = expiringIn3DaysRows.filter((subscription) =>
-    isActiveMonthlySubscriptionExpiringWithin(subscription, 3, now),
-  ).length;
+  const expiringIn3Days = expiringIn3DaysRow?.value ?? 0;
 
   const revenueByDay: { date: string; amountRub: number }[] = [];
   for (let i = 13; i >= 0; i--) {

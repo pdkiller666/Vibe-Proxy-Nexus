@@ -128,6 +128,104 @@ BEGIN
 END $$;
 `;
 
+const M41_INDEX_NAME = "subscriptions_active_user_starts_at_id_idx";
+const M41_ADVISORY_LOCK_KEY = 410041;
+const M41_CREATE_INDEX_SQL = `
+  CREATE INDEX CONCURRENTLY IF NOT EXISTS subscriptions_active_user_starts_at_id_idx
+    ON subscriptions(user_id, starts_at DESC NULLS FIRST, id DESC)
+    WHERE status = 'active'
+`;
+
+function normalizePredicate(predicate) {
+  return String(predicate ?? "")
+    .toLowerCase()
+    .replace(/[\s()]/g, "");
+}
+
+function isHealthyM41Index(index) {
+  return Boolean(
+    index?.indisvalid &&
+      index.indisready &&
+      index.indislive &&
+      index.index_method === "btree" &&
+      Array.isArray(index.key_columns) &&
+      index.key_columns.join(",") === "user_id,starts_at,id" &&
+      Array.isArray(index.descending) &&
+      index.descending.join(",") === "false,true,true" &&
+      Array.isArray(index.nulls_first) &&
+      index.nulls_first.join(",") === "false,true,true" &&
+      normalizePredicate(index.predicate) === "status='active'::text",
+  );
+}
+
+async function readM41Index() {
+  const { rows } = await client.query(
+    `
+      SELECT
+        i.indisvalid,
+        i.indisready,
+        i.indislive,
+        am.amname AS index_method,
+        array_agg(a.attname ORDER BY key_part.ordinality)
+          FILTER (WHERE key_part.ordinality <= i.indnkeyatts) AS key_columns,
+        array_agg((i.indoption[key_part.ordinality - 1] & 1) = 1 ORDER BY key_part.ordinality)
+          FILTER (WHERE key_part.ordinality <= i.indnkeyatts) AS descending,
+        array_agg((i.indoption[key_part.ordinality - 1] & 2) = 2 ORDER BY key_part.ordinality)
+          FILTER (WHERE key_part.ordinality <= i.indnkeyatts) AS nulls_first,
+        pg_get_expr(i.indpred, i.indrelid) AS predicate
+      FROM pg_class index_class
+      JOIN pg_index i ON i.indexrelid = index_class.oid
+      JOIN pg_class table_class ON table_class.oid = i.indrelid
+      JOIN pg_am am ON am.oid = index_class.relam
+      LEFT JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key_part(attnum, ordinality) ON true
+      LEFT JOIN pg_attribute a
+        ON a.attrelid = table_class.oid AND a.attnum = key_part.attnum
+      WHERE index_class.relname = $1
+        AND table_class.oid = 'subscriptions'::regclass
+      GROUP BY i.indexrelid, i.indisvalid, i.indisready, i.indislive,
+        i.indnkeyatts, i.indoption, am.amname, i.indpred, i.indrelid
+    `,
+    [M41_INDEX_NAME],
+  );
+  return rows[0] ?? null;
+}
+
+async function ensureM41SubscriptionExpiryIndex() {
+  let lockHeld = false;
+  await client.query("SELECT pg_advisory_lock($1::bigint)", [M41_ADVISORY_LOCK_KEY]);
+  lockHeld = true;
+
+  try {
+    const existing = await readM41Index();
+    if (!isHealthyM41Index(existing)) {
+      if (existing) {
+        console.warn(`heal-schema: M-41 rebuilding unhealthy ${M41_INDEX_NAME}`);
+        // This must remain a standalone query: PostgreSQL rejects concurrent
+        // index operations inside an explicit transaction or DO block.
+        await client.query(`DROP INDEX CONCURRENTLY IF EXISTS ${M41_INDEX_NAME}`);
+      } else {
+        console.log(`heal-schema: M-41 creating ${M41_INDEX_NAME}`);
+      }
+
+      // Concurrent creation keeps subscription/payment writes available while
+      // production builds the new partial index.
+      await client.query(M41_CREATE_INDEX_SQL);
+    } else {
+      console.log(`heal-schema: M-41 ${M41_INDEX_NAME} already healthy`);
+    }
+
+    const verified = await readM41Index();
+    if (!isHealthyM41Index(verified)) {
+      throw new Error(`M-41 ${M41_INDEX_NAME} is missing or does not match the required definition`);
+    }
+    console.log(`heal-schema: M-41 ${M41_INDEX_NAME} ready (partial, concurrent)`);
+  } finally {
+    if (lockHeld) {
+      await client.query("SELECT pg_advisory_unlock($1::bigint)", [M41_ADVISORY_LOCK_KEY]);
+    }
+  }
+}
+
 try {
   await client.connect();
   for (const sql of statements) {
@@ -1046,6 +1144,12 @@ try {
     AND recorded_at < '2026-08-17T04:00:00Z'::timestamptz
   `);
   console.log(`heal-schema: M-40 purged ${deletedMetrics} stale local-node metric snapshots (pre-cgroup-fix)`);
+
+  // ── M-41: subscriptions — latest active row per user ─────────────────────
+  // The dashboard uses DISTINCT ON (user_id) ordered by starts_at DESC, id
+  // DESC. Build or repair this partial index concurrently so this optimization
+  // never blocks subscription creation, payments, or billing updates.
+  await ensureM41SubscriptionExpiryIndex();
 
   console.log("heal-schema: done");
 } catch (err) {

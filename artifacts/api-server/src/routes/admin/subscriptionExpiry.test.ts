@@ -222,6 +222,34 @@ describe("admin expiring-subscription consistency", () => {
       .returning({ id: subscriptionsTable.id });
     subscriptionIds.push(pendingRequest!.id);
 
+    // The latest active row is already expired, so the older row must not
+    // make this user appear in the summary. This guards the DISTINCT ON
+    // ordering separately from the inactive pending request above.
+    const withNewerExpiredActive = await createUser("user");
+    userIds.push(withNewerExpiredActive.id);
+    const [olderExpiringActive] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId: withNewerExpiredActive.id,
+        planId: monthlyPlanId,
+        status: "active",
+        startsAt: new Date(now.getTime() - 2 * DAY_MS),
+        endsAt: new Date(now.getTime() + 2 * DAY_MS),
+      })
+      .returning({ id: subscriptionsTable.id });
+    subscriptionIds.push(olderExpiringActive!.id);
+    const [newerExpiredActive] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId: withNewerExpiredActive.id,
+        planId: monthlyPlanId,
+        status: "active",
+        startsAt: new Date(now.getTime() - DAY_MS),
+        endsAt: new Date(now.getTime() - 1_000),
+      })
+      .returning({ id: subscriptionsTable.id });
+    subscriptionIds.push(newerExpiredActive!.id);
+
     const [afterUsersResponse, afterSummaryResponse] = await Promise.all([
       request.get("/api/admin/users").set("Cookie", adminCookie),
       request.get("/api/admin/dashboard/summary").set("Cookie", adminCookie),
@@ -270,6 +298,7 @@ describe("admin expiring-subscription consistency", () => {
     expect(pendingRow?.activeSubscriptionId).toBeNull();
     expect(afterUsers.find((user) => user.id === endedAtBoundary.id)?.activeSubscriptionId).toBeNull();
     expect(afterUsers.find((user) => user.id === alreadyExpired.id)?.activeSubscriptionId).toBeNull();
+    expect(afterUsers.find((user) => user.id === withNewerExpiredActive.id)?.activeSubscriptionId).toBeNull();
 
     const pendingMaskedRow = afterUsers.find((user) => user.id === withNewerPending.id);
     expect(pendingMaskedRow?.activeSubscriptionBillingType).toBe("monthly");

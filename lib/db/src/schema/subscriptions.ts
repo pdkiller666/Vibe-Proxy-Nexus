@@ -71,6 +71,12 @@ export const subscriptionsTable = pgTable(
     // Enforcement/billing jobs (hourlyBilling.ts, subscriptionLifecycle.ts,
     // keyIssuance.ts) all filter "active" subscriptions on every tick.
     index("subscriptions_status_idx").on(table.status),
+    // Dashboard expiry summary selects the newest active row per user with
+    // DISTINCT ON. Keep this partial index limited to the rows that query can
+    // consider, while matching its DISTINCT ON and ORDER BY columns.
+    index("subscriptions_active_user_starts_at_id_idx")
+      .on(table.userId, table.startsAt.desc().nullsFirst(), table.id.desc())
+      .where(sql`status = 'active'`),
     // Plan-based filtering (reporting, plan deactivation cascade checks).
     index("subscriptions_plan_id_idx").on(table.planId),
     // Partial unique index: at most one pending_payment row per user.
