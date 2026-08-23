@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   useGetMe,
   useListMyVpnKeys,
@@ -249,6 +249,55 @@ function CopyButton({ text, showLabel = false }: { text: string; showLabel?: boo
   );
 }
 
+// Keep the connection guide compact on mobile, just like the referral section
+// on the dashboard. Content stays mounted so copying links and QR actions keep
+// their state when a section is opened again.
+function CollapsibleConnectionStep({
+  id,
+  icon,
+  title,
+  summary,
+  children,
+}: {
+  id: string;
+  icon: ReactNode;
+  title: string;
+  summary: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(() => (
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  ));
+
+  return (
+    <section className="bg-card border border-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={id}
+        className="w-full flex items-center justify-between gap-4 p-5 border-b border-border text-left hover:bg-muted/30 transition-colors"
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 font-bold">
+            {icon}
+            <span>{title}</span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">{summary}</p>
+        </div>
+        <ChevronDown
+          className={`w-4 h-4 text-muted-foreground transition-transform shrink-0 ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      <div id={id} className={open ? "block p-5" : "hidden"}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 function AddDeviceModal({
   onClose,
   onSubmit,
@@ -272,7 +321,12 @@ function AddDeviceModal({
       >
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-base">Новое устройство</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть окно добавления устройства"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -377,7 +431,12 @@ function QRModal({ url, onClose }: { url: string; onClose: () => void }) {
       >
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-base">QR-код для подключения</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть QR-код"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -665,35 +724,38 @@ export default function Keys() {
       {/* ── Android tab ───────────────────────────────────────────────────── */}
       {platform === "android" && (
         <>
-          <div className="bg-card border border-border p-5 space-y-3">
-            <div className="flex items-center gap-2 font-bold">
-              <ExternalLink className="w-4 h-4 text-primary" />
-              1. Установите приложение
+          <CollapsibleConnectionStep
+            id="connection-android-install"
+            icon={<ExternalLink className="w-4 h-4 text-primary" />}
+            title="1. Установите приложение"
+            summary="Выберите приложение для своего телефона."
+          >
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                После установки вы добавите в него ссылку для подключения.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={paymentSettings?.appDownloadLinks?.happAndroid ?? FALLBACK_LINKS.happAndroid}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+                >
+                  Скачать Happ
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <a
+                  href={paymentSettings?.appDownloadLinks?.v2rayng ?? FALLBACK_LINKS.v2rayng}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+                >
+                  Скачать v2rayNG
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Выберите приложение для своего телефона. После установки вы добавите в него ссылку ниже.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={paymentSettings?.appDownloadLinks?.happAndroid ?? FALLBACK_LINKS.happAndroid}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
-              >
-                Скачать Happ
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href={paymentSettings?.appDownloadLinks?.v2rayng ?? FALLBACK_LINKS.v2rayng}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
-              >
-                Скачать v2rayNG
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
+          </CollapsibleConnectionStep>
 
           <OnboardingTip
             id="keys-intro-android"
@@ -710,95 +772,97 @@ export default function Keys() {
 
           {/* Subscription URL — Android */}
           {canIssue && subscription?.url && activeKeys.length > 0 && (
-            <div className="bg-card border border-border p-5 space-y-3">
-              <div className="flex items-center gap-2 font-bold">
-                <RefreshCw className="w-4 h-4 text-primary" />
-                2. Добавьте ссылку для подключения
-                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  Android
-                </span>
+            <CollapsibleConnectionStep
+              id="connection-android-link"
+              icon={<RefreshCw className="w-4 h-4 text-primary" />}
+              title="2. Добавьте ссылку для подключения"
+              summary="Приложение будет само получать актуальные настройки VPN."
+            >
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Добавьте ссылку один раз. Подходит для <strong>Happ</strong> и <strong>v2rayNG</strong>.
+                </p>
+                <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                  <span className="truncate flex-1">{subscription.url}</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowQR(true)}
+                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                    title="QR-код"
+                    aria-label="Показать QR-код ссылки для подключения"
+                  >
+                    <QrCode className="w-4 h-4" />
+                  </button>
+                  <CopyButton text={subscription.url} showLabel />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  В приложении нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+                  Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Добавьте ссылку один раз — приложение будет само получать актуальные настройки VPN.
-                Подходит для <strong>Happ</strong> и <strong>v2rayNG</strong>.
-              </p>
-              <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                <span className="truncate flex-1">{subscription.url}</span>
-                <button
-                  onClick={() => setShowQR(true)}
-                  className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                  title="QR-код"
-                >
-                  <QrCode className="w-4 h-4" />
-                </button>
-                <CopyButton text={subscription.url} showLabel />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                В приложении нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
-                Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
-              </p>
-            </div>
+            </CollapsibleConnectionStep>
           )}
 
           {/* Xray config with Russian bypass — Android / Windows */}
           {canIssue && subscription?.url && activeKeys.length > 0 && (
-            <div className="bg-card border border-border p-5 space-y-4">
-              <div className="flex items-center gap-2 font-bold">
-                <Route className="w-4 h-4 text-green-500" />
-                Дополнительный режим: обход российских сайтов
-                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  Happ Android
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Российские сервисы (Сбербанк, Госуслуги, Яндекс, ВКонтакте) идут напрямую — без VPN.
-                Всё остальное — через VPN. Этот режим нужен только если вам требуется обход российских сайтов.
-              </p>
+            <CollapsibleConnectionStep
+              id="connection-android-routing"
+              icon={<Route className="w-4 h-4 text-green-500" />}
+              title="Дополнительный режим: обход российских сайтов"
+              summary="Российские сервисы идут напрямую, всё остальное — через VPN."
+            >
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Этот режим нужен только если вам требуется обход российских сайтов.
+                </p>
 
-              <div className="flex gap-3 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 text-sm">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div className="space-y-1 text-amber-800 dark:text-amber-300">
-                  <p className="font-semibold">Перед добавлением в Happ</p>
-                  <p className="text-amber-700 dark:text-amber-400 text-xs">
-                    В настройках Happ убедитесь: ядро — <strong>Xray core</strong>, тумблер <strong>«Маршрутизация» (Routing) — ВЫКЛЮЧЕН</strong>.
-                    Иначе встроенная маршрутизация Happ перекроет правила конфига.
+                <div className="flex gap-3 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-3 text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-amber-800 dark:text-amber-300">
+                    <p className="font-semibold">Перед добавлением в Happ</p>
+                    <p className="text-amber-700 dark:text-amber-400 text-xs">
+                      В настройках Happ убедитесь: ядро — <strong>Xray core</strong>, тумблер <strong>«Маршрутизация» (Routing) — ВЫКЛЮЧЕН</strong>.
+                      Иначе встроенная маршрутизация Happ перекроет правила конфига.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {activeKeys.map((key) => {
+                    const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
+                    return (
+                      <div key={key.id} className="space-y-1">
+                        <p className="text-xs font-semibold text-muted-foreground">{key.label}</p>
+                        <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                          <span className="truncate flex-1">{xrayUrl}</span>
+                          <button
+                            type="button"
+                            onClick={() => setXrayQRUrl(xrayUrl)}
+                            className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                            title="QR-код"
+                            aria-label={`Показать QR-код устройства ${key.label}`}
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
+                          <CopyButton text={xrayUrl} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="text-xs text-muted-foreground space-y-2 border-t border-border pt-3">
+                  <p>
+                    <strong className="text-foreground">Happ Android:</strong>{" "}
+                    скопируйте ссылку своего устройства (или отсканируйте QR) →
+                    в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong>.
+                  </p>
+                  <p className="text-muted-foreground/60">
+                    При смене сервера ссылка не меняется — конфиг обновится автоматически при следующем обновлении подписки.
                   </p>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                {activeKeys.map((key) => {
-                  const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
-                  return (
-                    <div key={key.id} className="space-y-1">
-                      <p className="text-xs font-semibold text-muted-foreground">{key.label}</p>
-                      <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                        <span className="truncate flex-1">{xrayUrl}</span>
-                        <button
-                          onClick={() => setXrayQRUrl(xrayUrl)}
-                          className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                          title="QR-код"
-                        >
-                          <QrCode className="w-4 h-4" />
-                        </button>
-                        <CopyButton text={xrayUrl} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="text-xs text-muted-foreground space-y-2 border-t border-border pt-3">
-                <p>
-                  <strong className="text-foreground">Happ Android:</strong>{" "}
-                  скопируйте ссылку своего устройства (или отсканируйте QR) →
-                  в Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong>.
-                </p>
-                <p className="text-muted-foreground/60">
-                  При смене сервера ссылка не меняется — конфиг обновится автоматически при следующем обновлении подписки.
-                </p>
-              </div>
-            </div>
+            </CollapsibleConnectionStep>
           )}
         </>
       )}
@@ -806,26 +870,29 @@ export default function Keys() {
       {/* ── Windows tab ───────────────────────────────────────────────────── */}
       {platform === "windows" && (
         <>
-          <div className="bg-card border border-border p-5 space-y-3">
-            <div className="flex items-center gap-2 font-bold">
-              <ExternalLink className="w-4 h-4 text-primary" />
-              1. Установите приложение
+          <CollapsibleConnectionStep
+            id="connection-windows-install"
+            icon={<ExternalLink className="w-4 h-4 text-primary" />}
+            title="1. Установите приложение"
+            summary="Установите v2rayN на компьютер."
+          >
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Затем добавьте в него ссылку для подключения.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={paymentSettings?.appDownloadLinks?.v2rayn ?? FALLBACK_LINKS.v2rayn}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+                >
+                  Скачать v2rayN
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Установите v2rayN на компьютер, затем добавьте в него ссылку ниже.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={paymentSettings?.appDownloadLinks?.v2rayn ?? FALLBACK_LINKS.v2rayn}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
-              >
-                Скачать v2rayN
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
+          </CollapsibleConnectionStep>
 
           <OnboardingTip
             id="keys-intro-windows"
@@ -841,72 +908,69 @@ export default function Keys() {
           </OnboardingTip>
 
           {canIssue && subscription?.url && activeKeys.length > 0 && (
-            <div className="bg-card border border-border p-5 space-y-3">
-              <div className="flex items-center gap-2 font-bold">
-                <RefreshCw className="w-4 h-4 text-primary" />
-                2. Добавьте ссылку для подключения
-                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  Windows
-                </span>
+            <CollapsibleConnectionStep
+              id="connection-windows-link"
+              icon={<RefreshCw className="w-4 h-4 text-primary" />}
+              title="2. Добавьте ссылку для подключения"
+              summary="v2rayN будет автоматически получать актуальные настройки VPN."
+            >
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                  <span className="truncate flex-1">{subscription.url}</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowQR(true)}
+                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                    title="Показать QR-код"
+                    aria-label="Показать QR-код ссылки для подключения"
+                  >
+                    <QrCode className="w-4 h-4" />
+                  </button>
+                  <CopyButton text={subscription.url} showLabel />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  В v2rayN: <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                После добавления v2rayN будет автоматически получать актуальные настройки VPN.
-              </p>
-              <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                <span className="truncate flex-1">{subscription.url}</span>
-                <button
-                  onClick={() => setShowQR(true)}
-                  className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                  title="Показать QR-код"
-                >
-                  <QrCode className="w-4 h-4" />
-                </button>
-                <CopyButton text={subscription.url} showLabel />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                В v2rayN: <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку.
-              </p>
-            </div>
+            </CollapsibleConnectionStep>
           )}
 
           {canIssue && subscription?.url && activeKeys.length > 0 && (
-            <div className="bg-card border border-border p-5 space-y-4">
-              <div className="flex items-center gap-2 font-bold">
-                <Route className="w-4 h-4 text-green-500" />
-                Дополнительный режим: обход российских сайтов
-                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  Windows
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                В этом режиме российские сервисы (Сбербанк, Госуслуги, Яндекс, ВКонтакте) работают напрямую,
-                без VPN. Всё остальное идёт через VPN.
-              </p>
-              <div className="space-y-2">
-                {activeKeys.map((key) => {
-                  const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
-                  return (
-                    <div key={key.id} className="space-y-1">
-                      <p className="text-xs font-semibold text-muted-foreground">{key.label}</p>
-                      <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                        <span className="truncate flex-1">{xrayUrl}</span>
-                        <button
-                          onClick={() => setXrayQRUrl(xrayUrl)}
-                          className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                          title="Показать QR-код"
-                        >
-                          <QrCode className="w-4 h-4" />
-                        </button>
-                        <CopyButton text={xrayUrl} showLabel />
+            <CollapsibleConnectionStep
+              id="connection-windows-routing"
+              icon={<Route className="w-4 h-4 text-green-500" />}
+              title="Дополнительный режим: обход российских сайтов"
+              summary="Российские сервисы работают напрямую, всё остальное — через VPN."
+            >
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  {activeKeys.map((key) => {
+                    const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
+                    return (
+                      <div key={key.id} className="space-y-1">
+                        <p className="text-xs font-semibold text-muted-foreground">{key.label}</p>
+                        <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                          <span className="truncate flex-1">{xrayUrl}</span>
+                          <button
+                          type="button"
+                            onClick={() => setXrayQRUrl(xrayUrl)}
+                            className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                            title="Показать QR-код"
+                          aria-label={`Показать QR-код устройства ${key.label}`}
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
+                          <CopyButton text={xrayUrl} showLabel />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                  В v2rayN: <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку для нужного устройства.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground border-t border-border pt-3">
-                В v2rayN: <strong>«Подписки»</strong> → <strong>«Настройки подписок»</strong> → добавить новую → вставить ссылку для нужного устройства.
-              </p>
-            </div>
+            </CollapsibleConnectionStep>
           )}
         </>
       )}
@@ -914,26 +978,29 @@ export default function Keys() {
       {/* ── iOS tab ───────────────────────────────────────────────────────── */}
       {platform === "ios" && (
         <>
-          <div className="bg-card border border-border p-5 space-y-3">
-            <div className="flex items-center gap-2 font-bold">
-              <ExternalLink className="w-4 h-4 text-primary" />
-              1. Установите приложение
+          <CollapsibleConnectionStep
+            id="connection-ios-install"
+            icon={<ExternalLink className="w-4 h-4 text-primary" />}
+            title="1. Установите приложение"
+            summary="Установите Happ из App Store."
+          >
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Затем добавьте в него ссылку для подключения.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={paymentSettings?.appDownloadLinks?.happIos ?? FALLBACK_LINKS.happIos}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
+                >
+                  Скачать Happ
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Установите Happ из App Store. Затем добавьте в него ссылку ниже.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={paymentSettings?.appDownloadLinks?.happIos ?? FALLBACK_LINKS.happIos}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors"
-              >
-                Скачать Happ
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
+          </CollapsibleConnectionStep>
 
           <OnboardingTip
             id="keys-intro-ios"
@@ -950,93 +1017,89 @@ export default function Keys() {
 
           {/* Subscription URL — iOS */}
           {canIssue && subscription?.url && activeKeys.length > 0 && (
-            <div className="bg-card border border-border p-5 space-y-3">
-              <div className="flex items-center gap-2 font-bold">
-                <RefreshCw className="w-4 h-4 text-primary" />
-                2. Добавьте ссылку для подключения
-                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  iPhone
-                </span>
+            <CollapsibleConnectionStep
+              id="connection-ios-link"
+              icon={<RefreshCw className="w-4 h-4 text-primary" />}
+              title="2. Добавьте ссылку для подключения"
+              summary="Happ будет автоматически получать актуальные настройки VPN."
+            >
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                  <span className="truncate flex-1">{subscription.url}</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowQR(true)}
+                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                    title="QR-код"
+                    aria-label="Показать QR-код ссылки для подключения"
+                  >
+                    <QrCode className="w-4 h-4" />
+                  </button>
+                  <CopyButton text={subscription.url} showLabel />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  В Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
+                  Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Добавьте ссылку в Happ один раз — приложение будет само получать актуальные настройки VPN.
-              </p>
-              <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                <span className="truncate flex-1">{subscription.url}</span>
-                <button
-                  onClick={() => setShowQR(true)}
-                  className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                  title="QR-код"
-                >
-                  <QrCode className="w-4 h-4" />
-                </button>
-                <CopyButton text={subscription.url} showLabel />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                В Happ нажмите <strong>«+»</strong> → <strong>«Добавить подписку»</strong> → вставьте ссылку.
-                Или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> прямо с экрана.
-              </p>
-            </div>
+            </CollapsibleConnectionStep>
           )}
 
           {/* iOS Happ routing profile */}
           {canIssue && subscription?.url && activeKeys.length > 0 && (
-            <div className="bg-card border border-border p-5 space-y-4">
-              <div className="flex items-center gap-2 font-bold">
-                <Route className="w-4 h-4 text-green-500" />
-                Маршрутизация для Happ iOS
-                <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full ml-1">
-                  шаг 2 из 2
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Российские сервисы (Сбербанк, Госуслуги, Яндекс, ВКонтакте и 160+ других) идут напрямую.
-                Всё остальное — через туннель.
-              </p>
-
-              {paymentSettings?.happIosRoutingUrl ? (
-                <>
-                  <a
-                    href={paymentSettings.happIosRoutingUrl}
-                    className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-bold px-5 py-3 hover:opacity-90 transition-opacity text-sm"
-                  >
-                    <Route className="w-4 h-4" />
-                    Настроить маршрутизацию →
-                  </a>
-
-                  {/* URL + copy + QR — для отправки ссылки на другое устройство */}
-                  <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-                    <span className="truncate flex-1">{paymentSettings.happIosRoutingUrl}</span>
-                    <button
-                      onClick={() => setShowRoutingQR(true)}
-                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                      title="QR-код маршрутизации"
+            <CollapsibleConnectionStep
+              id="connection-ios-routing"
+              icon={<Route className="w-4 h-4 text-green-500" />}
+              title="Маршрутизация для Happ iOS"
+              summary="Российские сервисы идут напрямую, всё остальное — через туннель."
+            >
+              <div className="space-y-4">
+                {paymentSettings?.happIosRoutingUrl ? (
+                  <>
+                    <a
+                      href={paymentSettings.happIosRoutingUrl}
+                      className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-bold px-5 py-3 hover:opacity-90 transition-opacity text-sm"
                     >
-                      <QrCode className="w-4 h-4" />
-                    </button>
-                    <CopyButton text={paymentSettings.happIosRoutingUrl} />
-                  </div>
-                  <p className="text-xs text-muted-foreground -mt-1">
-                    Перешлите ссылку или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> с другого устройства.
-                  </p>
-                </>
-              ) : (
-                <div className="h-12 bg-muted animate-pulse" />
-              )}
+                      <Route className="w-4 h-4" />
+                      Настроить маршрутизацию →
+                    </a>
 
-              <div className="text-xs text-muted-foreground space-y-1.5 border-t border-border pt-3">
-                <p>
-                  <strong className="text-foreground">Как работает:</strong>{" "}
-                  кнопка открывает Happ напрямую. Приложение покажет диалог «Импортировать профиль маршрутизации?» — нажмите <strong>«Применить»</strong>.
-                </p>
-                <p>
-                  Профиль обновляется администратором сервиса — при изменении нажмите кнопку снова.
-                </p>
-                <p className="text-muted-foreground/60">
-                  Требуется Happ 4.11+ с ядром Xray (iOS).
-                </p>
+                    {/* URL + copy + QR — для отправки ссылки на другое устройство */}
+                    <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
+                      <span className="truncate flex-1">{paymentSettings.happIosRoutingUrl}</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowRoutingQR(true)}
+                        className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                        title="QR-код маршрутизации"
+                        aria-label="Показать QR-код маршрутизации"
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </button>
+                      <CopyButton text={paymentSettings.happIosRoutingUrl} />
+                    </div>
+                    <p className="text-xs text-muted-foreground -mt-1">
+                      Перешлите ссылку или отсканируйте QR-код <QrCode className="inline w-3 h-3 mx-0.5" /> с другого устройства.
+                    </p>
+                  </>
+                ) : (
+                  <div className="h-12 bg-muted animate-pulse" />
+                )}
+
+                <div className="text-xs text-muted-foreground space-y-1.5 border-t border-border pt-3">
+                  <p>
+                    <strong className="text-foreground">Как работает:</strong>{" "}
+                    кнопка открывает Happ напрямую. Приложение покажет диалог «Импортировать профиль маршрутизации?» — нажмите <strong>«Применить»</strong>.
+                  </p>
+                  <p>
+                    Профиль обновляется администратором сервиса — при изменении нажмите кнопку снова.
+                  </p>
+                  <p className="text-muted-foreground/60">
+                    Требуется Happ 4.11+ с ядром Xray (iOS).
+                  </p>
+                </div>
               </div>
-            </div>
+            </CollapsibleConnectionStep>
           )}
         </>
       )}
