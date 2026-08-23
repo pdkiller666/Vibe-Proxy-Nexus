@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import {
   useGetMe,
   useListMyVpnKeys,
+  useListAdminVpnKeys,
   useListVpnNodes,
   useCreateVpnKey,
   useRevokeVpnKey,
@@ -28,7 +29,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/query-client";
-import { getListMyVpnKeysQueryKey, getGetMeQueryKey } from "@workspace/api-client-react";
+import {
+  getListAdminVpnKeysQueryKey,
+  getListMyVpnKeysQueryKey,
+  getGetMeQueryKey,
+} from "@workspace/api-client-react";
 import { Copy, Trash2, Plus, KeyRound, RefreshCw, ChevronDown, Check, QrCode, X, ExternalLink, Zap, Pencil, Route, AlertTriangle } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import QRCode from "qrcode";
@@ -81,6 +86,7 @@ function EditKeyForm({
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
             toast({ title: "Ключ перемещён", description: "Новый ключ выпущен на выбранном сервере." });
             onClose();
@@ -119,6 +125,7 @@ function EditKeyForm({
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
             toast({ title: "Название обновлено" });
             onClose();
           },
@@ -483,7 +490,15 @@ function formatDate(iso?: string | null) {
 
 export default function Keys() {
   const { data: me } = useGetMe();
-  const { data: keys, isLoading } = useListMyVpnKeys();
+  const isAdmin = me?.role === "admin";
+  const { data: myKeys, isLoading: isLoadingMyKeys } = useListMyVpnKeys({
+    query: { queryKey: getListMyVpnKeysQueryKey(), enabled: !isAdmin },
+  });
+  const { data: adminKeys, isLoading: isLoadingAdminKeys } = useListAdminVpnKeys(undefined, {
+    query: { queryKey: getListAdminVpnKeysQueryKey(), enabled: isAdmin },
+  });
+  const keys = isAdmin ? adminKeys : myKeys;
+  const isLoading = isAdmin ? isLoadingAdminKeys : isLoadingMyKeys;
   const { data: nodes } = useListVpnNodes();
   const { data: subscription } = useGetSubscriptionUrl();
   const { data: paymentSettings } = useGetPaymentSettings();
@@ -499,15 +514,27 @@ export default function Keys() {
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null);
   const [platform, setPlatform] = useState<Platform>(getInitialPlatform);
+  const [adminKeySearch, setAdminKeySearch] = useState("");
+  const [adminKeyStatus, setAdminKeyStatus] = useState<"all" | "active" | "revoked">("all");
 
   function switchPlatform(p: Platform) {
     setPlatform(p);
     try { localStorage.setItem("vpn-platform", p); } catch { /* ignore */ }
   }
 
-  const isAdmin = me?.role === "admin";
   const activeKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => !k.revokedAt);
   const visibleKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => isAdmin || !k.revokedAt);
+  const filteredVisibleKeys = visibleKeys.filter((key) => {
+    if (isAdmin && adminKeyStatus === "active" && key.revokedAt) return false;
+    if (isAdmin && adminKeyStatus === "revoked" && !key.revokedAt) return false;
+    if (isAdmin && adminKeySearch.trim()) {
+      const query = adminKeySearch.trim().toLowerCase();
+      return [key.label, key.nodeName, key.userEmail]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query));
+    }
+    return true;
+  });
   const canIssue = !!me?.hasActiveSubscription;
   const expiredSubscription =
     me?.subscriptionState === "expired" &&
@@ -532,6 +559,7 @@ export default function Keys() {
       onSuccess: (data) => {
         if (data.freeGranted) {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
           setShowAddDeviceModal(true);
           toast({ title: "Дополнительное место добавлено" });
           return;
@@ -570,6 +598,7 @@ export default function Keys() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setShowAddDeviceModal(false);
           toast({ title: "Устройство подключено", description: "Добавьте ссылку для подключения в приложение ниже." });
@@ -585,6 +614,26 @@ export default function Keys() {
 
   function handleRevoke(keyId: number) {
     setRevokingId(keyId);
+    if (isAdmin) {
+      void (async () => {
+        try {
+          const response = await fetch(`/api/admin/vpn-keys/${keyId}`, {
+            method: "DELETE",
+            credentials: "include",
+          });
+          if (!response.ok) throw new Error("Failed to revoke VPN key");
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListMyVpnKeysQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+          toast({ title: "Ключ отозван" });
+        } catch {
+          toast({ title: "Не удалось отозвать ключ", variant: "destructive" });
+        } finally {
+          setRevokingId(null);
+        }
+      })();
+      return;
+    }
     revokeKey(
       { keyId },
       {
@@ -1108,12 +1157,14 @@ export default function Keys() {
         <div className="bg-card border border-border p-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="font-bold">Мои устройства</h2>
+              <h2 className="font-bold">{isAdmin ? "Устройства пользователей" : "Мои устройства"}</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Подключено устройств: {activeKeyCount} из {deviceSlots}
+                {isAdmin ? `Активных ключей: ${activeKeys.length}` : `Подключено устройств: ${activeKeyCount} из ${deviceSlots}`}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Для каждого телефона или компьютера нужен отдельный VPN-доступ.
+                {isAdmin
+                  ? "Используйте поиск и фильтр статуса, чтобы быстро найти нужный ключ."
+                  : "Для каждого телефона или компьютера нужен отдельный VPN-доступ."}
               </p>
             </div>
             {canIssue && (
@@ -1145,6 +1196,42 @@ export default function Keys() {
               )
             )}
           </div>
+          {isAdmin && visibleKeys.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-border flex items-center gap-2 flex-wrap">
+              <Input
+                value={adminKeySearch}
+                onChange={(e) => setAdminKeySearch(e.target.value)}
+                placeholder="Поиск по устройству, email или серверу"
+                aria-label="Поиск по устройству, email или серверу"
+                className="rounded-none min-w-0 flex-1 basis-56"
+              />
+              <select
+                value={adminKeyStatus}
+                onChange={(e) => setAdminKeyStatus(e.target.value as typeof adminKeyStatus)}
+                aria-label="Фильтр по статусу ключа"
+                className="border border-border bg-background px-3 py-2 text-sm rounded-none"
+              >
+                <option value="all">Все ключи</option>
+                <option value="active">Только активные</option>
+                <option value="revoked">Только отозванные</option>
+              </select>
+              {(adminKeySearch || adminKeyStatus !== "all") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminKeySearch("");
+                    setAdminKeyStatus("all");
+                  }}
+                  className="border border-border px-3 py-2 text-sm hover:border-primary hover:text-primary transition-colors whitespace-nowrap"
+                >
+                  Сбросить
+                </button>
+              )}
+              <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+                Показано: {filteredVisibleKeys.length} из {visibleKeys.length}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -1157,9 +1244,23 @@ export default function Keys() {
         <p className="text-sm text-muted-foreground bg-card border border-border p-4">
           Пока нет подключённых устройств. Нажмите «Подключить это устройство» выше, чтобы создать первый VPN-доступ.
         </p>
+      ) : filteredVisibleKeys.length === 0 ? (
+        <div className="text-sm text-muted-foreground bg-card border border-border p-4 flex items-center justify-between gap-3 flex-wrap">
+          <span>По текущим фильтрам ключей не найдено.</span>
+          <button
+            type="button"
+            onClick={() => {
+              setAdminKeySearch("");
+              setAdminKeyStatus("all");
+            }}
+            className="border border-border px-3 py-1.5 text-sm hover:border-primary hover:text-primary transition-colors"
+          >
+            Сбросить фильтры
+          </button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {visibleKeys.map((key, i) => (
+          {filteredVisibleKeys.map((key, i) => (
             <div
               key={key.id}
               style={{ animationDelay: `${i * 60}ms` }}
@@ -1173,7 +1274,7 @@ export default function Keys() {
                     <KeyRound className="w-4 h-4 text-primary shrink-0" />
                     <span className="truncate min-w-0">{key.label}</span>
                     <span className="text-muted-foreground font-normal font-mono text-sm shrink-0 whitespace-nowrap">· {key.nodeName}</span>
-                    {!key.revokedAt && editingKeyId !== key.id && (
+                    {!key.revokedAt && editingKeyId !== key.id && (!isAdmin || key.userId === me?.id) && (
                       <button
                         onClick={() => setEditingKeyId(key.id)}
                         className="text-muted-foreground hover:text-primary transition-colors shrink-0"
@@ -1185,6 +1286,9 @@ export default function Keys() {
                   </div>
                   {key.description && editingKeyId !== key.id && (
                     <p className="text-xs text-muted-foreground mt-1 ml-6 break-words">{key.description}</p>
+                  )}
+                  {isAdmin && key.userEmail && (
+                    <p className="text-xs text-muted-foreground mt-1 ml-6 break-all">{key.userEmail}</p>
                   )}
                 </div>
                 {!key.revokedAt && me?.role === "admin" && (
