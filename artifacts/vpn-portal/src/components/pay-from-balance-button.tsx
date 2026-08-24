@@ -20,7 +20,7 @@ interface Props {
   target: Target;
   /** planId — required for target=subscription, ignored otherwise */
   planId?: number;
-  /** Pending traffic order being replaced by this balance payment. */
+  /** Pending subscription or traffic order being replaced by this balance payment. */
   pendingPaymentId?: number;
   /** Price of the item being purchased (rubles). Button is hidden when 0 or undefined. */
   priceRub: number;

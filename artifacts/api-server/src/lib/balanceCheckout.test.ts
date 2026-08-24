@@ -553,7 +553,6 @@ describe("checkoutFromBalance", () => {
 
     const outcome = await checkoutFromBalance(userId, {
       kind: "subscription",
-      planId: monthlyPlanId,
       pendingPaymentId: manualPayment!.id,
     });
 

@@ -30,15 +30,17 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
 
   const { target, planId, pendingPaymentId } = parsed.data;
 
-  // Validate planId presence for subscription target
-  if (target === "subscription" && !planId) {
+  // A new subscription needs its planId. An existing pending subscription
+  // checkout can provide pendingPaymentId instead; the service reads the plan
+  // from the locked source order.
+  if (target === "subscription" && !planId && !pendingPaymentId) {
     res.status(400).json({ error: "planId обязателен для target=subscription" });
     return;
   }
 
   const checkoutTarget =
     target === "subscription"
-      ? { kind: "subscription" as const, planId: planId!, pendingPaymentId }
+      ? { kind: "subscription" as const, planId, pendingPaymentId }
       : target === "extra_device_slot"
         ? { kind: "extra_device_slot" as const }
         : { kind: "extra_traffic" as const, pendingPaymentId };

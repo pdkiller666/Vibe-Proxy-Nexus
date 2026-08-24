@@ -2383,7 +2383,8 @@ components:
         target:
           type: string
           enum: [subscription, extra_device_slot, extra_traffic]
-        # Required when target=subscription
+        # Required for a new subscription purchase. It may be omitted when
+        # pendingPaymentId identifies an existing pending subscription order.
         planId: { type: integer }
         # Used when replacing a pending manual subscription or extra-traffic
         # order from its checkout page. The server locks this exact payment and

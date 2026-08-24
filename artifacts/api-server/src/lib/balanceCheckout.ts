@@ -41,7 +41,7 @@ import { logger } from "./logger";
 // ── Public types ─────────────────────────────────────────────────────────────
 
 export type BalanceCheckoutTarget =
-  | { kind: "subscription"; planId: number; pendingPaymentId?: number }
+  | { kind: "subscription"; planId?: number; pendingPaymentId?: number }
   | { kind: "extra_device_slot" }
   | { kind: "extra_traffic"; pendingPaymentId?: number };
 
@@ -434,7 +434,33 @@ async function resolveTargetMeta(
   settings: typeof paymentSettingsTable.$inferSelect,
 ): Promise<TargetMeta> {
   if (target.kind === "subscription") {
-    const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, target.planId));
+    // A checkout page for an already-created pending subscription only needs
+    // to identify that payment. Its plan belongs to the pending subscription,
+    // so resolve it server-side instead of relying on a second client query.
+    let planId = target.planId;
+    if (!planId && target.pendingPaymentId) {
+      const [pendingOrder] = await db
+        .select({ planId: subscriptionsTable.planId })
+        .from(paymentsTable)
+        .innerJoin(subscriptionsTable, eq(paymentsTable.subscriptionId, subscriptionsTable.id))
+        .where(
+          and(
+            eq(paymentsTable.id, target.pendingPaymentId),
+            eq(paymentsTable.userId, userId),
+            eq(paymentsTable.type, "subscription"),
+            eq(paymentsTable.status, "pending"),
+            eq(subscriptionsTable.status, "pending_payment"),
+          ),
+        )
+        .limit(1);
+      planId = pendingOrder?.planId;
+    }
+
+    if (!planId) {
+      return { ok: false, status: 400, error: "Не удалось определить тариф для этой заявки. Обновите страницу." };
+    }
+
+    const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
     if (!plan || !plan.isActive) {
       return { ok: false, status: 400, error: "Тариф не найден или недоступен." };
     }
