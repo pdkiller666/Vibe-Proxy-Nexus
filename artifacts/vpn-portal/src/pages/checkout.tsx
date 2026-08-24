@@ -17,6 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
 import { YooMoneyPaymentButtons } from "@/components/yoomoney-payment-buttons";
 import { ReferralPaymentOffer } from "@/components/referral-offer";
+import { useScrollToExpanded } from "@/hooks/use-scroll-to-expanded";
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const { toast } = useToast();
@@ -64,6 +65,7 @@ export default function Checkout() {
   const [note, setNote] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancelConfirmationRef = useScrollToExpanded(confirmCancel);
 
   const payment = payments
     ?.filter((p) => p.subscriptionId === subscriptionId)
@@ -260,7 +262,10 @@ export default function Checkout() {
                 Отменить заявку на подписку
               </button>
             ) : (
-              <div className="bg-destructive/10 border border-destructive/30 p-4 space-y-3">
+              <div
+                ref={cancelConfirmationRef}
+                className="bg-destructive/10 border border-destructive/30 p-4 space-y-3"
+              >
                 <div className="flex items-start gap-2 text-sm text-destructive font-medium">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                   Вы уверены? Заявка будет отменена. Если вы уже перевели деньги — свяжитесь с поддержкой.

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { useToast } from "@/hooks/use-toast";
+import { useScrollToExpanded } from "@/hooks/use-scroll-to-expanded";
 
 function formatKopecks(kopecks: number): string {
   const rubles = Math.floor(kopecks / 100);
@@ -151,6 +152,7 @@ function PendingPaymentCard({ payment }: { payment: Payment }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancelConfirmationRef = useScrollToExpanded(confirmCancel);
 
   // All cancel hooks called unconditionally — only the matching one is used.
   const { mutate: cancelTopup, isPending: cancellingTopup } = useDeleteBalanceTopupOrder({
@@ -269,7 +271,7 @@ function PendingPaymentCard({ payment }: { payment: Payment }) {
 
       {/* Confirm cancel */}
       {confirmCancel && (
-        <div className="mt-3 pt-3 border-t border-border space-y-3">
+        <div ref={cancelConfirmationRef} className="mt-3 pt-3 border-t border-border space-y-3">
           <p className="text-xs text-muted-foreground">
             Заявка будет отменена. Если вы уже перевели деньги — свяжитесь с поддержкой.
           </p>
