@@ -81,6 +81,7 @@ import type {
   PaymentScreenshotUpdate,
   PaymentSettings,
   PaymentSettingsUpdate,
+  PendingBalanceTopupConflict,
   Plan,
   PlanInput,
   PlanUpdate,
@@ -2223,7 +2224,7 @@ export const createBalanceTopupOrder = async (balanceTopupOrderBody: BalanceTopu
 
 
 
-export const getCreateBalanceTopupOrderMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateBalanceTopupOrderMutationOptions = <TError = ErrorType<PendingBalanceTopupConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBalanceTopupOrder>>, TError,{data: BodyType<BalanceTopupOrderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createBalanceTopupOrder>>, TError,{data: BodyType<BalanceTopupOrderBody>}, TContext> => {
 
@@ -2252,12 +2253,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateBalanceTopupOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createBalanceTopupOrder>>>
     export type CreateBalanceTopupOrderMutationBody = BodyType<BalanceTopupOrderBody>
-    export type CreateBalanceTopupOrderMutationError = ErrorType<unknown>
+    export type CreateBalanceTopupOrderMutationError = ErrorType<PendingBalanceTopupConflict>
 
     /**
  * @summary Start a balance top-up payment via SBP
  */
-export const useCreateBalanceTopupOrder = <TError = ErrorType<unknown>,
+export const useCreateBalanceTopupOrder = <TError = ErrorType<PendingBalanceTopupConflict>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBalanceTopupOrder>>, TError,{data: BodyType<BalanceTopupOrderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createBalanceTopupOrder>>,

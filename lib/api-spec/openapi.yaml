@@ -591,6 +591,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BalanceTopupOrderResult"
+        "409":
+          description: An existing pending top-up order can be resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingBalanceTopupConflict"
 
   /balance-topup-order/{paymentId}:
     delete:
@@ -3045,6 +3051,13 @@ components:
       properties:
         paymentId: { type: integer }
         amountRub: { type: integer }
+
+    PendingBalanceTopupConflict:
+      type: object
+      required: [error, paymentId]
+      properties:
+        error: { type: string }
+        paymentId: { type: integer, minimum: 1 }
 
     CancelBalanceTopupOrderResult:
       type: object

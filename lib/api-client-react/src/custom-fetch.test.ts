@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, customFetch } from "./custom-fetch";
+import { ApiError, customFetch, getApiErrorPositiveIntegerField } from "./custom-fetch";
+
+function apiError(data: unknown, status = 409): ApiError {
+  return new ApiError(
+    new Response(null, { status }),
+    data,
+    { method: "POST", url: "/api/balance-topup-order" },
+  );
+}
 
 describe("customFetch API errors", () => {
   afterEach(() => {
@@ -38,5 +46,14 @@ describe("customFetch API errors", () => {
         paymentId: 42,
       });
     }
+  });
+
+  it("reads a pending payment id only from a valid conflict response", () => {
+    expect(getApiErrorPositiveIntegerField(apiError({ paymentId: 42 }), "paymentId", 409)).toBe(42);
+    expect(getApiErrorPositiveIntegerField(apiError({ paymentId: 42 }, 400), "paymentId", 409)).toBeNull();
+    expect(getApiErrorPositiveIntegerField(apiError({ paymentId: 0 }), "paymentId", 409)).toBeNull();
+    expect(getApiErrorPositiveIntegerField(apiError({ paymentId: 1.5 }), "paymentId", 409)).toBeNull();
+    expect(getApiErrorPositiveIntegerField(apiError({ paymentId: "42" }), "paymentId", 409)).toBeNull();
+    expect(getApiErrorPositiveIntegerField(new Error("network failure"), "paymentId", 409)).toBeNull();
   });
 });

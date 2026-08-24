@@ -8,6 +8,7 @@ import {
   useCreateBalanceTopupOrder,
   usePatchMeAutoRenew,
   getGetMeQueryKey,
+  getApiErrorPositiveIntegerField,
 } from "@workspace/api-client-react";
 import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,14 +24,6 @@ function formatKopecks(kopecks: number): string {
   const cents = kopecks % 100;
   if (cents === 0) return `${rubles} ₽`;
   return `${rubles},${String(cents).padStart(2, "0")} ₽`;
-}
-
-function existingTopupPaymentId(error: unknown): number | null {
-  if (typeof error !== "object" || error === null || !("data" in error)) return null;
-  const { data } = error as { data?: unknown };
-  if (typeof data !== "object" || data === null || !("paymentId" in data)) return null;
-  const { paymentId } = data as { paymentId?: unknown };
-  return typeof paymentId === "number" ? paymentId : null;
 }
 
 export default function Plans() {
@@ -156,8 +149,7 @@ export default function Plans() {
           setLocation(`/balance-topup/${data.paymentId}`);
         },
         onError: (err: unknown) => {
-          // 409 = duplicate pending topup — API client keeps response JSON in ApiError.data.
-          const paymentId = existingTopupPaymentId(err);
+          const paymentId = getApiErrorPositiveIntegerField(err, "paymentId", 409);
           if (paymentId !== null) {
             setLocation(`/balance-topup/${paymentId}`);
             return;

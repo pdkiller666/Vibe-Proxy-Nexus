@@ -93,6 +93,7 @@ export * from './paymentSettings';
 export * from './paymentSettingsUpdate';
 export * from './paymentStatus';
 export * from './paymentType';
+export * from './pendingBalanceTopupConflict';
 export * from './plan';
 export * from './planBillingType';
 export * from './planDistributionEntry';

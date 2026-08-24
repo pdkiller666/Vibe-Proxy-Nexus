@@ -199,6 +199,22 @@ export class ApiError<T = unknown> extends Error {
   }
 }
 
+/**
+ * Reads a positive integer from a typed API error only when it has the expected
+ * HTTP status. Consumers can safely use it for resumable conflict responses.
+ */
+export function getApiErrorPositiveIntegerField(
+  error: unknown,
+  field: string,
+  expectedStatus: number,
+): number | null {
+  if (!(error instanceof ApiError) || error.status !== expectedStatus) return null;
+  if (typeof error.data !== "object" || error.data === null) return null;
+
+  const value = (error.data as Record<string, unknown>)[field];
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 export class ResponseParseError extends Error {
   readonly name = "ResponseParseError";
   readonly status: number;

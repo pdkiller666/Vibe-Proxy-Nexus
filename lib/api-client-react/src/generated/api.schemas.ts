@@ -919,6 +919,12 @@ export interface BalanceTopupOrderResult {
   amountRub: number;
 }
 
+export interface PendingBalanceTopupConflict {
+  error: string;
+  /** @minimum 1 */
+  paymentId: number;
+}
+
 export interface CancelBalanceTopupOrderResult {
   ok: boolean;
 }
