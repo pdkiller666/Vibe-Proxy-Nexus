@@ -6,7 +6,11 @@ import {
   useUpdatePaymentNote,
   getListMyPaymentsQueryKey,
   getListMyNotificationsQueryKey,
+  useListMySubscriptions,
+  getListMySubscriptionsQueryKey,
+  useGetMe,
 } from "@workspace/api-client-react";
+import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +59,8 @@ export default function Checkout() {
     },
   });
   const { data: settings, isLoading: settingsLoading } = useGetPaymentSettings();
+  const { data: subscriptions, isLoading: subscriptionsLoading } = useListMySubscriptions();
+  const { data: me } = useGetMe();
   const { mutate: updateNote, isPending: notePending } = useUpdatePaymentNote();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -65,6 +71,7 @@ export default function Checkout() {
   const payment = payments
     ?.filter((p) => p.subscriptionId === subscriptionId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  const subscription = subscriptions?.find((candidate) => candidate.id === subscriptionId);
 
   // The layout polls notifications only once a minute. As soon as this page
   // sees its payment turn confirmed, refresh them so the server-claimed
@@ -115,7 +122,7 @@ export default function Checkout() {
     );
   }
 
-  if (paymentsLoading || settingsLoading) {
+  if (paymentsLoading || settingsLoading || subscriptionsLoading) {
     return (
       <div className="space-y-4 max-w-xl">
         <Skeleton className="h-8 w-64" />
@@ -183,6 +190,23 @@ export default function Checkout() {
 
       {payment.status === "pending" && (
         <>
+          {/* Instant balance payment — replaces this pending subscription order. */}
+          {subscription && (
+            <PayFromBalanceButton
+              target="subscription"
+              planId={subscription.planId}
+              pendingPaymentId={payment.id}
+              priceRub={payment.amountRub}
+              balanceKopecks={me?.balanceKopecks ?? 0}
+              enabled={settings?.balancePaymentsEnabled ?? false}
+              onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: getListMyPaymentsQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getListMySubscriptionsQueryKey() });
+                setLocation("/dashboard");
+              }}
+            />
+          )}
+
           {/* Primary: YooMoney online payment */}
           <div className="bg-card border border-primary/40 p-6">
             <YooMoneyPaymentButtons paymentId={payment.id} amountRub={payment.amountRub} reference={payment.reference} />

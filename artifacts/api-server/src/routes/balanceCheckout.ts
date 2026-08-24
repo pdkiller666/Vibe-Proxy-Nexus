@@ -38,7 +38,7 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
 
   const checkoutTarget =
     target === "subscription"
-      ? { kind: "subscription" as const, planId: planId! }
+      ? { kind: "subscription" as const, planId: planId!, pendingPaymentId }
       : target === "extra_device_slot"
         ? { kind: "extra_device_slot" as const }
         : { kind: "extra_traffic" as const, pendingPaymentId };
@@ -58,7 +58,7 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
       const messages = {
         feature_disabled: "Оплата с баланса временно отключена.",
         payment_in_progress: "Оплата с баланса уже обрабатывается. Подождите несколько секунд.",
-        pending_payment_not_found: "Этот платёж за трафик не найден. Обновите страницу.",
+        pending_payment_not_found: "Эта заявка на оплату не найдена. Обновите страницу.",
         pending_payment_not_pending: "Этот платёж уже обработан. Обновите страницу, чтобы увидеть актуальный статус.",
         pending_payment_id_required: "Для оплаты этой заявки с баланса обновите страницу и попробуйте ещё раз.",
       } as const;

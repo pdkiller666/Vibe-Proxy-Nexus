@@ -523,6 +523,71 @@ describe("checkoutFromBalance", () => {
     await collectCreated(userId);
   });
 
+  it("scenario 6d: balance payment replaces an existing pending subscription order without creating a duplicate", async () => {
+    const initialBalance = PLAN_PRICE_RUB * 100 * 2;
+    const { id: userId } = await seedUser(initialBalance);
+    const [pendingSubscription] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId,
+        planId: monthlyPlanId,
+        status: "pending_payment",
+        startsAt: new Date(),
+      })
+      .returning({ id: subscriptionsTable.id });
+    subIds.push(pendingSubscription!.id);
+
+    const [manualPayment] = await db
+      .insert(paymentsTable)
+      .values({
+        userId,
+        subscriptionId: pendingSubscription!.id,
+        type: "subscription",
+        provider: "manual_sbp",
+        amountRub: PLAN_PRICE_RUB,
+        status: "pending",
+        reference: `manual-subscription-${uid()}`,
+      })
+      .returning({ id: paymentsTable.id });
+    paymentIds.push(manualPayment!.id);
+
+    const outcome = await checkoutFromBalance(userId, {
+      kind: "subscription",
+      planId: monthlyPlanId,
+      pendingPaymentId: manualPayment!.id,
+    });
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    const [replacedManualPayment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, manualPayment!.id));
+    expect(replacedManualPayment!.status).toBe("rejected");
+    expect(replacedManualPayment!.rejectionReason).toBe("Заменён оплатой с баланса");
+
+    const [balancePayment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, outcome.result.paymentId));
+    expect(balancePayment!.provider).toBe("balance");
+    expect(balancePayment!.status).toBe("confirmed");
+    expect(balancePayment!.subscriptionId).toBe(pendingSubscription!.id);
+
+    const subscriptions = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, userId));
+    expect(subscriptions).toHaveLength(1);
+    expect(subscriptions[0]!.id).toBe(pendingSubscription!.id);
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    expect(user!.balanceKopecks).toBe(initialBalance - PLAN_PRICE_RUB * 100);
+
+    await collectCreated(userId);
+  });
+
   // ── Scenario 10: Feature flag disabled → 409 ────────────────────────────────
   it("scenario 10: feature flag balancePaymentsEnabled=false → 409", async () => {
     await db

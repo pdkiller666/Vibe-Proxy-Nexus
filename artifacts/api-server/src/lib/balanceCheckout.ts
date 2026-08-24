@@ -41,7 +41,7 @@ import { logger } from "./logger";
 // ── Public types ─────────────────────────────────────────────────────────────
 
 export type BalanceCheckoutTarget =
-  | { kind: "subscription"; planId: number }
+  | { kind: "subscription"; planId: number; pendingPaymentId?: number }
   | { kind: "extra_device_slot" }
   | { kind: "extra_traffic"; pendingPaymentId?: number };
 
@@ -136,7 +136,10 @@ export async function checkoutFromBalance(
   }
 
   const requiredKopecks = amountRub * 100;
-  const pendingPaymentId = target.kind === "extra_traffic" ? target.pendingPaymentId : undefined;
+  const pendingPaymentId =
+    target.kind === "subscription" || target.kind === "extra_traffic"
+      ? target.pendingPaymentId
+      : undefined;
 
   // 3. Fast-path dedup (confirmed only) — skips the lock for sequential retries
   // A checkout page replacing a named manual order must always reach the
@@ -193,25 +196,33 @@ export async function checkoutFromBalance(
 
       // ── New payment path ─────────────────────────────────────────────────
 
-      // The traffic checkout page identifies the exact manual order it wants
-      // to replace. Lock it before debiting so a simultaneous manual
-      // confirmation either wins before the charge or loses cleanly.
-      if (paymentType === "extra_traffic") {
-        const [pendingAlternative] = await tx
-          .select({ id: paymentsTable.id, provider: paymentsTable.provider })
+      // The checkout page identifies the exact manual order it wants to
+      // replace. Lock it before debiting so a simultaneous manual confirmation
+      // either wins before the charge or loses cleanly. This applies to
+      // subscriptions as well as extra traffic.
+      let pendingAlternative:
+        | { id: number; provider: string; subscriptionId: number | null }
+        | undefined;
+      if (pendingPaymentId) {
+        [pendingAlternative] = await tx
+          .select({
+            id: paymentsTable.id,
+            provider: paymentsTable.provider,
+            subscriptionId: paymentsTable.subscriptionId,
+          })
           .from(paymentsTable)
           .where(
             and(
-              pendingPaymentId ? eq(paymentsTable.id, pendingPaymentId) : sql`true`,
+              eq(paymentsTable.id, pendingPaymentId),
               eq(paymentsTable.userId, userId),
-              eq(paymentsTable.type, "extra_traffic"),
+              eq(paymentsTable.type, paymentType),
               eq(paymentsTable.status, "pending"),
             ),
           )
           .for("update")
           .limit(1);
 
-        if (pendingPaymentId && !pendingAlternative) {
+        if (!pendingAlternative) {
           const [sourcePayment] = await tx
             .select({ id: paymentsTable.id })
             .from(paymentsTable)
@@ -219,54 +230,84 @@ export async function checkoutFromBalance(
               and(
                 eq(paymentsTable.id, pendingPaymentId),
                 eq(paymentsTable.userId, userId),
-                eq(paymentsTable.type, "extra_traffic"),
+                eq(paymentsTable.type, paymentType),
               ),
             )
             .limit(1);
           throw new Error(sourcePayment ? "PENDING_PAYMENT_NOT_PENDING" : "PENDING_PAYMENT_NOT_FOUND");
         }
-        if (!pendingPaymentId && pendingAlternative) {
+
+        if (paymentType === "subscription") {
+          const [pendingSubscription] = await tx
+            .select({
+              id: subscriptionsTable.id,
+              planId: subscriptionsTable.planId,
+              status: subscriptionsTable.status,
+            })
+            .from(subscriptionsTable)
+            .where(eq(subscriptionsTable.id, pendingAlternative.subscriptionId ?? -1))
+            .for("update")
+            .limit(1);
+
+          if (
+            !pendingSubscription ||
+            pendingSubscription.status !== "pending_payment" ||
+            pendingSubscription.planId !== meta.planId
+          ) {
+            throw new Error("PENDING_PAYMENT_NOT_PENDING");
+          }
+        }
+      } else if (paymentType === "extra_traffic") {
+        const [pendingAlternativePayment] = await tx
+          .select({ id: paymentsTable.id })
+          .from(paymentsTable)
+          .where(
+            and(
+              eq(paymentsTable.userId, userId),
+              eq(paymentsTable.type, "extra_traffic"),
+              eq(paymentsTable.status, "pending"),
+            ),
+          )
+          .limit(1);
+
+        if (pendingAlternativePayment) {
           // Older clients do not identify their source payment. Reject rather
           // than guessing, because a manual confirmation could race a guess.
           throw new Error("PENDING_PAYMENT_ID_REQUIRED");
         }
+      }
 
-        // Balance check after both user and source-payment locks.
-        const balance = user?.balanceKopecks ?? 0;
-        if (balance < requiredKopecks) {
-          throw Object.assign(new Error("INSUFFICIENT_BALANCE"), { balanceKopecks: balance, requiredKopecks });
-        }
+      // Balance check after the user and, when replacing an order, source
+      // payment locks.
+      const balance = user?.balanceKopecks ?? 0;
+      if (balance < requiredKopecks) {
+        throw Object.assign(new Error("INSUFFICIENT_BALANCE"), { balanceKopecks: balance, requiredKopecks });
+      }
 
-        if (pendingAlternative) {
-          await tx
-            .update(paymentsTable)
-            .set({
-              status: "rejected",
-              rejectionReason: "Заменён оплатой с баланса",
-            })
-            .where(
-              and(
-                eq(paymentsTable.id, pendingAlternative.id),
-                eq(paymentsTable.status, "pending"),
-              ),
-            );
-          logger.info(
-            { userId, paymentId: pendingAlternative.id, provider: pendingAlternative.provider },
-            "balance_checkout: replaced pending extra-traffic payment",
+      if (pendingAlternative) {
+        await tx
+          .update(paymentsTable)
+          .set({
+            status: "rejected",
+            rejectionReason: "Заменён оплатой с баланса",
+          })
+          .where(
+            and(
+              eq(paymentsTable.id, pendingAlternative.id),
+              eq(paymentsTable.status, "pending"),
+            ),
           );
-        }
-      } else {
-        // Balance check (after the user lock, so value is fresh).
-        const balance = user?.balanceKopecks ?? 0;
-        if (balance < requiredKopecks) {
-          throw Object.assign(new Error("INSUFFICIENT_BALANCE"), { balanceKopecks: balance, requiredKopecks });
-        }
+        logger.info(
+          { userId, paymentId: pendingAlternative.id, provider: pendingAlternative.provider },
+          `balance_checkout: replaced pending ${paymentType} payment`,
+        );
       }
 
       // Create pending_payment subscription INSIDE tx (only for subscription type).
       // This ensures retries and concurrent losers never produce orphaned rows.
-      let subscriptionId: number | null = meta.subscriptionId; // null for subscription type
-      if (meta.paymentType === "subscription") {
+      let subscriptionId: number | null =
+        pendingAlternative?.subscriptionId ?? meta.subscriptionId; // null for a new subscription
+      if (meta.paymentType === "subscription" && !pendingAlternative) {
         const now = new Date();
         const [currentActive] = await tx
           .select({ endsAt: subscriptionsTable.endsAt })
