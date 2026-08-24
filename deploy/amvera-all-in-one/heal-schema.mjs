@@ -153,7 +153,7 @@ function isHealthyM41Index(index) {
       Array.isArray(index.descending) &&
       index.descending.join(",") === "false,true,true" &&
       Array.isArray(index.nulls_first) &&
-      index.nulls_first.join(",") === "false,true,true" &&
+      index.nulls_first.join(",") === "false,true,false" &&
       normalizePredicate(index.predicate) === "status='active'::text",
   );
 }
