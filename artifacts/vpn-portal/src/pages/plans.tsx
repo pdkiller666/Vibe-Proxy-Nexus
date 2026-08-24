@@ -541,42 +541,26 @@ export default function Plans() {
                     }
 
                     return (
-                      <div className="space-y-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCardClick(plan.id);
-                            handleSelect(plan.id, plan.billingType);
-                          }}
-                          disabled={isPending}
-                          className={cn(
-                            "w-full font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2",
-                            "bg-primary text-primary-foreground",
-                          )}
-                        >
-                          {loadingPlanId === plan.id ? (
-                            "Оформляем..."
-                          ) : (
-                            <>
-                              <Check className="w-4 h-4" /> {plan.billingType === "hourly" ? "Подключить" : "Оформить"}
-                            </>
-                          )}
-                        </button>
-                        {/* Balance checkout — only for monthly paid plans */}
-                        {plan.billingType === "monthly" && (
-                          <PayFromBalanceButton
-                            target="subscription"
-                            planId={plan.id}
-                            priceRub={plan.priceRub}
-                            balanceKopecks={me?.balanceKopecks ?? 0}
-                            enabled={paymentSettings?.balancePaymentsEnabled ?? false}
-                            onSuccess={(paymentId) => {
-                              setBalanceCheckoutPaymentId(paymentId);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                          />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCardClick(plan.id);
+                          handleSelect(plan.id, plan.billingType);
+                        }}
+                        disabled={isPending}
+                        className={cn(
+                          "w-full font-bold py-3 hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2",
+                          "bg-primary text-primary-foreground",
                         )}
-                      </div>
+                      >
+                        {loadingPlanId === plan.id ? (
+                          "Оформляем..."
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" /> {plan.billingType === "hourly" ? "Подключить" : "Оформить"}
+                          </>
+                        )}
+                      </button>
                     );
                   })()}
                   </div>{/* end inner promo wrapper */}
