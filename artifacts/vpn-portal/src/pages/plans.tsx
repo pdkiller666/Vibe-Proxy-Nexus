@@ -13,7 +13,7 @@ import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Check, CreditCard, Zap, Wallet, CheckCircle2, Sparkles, X, RefreshCw } from "lucide-react";
+import { Check, CreditCard, Zap, Wallet, CheckCircle2, Sparkles, X, RefreshCw, ChevronDown } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { cn } from "@/lib/utils";
 import { ReferralPaymentOffer } from "@/components/referral-offer";
@@ -61,6 +61,8 @@ export default function Plans() {
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [balanceCheckoutPaymentId, setBalanceCheckoutPaymentId] = useState<number | null>(null);
+  const [renewalExpandedPlanId, setRenewalExpandedPlanId] = useState<number | null>(null);
+  const [autoRenewInfoOpen, setAutoRenewInfoOpen] = useState(false);
 
   const trackRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -381,17 +383,11 @@ export default function Plans() {
                         plan.priceRub > 0 &&
                         paymentSettings?.balancePaymentsEnabled === true;
                       const renewalTopupAmountRub = Math.max(plan.priceRub - balanceRub, minHourlyTopupRub, 1);
+                      const renewalExpanded = renewalExpandedPlanId === plan.id;
 
                       return (
                         <div className="space-y-2">
-                          <button
-                            disabled
-                            className="w-full bg-green-100 text-green-700 font-bold py-3 flex items-center justify-center gap-2 cursor-default opacity-90"
-                          >
-                            <CheckCircle2 className="w-4 h-4" /> Текущий тариф
-                          </button>
-
-                          {canRenewFromBalance && (
+                          {canRenewFromBalance && renewalExpanded ? (
                             <div onClick={(e) => e.stopPropagation()}>
                               <PayFromBalanceButton
                                 target="subscription"
@@ -410,37 +406,72 @@ export default function Plans() {
                                   window.scrollTo({ top: 0, behavior: "smooth" });
                                 }}
                               />
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={!canRenewFromBalance}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (canRenewFromBalance) setRenewalExpandedPlanId(plan.id);
+                              }}
+                              className={`w-full bg-green-100 text-green-700 font-bold py-3 flex items-center justify-center gap-2 ${
+                                canRenewFromBalance
+                                  ? "hover:bg-green-200 transition-colors"
+                                  : "cursor-default opacity-90"
+                              }`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              {canRenewFromBalance ? "Продлить тариф" : "Текущий тариф"}
+                            </button>
+                          )}
 
-                              <div className="border border-border p-3 space-y-2">
-                                <div className="flex items-center gap-2">
+                          {canRenewFromBalance && (
+                            <div className="border border-border p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-2 text-left"
+                                  aria-expanded={autoRenewInfoOpen}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAutoRenewInfoOpen((open) => !open);
+                                  }}
+                                >
                                   <RefreshCw className="w-4 h-4 text-primary" />
-                                  <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                                  <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
                                     Автопродление
-                                  </p>
-                                </div>
-                                <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm font-semibold">Продлять с баланса автоматически</p>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      За ~24 ч до окончания спишем {plan.priceRub} ₽ и добавим ещё {plan.durationDays} дней.
-                                    </p>
-                                  </div>
-                                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                                    <input
-                                      type="checkbox"
-                                      className="sr-only peer"
-                                      aria-label="Автоматически продлять подписку с баланса"
-                                      checked={autoRenewOverride ?? me?.autoRenewFromBalance ?? false}
-                                      disabled={isAutoRenewPending}
-                                      onChange={(e) => {
-                                        setAutoRenewOverride(e.target.checked);
-                                        updateAutoRenew({ data: { enabled: e.target.checked } });
-                                      }}
-                                    />
-                                    <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4 peer-disabled:opacity-50" />
-                                  </label>
-                                </div>
+                                  </span>
+                                  <ChevronDown
+                                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                      autoRenewInfoOpen ? "rotate-180" : ""
+                                    }`}
+                                  />
+                                </button>
+                                <label
+                                  className="relative inline-flex items-center cursor-pointer shrink-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    aria-label="Автоматически продлять подписку с баланса"
+                                    checked={autoRenewOverride ?? me?.autoRenewFromBalance ?? false}
+                                    disabled={isAutoRenewPending}
+                                    onChange={(e) => {
+                                      setAutoRenewOverride(e.target.checked);
+                                      updateAutoRenew({ data: { enabled: e.target.checked } });
+                                    }}
+                                  />
+                                  <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4 peer-disabled:opacity-50" />
+                                </label>
                               </div>
+                              {autoRenewInfoOpen && (
+                                <p className="text-xs text-muted-foreground mt-2 pl-6">
+                                  За ~24 ч до окончания с баланса спишется {plan.priceRub} ₽ и добавится ещё{" "}
+                                  {plan.durationDays} дней.
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>

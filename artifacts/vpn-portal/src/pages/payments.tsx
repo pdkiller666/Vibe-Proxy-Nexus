@@ -12,6 +12,7 @@ import {
   getListMyPaymentsQueryKey,
 } from "@workspace/api-client-react";
 import type { BalanceTransaction, Payment } from "@workspace/api-client-react";
+import { ApiError } from "@workspace/api-client-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,18 @@ function paymentTypeLabel(type: string): string {
   return "Подписка";
 }
 
+function existingTopupPaymentId(error: unknown): number | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+
+  const data = error.data;
+  if (typeof data !== "object" || data === null) return null;
+
+  const paymentId = (data as { paymentId?: unknown }).paymentId;
+  return typeof paymentId === "number" && Number.isInteger(paymentId) && paymentId > 0
+    ? paymentId
+    : null;
+}
+
 function BalanceWidget() {
   const { data: me } = useGetMe();
   const { mutate: createTopup, isPending } = useCreateBalanceTopupOrder();
@@ -84,10 +97,9 @@ function BalanceWidget() {
           setLocation(`/balance-topup/${data.paymentId}`);
         },
         onError: (err: unknown) => {
-          // 409 = duplicate pending topup — redirect to existing instead of showing an error
-          const body = err as { paymentId?: number };
-          if (body?.paymentId) {
-            setLocation(`/balance-topup/${body.paymentId}`);
+          const paymentId = existingTopupPaymentId(err);
+          if (paymentId !== null) {
+            setLocation(`/balance-topup/${paymentId}`);
             return;
           }
           const msg = err instanceof Error ? err.message : undefined;
