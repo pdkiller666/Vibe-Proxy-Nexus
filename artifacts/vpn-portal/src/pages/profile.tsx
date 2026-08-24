@@ -217,11 +217,11 @@ function ReferralSection() {
         приглашённого пользователя вам начисляется{" "}
         <span className="text-foreground font-bold">{me.referralCommissionPercent}%</span> от суммы на баланс.
       </p>
-      <div className="flex gap-2 flex-wrap">
-        <Input value={referralLink} readOnly className="rounded-none max-w-lg font-mono text-xs" />
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <Input value={referralLink} readOnly className="rounded-none min-w-0 font-mono text-xs" />
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity"
+          className="flex w-full sm:w-auto items-center justify-center gap-1.5 bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity"
         >
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           {copied ? "Скопировано" : "Скопировать"}
@@ -230,29 +230,25 @@ function ReferralSection() {
           value={referralLink}
           title="QR-код реферальной ссылки"
           description="Отсканируйте код камерой — он откроет регистрацию по вашей реферальной ссылке."
+          className="w-full sm:w-auto"
         />
       </div>
-      <div className="flex gap-2 flex-wrap items-center">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm text-muted-foreground whitespace-nowrap">Инвайт-код:</span>
           <Input
             value={me.referralCode}
             readOnly
-            className="rounded-none w-36 font-mono text-sm tracking-widest text-center"
+            className="rounded-none min-w-0 w-full font-mono text-sm tracking-widest text-center"
           />
         </div>
         <button
           onClick={handleCopyCode}
-          className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity"
+          className="flex w-full sm:w-auto items-center justify-center gap-1.5 bg-primary text-primary-foreground font-bold px-5 py-2 text-sm hover:opacity-90 transition-opacity"
         >
           {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           {copiedCode ? "Скопировано" : "Скопировать"}
         </button>
-        <ReferralQrDialog
-          value={me.referralCode}
-          title="QR-код инвайт-кода"
-          description="Отсканируйте код или покажите его другу, чтобы он ввёл инвайт-код при регистрации."
-        />
       </div>
       <div className="flex gap-6 flex-wrap text-sm pt-1">
         <div>

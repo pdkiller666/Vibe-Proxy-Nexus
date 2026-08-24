@@ -385,43 +385,42 @@ function ReferralSection() {
         )}
 
         {/* Ссылка и код */}
-        <div className="p-5 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex-1 min-w-0 font-mono text-sm bg-muted px-3 py-2 truncate select-all">
-              {referralLink}
+        <div className="p-5 space-y-4">
+          <div className="space-y-1.5">
+            <div className="text-xs font-semibold text-muted-foreground">Реферальная ссылка</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+              <div className="min-w-0 bg-muted px-3 py-2.5 font-mono text-sm truncate select-all flex items-center">
+                {referralLink}
+              </div>
+              <button
+                onClick={copyLink}
+                className="w-full sm:w-auto shrink-0 border border-border px-4 py-2.5 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-1.5"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? "Скопировано" : "Скопировать ссылку"}
+              </button>
+              <ReferralQrDialog
+                value={referralLink}
+                title="QR-код реферальной ссылки"
+                description="Отсканируйте код камерой — он откроет регистрацию по вашей реферальной ссылке."
+                className="w-full sm:w-auto"
+              />
             </div>
-            <button
-              onClick={copyLink}
-              className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? "Скопировано" : "Скопировать ссылку"}
-            </button>
-            <ReferralQrDialog
-              value={referralLink}
-              title="QR-код реферальной ссылки"
-              description="Отсканируйте код камерой — он откроет регистрацию по вашей реферальной ссылке."
-            />
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">Инвайт-код:</span>
-              <div className="font-mono text-sm bg-muted px-3 py-2 select-all tracking-widest">
+          <div className="space-y-1.5">
+            <div className="text-xs font-semibold text-muted-foreground">Инвайт-код</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="min-w-0 bg-muted px-3 py-2.5 font-mono text-sm tracking-widest select-all flex items-center">
                 {me.referralCode}
               </div>
+              <button
+                onClick={copyCode}
+                className="w-full sm:w-auto shrink-0 border border-border px-4 py-2.5 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-1.5"
+              >
+                {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copiedCode ? "Скопировано" : "Скопировать код"}
+              </button>
             </div>
-            <button
-              onClick={copyCode}
-              className="shrink-0 border border-border px-4 py-2 text-sm font-semibold hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5"
-            >
-              {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copiedCode ? "Скопировано" : "Скопировать код"}
-            </button>
-            <ReferralQrDialog
-              value={me.referralCode}
-              title="QR-код инвайт-кода"
-              description="Отсканируйте код или покажите его другу, чтобы он ввёл инвайт-код при регистрации."
-            />
           </div>
 
           {/* Механика */}
