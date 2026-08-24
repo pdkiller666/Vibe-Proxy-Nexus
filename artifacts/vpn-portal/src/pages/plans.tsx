@@ -431,15 +431,16 @@ export default function Plans() {
                               <div className="flex items-center justify-between gap-3">
                                 <button
                                   type="button"
-                                  className="min-w-0 flex-1 flex items-center gap-2 text-left"
+                                  className="min-w-0 flex-1 flex items-center gap-2 text-left overflow-hidden"
                                   aria-expanded={autoRenewInfoOpen}
+                                  aria-label={autoRenewInfoOpen ? "Свернуть автопродление" : "Раскрыть автопродление"}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setAutoRenewInfoOpen((open) => !open);
                                   }}
                                 >
                                   <RefreshCw className="w-4 h-4 shrink-0 text-primary" />
-                                  <span className="min-w-0 flex-1 text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground whitespace-nowrap">
+                                  <span className="min-w-0 flex-1 truncate text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
                                     Автопродление
                                   </span>
                                   <ChevronDown
