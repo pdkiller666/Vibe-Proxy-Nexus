@@ -380,7 +380,7 @@ export default function Plans() {
                       return (
                         <div className="space-y-2">
                           {canRenewFromBalance && renewalExpanded ? (
-                            <div onClick={(e) => e.stopPropagation()}>
+                            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                               <PayFromBalanceButton
                                 target="subscription"
                                 planId={plan.id}
@@ -398,6 +398,14 @@ export default function Plans() {
                                   window.scrollTo({ top: 0, behavior: "smooth" });
                                 }}
                               />
+                              <button
+                                type="button"
+                                className="w-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors py-2 text-xs font-semibold flex items-center justify-center gap-2"
+                                onClick={() => setRenewalExpandedPlanId(null)}
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                Отмена
+                              </button>
                             </div>
                           ) : (
                             <button
@@ -419,29 +427,29 @@ export default function Plans() {
                           )}
 
                           {canRenewFromBalance && (
-                            <div className="border border-border p-3">
+                            <div className="border border-border p-3 overflow-hidden">
                               <div className="flex items-center justify-between gap-3">
                                 <button
                                   type="button"
-                                  className="flex items-center gap-2 text-left"
+                                  className="min-w-0 flex-1 flex items-center gap-2 text-left"
                                   aria-expanded={autoRenewInfoOpen}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setAutoRenewInfoOpen((open) => !open);
                                   }}
                                 >
-                                  <RefreshCw className="w-4 h-4 text-primary" />
-                                  <span className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                                  <RefreshCw className="w-4 h-4 shrink-0 text-primary" />
+                                  <span className="min-w-0 flex-1 text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground whitespace-nowrap">
                                     Автопродление
                                   </span>
                                   <ChevronDown
-                                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                    className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${
                                       autoRenewInfoOpen ? "rotate-180" : ""
                                     }`}
                                   />
                                 </button>
                                 <label
-                                  className="relative inline-flex items-center cursor-pointer shrink-0"
+                                  className="relative inline-flex items-center cursor-pointer shrink-0 w-10 h-6"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <input
@@ -455,7 +463,7 @@ export default function Plans() {
                                       updateAutoRenew({ data: { enabled: e.target.checked } });
                                     }}
                                   />
-                                  <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4 peer-disabled:opacity-50" />
+                                  <div className="w-10 h-6 shrink-0 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4 peer-disabled:opacity-50" />
                                 </label>
                               </div>
                               {autoRenewInfoOpen && (
