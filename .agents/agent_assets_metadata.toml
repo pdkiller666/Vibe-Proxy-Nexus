@@ -6,27 +6,32 @@ id = "VbivRwj_M2jzcSZP9Y7F_"
 uri = "file://attached_assets/vpnexus-freekassa.css"
 type = "unspecified"
 title = "vpnexus-freekassa.css v5 (усиленная специфичность)"
+logical_id = "6d5e57c9-5cbd-4774-8389-9265a6e7a42c"
 
 [[outputs]]
 id = "0LT9yvCKhE5864rR2XLUT"
 uri = "file://attached_assets/vpnexus-logo-light.svg"
 type = "image"
 title = "Светлый логотип — VPNexus (финал)"
+logical_id = "242729cd-78bd-401f-99c2-2dcb6eccf80e"
 
 [[outputs]]
 id = "_STtL9NNQPoDjzYJelf65"
 uri = "file://attached_assets/vpnexus-logo-dark.svg"
 type = "image"
 title = "Тёмный логотип — VPNexus (финал)"
+logical_id = "baf93ebe-0728-48b8-acb2-18c2db70a7ba"
 
 [[outputs]]
 id = "lZOwc6UcwvohMPcrGQRaZ"
 uri = "file://attached_assets/vpnexus-logo-light.jpg"
 type = "image"
 title = "Светлый логотип — JPG"
+logical_id = "8dca774f-cadb-4b1d-9ad9-4d12a9f85269"
 
 [[outputs]]
 id = "12y-WTp6uHbu7vBcYQs6i"
 uri = "file://attached_assets/vpnexus-logo-dark.jpg"
 type = "image"
 title = "Тёмный логотип — JPG"
+logical_id = "59b58795-850c-4adf-b87b-719f5100156d"

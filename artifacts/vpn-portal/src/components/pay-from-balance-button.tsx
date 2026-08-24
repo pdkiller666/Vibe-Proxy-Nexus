@@ -28,6 +28,18 @@ interface Props {
   balanceKopecks: number;
   /** Whether the feature flag is on. Button is hidden when false. */
   enabled: boolean;
+  /** Label for a successful balance-funded purchase. */
+  actionLabel?: string;
+  /** Optional action to run instead of showing an insufficient-balance error. */
+  onInsufficientBalance?: () => void;
+  /** Label for the replacement action shown when the balance is insufficient. */
+  insufficientActionLabel?: string;
+  /** Amount that the replacement action will add to the balance. */
+  insufficientTopupAmountRub?: number;
+  /** Whether an external replacement action is in progress. */
+  isActionPending?: boolean;
+  /** Label while an external replacement action is in progress. */
+  actionPendingLabel?: string;
   /** Called on successful payment with the new paymentId. */
   onSuccess?: (paymentId: number) => void;
   /** Optional class for the outer wrapper */
@@ -70,6 +82,12 @@ export function PayFromBalanceButton({
   priceRub,
   balanceKopecks,
   enabled,
+  actionLabel = "Оплатить с баланса",
+  onInsufficientBalance,
+  insufficientActionLabel = "Пополнить баланс",
+  insufficientTopupAmountRub,
+  isActionPending = false,
+  actionPendingLabel = "Обрабатываем...",
   onSuccess,
   className,
 }: Props) {
@@ -114,8 +132,14 @@ export function PayFromBalanceButton({
     <div className={className}>
       <button
         type="button"
-        onClick={() => mutate()}
-        disabled={isPending}
+        onClick={() => {
+          if (!sufficient && onInsufficientBalance) {
+            onInsufficientBalance();
+            return;
+          }
+          mutate();
+        }}
+        disabled={isPending || isActionPending}
         className={`w-full flex items-center justify-between gap-3 px-5 py-3 border font-bold text-sm transition-colors ${
           sufficient
             ? "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
@@ -123,8 +147,12 @@ export function PayFromBalanceButton({
         } disabled:opacity-50`}
       >
         <span className="flex items-center gap-2">
-          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
-          {isPending ? "Оплачиваем..." : "Оплатить с баланса"}
+          {isPending || isActionPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
+          {isPending || isActionPending
+            ? isPending ? "Оплачиваем..." : actionPendingLabel
+            : !sufficient && onInsufficientBalance
+              ? insufficientActionLabel
+              : actionLabel}
         </span>
         <span className="font-mono text-xs">
           {sufficient ? (
@@ -141,7 +169,7 @@ export function PayFromBalanceButton({
       {!sufficient && (
         <p className="text-xs text-amber-700 mt-1 pl-1">
           Недостаточно средств — пополните баланс на{" "}
-          <strong>{priceRub - balanceRub} ₽</strong> и попробуйте снова.
+          <strong>{insufficientTopupAmountRub ?? priceRub - balanceRub} ₽</strong> и попробуйте снова.
         </p>
       )}
     </div>

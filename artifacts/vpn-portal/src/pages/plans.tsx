@@ -6,13 +6,14 @@ import {
   useGetMe,
   useGetPaymentSettings,
   useCreateBalanceTopupOrder,
+  usePatchMeAutoRenew,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Check, CreditCard, Zap, Wallet, CheckCircle2, Sparkles, X } from "lucide-react";
+import { Check, CreditCard, Zap, Wallet, CheckCircle2, Sparkles, X, RefreshCw } from "lucide-react";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { cn } from "@/lib/utils";
 import { ReferralPaymentOffer } from "@/components/referral-offer";
@@ -24,15 +25,37 @@ function formatKopecks(kopecks: number): string {
   return `${rubles},${String(cents).padStart(2, "0")} ₽`;
 }
 
+function existingTopupPaymentId(error: unknown): number | null {
+  if (typeof error !== "object" || error === null || !("data" in error)) return null;
+  const { data } = error as { data?: unknown };
+  if (typeof data !== "object" || data === null || !("paymentId" in data)) return null;
+  const { paymentId } = data as { paymentId?: unknown };
+  return typeof paymentId === "number" ? paymentId : null;
+}
+
 export default function Plans() {
   const { data: plans, isLoading } = useListPlans();
   const { data: me } = useGetMe();
   const { data: paymentSettings } = useGetPaymentSettings();
-  const { mutate: createSubscription, isPending } = useCreateSubscription();
-  const { mutate: createTopup, isPending: isToppingUp } = useCreateBalanceTopupOrder();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { mutate: createSubscription, isPending } = useCreateSubscription();
+  const { mutate: createTopup, isPending: isToppingUp } = useCreateBalanceTopupOrder();
+  const [autoRenewOverride, setAutoRenewOverride] = useState<boolean | null>(null);
+  const { mutate: updateAutoRenew, isPending: isAutoRenewPending } = usePatchMeAutoRenew({
+    mutation: {
+      onSuccess: (data) => {
+        setAutoRenewOverride(data.autoRenewFromBalance);
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        toast({ title: "Настройки автопродления сохранены" });
+      },
+      onError: () => {
+        setAutoRenewOverride(null);
+        toast({ title: "Не удалось изменить настройки автопродления", variant: "destructive" });
+      },
+    },
+  });
   const [loadingPlanId, setLoadingPlanId] = useState<number | null>(null);
   const [topupPlanId, setTopupPlanId] = useState<number | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
@@ -120,8 +143,8 @@ export default function Plans() {
   const minHourlyTopupRub = paymentSettings?.minHourlyTopupRub ?? 0;
   const balanceRub = me ? Math.floor(me.balanceKopecks / 100) : 0;
 
-  function handleQuickTopup(planId: number) {
-    const amountRub = minHourlyTopupRub > 0 ? minHourlyTopupRub : 100;
+  function handleQuickTopup(planId: number, requestedAmountRub?: number) {
+    const amountRub = Math.max(requestedAmountRub ?? 0, minHourlyTopupRub, 1);
     setTopupPlanId(planId);
     createTopup(
       { data: { amountRub } },
@@ -131,10 +154,10 @@ export default function Plans() {
           setLocation(`/balance-topup/${data.paymentId}`);
         },
         onError: (err: unknown) => {
-          // 409 = duplicate pending topup — server returns existing paymentId
-          const body = err as { paymentId?: number };
-          if (body?.paymentId) {
-            setLocation(`/balance-topup/${body.paymentId}`);
+          // 409 = duplicate pending topup — API client keeps response JSON in ApiError.data.
+          const paymentId = existingTopupPaymentId(err);
+          if (paymentId !== null) {
+            setLocation(`/balance-topup/${paymentId}`);
             return;
           }
           const msg = err instanceof Error ? err.message : undefined;
@@ -353,13 +376,74 @@ export default function Plans() {
                   </ul>
                   {(() => {
                     if (isCurrentPlan) {
+                      const canRenewFromBalance =
+                        plan.billingType === "monthly" &&
+                        plan.priceRub > 0 &&
+                        paymentSettings?.balancePaymentsEnabled === true;
+                      const renewalTopupAmountRub = Math.max(plan.priceRub - balanceRub, minHourlyTopupRub, 1);
+
                       return (
-                        <button
-                          disabled
-                          className="w-full bg-green-100 text-green-700 font-bold py-3 flex items-center justify-center gap-2 cursor-default opacity-90"
-                        >
-                          <CheckCircle2 className="w-4 h-4" /> Текущий тариф
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            disabled
+                            className="w-full bg-green-100 text-green-700 font-bold py-3 flex items-center justify-center gap-2 cursor-default opacity-90"
+                          >
+                            <CheckCircle2 className="w-4 h-4" /> Текущий тариф
+                          </button>
+
+                          {canRenewFromBalance && (
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <PayFromBalanceButton
+                                target="subscription"
+                                planId={plan.id}
+                                priceRub={plan.priceRub}
+                                balanceKopecks={me?.balanceKopecks ?? 0}
+                                enabled
+                                actionLabel="Продлить с баланса"
+                                insufficientActionLabel={`Пополнить на ${renewalTopupAmountRub} ₽`}
+                                insufficientTopupAmountRub={renewalTopupAmountRub}
+                                isActionPending={topupPlanId === plan.id && isToppingUp}
+                                actionPendingLabel="Создаём заявку..."
+                                onInsufficientBalance={() => handleQuickTopup(plan.id, renewalTopupAmountRub)}
+                                onSuccess={(paymentId) => {
+                                  setBalanceCheckoutPaymentId(paymentId);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }}
+                              />
+
+                              <div className="border border-border p-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <RefreshCw className="w-4 h-4 text-primary" />
+                                  <p className="text-xs font-mono font-bold uppercase tracking-widest text-muted-foreground">
+                                    Автопродление
+                                  </p>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-semibold">Продлять с баланса автоматически</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      За ~24 ч до окончания спишем {plan.priceRub} ₽ и добавим ещё {plan.durationDays} дней.
+                                    </p>
+                                  </div>
+                                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input
+                                      type="checkbox"
+                                      className="sr-only peer"
+                                      aria-label="Автоматически продлять подписку с баланса"
+                                      checked={autoRenewOverride ?? me?.autoRenewFromBalance ?? false}
+                                      disabled={isAutoRenewPending}
+                                      onChange={(e) => {
+                                        setAutoRenewOverride(e.target.checked);
+                                        updateAutoRenew({ data: { enabled: e.target.checked } });
+                                      }}
+                                    />
+                                    <div className="w-10 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4 peer-disabled:opacity-50" />
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       );
                     }
 

@@ -1,13 +1,10 @@
 kind = "web"
 previewPath = "/"
 title = "VPN Portal"
+description = "Приватный VPN-портал для приглашений, подписок, платежей и управления VLESS-ключами."
 version = "1.0.0"
 id = "artifacts/vpn-portal"
 router = "path"
-
-[[integratedSkills]]
-name = "react-vite"
-version = "1.0.0"
 
 [[services]]
 name = "web"
@@ -19,8 +16,8 @@ run = "pnpm --filter @workspace/vpn-portal run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/vpn-portal", "run", "build" ]
-publicDir = "artifacts/vpn-portal/dist/public"
 serve = "static"
+publicDir = "artifacts/vpn-portal/dist/public"
 
 [[services.production.rewrites]]
 from = "/terms"

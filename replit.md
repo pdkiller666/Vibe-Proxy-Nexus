@@ -14,6 +14,14 @@
 - `./deploy.sh "Сообщение на русском о том, что изменилось"` — deploy to production (pushes to GitHub, which triggers Amvera's auto-build). Main agent's shell blocks `git push`, so this is the only way to ship.
 - Required env: `DATABASE_URL` — Postgres connection string
 
+### Replit development environment
+
+- Replit supplies the development `DATABASE_URL` through its built-in PostgreSQL database; after connecting a clean database, run `pnpm --filter @workspace/db run push` once to create the schema.
+- Development secrets: `SESSION_SECRET` and `ADMIN_PASSWORD`; ordinary settings: `ADMIN_EMAIL`, `NODE_ENV=development`, `BASE_PATH=/`. `YOOMONEY_NOTIFICATION_SECRET` and `YOOMONEY_RECEIVER` are needed only when exercising automatic ЮMoney payments.
+- Start only the managed artifact workflows: `artifacts/api-server: API Server` and `artifacts/vpn-portal: web`. They supply the required `PORT` and proxy routing; do not replace them with ad-hoc workflows.
+- The SEO validation command is `pnpm --filter @workspace/vpn-portal run test:seo`; it explicitly supplies `PORT=4173` and `BASE_PATH=/`, which the Vite config requires for a production build.
+- Replit-to-GitHub deployment through `./deploy.sh` additionally requires the `GITHUB_TOKEN` secret with permission to write repository contents. Amvera production secrets, especially its own `DATABASE_URL`, stay in the Amvera panel and must not be replaced with Replit development values.
+
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
