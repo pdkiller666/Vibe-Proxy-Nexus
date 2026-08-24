@@ -222,6 +222,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Me"
+        "400":
+          description: Automatic renewal is unavailable for the current subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "402":
+          description: Insufficient balance to enable automatic renewal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoRenewInsufficientBalance"
 
   /balance-checkout:
     post:
@@ -2355,6 +2367,14 @@ components:
       required: [enabled]
       properties:
         enabled: { type: boolean }
+
+    AutoRenewInsufficientBalance:
+      type: object
+      required: [error, balanceKopecks, requiredKopecks]
+      properties:
+        error: { type: string }
+        balanceKopecks: { type: integer }
+        requiredKopecks: { type: integer, minimum: 1 }
 
     BalanceCheckoutInput:
       type: object

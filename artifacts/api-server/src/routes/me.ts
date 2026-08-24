@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, usersTable, type User } from "@workspace/db";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { db, plansTable, subscriptionsTable, usersTable, type User } from "@workspace/db";
 import {
   GetMeResponse,
   UpdateMeBody,
@@ -111,9 +111,85 @@ router.patch("/me/auto-renew", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (parsed.data.enabled) {
+    const result = await db.transaction(async (tx) => {
+      // The balance checkout path locks this same row before it debits. Holding
+      // the lock here makes the balance check and preference update one atomic
+      // decision instead of trusting the user object loaded by auth middleware.
+      const [lockedUser] = await tx
+        .select({ id: usersTable.id, balanceKopecks: usersTable.balanceKopecks })
+        .from(usersTable)
+        .where(eq(usersTable.id, req.appUser!.id))
+        .for("update");
+
+      if (!lockedUser) return { kind: "missing_user" as const };
+
+      // Match buildMeData exactly: select the most recent active subscription
+      // of any billing type, then require that current subscription to be
+      // monthly. An older monthly row must not authorize a current hourly plan.
+      const [currentSubscription] = await tx
+        .select({
+          priceRub: plansTable.priceRub,
+          billingType: plansTable.billingType,
+        })
+        .from(subscriptionsTable)
+        .innerJoin(plansTable, eq(subscriptionsTable.planId, plansTable.id))
+        .where(
+          and(
+            eq(subscriptionsTable.userId, lockedUser.id),
+            eq(subscriptionsTable.status, "active"),
+            or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, new Date())),
+          ),
+        )
+        .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+        .limit(1);
+
+      if (
+        !currentSubscription ||
+        currentSubscription.billingType !== "monthly" ||
+        currentSubscription.priceRub <= 0
+      ) {
+        return { kind: "not_monthly" as const };
+      }
+
+      const requiredKopecks = currentSubscription.priceRub * 100;
+      if (lockedUser.balanceKopecks < requiredKopecks) {
+        return {
+          kind: "insufficient_balance" as const,
+          balanceKopecks: lockedUser.balanceKopecks,
+          requiredKopecks,
+        };
+      }
+
+      const [user] = await tx
+        .update(usersTable)
+        .set({ autoRenewFromBalance: true })
+        .where(eq(usersTable.id, lockedUser.id))
+        .returning();
+      return { kind: "updated" as const, user: user! };
+    });
+
+    if (result.kind === "missing_user" || result.kind === "not_monthly") {
+      res.status(400).json({ error: "Автопродление доступно только для активного месячного тарифа." });
+      return;
+    }
+
+    if (result.kind === "insufficient_balance") {
+      res.status(402).json({
+        error: "Недостаточно средств на балансе для включения автопродления. Пополните баланс и попробуйте снова.",
+        balanceKopecks: result.balanceKopecks,
+        requiredKopecks: result.requiredKopecks,
+      });
+      return;
+    }
+
+    res.json(GetMeResponse.parse(await buildMeData(result.user, req.get("host") ?? "")));
+    return;
+  }
+
   const [user] = await db
     .update(usersTable)
-    .set({ autoRenewFromBalance: parsed.data.enabled })
+    .set({ autoRenewFromBalance: false })
     .where(eq(usersTable.id, req.appUser!.id))
     .returning();
 

@@ -9,6 +9,7 @@ import {
   usePatchMeAutoRenew,
   getGetMeQueryKey,
   getApiErrorPositiveIntegerField,
+  ApiError,
 } from "@workspace/api-client-react";
 import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,8 +44,9 @@ export default function Plans() {
         queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
         toast({ title: "Настройки автопродления сохранены" });
       },
-      onError: () => {
+      onError: (error: unknown) => {
         setAutoRenewOverride(null);
+        if (error instanceof ApiError && error.status === 402) return;
         toast({ title: "Не удалось изменить настройки автопродления", variant: "destructive" });
       },
     },
@@ -137,6 +139,16 @@ export default function Plans() {
 
   const minHourlyTopupRub = paymentSettings?.minHourlyTopupRub ?? 0;
   const balanceRub = me ? Math.floor(me.balanceKopecks / 100) : 0;
+
+  function showAutoRenewTopup(planId: number, priceRub: number) {
+    setAutoRenewOverride(false);
+    setRenewalExpandedPlanId(planId);
+    toast({
+      title: "Недостаточно средств для автопродления",
+      description: `Для включения автопродления нужно ${priceRub} ₽ на балансе. Пополните баланс и попробуйте снова.`,
+      variant: "destructive",
+    });
+  }
 
   function handleQuickTopup(planId: number, requestedAmountRub?: number) {
     const amountRub = Math.max(requestedAmountRub ?? 0, minHourlyTopupRub, 1);
@@ -460,8 +472,23 @@ export default function Plans() {
                                     checked={autoRenewOverride ?? me?.autoRenewFromBalance ?? false}
                                     disabled={isAutoRenewPending}
                                     onChange={(e) => {
-                                      setAutoRenewOverride(e.target.checked);
-                                      updateAutoRenew({ data: { enabled: e.target.checked } });
+                                      const enabled = e.target.checked;
+                                      if (enabled && (me?.balanceKopecks ?? 0) < plan.priceRub * 100) {
+                                        showAutoRenewTopup(plan.id, plan.priceRub);
+                                        return;
+                                      }
+
+                                      setAutoRenewOverride(enabled);
+                                      updateAutoRenew(
+                                        { data: { enabled } },
+                                        {
+                                          onError: (error: unknown) => {
+                                            if (enabled && error instanceof ApiError && error.status === 402) {
+                                              showAutoRenewTopup(plan.id, plan.priceRub);
+                                            }
+                                          },
+                                        },
+                                      );
                                     }}
                                   />
                                   <div className="w-10 h-6 shrink-0 bg-muted peer-checked:bg-primary rounded-full transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:w-5 after:h-5 after:rounded-full after:transition-all peer-checked:after:translate-x-4 peer-disabled:opacity-50" />

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetMe, useUpdateMe, useChangeMyEmail, useChangeMyPassword, usePatchMeAutoRenew, useGetPaymentSettings, getGetMeQueryKey } from "@workspace/api-client-react";
+import { ApiError, useGetMe, useUpdateMe, useChangeMyEmail, useChangeMyPassword, usePatchMeAutoRenew, useGetPaymentSettings, getGetMeQueryKey } from "@workspace/api-client-react";
 import { UserCircle, Mail, KeyRound, Save, Users, Copy, Check, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -269,7 +269,16 @@ function AutoRenewSection() {
         queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
         toast({ title: "Настройки автопродления сохранены" });
       },
-      onError: () => toast({ title: "Не удалось изменить настройки", variant: "destructive" }),
+      onError: (error: unknown) => {
+        const message =
+          error instanceof ApiError &&
+          typeof error.data === "object" &&
+          error.data !== null &&
+          typeof (error.data as { error?: unknown }).error === "string"
+            ? (error.data as { error: string }).error
+            : "Не удалось изменить настройки";
+        toast({ title: message, variant: "destructive" });
+      },
     },
   });
 

@@ -41,6 +41,7 @@ export * from './adminUserProfileUpdate';
 export * from './adminUserSearchResult';
 export * from './appDownloadLinks';
 export * from './autoRenewInput';
+export * from './autoRenewInsufficientBalance';
 export * from './balanceCheckoutInput';
 export * from './balanceCheckoutInputTarget';
 export * from './balanceCheckoutResult';

@@ -338,6 +338,13 @@ export interface AutoRenewInput {
   enabled: boolean;
 }
 
+export interface AutoRenewInsufficientBalance {
+  error: string;
+  balanceKopecks: number;
+  /** @minimum 1 */
+  requiredKopecks: number;
+}
+
 export type BalanceCheckoutInputTarget = typeof BalanceCheckoutInputTarget[keyof typeof BalanceCheckoutInputTarget];
 
 

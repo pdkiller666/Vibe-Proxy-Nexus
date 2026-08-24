@@ -42,6 +42,7 @@ import type {
   AdminUserProfileUpdate,
   AdminUserSearchResult,
   AutoRenewInput,
+  AutoRenewInsufficientBalance,
   BalanceCheckoutInput,
   BalanceCheckoutResult,
   BalanceTopupOrderBody,
@@ -892,7 +893,7 @@ export const patchMeAutoRenew = async (autoRenewInput: AutoRenewInput, options?:
 
 
 
-export const getPatchMeAutoRenewMutationOptions = <TError = ErrorType<unknown>,
+export const getPatchMeAutoRenewMutationOptions = <TError = ErrorType<ErrorEnvelope | AutoRenewInsufficientBalance>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMeAutoRenew>>, TError,{data: BodyType<AutoRenewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof patchMeAutoRenew>>, TError,{data: BodyType<AutoRenewInput>}, TContext> => {
 
@@ -921,12 +922,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type PatchMeAutoRenewMutationResult = NonNullable<Awaited<ReturnType<typeof patchMeAutoRenew>>>
     export type PatchMeAutoRenewMutationBody = BodyType<AutoRenewInput>
-    export type PatchMeAutoRenewMutationError = ErrorType<unknown>
+    export type PatchMeAutoRenewMutationError = ErrorType<ErrorEnvelope | AutoRenewInsufficientBalance>
 
     /**
  * @summary Enable or disable automatic monthly renewal from balance
  */
-export const usePatchMeAutoRenew = <TError = ErrorType<unknown>,
+export const usePatchMeAutoRenew = <TError = ErrorType<ErrorEnvelope | AutoRenewInsufficientBalance>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMeAutoRenew>>, TError,{data: BodyType<AutoRenewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof patchMeAutoRenew>>,
