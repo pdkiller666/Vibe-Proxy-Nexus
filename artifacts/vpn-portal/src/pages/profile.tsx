@@ -4,6 +4,7 @@ import { ApiError, useGetMe, useUpdateMe, useChangeMyEmail, useChangeMyPassword,
 import { UserCircle, Mail, KeyRound, Save, Users, Copy, Check, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { ReferralQrDialog } from "@/components/referral-qr-dialog";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -225,6 +226,11 @@ function ReferralSection() {
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           {copied ? "Скопировано" : "Скопировать"}
         </button>
+        <ReferralQrDialog
+          value={referralLink}
+          title="QR-код реферальной ссылки"
+          description="Отсканируйте код камерой — он откроет регистрацию по вашей реферальной ссылке."
+        />
       </div>
       <div className="flex gap-2 flex-wrap items-center">
         <div className="flex items-center gap-2 min-w-0">
@@ -242,6 +248,11 @@ function ReferralSection() {
           {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           {copiedCode ? "Скопировано" : "Скопировать"}
         </button>
+        <ReferralQrDialog
+          value={me.referralCode}
+          title="QR-код инвайт-кода"
+          description="Отсканируйте код или покажите его другу, чтобы он ввёл инвайт-код при регистрации."
+        />
       </div>
       <div className="flex gap-6 flex-wrap text-sm pt-1">
         <div>

@@ -49,6 +49,7 @@ import {
   Wallet, AlertTriangle, Settings, Shield, Download,
 } from "lucide-react";
 import { formatDate, formatBytes, ADMIN_PAGE_SIZE, PaginationBar } from "./admin-shared";
+import { ReferralQrDialog } from "@/components/referral-qr-dialog";
 
 export type SubscriptionFilter =
   | "all"
@@ -758,6 +759,13 @@ function InviteLinkRow({
         <div className="font-medium truncate">{link.note ?? <span className="text-muted-foreground italic">без заметки</span>}</div>
         <div className="flex items-center gap-1 mt-0.5">
           <span className="font-mono text-xs text-muted-foreground tracking-widest">{link.code}</span>
+          <ReferralQrDialog
+            value={`${window.location.origin}${basePath}/sign-up?ref=${link.code}`}
+            title="QR-код инвайт-ссылки"
+            description="Отсканируйте код камерой — он откроет регистрацию по этой инвайт-ссылке."
+            buttonLabel=""
+            className="border-0 px-1 py-0.5 text-xs"
+          />
           <button
             onClick={onCopyUrl}
             title="Скопировать ссылку"

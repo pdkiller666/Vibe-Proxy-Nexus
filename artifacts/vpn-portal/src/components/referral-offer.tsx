@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { ReferralQrDialog } from "@/components/referral-qr-dialog";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -115,6 +116,12 @@ export function ReferralOfferCard({
             <Share2 className="w-3.5 h-3.5" />
             Поделиться
           </button>
+          <ReferralQrDialog
+            value={link}
+            title="QR-код реферальной ссылки"
+            description="Отсканируйте код камерой — он откроет регистрацию по вашей реферальной ссылке."
+            buttonLabel="QR-код"
+          />
         </div>
       </div>
     );
@@ -173,6 +180,12 @@ export function ReferralOfferCard({
           <Share2 className="w-4 h-4" />
           Поделиться
         </button>
+        <ReferralQrDialog
+          value={details.link}
+          title="QR-код реферальной ссылки"
+          description="Отсканируйте код камерой — он откроет регистрацию по вашей реферальной ссылке."
+          buttonLabel="QR-код"
+        />
         <Link
           href="/dashboard?referrals=1"
           className="inline-flex items-center gap-1 text-sm font-semibold text-orange-700 hover:text-orange-900"

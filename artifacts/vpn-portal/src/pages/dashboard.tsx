@@ -36,6 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { OnboardingTip } from "@/components/onboarding-tip";
 import { useToast } from "@/hooks/use-toast";
 import { ReferralOfferCard } from "@/components/referral-offer";
+import { ReferralQrDialog } from "@/components/referral-qr-dialog";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -396,6 +397,11 @@ function ReferralSection() {
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               {copied ? "Скопировано" : "Скопировать ссылку"}
             </button>
+            <ReferralQrDialog
+              value={referralLink}
+              title="QR-код реферальной ссылки"
+              description="Отсканируйте код камерой — он откроет регистрацию по вашей реферальной ссылке."
+            />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
@@ -411,6 +417,11 @@ function ReferralSection() {
               {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               {copiedCode ? "Скопировано" : "Скопировать код"}
             </button>
+            <ReferralQrDialog
+              value={me.referralCode}
+              title="QR-код инвайт-кода"
+              description="Отсканируйте код или покажите его другу, чтобы он ввёл инвайт-код при регистрации."
+            />
           </div>
 
           {/* Механика */}
