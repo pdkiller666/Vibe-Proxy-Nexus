@@ -477,12 +477,15 @@ async function issueKeyForUserInner(
       if (node.managementApiUrl) {
         // Use UUID as the label/email — same rationale as local Xray:
         // labels can collide across users and corrupt per-user traffic stats.
-        // limitIp: 1 enforces one simultaneous source IP per key (= one device).
+        // Keep limitIp for compatibility with a custom node image if one is
+        // introduced later. The pinned vanilla Xray ignores it; concurrent WS
+        // control is handled separately at the proxy layer via sid.
         await addRemoteXrayClient(node, uuid, uuid, 1);
       } else {
         // Use UUID (not label) as the Xray "email" tag — labels can collide
         // across users and corrupt Xray's per-user dedup and traffic attribution.
-        // limitIp: 1 enforces one simultaneous source IP per key (= one device).
+        // See the remote branch above for why limitIp is retained but is not
+        // relied on for device/session enforcement.
         await addXrayClient(uuid, uuid, 1);
       }
       // Mark the key usable only now — replays of this idempotency key must

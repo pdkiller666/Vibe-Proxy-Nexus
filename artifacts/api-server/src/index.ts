@@ -1,10 +1,15 @@
 import http from "http";
 import net from "net";
+import { Duplex } from "stream";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedDefaultAdmin } from "./lib/seedAdmin";
 import { backfillReferralCodes } from "./lib/referralCode";
 import { VPN_WS_PATH } from "./lib/vless";
+import {
+  getVpnSessionIdFromRequestUrl,
+  VpnSessionRegistry,
+} from "./lib/vpnSessionLimit";
 
 const rawPort = process.env["PORT"];
 
@@ -32,6 +37,7 @@ const server = http.createServer(app);
 // Bound how long we wait to reach the local Xray inbound before giving up, so a
 // stuck/down Xray can't leak half-open client sockets.
 const XRAY_CONNECT_TIMEOUT_MS = 10000;
+const vpnSessionRegistry = new VpnSessionRegistry<Duplex>();
 
 server.on("upgrade", (req, socket, head) => {
   const pathOnly = (req.url ?? "").split("?")[0];
@@ -50,9 +56,24 @@ server.on("upgrade", (req, socket, head) => {
     return;
   }
 
+  const sessionId = getVpnSessionIdFromRequestUrl(req.url);
+  if (sessionId && !vpnSessionRegistry.tryAcquire(sessionId, socket)) {
+    // The HTTP upgrade has not completed yet, so a normal 503 makes the
+    // rejection unambiguous to clients and leaves the existing tunnel intact.
+    socket.end(
+      "HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
+    logger.warn({ sessionId: sessionId.slice(0, 8) }, "Rejected concurrent VPN WebSocket session");
+    return;
+  }
+
   const upstream = net.connect(XRAY_WS_PORT, XRAY_WS_HOST);
+  let tunnelClosed = false;
 
   const cleanup = () => {
+    if (tunnelClosed) return;
+    tunnelClosed = true;
+    if (sessionId) vpnSessionRegistry.release(sessionId, socket);
     socket.destroy();
     upstream.destroy();
   };
@@ -71,6 +92,8 @@ server.on("upgrade", (req, socket, head) => {
     }
 
     upstream.write(
+      // Xray validates request.URL.Path (not the query string), so it keeps
+      // accepting its configured `/vpnws` inbound while the relay uses sid.
       `${req.method} ${req.url} HTTP/1.1\r\n${headerLines.join("\r\n")}\r\n\r\n`,
     );
     if (head && head.length > 0) {
@@ -81,8 +104,10 @@ server.on("upgrade", (req, socket, head) => {
     upstream.pipe(socket);
   });
 
-  upstream.on("error", cleanup);
-  socket.on("error", cleanup);
+  upstream.once("error", cleanup);
+  upstream.once("close", cleanup);
+  socket.once("error", cleanup);
+  socket.once("close", cleanup);
 });
 
 server.on("error", (err) => {

@@ -43,6 +43,8 @@ export interface XrayOutboundParams {
    * If absent for an IP node, allowInsecure falls back to true.
    */
   certSha256?: string | null;
+  /** WebSocket path, including a canary `sid` when session limiting is enabled. */
+  wsPath?: string;
 }
 
 // ─── Internal constants ───────────────────────────────────────────────────────
@@ -178,7 +180,7 @@ function buildVlessOutbound(
       security: "tls",
       tlsSettings,
       wsSettings: {
-        path:    VPN_WS_PATH,
+        path:    params.wsPath ?? VPN_WS_PATH,
         headers: { Host: params.sni },
       },
     },

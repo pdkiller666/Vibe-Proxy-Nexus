@@ -214,6 +214,9 @@ git pull
 cd deploy/amvera-vpn-node
 docker compose build
 docker compose up -d
+# Обновить правило лимита сессий в HTTP-контексте Nginx:
+install -m 0644 nginx-session-limit.conf /etc/nginx/conf.d/vpn-session-limit.conf
+nginx -t && systemctl reload nginx
 # Удалить старые Docker-слои и build cache (освобождает 1–2 ГБ):
 docker system prune -af --volumes=false
 ```
@@ -223,6 +226,15 @@ docker system prune -af --volumes=false
 
 Существующие ключи сохраняются — `render-config.sh` при каждом старте переносит
 список `clients` из persistent-тома `/etc/xray` в обновлённый конфиг.
+
+### Постепенное ограничение WebSocket-сессий
+
+`nginx-session-limit.conf` создаёт общую зону Nginx, а `nginx-vps.conf` ограничивает
+`/vpnws?sid=...` одним одновременным подключением (`503` при втором). Пустой `sid`
+не учитывается, поэтому старые VLESS-ссылки с обычным `/vpnws` не меняют поведение.
+`sid` выдаёт основной API: сначала включите там `VPN_SESSION_LIMIT_MODE=canary` и
+перечислите тестовые UUID в `VPN_SESSION_LIMIT_CANARY_UUIDS`, а после проверки
+переводите на `all`.
 
 ---
 

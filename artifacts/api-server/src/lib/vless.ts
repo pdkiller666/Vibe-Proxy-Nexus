@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { VpnNode } from "@workspace/db";
 import { resolvePublicAddress } from "./domain";
+import { buildVpnWebSocketPath } from "./vpnSessionLimit";
 
 /**
  * WebSocket path that Xray listens on inside the container and that the Node
@@ -110,7 +111,7 @@ export function buildVlessLink(
     sni: node.sni,
     fp: "chrome",
     host: node.sni,
-    path: VPN_WS_PATH,
+    path: buildVpnWebSocketPath(VPN_WS_PATH, uuid),
     encryption: "none",
     ...(isIpNode && certSha256 ? { pinnedPeerCertSha256: certSha256 } : {}),
     ...(isIpNode && !certSha256 ? { allowInsecure: "1" } : {}),

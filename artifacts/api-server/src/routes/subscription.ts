@@ -21,6 +21,7 @@ import {
   isIpAddress,
   type XrayOutboundParams,
 } from "../lib/xrayClientConfig";
+import { buildVpnWebSocketPath } from "../lib/vpnSessionLimit";
 
 const router: IRouter = Router();
 
@@ -360,6 +361,7 @@ router.get(
             isIpNode:
               isIpAddress(resolved.host) || isIpAddress(node.sni),
             certSha256: node.certSha256 ?? null,
+            wsPath:     buildVpnWebSocketPath("/vpnws", key.uuid),
           };
         }),
       );
