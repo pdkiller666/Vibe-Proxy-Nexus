@@ -235,19 +235,6 @@ describe("buildXrayClientConfig — VLESS outbound (domain node)", () => {
     expect(stream.wsSettings.headers.Host).toBe(DOMAIN_OUTBOUND.sni);
   });
 
-  it("preserves a canary session ID in the WebSocket path when supplied", () => {
-    const config = buildXrayClientConfig([
-      { ...DOMAIN_OUTBOUND, wsPath: "/vpnws?sid=abcdefghijklmnopqrstuvwxyz012345" },
-    ]);
-    const vlessOutbound = (config.outbounds as Array<Record<string, unknown>>).find(
-      (outbound) => outbound.protocol === "vless",
-    );
-    const stream = vlessOutbound?.streamSettings as {
-      wsSettings: { path: string };
-    };
-
-    expect(stream.wsSettings.path).toBe("/vpnws?sid=abcdefghijklmnopqrstuvwxyz012345");
-  });
 });
 
 // ─── IP node TLS handling ─────────────────────────────────────────────────────

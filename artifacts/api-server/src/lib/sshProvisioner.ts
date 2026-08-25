@@ -394,14 +394,6 @@ function writeRemoteFileViaExec(
 // Nginx config generator
 // ---------------------------------------------------------------------------
 
-// This file is included by Ubuntu's stock nginx.conf from the HTTP context.
-// `limit_conn_zone` is invalid inside a site/server file, so it must be
-// deployed separately before a generated site starts using `limit_conn`.
-const NGINX_SESSION_LIMIT_HTTP_CONFIG = `# Managed by VPNexus provisioner.
-# Empty $arg_sid values are not counted: legacy /vpnws links are unaffected.
-limit_conn_zone $arg_sid zone=vpn_session_by_sid:10m;
-`;
-
 /**
  * Generate an HTTP-only nginx config for certbot's HTTP-01 challenge.
  * certbot --nginx will automatically add the HTTPS server block.
@@ -417,8 +409,6 @@ server {
 
     # VPN WebSocket traffic
     location /vpnws {
-        limit_conn        vpn_session_by_sid 1;
-        limit_conn_status 503;
         proxy_pass         http://127.0.0.1:10000;
         proxy_http_version 1.1;
         proxy_set_header   Upgrade    $http_upgrade;
@@ -464,8 +454,6 @@ server {
 
     # VPN WebSocket traffic
     location /vpnws {
-        limit_conn        vpn_session_by_sid 1;
-        limit_conn_status 503;
         proxy_pass         http://127.0.0.1:10000;
         proxy_http_version 1.1;
         proxy_set_header   Upgrade    $http_upgrade;
@@ -597,15 +585,7 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     emitStep(job, "⚙️  Настройка Nginx...");
     const nginxConfig = makeNginxHttpConfig(domain);
     await writeRemoteFileViaExec(conn, "/tmp/vpn-node-nginx.conf", nginxConfig, job);
-    await writeRemoteFileViaExec(
-      conn,
-      "/tmp/vpn-session-limit.conf",
-      NGINX_SESSION_LIMIT_HTTP_CONFIG,
-      job,
-    );
     const nginxSetup = [
-      "mkdir -p /etc/nginx/conf.d",
-      "cp /tmp/vpn-session-limit.conf /etc/nginx/conf.d/vpn-session-limit.conf",
       "cp /tmp/vpn-node-nginx.conf /etc/nginx/sites-available/vpn-node",
       "ln -sf /etc/nginx/sites-available/vpn-node /etc/nginx/sites-enabled/vpn-node",
       "rm -f /etc/nginx/sites-enabled/default",

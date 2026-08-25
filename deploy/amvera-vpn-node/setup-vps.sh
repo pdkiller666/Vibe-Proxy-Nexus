@@ -117,10 +117,6 @@ else
 fi
 
 # ── Nginx config ──────────────────────────────────────────────────────────────
-# limit_conn_zone is legal only in Nginx's http context; Ubuntu includes
-# /etc/nginx/conf.d/*.conf from that context by default.
-install -d /etc/nginx/conf.d
-cp nginx-session-limit.conf /etc/nginx/conf.d/vpn-session-limit.conf
 NGINX_CONF="/etc/nginx/sites-available/vpn-node"
 cp nginx-vps.conf "$NGINX_CONF"
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/vpn-node
