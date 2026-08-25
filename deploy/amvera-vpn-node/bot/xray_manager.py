@@ -49,10 +49,9 @@ def add_client(uuid: str, label: str, limit_ip: int | None = None) -> None:
         # only required for VLESS + XTLS-Reality/Vision (raw TCP). Omitting
         # it here keeps the config valid for the WS inbound.
         #
-        # limitIp (when > 0) restricts the number of simultaneous source IPs
-        # that can use this client UUID — enforces the "one device" policy at
-        # the Xray level so a leaked key can't be shared across multiple
-        # clients simultaneously.
+        # limitIp is retained as a compatibility hint for a custom Xray build.
+        # The pinned vanilla core does not reliably enforce it. Do not add a
+        # raw WebSocket/session limit here: one phone opens many WS tunnels.
         client: dict = {"id": uuid, "email": label}
         if limit_ip is not None and limit_ip > 0:
             client["limitIp"] = limit_ip

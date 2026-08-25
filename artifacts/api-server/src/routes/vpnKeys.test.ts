@@ -465,6 +465,21 @@ describe("Global slot limit enforced across different nodes", () => {
       .set("Cookie", userCookie)
       .send({ nodeId: nodeBId });
     expect(retryRes.status).toBe(409);
+
+    // Revoking the first key must release the same slot, so a subsequent
+    // request can issue a replacement on another node.
+    const revokeRes = await request
+      .delete(`/api/vpn-keys/${firstRes.body.id}`)
+      .set("Cookie", userCookie);
+    expect(revokeRes.status).toBe(204);
+
+    const replacementRes = await request
+      .post("/api/vpn-keys")
+      .set("Cookie", userCookie)
+      .send({ nodeId: nodeBId });
+    expect(replacementRes.status).toBe(201);
+    expect(replacementRes.body.id).not.toBe(firstRes.body.id);
+    createdKeyIds.push(replacementRes.body.id);
   });
 
   it("allows at most one key when two concurrent requests race for the same slot", async () => {

@@ -37,7 +37,7 @@ interface XrayClient {
   id: string;
   email?: string;
   flow?: string;
-  /** Maximum simultaneous source IPs allowed for this client (Xray enforces at protocol level). */
+  /** Compatibility hint for custom Xray builds; ignored by the pinned vanilla core. */
   limitIp?: number;
 }
 

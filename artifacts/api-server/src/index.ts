@@ -75,7 +75,8 @@ server.on("upgrade", (req, socket, head) => {
 
     upstream.write(
       // Xray validates request.URL.Path (not the query string), so it keeps
-      // accepting its configured `/vpnws` inbound while the relay uses sid.
+      // accepting its configured `/vpnws` inbound without transport-specific
+      // session state in this relay.
       `${req.method} ${req.url} HTTP/1.1\r\n${headerLines.join("\r\n")}\r\n\r\n`,
     );
     if (head && head.length > 0) {

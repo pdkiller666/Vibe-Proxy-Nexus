@@ -479,7 +479,8 @@ async function issueKeyForUserInner(
         // labels can collide across users and corrupt per-user traffic stats.
         // Keep limitIp for compatibility with a custom node image if one is
         // introduced later. The pinned vanilla Xray ignores it; concurrent WS
-        // control is handled separately at the proxy layer via sid.
+        // streams are intentionally not limited because they do not identify a
+        // physical device.
         await addRemoteXrayClient(node, uuid, uuid, 1);
       } else {
         // Use UUID (not label) as the Xray "email" tag — labels can collide
