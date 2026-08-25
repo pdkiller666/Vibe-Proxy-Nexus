@@ -98,5 +98,11 @@ chown -R node "$(dirname "$XRAY_CONFIG_PATH")" || true
 chmod -R u+rwX "$(dirname "$XRAY_CONFIG_PATH")"
 
 mkdir -p /var/log/supervisor
+# Xray runs as root, while the web/API process runs as node and reads its
+# supervisor tail through the admin node-log endpoint. Pre-create the files so
+# supervisor keeps permissions that allow the node user to read them.
+touch /var/log/supervisor/xray.log /var/log/supervisor/xray-error.log
+chown node:node /var/log/supervisor/xray.log /var/log/supervisor/xray-error.log
+chmod 0660 /var/log/supervisor/xray.log /var/log/supervisor/xray-error.log
 
 exec supervisord -c /app/supervisord.conf
