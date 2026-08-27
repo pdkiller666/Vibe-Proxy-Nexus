@@ -28,6 +28,7 @@ export async function buildMeData(user: User, requestHost?: string) {
       trafficLimitGb: plansTable.trafficLimitGb,
       extraTrafficGb: subscriptionsTable.extraTrafficGb,
       trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
+      carriedOverPeriodBytes: subscriptionsTable.carriedOverPeriodBytes,
       isTrial: subscriptionsTable.isTrial,
     })
     .from(subscriptionsTable)
@@ -91,7 +92,13 @@ export async function buildMeData(user: User, requestHost?: string) {
     .where(and(eq(vpnKeysTable.userId, user.id), isNull(vpnKeysTable.revokedAt)));
 
   const activeKeyCount = keyCountResult?.cnt ?? 0;
-  const periodUsageBytes = Number(keyCountResult?.periodUp ?? 0) + Number(keyCountResult?.periodDown ?? 0);
+  // Add bytes banked from keys already revoked for hitting the cap this
+  // period (see subscriptions.carriedOverPeriodBytes schema comment) —
+  // otherwise the dashboard's "used / limit" bar would drop back to (near)
+  // zero the moment enforceTrafficLimits() revokes an over-limit key, even
+  // though the user hasn't actually been given any new headroom yet.
+  const periodUsageBytes =
+    Number(keyCountResult?.periodUp ?? 0) + Number(keyCountResult?.periodDown ?? 0) + (activeSubscription?.carriedOverPeriodBytes ?? 0);
   // Extra device slots live on the active subscription row, not the user —
   // without an active subscription there is no slot to report at all (slots
   // bought under a since-expired/switched subscription do not carry over).

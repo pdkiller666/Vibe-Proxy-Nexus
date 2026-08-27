@@ -156,6 +156,7 @@ export async function enforceTrafficLimits(): Promise<number> {
         subscriptionId: subscriptionsTable.id,
         trafficLimitGb: plansTable.trafficLimitGb,
         extraTrafficGb: subscriptionsTable.extraTrafficGb,
+        carriedOverPeriodBytes: subscriptionsTable.carriedOverPeriodBytes,
       })
       .from(subscriptionsTable)
       .innerJoin(plansTable, eq(plansTable.id, subscriptionsTable.planId))
@@ -178,8 +179,13 @@ export async function enforceTrafficLimits(): Promise<number> {
       subscriptionId: currentPlanLimitByUser.subscriptionId,
       trafficLimitGb: currentPlanLimitByUser.trafficLimitGb,
       extraTrafficGb: currentPlanLimitByUser.extraTrafficGb,
-      periodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`.as(
-        "period_bytes",
+      carriedOverPeriodBytes: currentPlanLimitByUser.carriedOverPeriodBytes,
+      // Bytes from still-active keys only — carriedOverPeriodBytes (banked
+      // from keys already revoked for hitting the cap, see schema comment)
+      // is added in JS below so it isn't multiplied by however many active
+      // keys the user currently has via this GROUP BY.
+      activeKeyPeriodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`.as(
+        "active_key_period_bytes",
       ),
     })
     .from(vpnKeysTable)
@@ -190,8 +196,16 @@ export async function enforceTrafficLimits(): Promise<number> {
       currentPlanLimitByUser.subscriptionId,
       currentPlanLimitByUser.trafficLimitGb,
       currentPlanLimitByUser.extraTrafficGb,
+      currentPlanLimitByUser.carriedOverPeriodBytes,
     );
-  const usage = rawUsage.map((r) => ({ ...r, periodBytes: Number(r.periodBytes) }));
+  const usage = rawUsage.map((r) => ({
+    ...r,
+    // Total period usage = still-active keys' bytes + bytes banked from keys
+    // already revoked for hitting the cap this period. Without the latter,
+    // revoking an over-limit key would make its usage vanish from this sum
+    // the instant a replacement key (which starts at 0) is issued.
+    periodBytes: Number(r.activeKeyPeriodBytes) + r.carriedOverPeriodBytes,
+  }));
 
   let revokedUsers = 0;
 
@@ -223,20 +237,22 @@ export async function enforceTrafficLimits(): Promise<number> {
           status: subscriptionsTable.status,
           extraTrafficGb: subscriptionsTable.extraTrafficGb,
           trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
+          carriedOverPeriodBytes: subscriptionsTable.carriedOverPeriodBytes,
         })
         .from(subscriptionsTable)
         .where(eq(subscriptionsTable.id, row.subscriptionId));
       if (!freshSub || freshSub.status !== "active") return { act: false as const };
 
-      const [{ freshPeriodBytes }] = await tx
+      const [{ freshActiveKeyPeriodBytes }] = await tx
         .select({
-          freshPeriodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`,
+          freshActiveKeyPeriodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`,
         })
         .from(vpnKeysTable)
         .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
+      const freshPeriodBytes = Number(freshActiveKeyPeriodBytes) + freshSub.carriedOverPeriodBytes;
 
       const freshLimitBytes = (trafficLimitGb + freshSub.extraTrafficGb) * 1024 * 1024 * 1024;
-      if (Number(freshPeriodBytes) < freshLimitBytes) {
+      if (freshPeriodBytes < freshLimitBytes) {
         // A concurrent top-up (or renewal) already resolved this since the
         // batch query ran — nothing to revoke, nothing to flag.
         return { act: false as const };
@@ -257,6 +273,21 @@ export async function enforceTrafficLimits(): Promise<number> {
         .update(vpnKeysTable)
         .set({ revokedAt: now, revokedReason: "traffic_limit", xrayCleanupPendingAt: now })
         .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
+
+      // Bank the bytes these keys had accumulated onto the subscription
+      // itself (see carriedOverPeriodBytes schema comment) — otherwise the
+      // moment these keys are revoked, their usage vanishes from every future
+      // "sum non-revoked keys" check, and a subsequent top-up + reissue would
+      // silently hand the user a full fresh quota instead of just the newly
+      // purchased headroom on top of what they'd already used.
+      const revokedBytes = keysToRevoke.reduce(
+        (sum, { key }) => sum + key.periodUpBytes + key.periodDownBytes,
+        0,
+      );
+      await tx
+        .update(subscriptionsTable)
+        .set({ carriedOverPeriodBytes: sql`${subscriptionsTable.carriedOverPeriodBytes} + ${revokedBytes}` })
+        .where(eq(subscriptionsTable.id, row.subscriptionId));
 
       // Persist the "blocked" flag on the subscription itself — this is what
       // closes the reissue loophole: keyIssuance.ts refuses to issue a brand

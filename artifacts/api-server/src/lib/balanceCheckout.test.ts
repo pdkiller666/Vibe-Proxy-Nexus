@@ -320,6 +320,67 @@ describe("checkoutFromBalance", () => {
     await collectCreated(userId);
   });
 
+  // ── Scenario 4c: Concurrent requests, different amounts → unique-index race ─
+  it("scenario 4c: two concurrent requests of the same type but different amounts → loser gets 409 concurrent_payment_conflict, not 500", async () => {
+    const initialBalance = 100_000;
+    const { id: userId } = await seedUser(initialBalance);
+
+    // Two subscription plans with different prices. The dedup checks (fast-path
+    // and inner-tx) only match an existing pending payment of the SAME
+    // amountRub, so two concurrent checkouts for different plans (different
+    // amounts) both pass dedup and race on the payments_one_pending_per_user_type_idx
+    // unique index INSERT instead.
+    const [planA] = await db
+      .insert(plansTable)
+      .values({ name: `Concurrent plan A ${uid()}`, priceRub: 300, durationDays: 30, billingType: "monthly" })
+      .returning({ id: plansTable.id });
+    const [planB] = await db
+      .insert(plansTable)
+      .values({ name: `Concurrent plan B ${uid()}`, priceRub: 500, durationDays: 30, billingType: "monthly" })
+      .returning({ id: plansTable.id });
+    planIds.push(planA!.id, planB!.id);
+
+    // Delay confirmPaymentById so the winner's payment row stays 'pending'
+    // long enough for the loser's INSERT to actually race against it (rather
+    // than finding it already 'confirmed', which would not collide on the
+    // status='pending' partial unique index).
+    vi.mocked(confirmPaymentById).mockImplementation(async (paymentId: number) => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await db.update(paymentsTable).set({ status: "confirmed" }).where(eq(paymentsTable.id, paymentId));
+      const [p] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId));
+      return { ok: true as const, payment: p! };
+    });
+
+    const [r1, r2] = await Promise.all([
+      checkoutFromBalance(userId, { kind: "subscription", planId: planA!.id }),
+      checkoutFromBalance(userId, { kind: "subscription", planId: planB!.id }),
+    ]);
+
+    const results = [r1, r2];
+    const successes = results.filter((r) => r.ok);
+    const failures = results.filter((r) => !r.ok);
+
+    // Exactly one wins the unique index, the other loses the race.
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+
+    const failure = failures[0]!;
+    if (failure.ok) throw new Error("expected loser to fail");
+    expect(failure.status).toBe(409);
+    expect(failure.error).toBe("concurrent_payment_conflict");
+
+    // Balance debited exactly once (only the winner's debit).
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    const winnerAmount = successes[0]!.ok ? successes[0]!.result.amountRub : 0;
+    expect(user!.balanceKopecks).toBe(initialBalance - winnerAmount * 100);
+
+    // No orphaned subscription from the loser's rolled-back transaction.
+    const subs = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
+    expect(subs).toHaveLength(1);
+
+    await collectCreated(userId);
+  }, 10_000);
+
   // ── Scenario 5: confirmPaymentById fails → compensation ─────────────────────
   it("scenario 5: confirmPaymentById fails (payment still pending) → balance refunded, refund tx created", async () => {
     const initialBalance = PLAN_PRICE_RUB * 100 * 2;

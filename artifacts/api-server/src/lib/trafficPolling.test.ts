@@ -7,7 +7,7 @@
  * inflating the fresh period with all historical traffic.
  */
 import { randomBytes } from "node:crypto";
-import { eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, plansTable, subscriptionsTable, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { applyTrafficDeltas, enforceTrafficLimits } from "./trafficPolling";
@@ -665,5 +665,122 @@ describe("enforceTrafficLimits", () => {
 
     const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
     expect(sub!.trafficLimitExceededAt).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // carriedOverPeriodBytes: a top-up + key reissue must not erase usage that
+  // accrued on the key(s) enforceTrafficLimits revoked for hitting the cap.
+  // -------------------------------------------------------------------------
+
+  it("banks the revoked key's period bytes onto the subscription's carriedOverPeriodBytes", async () => {
+    const planId = await seedPlan(5); // 5 GB cap
+    const subscriptionId = await seedActiveSubscription(planId);
+
+    const USED_BYTES = 6 * 1024 * 1024 * 1024; // 6 GB — over the 5 GB cap
+    const upBytes = Math.floor(USED_BYTES / 2);
+    const downBytes = Math.ceil(USED_BYTES / 2);
+    const keyId = await seedKey({ periodUpBytes: upBytes, periodDownBytes: downBytes });
+
+    await enforceTrafficLimits();
+
+    const key = await getKey(keyId);
+    expect(key.revokedAt).not.toBeNull();
+
+    const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
+    expect(sub!.carriedOverPeriodBytes).toBe(upBytes + downBytes);
+  });
+
+  it(
+    "exceed limit -> blocked -> buy more traffic -> remaining allowance is (new cap - previously used), " +
+      "not the full new cap",
+    async () => {
+      // 1. User on a 5 GB plan uses 6 GB and gets blocked.
+      const PLAN_LIMIT_GB = 5;
+      const planId = await seedPlan(PLAN_LIMIT_GB);
+      const subscriptionId = await seedActiveSubscription(planId);
+
+      const USED_BYTES = 6 * 1024 * 1024 * 1024;
+      const originalKeyId = await seedKey({
+        periodUpBytes: Math.floor(USED_BYTES / 2),
+        periodDownBytes: Math.ceil(USED_BYTES / 2),
+      });
+
+      await enforceTrafficLimits();
+
+      const revokedKey = await getKey(originalKeyId);
+      expect(revokedKey.revokedAt).not.toBeNull();
+
+      const [blockedSub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
+      expect(blockedSub!.trafficLimitExceededAt).not.toBeNull();
+      expect(blockedSub!.carriedOverPeriodBytes).toBe(USED_BYTES);
+
+      // 2. User buys 5 more GB. This mirrors exactly what confirmPaymentById's
+      // extra_traffic branch does to the subscription row (raise
+      // extraTrafficGb, clear trafficLimitExceededAt) — carriedOverPeriodBytes
+      // is untouched by a top-up, only by a fresh revoke or a brand-new
+      // subscription row (renewal).
+      const TOPUP_GB = 5;
+      await db
+        .update(subscriptionsTable)
+        .set({ extraTrafficGb: TOPUP_GB, trafficLimitExceededAt: null })
+        .where(eq(subscriptionsTable.id, subscriptionId));
+
+      // 3. ensureActiveKeyForUser sees zero active keys and calls
+      // issueKeyForUser, which inserts a brand new key at 0 period bytes —
+      // reproduced directly here rather than invoking the real Xray-backed
+      // issuance path.
+      const newKeyId = await seedKey({ periodUpBytes: 0, periodDownBytes: 0 });
+
+      // 4. Effective period usage — the same formula enforceTrafficLimits and
+      // buildMeData (meResponse.ts) now use — must still reflect the 6 GB
+      // already used, not reset to 0 just because the key backing it changed.
+      const [{ activeKeyBytes }] = await db
+        .select({
+          activeKeyBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`,
+        })
+        .from(vpnKeysTable)
+        .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
+      const [toppedUpSub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
+      const effectiveUsageBytes = Number(activeKeyBytes) + toppedUpSub!.carriedOverPeriodBytes;
+      expect(effectiveUsageBytes).toBe(USED_BYTES);
+
+      const newCapBytes = (PLAN_LIMIT_GB + TOPUP_GB) * 1024 * 1024 * 1024;
+      const remainingAllowanceBytes = newCapBytes - effectiveUsageBytes;
+      // (5 + 5) GB cap - 6 GB already used = 4 GB left, NOT the full 10 GB.
+      expect(remainingAllowanceBytes).toBe(4 * 1024 * 1024 * 1024);
+
+      // 5. Sanity check the fix end-to-end through enforceTrafficLimits
+      // itself: the reissued key must survive (6 GB used < 10 GB cap)...
+      await enforceTrafficLimits();
+      const survivingKey = await getKey(newKeyId);
+      expect(survivingKey.revokedAt).toBeNull();
+
+      // ...but once the user actually consumes the remaining headroom, the
+      // cap is enforced again — proving carriedOverPeriodBytes participates
+      // in the real revoke decision, not just this test's own arithmetic.
+      await db
+        .update(vpnKeysTable)
+        .set({ periodUpBytes: Math.floor(remainingAllowanceBytes / 2), periodDownBytes: Math.ceil(remainingAllowanceBytes / 2) })
+        .where(eq(vpnKeysTable.id, newKeyId));
+      await enforceTrafficLimits();
+      const exhaustedKey = await getKey(newKeyId);
+      expect(exhaustedKey.revokedAt).not.toBeNull();
+    },
+  );
+
+  it("a subscription renewal (new subscription row) starts carriedOverPeriodBytes at 0, unaffected by a prior period's carry-over", async () => {
+    // Old, exhausted subscription with banked usage from a prior period.
+    const planId = await seedPlan(5);
+    const oldSubscriptionId = await seedActiveSubscription(planId);
+    await db
+      .update(subscriptionsTable)
+      .set({ carriedOverPeriodBytes: 6 * 1024 * 1024 * 1024, status: "expired" })
+      .where(eq(subscriptionsTable.id, oldSubscriptionId));
+
+    // Renewal always creates a brand-new subscription row (confirmPayment.ts
+    // activation branch) rather than mutating the old one.
+    const newSubscriptionId = await seedActiveSubscription(planId);
+    const [newSub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, newSubscriptionId));
+    expect(newSub!.carriedOverPeriodBytes).toBe(0);
   });
 });

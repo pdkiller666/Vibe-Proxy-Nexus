@@ -224,13 +224,20 @@ router.get(
         (sum, key) => sum + key.periodUpBytes,
         0,
       );
+      // Bytes banked from keys already revoked for hitting the cap this
+      // period (see subscriptions.carriedOverPeriodBytes schema comment) are
+      // folded entirely into "download" here — Happ/v2rayNG only render a
+      // single combined progress bar from upload+download vs. total, so the
+      // up/down split doesn't matter, but the total consumed must, or a
+      // top-up right after a limit-triggered revoke would show the usage bar
+      // reset to (near) zero instead of reflecting what was already used.
       const periodDownBytes = keys.reduce(
         (sum, key) => sum + key.periodDownBytes,
         0,
-      );
+      ) + activeSubscription.carriedOverPeriodBytes;
 
       const totalBytes = activePlan?.trafficLimitGb
-        ? activePlan.trafficLimitGb * 1024 * 1024 * 1024
+        ? (activePlan.trafficLimitGb + activeSubscription.extraTrafficGb) * 1024 * 1024 * 1024
         : 0;
 
       const parts = [

@@ -123,6 +123,7 @@ async function enrichUsersWithTraffic(users: User[]) {
       extraDeviceSlots: subscriptionsTable.extraDeviceSlots,
       extraTrafficGb: subscriptionsTable.extraTrafficGb,
       trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
+      carriedOverPeriodBytes: subscriptionsTable.carriedOverPeriodBytes,
       isTrial: subscriptionsTable.isTrial,
     })
     .from(subscriptionsTable)
@@ -159,6 +160,7 @@ async function enrichUsersWithTraffic(users: User[]) {
   const extraDeviceSlotsByUser = new Map(activeRows.map((r) => [r.userId, r.extraDeviceSlots]));
   const extraTrafficGbByUser = new Map(activeRows.map((r) => [r.userId, r.extraTrafficGb]));
   const trafficLimitExceededAtByUser = new Map(activeRows.map((r) => [r.userId, r.trafficLimitExceededAt]));
+  const carriedOverPeriodBytesByUser = new Map(activeRows.map((r) => [r.userId, r.carriedOverPeriodBytes]));
   const isTrialByUser = new Map(activeRows.map((r) => [r.userId, r.isTrial]));
   const trialEndsAtByUser = new Map(activeRows.map((r) => [r.userId, r.endsAt]));
 
@@ -214,7 +216,13 @@ async function enrichUsersWithTraffic(users: User[]) {
     const trafficLimitGb = limitByUser.get(user.id) ?? null;
     const extraTrafficGb = extraTrafficGbByUser.get(user.id) ?? 0;
     const current = currentByUser.get(user.id);
-    const periodBytes = (traffic?.periodUpBytes ?? 0) + (traffic?.periodDownBytes ?? 0);
+    // Add bytes banked from keys already revoked for hitting the cap this
+    // period (see subscriptions.carriedOverPeriodBytes schema comment) — a
+    // top-up + reissue would otherwise make this flag flip back to "not
+    // exceeded" the instant the old key's usage is replaced by a fresh
+    // zero-usage key, even though the user hasn't been granted new headroom.
+    const carriedOverPeriodBytes = carriedOverPeriodBytesByUser.get(user.id) ?? 0;
+    const periodBytes = (traffic?.periodUpBytes ?? 0) + (traffic?.periodDownBytes ?? 0) + carriedOverPeriodBytes;
     // Raw sql<> expressions come back from pg as strings, not Date objects —
     // unlike Drizzle-mapped timestamp columns. Coerce explicitly before math.
     const vpnLastActiveAtRaw = traffic?.vpnLastActiveAt ?? null;

@@ -1151,6 +1151,18 @@ try {
   // never blocks subscription creation, payments, or billing updates.
   await ensureM41SubscriptionExpiryIndex();
 
+  // ── M-42: subscriptions.carried_over_period_bytes ────────────────────────
+  // Banks bytes from VPN keys enforceTrafficLimits() revoked for hitting the
+  // traffic cap (revokedReason: 'traffic_limit'), so a later top-up that
+  // reissues a fresh (zero-usage) key doesn't make the user's already-used
+  // traffic vanish from the running total for this subscription period. See
+  // the column's schema comment in lib/db/src/schema/subscriptions.ts.
+  await client.query(`
+    ALTER TABLE subscriptions
+      ADD COLUMN IF NOT EXISTS carried_over_period_bytes bigint NOT NULL DEFAULT 0;
+  `);
+  console.log("heal-schema: M-42 subscriptions.carried_over_period_bytes column added");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

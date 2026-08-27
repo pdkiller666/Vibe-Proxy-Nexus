@@ -60,7 +60,8 @@ export type BalanceCheckoutError =
         | "payment_in_progress"
         | "pending_payment_not_found"
         | "pending_payment_not_pending"
-        | "pending_payment_id_required";
+        | "pending_payment_id_required"
+        | "concurrent_payment_conflict";
     }
   | { status: 400; error: string }
   | { status: 402; error: "insufficient_balance"; balanceKopecks: number; requiredKopecks: number }
@@ -389,6 +390,25 @@ export async function checkoutFromBalance(
       } as const;
       const error = switchErrors[err.message as keyof typeof switchErrors];
       if (error) return { ok: false, status: 409, error };
+    }
+    // PostgreSQL unique_violation (23505) on payments_one_pending_per_user_type_idx:
+    // the pre-tx dedup check and the inner-tx dedup re-check only match an
+    // existing pending payment of the SAME amountRub, so two concurrent
+    // checkouts of the same type but different amount (e.g. two different
+    // plans, or a price change between requests) can both pass the dedup
+    // checks and race on the INSERT itself. The FOR UPDATE user-row lock
+    // serialises the two transactions, but the loser's INSERT still hits the
+    // partial unique index because the winner's row is a different amount.
+    // Drizzle wraps pg errors in DrizzleQueryError; the original pg code may
+    // be on err.code directly (older drizzle/pg versions) or on err.cause.code
+    // (newer Node.js Error cause chain). Check both — same pattern used in
+    // referralCode.ts, admin/users.ts, subscriptions.ts, extraTrafficOrder.ts.
+    const pgCode =
+      (err as { code?: string; cause?: { code?: string } })?.code ??
+      (err as { cause?: { code?: string } })?.cause?.code;
+    if (pgCode === "23505") {
+      logger.info({ userId, paymentType }, "balance_checkout: concurrent insert lost race on unique index");
+      return { ok: false, status: 409, error: "concurrent_payment_conflict" };
     }
     logger.error({ err, userId }, "balance_checkout: tx1 failed");
     return { ok: false, status: 500, error: "Ошибка при обработке платежа. Попробуйте позже." };

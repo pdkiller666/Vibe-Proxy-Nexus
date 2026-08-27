@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -59,6 +59,23 @@ export const subscriptionsTable = pgTable(
     // need to clear it because renewals create a brand new subscription row
     // that starts with this null by default.
     trafficLimitExceededAt: timestamp("traffic_limit_exceeded_at", { withTimezone: true }),
+    // Period bytes "banked" from VPN keys that enforceTrafficLimits() revoked
+    // for exceeding the traffic cap (revokedReason: 'traffic_limit') while
+    // this subscription row was the active one. Every usage check that sums
+    // vpn_keys.periodUpBytes/periodDownBytes only does so over non-revoked
+    // keys (isNull(revokedAt)) — without this column, the instant a key is
+    // revoked for hitting the cap, its accumulated usage becomes invisible.
+    // Then a top-up that clears trafficLimitExceededAt and triggers
+    // ensureActiveKeyForUser (keyIssuance.ts) would reissue a brand new key
+    // starting at 0 period bytes, handing the user a full fresh quota instead
+    // of just the newly purchased headroom on top of what they'd already
+    // used. Every place that computes "how much of this period has the user
+    // used" must add this to the sum over active keys.
+    // Never touched by a renewal: a renewal always activates a brand-new
+    // subscription row (see schema comment on extraTrafficGb above), which
+    // starts this back at 0 — matching periodUpBytes/periodDownBytes being
+    // reset to 0 on the (surviving) active keys in confirmPayment.ts.
+    carriedOverPeriodBytes: bigint("carried_over_period_bytes", { mode: "number" }).notNull().default(0),
     // True only for subscriptions created as a free trial during registration.
     // Admin-assigned subscriptions (PATCH /admin/users/:userId/subscription) are
     // inserted with isTrial=false (the default), so those users never see the

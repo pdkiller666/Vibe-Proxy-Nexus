@@ -14,7 +14,9 @@ const router: IRouter = Router();
  * and the balance is debited atomically. On confirm failure the balance is refunded.
  *
  * Errors:
- *   409 — feature flag balancePaymentsEnabled=false
+ *   409 — feature flag balancePaymentsEnabled=false, a payment is already in
+ *         progress, or two concurrent checkouts of the same type raced past
+ *         the dedup check and lost the payments_one_pending_per_user_type_idx race
  *   400 — invalid target (hourly plan, zero price, no active subscription, etc.)
  *   402 — insufficient balance { error: "insufficient_balance", balanceKopecks, requiredKopecks }
  *   500 — unexpected technical error (balance refunded automatically)
@@ -63,6 +65,7 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
         pending_payment_not_found: "Эта заявка на оплату не найдена. Обновите страницу.",
         pending_payment_not_pending: "Этот платёж уже обработан. Обновите страницу, чтобы увидеть актуальный статус.",
         pending_payment_id_required: "Для оплаты этой заявки с баланса обновите страницу и попробуйте ещё раз.",
+        concurrent_payment_conflict: "У вас уже есть незавершённая заявка. Обновите страницу и попробуйте снова.",
       } as const;
       res.status(409).json({ error: messages[outcome.error] });
       return;
