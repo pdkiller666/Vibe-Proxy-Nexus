@@ -516,13 +516,32 @@ export default function Keys() {
   const [platform, setPlatform] = useState<Platform>(getInitialPlatform);
   const [adminKeySearch, setAdminKeySearch] = useState("");
   const [adminKeyStatus, setAdminKeyStatus] = useState<"all" | "active" | "revoked">("all");
+  const [adminSearchDefaulted, setAdminSearchDefaulted] = useState(false);
 
   function switchPlatform(p: Platform) {
     setPlatform(p);
     try { localStorage.setItem("vpn-platform", p); } catch { /* ignore */ }
   }
 
+  // The "all users' keys" table below is a management tool and legitimately
+  // lists everyone — but it should not dump every customer's devices in the
+  // admin's face by default. Point the search at the admin's own email once
+  // `me` has loaded, without stomping on a search the admin already typed.
+  useEffect(() => {
+    if (!adminSearchDefaulted && isAdmin && me?.email) {
+      setAdminKeySearch(me.email);
+      setAdminSearchDefaulted(true);
+    }
+  }, [adminSearchDefaulted, isAdmin, me?.email]);
+
   const activeKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => !k.revokedAt);
+  // Admins see every user's keys in `keys` (needed for the management table
+  // below), but the connection guide at the top of the page must only ever
+  // show the admin's OWN devices — otherwise it leaks every customer's
+  // device labels into the admin's personal "how to connect" flow.
+  const myActiveKeys = isAdmin
+    ? activeKeys.filter((k: { userId?: number }) => k.userId === me?.id)
+    : activeKeys;
   const visibleKeys = (keys ?? []).filter((k: { revokedAt?: string | null }) => isAdmin || !k.revokedAt);
   const filteredVisibleKeys = visibleKeys.filter((key) => {
     if (isAdmin && adminKeyStatus === "active" && key.revokedAt) return false;
@@ -694,7 +713,7 @@ export default function Keys() {
                   : "можно подключить VPN"}
             </span>
           </div>
-          {activeKeys.length === 0 && hasSlotAvailable ? (
+          {myActiveKeys.length === 0 && hasSlotAvailable ? (
             <button
               type="button"
               onClick={() => setShowAddDeviceModal(true)}
@@ -820,7 +839,7 @@ export default function Keys() {
           </OnboardingTip>
 
           {/* Subscription URL — Android */}
-          {canIssue && subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && myActiveKeys.length > 0 && (
             <CollapsibleConnectionStep
               id="connection-android-link"
               icon={<RefreshCw className="w-4 h-4 text-primary" />}
@@ -853,7 +872,7 @@ export default function Keys() {
           )}
 
           {/* Xray config with Russian bypass — Android / Windows */}
-          {canIssue && subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && myActiveKeys.length > 0 && (
             <CollapsibleConnectionStep
               id="connection-android-routing"
               icon={<Route className="w-4 h-4 text-green-500" />}
@@ -877,7 +896,7 @@ export default function Keys() {
                 </div>
 
                 <div className="space-y-2">
-                  {activeKeys.map((key) => {
+                  {myActiveKeys.map((key) => {
                     const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
                     return (
                       <div key={key.id} className="space-y-1">
@@ -956,7 +975,7 @@ export default function Keys() {
             </p>
           </OnboardingTip>
 
-          {canIssue && subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && myActiveKeys.length > 0 && (
             <CollapsibleConnectionStep
               id="connection-windows-link"
               icon={<RefreshCw className="w-4 h-4 text-primary" />}
@@ -984,7 +1003,7 @@ export default function Keys() {
             </CollapsibleConnectionStep>
           )}
 
-          {canIssue && subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && myActiveKeys.length > 0 && (
             <CollapsibleConnectionStep
               id="connection-windows-routing"
               icon={<Route className="w-4 h-4 text-green-500" />}
@@ -993,7 +1012,7 @@ export default function Keys() {
             >
               <div className="space-y-4">
                 <div className="space-y-2">
-                  {activeKeys.map((key) => {
+                  {myActiveKeys.map((key) => {
                     const xrayUrl = `${subscription.url}?format=xray&key=${key.id}`;
                     return (
                       <div key={key.id} className="space-y-1">
@@ -1065,7 +1084,7 @@ export default function Keys() {
           </OnboardingTip>
 
           {/* Subscription URL — iOS */}
-          {canIssue && subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && myActiveKeys.length > 0 && (
             <CollapsibleConnectionStep
               id="connection-ios-link"
               icon={<RefreshCw className="w-4 h-4 text-primary" />}
@@ -1095,7 +1114,7 @@ export default function Keys() {
           )}
 
           {/* iOS Happ routing profile */}
-          {canIssue && subscription?.url && activeKeys.length > 0 && (
+          {canIssue && subscription?.url && myActiveKeys.length > 0 && (
             <CollapsibleConnectionStep
               id="connection-ios-routing"
               icon={<Route className="w-4 h-4 text-green-500" />}

@@ -12,6 +12,7 @@ import {
   type Payment,
 } from "@workspace/db";
 import { ensureActiveKeyForUser } from "./keyIssuance";
+import { lockCurrentSubscription } from "./subscription";
 
 type PaymentNotificationOptions = {
   /** Background renewals use their own Dashboard notification and must never open the first-payment modal. */
@@ -184,36 +185,22 @@ export async function confirmPaymentById(
           throw new Error("PAYMENT_STATE_CHANGED");
         }
 
-        const [sub] = await tx
-          .select({ id: subscriptionsTable.id, status: subscriptionsTable.status, userId: subscriptionsTable.userId })
-          .from(subscriptionsTable)
-          .where(eq(subscriptionsTable.id, payment.subscriptionId!));
-
-        // If the original subscription is no longer active (e.g. the user
-        // renewed between creating the payment and admin confirming it), fall
-        // back to the user's current active subscription so the paid traffic
-        // is not silently lost.
-        let targetSubId: number;
-        let targetUserId: number;
-        if (!sub || sub.status !== "active") {
-          const [currentActive] = await tx
-            .select({ id: subscriptionsTable.id, userId: subscriptionsTable.userId })
-            .from(subscriptionsTable)
-            .where(
-              and(
-                eq(subscriptionsTable.userId, payment.userId),
-                eq(subscriptionsTable.status, "active"),
-              ),
-            )
-            .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
-            .limit(1);
-          if (!currentActive) throw new Error("SUBSCRIPTION_NOT_ACTIVE");
-          targetSubId = currentActive.id;
-          targetUserId = currentActive.userId;
-        } else {
-          targetSubId = sub.id;
-          targetUserId = sub.userId;
-        }
+        // Lock and read the user's CURRENT subscription in one step —
+        // lockCurrentSubscription (subscription.ts) is the single canonical
+        // "most-recently-started, not-yet-expired, status='active'" row
+        // selector shared by issueKeyForUser's serialization lock
+        // (keyIssuance.ts) and enforceTrafficLimits' re-check
+        // (trafficPolling.ts). Always crediting THIS exact row — never a
+        // separately-queried "fallback" — guarantees all three code paths
+        // lock and act on the same subscription, so their locks actually
+        // serialize against each other instead of silently targeting
+        // different rows when the user happens to have more than one
+        // 'active' row (e.g. payment.subscriptionId pointing at one that
+        // has since lapsed by date but hasn't been swept yet).
+        const currentSub = await lockCurrentSubscription(tx, payment.userId);
+        if (!currentSub) throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+        const targetSubId = currentSub.id;
+        const targetUserId = currentSub.userId;
 
         // Atomic increment (same pattern as extra_device_slot above) plus
         // clearing the exceeded flag so a blocked user regains the ability

@@ -21,6 +21,19 @@ import { usersTable } from "./users";
  *                         node responds successfully; isActive is restored to true.
  *  - "auto_renew_error":  written by autoRenew.ts when a technical (non-balance) error
  *                         prevents renewal. metadata: { userId, planId, planName, error }.
+ *  - "auto_key_issuance_failed": written by keyIssuance.ts's ensureActiveKeyForUser
+ *                         when a user ends up with zero active keys after a successful
+ *                         payment/subscription activation and re-issuing one also failed.
+ *                         metadata: { userId, reason }.
+ *  - "key_migration_traffic_loss": written by admin/vpnNodes.ts's node-deletion key
+ *                         migration when the atomic transfer of an old key's traffic
+ *                         counters onto its replacement fails (the old row must still be
+ *                         deleted — vpn_keys.node_id is ON DELETE RESTRICT — so the
+ *                         counters are otherwise lost with no other record). Lets an
+ *                         admin manually credit the user's new key if warranted.
+ *                         metadata: { userId, oldKeyId, newKeyId, nodeId, nodeName,
+ *                         lastKnownTrafficUpBytes, lastKnownTrafficDownBytes,
+ *                         lastKnownPeriodUpBytes, lastKnownPeriodDownBytes, reason }.
  *
  * ── User-scoped event types (userId SET) ─────────────────────────────────────
  *  - "key_migrated":        emitted after a VPN key is automatically moved to another node.

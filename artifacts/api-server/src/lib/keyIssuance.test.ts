@@ -228,6 +228,186 @@ describe("issueKeyForUser idempotency across processes (unlocked)", () => {
 });
 
 /**
+ * enforceTrafficBlock re-check: closes the window between a caller's own
+ * pre-check (isTrafficLimitBlocked, read outside any lock) and the moment
+ * this function actually inserts a new key. Without the in-transaction
+ * re-check, enforceTrafficLimits() (trafficPolling.ts) could flag the
+ * subscription in that gap and a brand-new 0-byte key would still be issued.
+ */
+describe("issueKeyForUser enforceTrafficBlock re-check", () => {
+  let userId: number;
+  let planId: number;
+  let nodeId: number;
+  let subscriptionId: number;
+
+  beforeAll(async () => {
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        email: `enforce-block-${randomBytes(6).toString("hex")}@example.com`,
+        passwordHash: "not-a-real-hash",
+        referralCode: randomBytes(6).toString("hex"),
+      })
+      .returning({ id: usersTable.id });
+    userId = user.id;
+
+    const [plan] = await db
+      .insert(plansTable)
+      .values({
+        name: `Enforce block plan ${randomBytes(4).toString("hex")}`,
+        priceRub: 10000,
+        durationDays: 30,
+        devicesIncluded: 5,
+      })
+      .returning({ id: plansTable.id });
+    planId = plan.id;
+
+    const [node] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Enforce block node ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "enforce-block.example.com",
+        sni: "enforce-block.example.com",
+        isActive: true,
+        maxUsers: null,
+      })
+      .returning({ id: vpnNodesTable.id });
+    nodeId = node.id;
+  });
+
+  afterEach(async () => {
+    await db.delete(vpnKeysTable).where(eq(vpnKeysTable.userId, userId));
+    await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
+  });
+
+  afterAll(async () => {
+    await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
+    await db.delete(plansTable).where(eq(plansTable.id, planId));
+    await db.delete(usersTable).where(eq(usersTable.id, userId));
+  });
+
+  async function seedActiveSubscription(trafficLimitExceededAt: Date | null): Promise<number> {
+    const [sub] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId,
+        planId,
+        status: "active",
+        startsAt: new Date(),
+        endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        trafficLimitExceededAt,
+      })
+      .returning({ id: subscriptionsTable.id });
+    return sub.id;
+  }
+
+  it("refuses to issue a new key when the subscription is flagged and enforceTrafficBlock=true", async () => {
+    subscriptionId = await seedActiveSubscription(new Date());
+
+    const result = await issueKeyForUserUnlockedForTests(
+      userId,
+      5,
+      nodeId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true, // enforceTrafficBlock
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(403);
+
+    const rows = await db.select({ id: vpnKeysTable.id }).from(vpnKeysTable).where(eq(vpnKeysTable.userId, userId));
+    expect(rows.length).toBe(0);
+  });
+
+  it("still issues a key when flagged but enforceTrafficBlock is omitted (admin/system bypass callers)", async () => {
+    subscriptionId = await seedActiveSubscription(new Date());
+
+    const result = await issueKeyForUserUnlockedForTests(userId, 5, nodeId);
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("issues a key normally when not flagged, even with enforceTrafficBlock=true", async () => {
+    subscriptionId = await seedActiveSubscription(null);
+
+    const result = await issueKeyForUserUnlockedForTests(
+      userId,
+      5,
+      nodeId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("checks the user's CURRENT subscription's flag, not a stale-active one with a different flag state", async () => {
+    // A stale-active subscription (status='active' but already past endsAt —
+    // the periodic expiry sweep hasn't run yet) is flagged as exceeded, but
+    // the user's genuinely current subscription is not. The re-check must
+    // follow lockCurrentSubscription's canonical row selection (same one
+    // enforceTrafficLimits/confirmPayment use), not an arbitrary active row,
+    // or a user who topped up under their current subscription could still
+    // be wrongly blocked by an old, unrelated flag.
+    await db.insert(subscriptionsTable).values({
+      userId,
+      planId,
+      status: "active",
+      startsAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+      endsAt: new Date(Date.now() - 60 * 60 * 1000),
+      trafficLimitExceededAt: new Date(),
+    });
+    subscriptionId = await seedActiveSubscription(null); // current, not flagged
+
+    const allowed = await issueKeyForUserUnlockedForTests(
+      userId,
+      5,
+      nodeId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(allowed.ok).toBe(true);
+
+    await db.delete(vpnKeysTable).where(eq(vpnKeysTable.userId, userId));
+    await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
+
+    // Inverse: stale-active is NOT flagged, current IS flagged — must block.
+    await db.insert(subscriptionsTable).values({
+      userId,
+      planId,
+      status: "active",
+      startsAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+      endsAt: new Date(Date.now() - 60 * 60 * 1000),
+      trafficLimitExceededAt: null,
+    });
+    subscriptionId = await seedActiveSubscription(new Date()); // current, flagged
+
+    const blocked = await issueKeyForUserUnlockedForTests(
+      userId,
+      5,
+      nodeId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.status).toBe(403);
+  });
+});
+
+/**
  * Provisioning-aware idempotency: a replay must never fabricate a 201 for a
  * key whose Xray provisioning failed or is still undecided.
  */

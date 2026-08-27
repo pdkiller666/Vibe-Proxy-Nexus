@@ -1,6 +1,54 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { db, subscriptionsTable, type Subscription } from "@workspace/db";
 import { getSessionSecret } from "./session";
 import { resolvePublicAddress } from "./domain";
+
+/**
+ * Transaction handle type shared by both `db` (web requests) and `jobsDb`
+ * (background jobs) — both are the same drizzle-postgres shape, so a
+ * callback typed against `db.transaction`'s parameter works for either.
+ */
+type PgTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Canonical "current subscription" selector: the most recently started,
+ * not-yet-expired row with status='active' for this user (endsAt IS NULL
+ * covers hourly/never-expiring plans). This exact selection — same filter,
+ * same ORDER BY — is shared by every code path that locks or reads "the"
+ * subscription a user's traffic/slot/billing math is computed against:
+ * issueKeyForUser's serialization lock (keyIssuance.ts), the extra_traffic
+ * top-up credit (confirmPayment.ts), and the enforcement re-check
+ * (trafficPolling.ts, via its own DISTINCT ON batch query using the same
+ * ordering). If any of these ever pick a *different* subscription row than
+ * the others when a user has more than one 'active' row (e.g. a stale row
+ * whose status hasn't been swept yet after its endsAt passed), their
+ * `SELECT ... FOR UPDATE` locks target different rows and no longer
+ * serialize against each other — silently defeating the race-condition
+ * fixes built on top of this lock.
+ *
+ * Must be called inside a transaction (`tx`) — it takes `FOR UPDATE`.
+ */
+export async function lockCurrentSubscription(
+  tx: PgTx,
+  userId: number,
+): Promise<Subscription | undefined> {
+  const now = new Date();
+  const [sub] = await tx
+    .select()
+    .from(subscriptionsTable)
+    .where(
+      and(
+        eq(subscriptionsTable.userId, userId),
+        eq(subscriptionsTable.status, "active"),
+        or(isNull(subscriptionsTable.endsAt), gt(subscriptionsTable.endsAt, now)),
+      ),
+    )
+    .orderBy(desc(subscriptionsTable.startsAt), desc(subscriptionsTable.id))
+    .limit(1)
+    .for("update");
+  return sub;
+}
 
 /**
  * Human/brand-facing name shown as the subscription group title in client

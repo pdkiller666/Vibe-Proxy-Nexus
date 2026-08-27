@@ -188,30 +188,113 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
           return;
         }
 
-        // Revoke old key: DB-first (source of truth), then Xray (non-fatal — node is being removed).
+        // Carry over the accumulated traffic counters to the new key by
+        // reading and deleting the OLD key row in a single transaction —
+        // NOT from the `key` object captured before this loop started.
+        // Between that earlier snapshot and now, issueKeyForUser ran (which
+        // can involve real network calls to a remote node's management API),
+        // and the traffic-polling job (trafficPolling.ts, every 60s) could
+        // have advanced this exact key's counters via applyTrafficDeltas in
+        // the meantime. `DELETE ... RETURNING` inside a transaction reads
+        // the row's truly-latest committed values at the moment of removal
+        // (blocking behind, then reading after, any concurrent UPDATE on the
+        // same row) — a plain read-then-later-delete would silently drop
+        // whatever traffic accrued during that window.
         try {
-          await db
-            .update(vpnKeysTable)
-            .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
-            .where(eq(vpnKeysTable.id, key.id));
+          await db.transaction(async (tx) => {
+            const [source] = await tx
+              .delete(vpnKeysTable)
+              .where(eq(vpnKeysTable.id, key.id))
+              .returning();
+            if (!source) throw new Error("SOURCE_KEY_ALREADY_GONE");
+            // Postgres treats an UPDATE affecting zero rows as a successful
+            // statement — if the just-issued replacement row disappeared in
+            // the interval since issueKeyForUser returned (e.g. an
+            // overlapping revoke/delete elsewhere), this UPDATE would
+            // silently no-op and the transaction would still commit,
+            // discarding the source counters with no error and no event.
+            // RETURNING its id turns that into an explicit, checkable outcome.
+            const [updated] = await tx
+              .update(vpnKeysTable)
+              .set({
+                trafficUpBytes: source.trafficUpBytes,
+                trafficDownBytes: source.trafficDownBytes,
+                periodUpBytes: source.periodUpBytes,
+                periodDownBytes: source.periodDownBytes,
+                periodStartedAt: source.periodStartedAt,
+              })
+              .where(eq(vpnKeysTable.id, result.key.id))
+              .returning({ id: vpnKeysTable.id });
+            if (!updated) throw new Error("REPLACEMENT_KEY_DISAPPEARED_DURING_TRANSFER");
+            return source;
+          });
         } catch (err) {
+          // A failure here must NOT be reported as a successful migration —
+          // that would silently lose the old key's traffic history. Record a
+          // durable admin-visible event with the exact counters that could
+          // not be transferred (for manual reconciliation), unwind the
+          // just-issued replacement, and report this as a failed migration —
+          // same outcome as "no available node" above. The old key row
+          // itself cannot be preserved: vpn_keys.node_id is NOT NULL with
+          // ON DELETE RESTRICT, so every key on this node (migrated or not)
+          // must be gone before the node row can be deleted below.
           logger.error(
             { err, oldKeyId: key.id, newKeyId: result.key.id },
-            "delete node: new key issued but old key DB revoke failed",
+            "delete node: failed to carry over traffic history to migrated key — unwinding replacement, reporting as a failed migration",
           );
+          failedMigrations++;
+          try {
+            await db.insert(systemEventsTable).values({
+              eventType: "key_migration_traffic_loss",
+              userId: key.userId,
+              metadata: {
+                oldKeyId: key.id,
+                newKeyId: result.key.id,
+                nodeId,
+                nodeName: node.name,
+                lastKnownTrafficUpBytes: key.trafficUpBytes,
+                lastKnownTrafficDownBytes: key.trafficDownBytes,
+                lastKnownPeriodUpBytes: key.periodUpBytes,
+                lastKnownPeriodDownBytes: key.periodDownBytes,
+                reason: err instanceof Error ? err.message : String(err),
+              },
+            });
+          } catch (eventErr) {
+            logger.error({ err: eventErr, oldKeyId: key.id }, "delete node: failed to record key_migration_traffic_loss event");
+          }
+          try {
+            const [newNode] = await db
+              .select()
+              .from(vpnNodesTable)
+              .where(eq(vpnNodesTable.id, result.key.nodeId));
+            if (newNode?.managementApiUrl) {
+              await removeRemoteXrayClient(newNode, result.key.uuid).catch(() => {/* best-effort */});
+            } else if (isLocalXrayEnabled()) {
+              await removeXrayClient(result.key.uuid).catch(() => {/* best-effort */});
+            }
+            await db.delete(vpnKeysTable).where(eq(vpnKeysTable.id, result.key.id));
+          } catch (cleanupErr) {
+            logger.error(
+              { err: cleanupErr, newKeyId: result.key.id },
+              "delete node: failed to unwind replacement key after traffic-copy failure",
+            );
+          }
+          return;
         }
 
+        // The old key's DB row is already gone (deleted atomically above
+        // along with reading its final counters) — only the Xray client
+        // itself needs cleaning up now, best-effort, using the uuid we
+        // already have in memory.
         if (node.managementApiUrl) {
           try {
             await removeRemoteXrayClient(node, key.uuid);
-            await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, key.id));
           } catch (err) {
             logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: remote Xray removal of migrated key failed (ignored)");
           }
         } else if (isLocalXrayEnabled()) {
           try {
             await removeXrayClient(key.uuid);
-            await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, key.id));
           } catch (err) {
             logger.warn({ err, uuid: key.uuid, nodeId }, "delete node: local Xray removal of migrated key failed (ignored)");
           }

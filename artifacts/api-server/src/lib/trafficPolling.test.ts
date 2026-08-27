@@ -7,7 +7,7 @@
  * inflating the fresh period with all historical traffic.
  */
 import { randomBytes } from "node:crypto";
-import { eq, isNull } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, plansTable, subscriptionsTable, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { applyTrafficDeltas, enforceTrafficLimits } from "./trafficPolling";
@@ -605,5 +605,65 @@ describe("enforceTrafficLimits", () => {
 
     const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
     expect(sub!.trafficLimitExceededAt?.getTime()).toBe(alreadyFlaggedAt.getTime());
+  });
+
+  // -------------------------------------------------------------------------
+  // Top-up vs. enforcement race: enforceTrafficLimits must re-verify inside
+  // the same per-subscription lock confirmPaymentById's extra-traffic branch
+  // takes, so a top-up landing between the batch usage scan and the per-row
+  // decision cannot be overridden by a revoke based on stale data.
+  // -------------------------------------------------------------------------
+
+  it("does not revoke when a concurrent traffic top-up commits before enforcement acquires the row lock", async () => {
+    const planId = await seedPlan(5); // 5 GB base cap
+    const subscriptionId = await seedActiveSubscription(planId);
+
+    // 6 GB used: over the base 5 GB cap, but would be under a topped-up 10 GB cap.
+    const USED_BYTES = 6 * 1024 * 1024 * 1024;
+    const keyId = await seedKey({
+      periodUpBytes: Math.floor(USED_BYTES / 2),
+      periodDownBytes: Math.ceil(USED_BYTES / 2),
+    });
+
+    // Simulate confirmPaymentById's extra-traffic branch: it takes the same
+    // `SELECT ... FOR UPDATE` lock on the subscription row before crediting.
+    // We hold the lock open (via `gate`) until enforceTrafficLimits' initial,
+    // lock-free batch usage scan has had time to run and see the still-stale
+    // "exceeded" snapshot — reproducing the exact interleaving the fix must
+    // survive: the batch scan is stale, but the per-row transaction must
+    // still re-read fresh state before acting.
+    let releaseTopUp!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseTopUp = resolve;
+    });
+    let lockAcquired!: () => void;
+    const lockAcquiredPromise = new Promise<void>((resolve) => {
+      lockAcquired = resolve;
+    });
+
+    const topUpPromise = db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM subscriptions WHERE id = ${subscriptionId} FOR UPDATE`);
+      lockAcquired();
+      await gate;
+      await tx
+        .update(subscriptionsTable)
+        .set({ extraTrafficGb: 5, trafficLimitExceededAt: null })
+        .where(eq(subscriptionsTable.id, subscriptionId));
+    });
+
+    await lockAcquiredPromise;
+    const enforcePromise = enforceTrafficLimits();
+    // Give enforceTrafficLimits' initial (lock-free) batch scan time to run
+    // and observe the still-stale "exceeded" state before we release the lock.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    releaseTopUp();
+
+    await Promise.all([topUpPromise, enforcePromise]);
+
+    const key = await getKey(keyId);
+    expect(key.revokedAt).toBeNull();
+
+    const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
+    expect(sub!.trafficLimitExceededAt).toBeNull();
   });
 });

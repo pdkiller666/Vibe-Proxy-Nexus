@@ -196,23 +196,88 @@ export async function enforceTrafficLimits(): Promise<number> {
   let revokedUsers = 0;
 
   for (const row of usage) {
-    if (row.trafficLimitGb == null) continue;
+    const trafficLimitGb = row.trafficLimitGb;
+    if (trafficLimitGb == null) continue;
     // Effective cap = the plan's base allowance plus any traffic the user
     // has self-service topped-up for THIS subscription period (see
     // extraTrafficGb schema comment) — buying more GB must actually raise
     // the ceiling enforcement checks against, not just be cosmetic.
-    const limitBytes = (row.trafficLimitGb + row.extraTrafficGb) * 1024 * 1024 * 1024;
+    const limitBytes = (trafficLimitGb + row.extraTrafficGb) * 1024 * 1024 * 1024;
     if (row.periodBytes < limitBytes) continue;
 
-    const keysToRevoke = await jobsDb
-      .select({ key: vpnKeysTable, node: vpnNodesTable })
-      .from(vpnKeysTable)
-      .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
-      .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
+    // Re-verify and decide atomically under a lock on the exact subscription
+    // row that keyIssuance.ts and confirmPayment.ts's extra-traffic branch
+    // also lock (SELECT ... FOR UPDATE on this same row). Without this, a
+    // concurrent traffic top-up landing between the batch usage query above
+    // and the writes below could have already raised the cap or cleared the
+    // flag — and this loop, still working off the stale `usage` snapshot,
+    // would revoke the user's brand-new key and immediately re-stamp the
+    // block flag, leaving a paying user falsely locked out indefinitely.
+    // Locking the row means whichever transaction commits first wins, and
+    // the other always observes the up-to-date state.
+    const decision = await jobsDb.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM subscriptions WHERE id = ${row.subscriptionId} FOR UPDATE`);
 
-    if (keysToRevoke.length === 0) continue;
+      const [freshSub] = await tx
+        .select({
+          status: subscriptionsTable.status,
+          extraTrafficGb: subscriptionsTable.extraTrafficGb,
+          trafficLimitExceededAt: subscriptionsTable.trafficLimitExceededAt,
+        })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.id, row.subscriptionId));
+      if (!freshSub || freshSub.status !== "active") return { act: false as const };
 
-    for (const { key, node } of keysToRevoke) {
+      const [{ freshPeriodBytes }] = await tx
+        .select({
+          freshPeriodBytes: sql<string>`coalesce(sum(${vpnKeysTable.periodUpBytes} + ${vpnKeysTable.periodDownBytes}), 0)`,
+        })
+        .from(vpnKeysTable)
+        .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
+
+      const freshLimitBytes = (trafficLimitGb + freshSub.extraTrafficGb) * 1024 * 1024 * 1024;
+      if (Number(freshPeriodBytes) < freshLimitBytes) {
+        // A concurrent top-up (or renewal) already resolved this since the
+        // batch query ran — nothing to revoke, nothing to flag.
+        return { act: false as const };
+      }
+
+      const keysToRevoke = await tx
+        .select({ key: vpnKeysTable, node: vpnNodesTable })
+        .from(vpnKeysTable)
+        .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+        .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
+      if (keysToRevoke.length === 0) return { act: false as const };
+
+      // DB first (source of truth), Xray cleanup after commit — same
+      // ordering as the user/admin revoke routes (see project memory:
+      // vpn-key-revoke-write-order) and it keeps this lock held only as
+      // long as the writes below, not any network calls.
+      await tx
+        .update(vpnKeysTable)
+        .set({ revokedAt: now, revokedReason: "traffic_limit", xrayCleanupPendingAt: now })
+        .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
+
+      // Persist the "blocked" flag on the subscription itself — this is what
+      // closes the reissue loophole: keyIssuance.ts refuses to issue a brand
+      // new key (which would start at 0 period bytes) while this is set, so
+      // simply revoking-and-reissuing a device no longer bypasses the cap.
+      // Only set it if not already set here (we hold the lock, so this can't
+      // race a top-up clearing it — that transaction would already have
+      // committed or is still blocked behind us).
+      if (!freshSub.trafficLimitExceededAt) {
+        await tx
+          .update(subscriptionsTable)
+          .set({ trafficLimitExceededAt: now })
+          .where(eq(subscriptionsTable.id, row.subscriptionId));
+      }
+
+      return { act: true as const, keysToRevoke };
+    });
+
+    if (!decision.act) continue;
+
+    for (const { key, node } of decision.keysToRevoke) {
       if (node.managementApiUrl) {
         try {
           await removeRemoteXrayClient(node, key.uuid);
@@ -227,23 +292,6 @@ export async function enforceTrafficLimits(): Promise<number> {
         }
       }
     }
-
-    await jobsDb
-      .update(vpnKeysTable)
-       .set({ revokedAt: now, revokedReason: "traffic_limit", xrayCleanupPendingAt: now })
-      .where(and(eq(vpnKeysTable.userId, row.userId), isNull(vpnKeysTable.revokedAt)));
-
-    // Persist the "blocked" flag on the subscription itself — this is what
-    // closes the reissue loophole: keyIssuance.ts refuses to issue a brand
-    // new key (which would start at 0 period bytes) while this is set, so
-    // simply revoking-and-reissuing a device no longer bypasses the cap.
-    // Only set it if not already set, so a top-up that clears it (see
-    // extraTrafficOrder.ts / confirmPayment.ts) isn't immediately
-    // re-stamped with a fresh timestamp by this same loop iteration.
-    await jobsDb
-      .update(subscriptionsTable)
-      .set({ trafficLimitExceededAt: now })
-      .where(and(eq(subscriptionsTable.id, row.subscriptionId), isNull(subscriptionsTable.trafficLimitExceededAt)));
 
     revokedUsers += 1;
     logger.info(

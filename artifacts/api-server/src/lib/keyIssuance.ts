@@ -3,13 +3,14 @@ import {
   db,
   plansTable,
   subscriptionsTable,
+  systemEventsTable,
   vpnKeysTable,
   vpnNodesTable,
 } from "@workspace/db";
 import { buildDeepLink, buildVlessLink, generateKeyUuid } from "./vless";
 import { addXrayClient, isLocalXrayEnabled } from "./xray";
 import { addRemoteXrayClient } from "./remoteNode";
-import { BRAND_NAME } from "./subscription";
+import { BRAND_NAME, lockCurrentSubscription } from "./subscription";
 import { logger } from "./logger";
 
 export type IssueKeyResult =
@@ -154,6 +155,14 @@ async function replayOrFail(
  * @param preferLabel   - Optional label override (undefined → branded default).
  * @param replaceKeyId  - Relocation-only source key excluded from the slot count
  *                        while its replacement is being provisioned.
+ * @param enforceTrafficBlock - When true, re-checks the caller's
+ *   trafficLimitExceededAt flag INSIDE the same subscription-row lock used
+ *   below, closing the gap between a caller's own pre-check (e.g.
+ *   isTrafficLimitBlocked in routes/vpnKeys.ts) and this function's insert.
+ *   Without this, enforceTrafficLimits() (trafficPolling.ts) could flag the
+ *   subscription in that gap and a brand-new 0-byte key would still get
+ *   issued. Defaults to false so admin overrides, ensureActiveKeyForUser, and
+ *   node-migration reissuance keep bypassing the cap as designed.
  */
 export async function issueKeyForUser(
   userId: number,
@@ -163,6 +172,7 @@ export async function issueKeyForUser(
   description?: string,
   idempotencyKey?: string,
   replaceKeyId?: number,
+  enforceTrafficBlock?: boolean,
 ): Promise<IssueKeyResult> {
   return withUserIssueLock(userId, () =>
     issueKeyForUserInner(
@@ -173,6 +183,7 @@ export async function issueKeyForUser(
       description,
       idempotencyKey,
       replaceKeyId,
+      enforceTrafficBlock,
     ),
   );
 }
@@ -193,6 +204,7 @@ async function issueKeyForUserInner(
   description?: string,
   idempotencyKey?: string,
   replaceKeyId?: number,
+  enforceTrafficBlock?: boolean,
 ): Promise<IssueKeyResult> {
   // Idempotent replay: a retried request (same client-generated UUID) gets
   // the key issued by the first attempt instead of a duplicate. Checked
@@ -350,13 +362,26 @@ async function issueKeyForUserInner(
   let key!: typeof vpnKeysTable.$inferSelect;
   try {
     key = await db.transaction(async (tx) => {
-      // Lock the user's active subscription to serialize concurrent issuance
-      // for this user. Any concurrent issueKeyForUser for the same user will
-      // block at this point until we commit, so its subsequent count query
-      // reflects our already-inserted key.
-      await tx.execute(
-        sql`SELECT id FROM subscriptions WHERE user_id = ${userId} AND status = 'active' LIMIT 1 FOR UPDATE`,
-      );
+      // Lock the user's CURRENT subscription (lockCurrentSubscription — the
+      // same most-recently-started, not-yet-expired row selector shared by
+      // confirmPayment.ts's extra_traffic credit and trafficPolling.ts's
+      // enforcement re-check) to serialize concurrent issuance for this
+      // user. Any concurrent issueKeyForUser for the same user will block
+      // at this point until we commit, so its subsequent count query
+      // reflects our already-inserted key. Locking a *different* active row
+      // than what enforcement/top-up lock (e.g. an unordered "any active
+      // row") would fail to serialize against them at all.
+      const lockedSub = await lockCurrentSubscription(tx, userId);
+
+      // Re-check the traffic-limit block flag now that we hold the lock —
+      // closes the window between a caller's own pre-check (e.g.
+      // isTrafficLimitBlocked in routes/vpnKeys.ts) and this transaction,
+      // during which enforceTrafficLimits() (trafficPolling.ts) could have
+      // flagged the subscription: it takes this exact lock before writing
+      // the flag, so whichever side commits first is authoritative.
+      if (enforceTrafficBlock && lockedSub?.trafficLimitExceededAt) {
+        throw new Error("TRAFFIC_LIMIT_BLOCKED");
+      }
 
       // Idempotency re-check INSIDE the lock: a cross-process retry can pass
       // the top-of-function replay lookup before the original commits, then
@@ -433,6 +458,14 @@ async function issueKeyForUserInner(
       // The original's provisioning failed while we waited (its row was
       // revoked and its idempotency_key cleared) — retriable.
       return PENDING_RETRY_RESULT;
+    }
+    if (err instanceof Error && err.message === "TRAFFIC_LIMIT_BLOCKED") {
+      return replayOrFail(userId, idempotencyKey, {
+        ok: false,
+        status: 403,
+        error:
+          "Лимит трафика по тарифу исчерпан. Докупите трафик или подождите продления подписки, чтобы выпустить новый ключ.",
+      });
     }
     if (err instanceof Error && err.message === "SLOTS_EXCEEDED") {
       const e = err as Error & { slotCount: number; totalSlots: number };
@@ -610,8 +643,30 @@ export async function ensureActiveKeyForUser(userId: number): Promise<void> {
         { userId, err: result.error },
         "Could not auto-issue VPN key after subscription activation",
       );
+      await recordKeyIssuanceFailure(userId, result.error);
     }
   } catch (err) {
     logger.error({ err, userId }, "ensureActiveKeyForUser failed");
+    await recordKeyIssuanceFailure(userId, err instanceof Error ? err.message : String(err));
+  }
+}
+
+/**
+ * Surfaces a failed post-payment auto key-issuance (ensureActiveKeyForUser)
+ * to admins. Without this, the only trace was a WARN/ERROR log line — a
+ * user could pay successfully and end up with zero working keys and no
+ * signal short of them contacting support. Admin-scoped (userId: null) so
+ * it lands in the same bell/history feed as other operational events (see
+ * routes/admin/systemEvents.ts). Best-effort: never let this fail the
+ * caller's own error handling.
+ */
+async function recordKeyIssuanceFailure(userId: number, reason: string): Promise<void> {
+  try {
+    await db.insert(systemEventsTable).values({
+      eventType: "auto_key_issuance_failed",
+      metadata: { userId, reason },
+    });
+  } catch (err) {
+    logger.error({ err, userId }, "Failed to record auto_key_issuance_failed system event");
   }
 }

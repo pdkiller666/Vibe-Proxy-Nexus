@@ -87,6 +87,10 @@ router.post("/vpn-keys", requireAuth, async (req, res): Promise<void> => {
     parsed.data.label ?? undefined,
     parsed.data.description ?? undefined,
     parsed.data.idempotencyKey ?? undefined,
+    undefined,
+    // Re-verified inside issueKeyForUser's own subscription lock — closes the
+    // TOCTOU window between the isTrafficLimitBlocked check above and this call.
+    true,
   );
 
   if (!result.ok) {
@@ -350,6 +354,9 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
     existing.key.description ?? undefined,
     idempotencyKey,
     existing.key.id,
+    // Re-verified inside issueKeyForUser's own subscription lock — closes the
+    // TOCTOU window between the isTrafficLimitBlocked check above and this call.
+    true,
   );
 
   if (!result.ok) {
