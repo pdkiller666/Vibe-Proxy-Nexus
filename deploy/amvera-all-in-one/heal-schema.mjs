@@ -14,6 +14,13 @@
 // list append-only — one idempotent statement per historical schema change
 // that drizzle-kit push cannot apply unattended.
 import pg from "pg";
+import {
+  M41_ADVISORY_LOCK_KEY,
+  M41_CREATE_INDEX_SQL,
+  M41_INDEX_NAME,
+  isHealthyM41Index,
+  runM41BestEffort,
+} from "./heal-schema-m41.mjs";
 
 const { Client } = pg;
 
@@ -127,36 +134,6 @@ BEGIN
   END IF;
 END $$;
 `;
-
-const M41_INDEX_NAME = "subscriptions_active_user_starts_at_id_idx";
-const M41_ADVISORY_LOCK_KEY = 410041;
-const M41_CREATE_INDEX_SQL = `
-  CREATE INDEX CONCURRENTLY IF NOT EXISTS subscriptions_active_user_starts_at_id_idx
-    ON subscriptions(user_id, starts_at DESC NULLS FIRST, id DESC)
-    WHERE status = 'active'
-`;
-
-function normalizePredicate(predicate) {
-  return String(predicate ?? "")
-    .toLowerCase()
-    .replace(/[\s()]/g, "");
-}
-
-function isHealthyM41Index(index) {
-  return Boolean(
-    index?.indisvalid &&
-      index.indisready &&
-      index.indislive &&
-      index.index_method === "btree" &&
-      Array.isArray(index.key_columns) &&
-      index.key_columns.join(",") === "user_id,starts_at,id" &&
-      Array.isArray(index.descending) &&
-      index.descending.join(",") === "false,true,true" &&
-      Array.isArray(index.nulls_first) &&
-      index.nulls_first.join(",") === "false,true,false" &&
-      normalizePredicate(index.predicate) === "status='active'::text",
-  );
-}
 
 async function readM41Index() {
   const { rows } = await client.query(
@@ -1145,12 +1122,6 @@ try {
   `);
   console.log(`heal-schema: M-40 purged ${deletedMetrics} stale local-node metric snapshots (pre-cgroup-fix)`);
 
-  // ── M-41: subscriptions — latest active row per user ─────────────────────
-  // The dashboard uses DISTINCT ON (user_id) ordered by starts_at DESC, id
-  // DESC. Build or repair this partial index concurrently so this optimization
-  // never blocks subscription creation, payments, or billing updates.
-  await ensureM41SubscriptionExpiryIndex();
-
   // ── M-42: subscriptions.carried_over_period_bytes ────────────────────────
   // Banks bytes from VPN keys enforceTrafficLimits() revoked for hitting the
   // traffic cap (revokedReason: 'traffic_limit'), so a later top-up that
@@ -1210,6 +1181,12 @@ try {
       EXECUTE FUNCTION payments_subscription_owner_guard();
   `);
   console.log(`heal-schema: M-43 payments subscription ownership guard (detached ${detachedPayments ?? 0} malformed rows)`);
+
+  // ── M-41: subscriptions — latest active row per user ─────────────────────
+  // The dashboard uses DISTINCT ON (user_id) ordered by starts_at DESC, id
+  // DESC. This is only an optimization, so a problem repairing the partial
+  // index must never prevent the critical M-42/M-43 safeguards above.
+  await runM41BestEffort(ensureM41SubscriptionExpiryIndex);
 
   console.log("heal-schema: done");
 } catch (err) {

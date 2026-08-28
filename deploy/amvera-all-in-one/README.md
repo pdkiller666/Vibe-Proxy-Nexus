@@ -140,7 +140,10 @@ WebSocket-потоки одного ключа намеренно не огра�
    не может применить без интерактивного промпта (уникальные индексы, FK constraints,
    DROP COLUMN и т.д.). Все блоки `DO $$ … $$` оформлены в корректном PostgreSQL
    dollar-quoting. Текущие миграции: M-0→M-15 (исторические), M-16 (`users.is_banned`),
-   M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL), M-24 (`vpn_nodes.cert_sha256`).
+   M-17 (`users.referred_by_user_id` FK → ON DELETE SET NULL), M-24 (`vpn_nodes.cert_sha256`),
+   M-41 (индекс активных подписок), M-42 (`subscriptions.carried_over_period_bytes`)
+   и M-43 (защита ownership для payment/subscription). M-41 — необязательная
+   оптимизация и не блокирует критические M-42/M-43 при проблеме с индексом.
 2. **`drizzle-kit push`** — накатывает остальные изменения схемы.
 
 ## Локальная сборка (проверка)
