@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   M41_CREATE_INDEX_SQL,
+  formatM41IndexMetadata,
   isHealthyM41Index,
   normalizePredicate,
   runM41BestEffort,
@@ -21,6 +22,8 @@ const healthyIndex = {
   descending: [false, true, true],
   nulls_first: [false, true, false],
   predicate: "(status = 'active'::text)",
+  index_definition:
+    "CREATE INDEX subscriptions_active_user_starts_at_id_idx ON public.subscriptions USING btree (user_id, starts_at DESC NULLS FIRST, id DESC NULLS LAST) WHERE (status = 'active'::text)",
 };
 
 describe("Amvera M-41 schema repair", () => {
@@ -31,6 +34,15 @@ describe("Amvera M-41 schema repair", () => {
   it("accepts the metadata returned for the intended partial index", () => {
     expect(isHealthyM41Index(healthyIndex)).toBe(true);
     expect(normalizePredicate(" ( status = 'active'::text ) ")).toBe("status='active'::text");
+  });
+
+  it("formats only index metadata when production verification fails", () => {
+    const formatted = formatM41IndexMetadata(healthyIndex);
+
+    expect(formatted).toContain('"index_method":"btree"');
+    expect(formatted).toContain('"index_definition":"CREATE INDEX');
+    expect(formatted).not.toContain("users");
+    expect(formatM41IndexMetadata(null)).toBe("missing");
   });
 
   it("rejects the old default-NULLS-FIRST definition that caused the production failure", () => {

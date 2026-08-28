@@ -12,6 +12,24 @@ export function normalizePredicate(predicate) {
     .replace(/[\s()]/g, "");
 }
 
+export function formatM41IndexMetadata(index) {
+  if (!index) {
+    return "missing";
+  }
+
+  return JSON.stringify({
+    indisvalid: index.indisvalid,
+    indisready: index.indisready,
+    indislive: index.indislive,
+    index_method: index.index_method,
+    key_columns: index.key_columns,
+    descending: index.descending,
+    nulls_first: index.nulls_first,
+    predicate: index.predicate,
+    index_definition: index.index_definition,
+  });
+}
+
 export function isHealthyM41Index(index) {
   return Boolean(
     index?.indisvalid &&

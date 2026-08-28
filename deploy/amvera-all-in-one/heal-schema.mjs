@@ -18,6 +18,7 @@ import {
   M41_ADVISORY_LOCK_KEY,
   M41_CREATE_INDEX_SQL,
   M41_INDEX_NAME,
+  formatM41IndexMetadata,
   isHealthyM41Index,
   runM41BestEffort,
 } from "./heal-schema-m41.mjs";
@@ -149,7 +150,8 @@ async function readM41Index() {
           FILTER (WHERE key_part.ordinality <= i.indnkeyatts) AS descending,
         array_agg((i.indoption[key_part.ordinality - 1] & 2) = 2 ORDER BY key_part.ordinality)
           FILTER (WHERE key_part.ordinality <= i.indnkeyatts) AS nulls_first,
-        pg_get_expr(i.indpred, i.indrelid) AS predicate
+        pg_get_expr(i.indpred, i.indrelid) AS predicate,
+        pg_get_indexdef(i.indexrelid) AS index_definition
       FROM pg_class index_class
       JOIN pg_index i ON i.indexrelid = index_class.oid
       JOIN pg_class table_class ON table_class.oid = i.indrelid
@@ -193,7 +195,9 @@ async function ensureM41SubscriptionExpiryIndex() {
 
     const verified = await readM41Index();
     if (!isHealthyM41Index(verified)) {
-      throw new Error(`M-41 ${M41_INDEX_NAME} is missing or does not match the required definition`);
+      throw new Error(
+        `M-41 ${M41_INDEX_NAME} is missing or does not match the required definition; actual=${formatM41IndexMetadata(verified)}`,
+      );
     }
     console.log(`heal-schema: M-41 ${M41_INDEX_NAME} ready (partial, concurrent)`);
   } finally {
