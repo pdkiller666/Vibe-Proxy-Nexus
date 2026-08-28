@@ -131,6 +131,7 @@ export async function applyTrafficDeltas(
       last_traffic_at = now()
     from (values ${values}) as c(uuid, up, down)
     where vk.uuid = c.uuid
+      and vk.revoked_at is null
   `);
 }
 
@@ -404,6 +405,29 @@ export function flushTrafficDeltas(): Promise<{ polledNodes: string[] }> {
   // Swallow so one failed flush doesn't permanently wedge the queue for
   // every flush queued behind it; each caller still observes its own
   // rejection via the returned `run` promise.
+  flushQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+/**
+ * Runs a destructive key mutation after one final traffic flush, while
+ * keeping every other scheduled/ad-hoc flush queued until the mutation
+ * commits. Combined with applyTrafficDeltas ignoring revoked rows, this
+ * prevents an already-read delta from landing on a key after its usage was
+ * banked and the key was revoked.
+ */
+export function afterTrafficDeltasFlushed<T>(action: () => Promise<T>): Promise<T> {
+  const run = flushQueue.then(async () => {
+    try {
+      await doFlushTrafficDeltas();
+    } catch (err) {
+      logger.warn({ err }, "Final traffic flush before key mutation failed; continuing mutation");
+    }
+    return action();
+  });
   flushQueue = run.then(
     () => undefined,
     () => undefined,

@@ -61,6 +61,7 @@ export type BalanceCheckoutError =
         | "pending_payment_not_found"
         | "pending_payment_not_pending"
         | "pending_payment_id_required"
+        | "pending_payment_owner_mismatch"
         | "concurrent_payment_conflict";
     }
   | { status: 400; error: string }
@@ -238,15 +239,41 @@ export async function checkoutFromBalance(
           throw new Error(sourcePayment ? "PENDING_PAYMENT_NOT_PENDING" : "PENDING_PAYMENT_NOT_FOUND");
         }
 
+        // A pending order carries its subscriptionId into the replacement
+        // balance payment. Validate the pair before any replacement/debit
+        // write so a malformed imported order cannot make a new payment point
+        // at another user's subscription.
+        if (pendingAlternative.subscriptionId != null) {
+          const [ownedSubscription] = await tx
+            .select({ id: subscriptionsTable.id })
+            .from(subscriptionsTable)
+            .where(
+              and(
+                eq(subscriptionsTable.id, pendingAlternative.subscriptionId),
+                eq(subscriptionsTable.userId, userId),
+              ),
+            )
+            .for("update");
+          if (!ownedSubscription) {
+            throw new Error("PENDING_PAYMENT_OWNER_MISMATCH");
+          }
+        }
+
         if (paymentType === "subscription") {
           const [pendingSubscription] = await tx
             .select({
               id: subscriptionsTable.id,
               planId: subscriptionsTable.planId,
               status: subscriptionsTable.status,
+              userId: subscriptionsTable.userId,
             })
             .from(subscriptionsTable)
-            .where(eq(subscriptionsTable.id, pendingAlternative.subscriptionId ?? -1))
+            .where(
+              and(
+                eq(subscriptionsTable.id, pendingAlternative.subscriptionId ?? -1),
+                eq(subscriptionsTable.userId, userId),
+              ),
+            )
             .for("update")
             .limit(1);
 
@@ -387,6 +414,7 @@ export async function checkoutFromBalance(
         PENDING_PAYMENT_NOT_FOUND: "pending_payment_not_found",
         PENDING_PAYMENT_NOT_PENDING: "pending_payment_not_pending",
         PENDING_PAYMENT_ID_REQUIRED: "pending_payment_id_required",
+        PENDING_PAYMENT_OWNER_MISMATCH: "pending_payment_owner_mismatch",
       } as const;
       const error = switchErrors[err.message as keyof typeof switchErrors];
       if (error) return { ok: false, status: 409, error };
@@ -416,7 +444,7 @@ export async function checkoutFromBalance(
 
   // 5. Handle inner-dedup outcomes (no new debit happened)
   if (txOutcome.kind === "dedup_confirmed") {
-    const subscription = await fetchSubscription(paymentType, txOutcome.subscriptionId);
+    const subscription = await fetchSubscription(paymentType, txOutcome.subscriptionId, userId);
     logger.info({ userId, paymentId: txOutcome.paymentId }, "balance_checkout: inner dedup hit (confirmed)");
     return { ok: true, result: { paymentId: txOutcome.paymentId, type: paymentType, amountRub, subscription } };
   }
@@ -438,7 +466,7 @@ export async function checkoutFromBalance(
     return { ok: false, status: 500, error: "Ошибка при активации. Баланс возвращён." };
   }
 
-  const subscription = await fetchSubscription(paymentType, subscriptionId);
+  const subscription = await fetchSubscription(paymentType, subscriptionId, userId);
 
   return {
     ok: true,
@@ -561,9 +589,13 @@ function buildDescription(meta: TargetMeta & { ok: true }, _subscriptionId: numb
 async function fetchSubscription(
   paymentType: "subscription" | "extra_device_slot" | "extra_traffic",
   subscriptionId: number | null,
+  userId: number,
 ): Promise<Subscription | null> {
   if (paymentType !== "subscription" || subscriptionId == null) return null;
-  const rows = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
+  const rows = await db
+    .select()
+    .from(subscriptionsTable)
+    .where(and(eq(subscriptionsTable.id, subscriptionId), eq(subscriptionsTable.userId, userId)));
   return rows[0] ?? null;
 }
 
@@ -600,7 +632,7 @@ async function checkDedup(
 
   if (!existing) return null;
 
-  const subscription = await fetchSubscription(paymentType, existing.subscriptionId ?? null);
+  const subscription = await fetchSubscription(paymentType, existing.subscriptionId ?? null, userId);
   logger.info({ userId, paymentId: existing.id }, "balance_checkout: fast-path dedup hit");
   return { paymentId: existing.id, type: paymentType, amountRub, subscription };
 }

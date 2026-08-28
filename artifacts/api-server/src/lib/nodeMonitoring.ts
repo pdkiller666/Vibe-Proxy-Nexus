@@ -27,6 +27,8 @@
 import { and, asc, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable, nodeMetricSnapshotsTable } from "@workspace/db";
 import { logger } from "./logger";
+import { bankActiveKeyUsageForRevocation } from "./trafficCarryover";
+import { afterTrafficDeltasFlushed } from "./trafficPolling";
 import { issueKeyForUser, resolveTotalSlots } from "./keyIssuance";
 import { removeXrayClient, isLocalXrayEnabled } from "./xray";
 import { removeRemoteXrayClient } from "./remoteNode";
@@ -167,16 +169,20 @@ export async function reconcilePendingKeyReplacements(): Promise<void> {
 
     if (!source || source.key.revokedAt) continue;
 
-    const [revoked] = await db
-      .update(vpnKeysTable)
-      .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
-      .where(
-        and(
-          eq(vpnKeysTable.id, source.key.id),
-          isNull(vpnKeysTable.revokedAt),
-        ),
-      )
-      .returning({ id: vpnKeysTable.id });
+    const revoked = await afterTrafficDeltasFlushed(() => db.transaction(async (tx) => {
+      await bankActiveKeyUsageForRevocation(tx, source.key.userId, [source.key.id]);
+      const [updated] = await tx
+        .update(vpnKeysTable)
+        .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
+        .where(
+          and(
+            eq(vpnKeysTable.id, source.key.id),
+            isNull(vpnKeysTable.revokedAt),
+          ),
+        )
+        .returning({ id: vpnKeysTable.id });
+      return updated;
+    }));
 
     if (!revoked) continue;
 
@@ -360,10 +366,15 @@ async function migrateKeysFromDeactivatedNode(node: {
 
       // Revoke old key: DB-first (source of truth), then Xray (non-fatal — node is down).
       try {
-        await db
-          .update(vpnKeysTable)
-          .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
-          .where(eq(vpnKeysTable.id, key.id));
+        await afterTrafficDeltasFlushed(() => db.transaction(async (tx) => {
+          await bankActiveKeyUsageForRevocation(tx, key.userId, [key.id]);
+          const [revoked] = await tx
+            .update(vpnKeysTable)
+            .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
+            .where(and(eq(vpnKeysTable.id, key.id), isNull(vpnKeysTable.revokedAt)))
+            .returning({ id: vpnKeysTable.id });
+          if (!revoked) throw new Error("SOURCE_KEY_ALREADY_REVOKED");
+        }));
       } catch (err) {
         logger.error(
           { err, oldKeyId: key.id, newKeyId: result.key.id },

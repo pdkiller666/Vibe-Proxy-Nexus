@@ -22,6 +22,7 @@ describe("VPN key revoke flow", () => {
   let otherUserCookie: string;
   let planId: number;
   let nodeId: number;
+  let activeSubscriptionId: number;
   const subscriptionIds: number[] = [];
   const vpnKeyIds: number[] = [];
 
@@ -91,6 +92,7 @@ describe("VPN key revoke flow", () => {
         endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       })
       .returning({ id: subscriptionsTable.id });
+    activeSubscriptionId = subscription.id;
     subscriptionIds.push(subscription.id);
   });
 
@@ -123,22 +125,48 @@ describe("VPN key revoke flow", () => {
 
   it("revokes an owned VPN key and stamps revokedAt", async () => {
     const keyId = await issueKey();
+    await db
+      .update(vpnKeysTable)
+      .set({ periodUpBytes: 111, periodDownBytes: 222 })
+      .where(eq(vpnKeysTable.id, keyId));
+    const [before] = await db
+      .select({ carried: subscriptionsTable.carriedOverPeriodBytes })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, activeSubscriptionId));
 
     const res = await request.delete(`/api/vpn-keys/${keyId}`).set("Cookie", userCookie);
     expect(res.status).toBe(204);
 
     const [key] = await db.select().from(vpnKeysTable).where(eq(vpnKeysTable.id, keyId));
     expect(key?.revokedAt).not.toBeNull();
+    const [after] = await db
+      .select({ carried: subscriptionsTable.carriedOverPeriodBytes })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, activeSubscriptionId));
+    expect(after!.carried).toBe(before!.carried + 333);
   });
 
   it("is idempotent — revoking an already-revoked key still succeeds", async () => {
     const keyId = await issueKey();
+    await db
+      .update(vpnKeysTable)
+      .set({ periodUpBytes: 444, periodDownBytes: 555 })
+      .where(eq(vpnKeysTable.id, keyId));
+    const [before] = await db
+      .select({ carried: subscriptionsTable.carriedOverPeriodBytes })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, activeSubscriptionId));
 
     const first = await request.delete(`/api/vpn-keys/${keyId}`).set("Cookie", userCookie);
     expect(first.status).toBe(204);
 
     const second = await request.delete(`/api/vpn-keys/${keyId}`).set("Cookie", userCookie);
     expect(second.status).toBe(204);
+    const [after] = await db
+      .select({ carried: subscriptionsTable.carriedOverPeriodBytes })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, activeSubscriptionId));
+    expect(after!.carried).toBe(before!.carried + 999);
   });
 
   it("returns 404 when a user tries to revoke another user's key", async () => {
@@ -739,6 +767,10 @@ describe("VPN key relocation", () => {
     expect(first.status).toBe(201);
     const oldKeyId = first.body.id as number;
     keyIds.push(oldKeyId);
+    await db
+      .update(vpnKeysTable)
+      .set({ periodUpBytes: 1_000, periodDownBytes: 2_000 })
+      .where(eq(vpnKeysTable.id, oldKeyId));
 
     const idempotencyKey = randomBytes(16).toString("hex");
     const relocationPath = `/api/vpn-keys/${oldKeyId}/relocate`;
@@ -769,6 +801,11 @@ describe("VPN key relocation", () => {
       expect.objectContaining({ id: newKeyId, nodeId: targetNodeId }),
     ]);
     expect(rows.find((row) => row.id === oldKeyId)?.revokedAt).not.toBeNull();
+    const [updatedSubscription] = await db
+      .select({ carried: subscriptionsTable.carriedOverPeriodBytes })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, subscription.id));
+    expect(updatedSubscription!.carried).toBe(3_000);
   });
 
   it("deduplicates concurrent relocation requests for a one-slot subscription", async () => {

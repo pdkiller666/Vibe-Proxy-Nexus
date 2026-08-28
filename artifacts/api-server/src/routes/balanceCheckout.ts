@@ -65,6 +65,7 @@ router.post("/balance-checkout", requireAuth, async (req, res): Promise<void> =>
         pending_payment_not_found: "Эта заявка на оплату не найдена. Обновите страницу.",
         pending_payment_not_pending: "Этот платёж уже обработан. Обновите страницу, чтобы увидеть актуальный статус.",
         pending_payment_id_required: "Для оплаты этой заявки с баланса обновите страницу и попробуйте ещё раз.",
+        pending_payment_owner_mismatch: "Эта заявка на оплату недействительна. Обратитесь в поддержку.",
         concurrent_payment_conflict: "У вас уже есть незавершённая заявка. Обновите страницу и попробуйте снова.",
       } as const;
       res.status(409).json({ error: messages[outcome.error] });

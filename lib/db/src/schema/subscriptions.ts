@@ -59,9 +59,10 @@ export const subscriptionsTable = pgTable(
     // need to clear it because renewals create a brand new subscription row
     // that starts with this null by default.
     trafficLimitExceededAt: timestamp("traffic_limit_exceeded_at", { withTimezone: true }),
-    // Period bytes "banked" from VPN keys that enforceTrafficLimits() revoked
-    // for exceeding the traffic cap (revokedReason: 'traffic_limit') while
-    // this subscription row was the active one. Every usage check that sums
+    // Period bytes "banked" from VPN keys revoked while this subscription row
+    // was the active one. This includes traffic-cap enforcement plus
+    // user/admin removal and replacement flows that do not copy counters
+    // directly to a replacement key. Every usage check that sums
     // vpn_keys.periodUpBytes/periodDownBytes only does so over non-revoked
     // keys (isNull(revokedAt)) — without this column, the instant a key is
     // revoked for hitting the cap, its accumulated usage becomes invisible.
@@ -71,7 +72,9 @@ export const subscriptionsTable = pgTable(
     // of just the newly purchased headroom on top of what they'd already
     // used. Every place that computes "how much of this period has the user
     // used" must add this to the sum over active keys.
-    // Never touched by a renewal: a renewal always activates a brand-new
+    // Replacement flows that DO copy period counters to the replacement key
+    // must not bank them here, or the same usage would be counted twice.
+    // Never carried into a renewal: a renewal always activates a brand-new
     // subscription row (see schema comment on extraTrafficGb above), which
     // starts this back at 0 — matching periodUpBytes/periodDownBytes being
     // reset to 0 on the (surviving) active keys in confirmPayment.ts.

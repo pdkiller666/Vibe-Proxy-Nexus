@@ -40,6 +40,8 @@ import {
   UpdateUserSubscriptionParams,
   UpdateUserSubscriptionResponse,
 } from "@workspace/api-zod";
+import { bankActiveKeyUsageForRevocation } from "../../lib/trafficCarryover";
+import { afterTrafficDeltasFlushed } from "../../lib/trafficPolling";
 import { hashPassword } from "../../lib/password";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
@@ -703,16 +705,17 @@ router.post("/admin/users/:userId/ban", requireAuth, requireAdmin, async (req, r
     .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
 
   // DB write: ban flag + revoke all active keys + force-logout — atomically.
-  await db.transaction(async (tx) => {
+  await afterTrafficDeltasFlushed(() => db.transaction(async (tx) => {
     await tx.update(usersTable).set({ isBanned: true }).where(eq(usersTable.id, userId));
-    if (activeKeys.length > 0) {
+    const banked = await bankActiveKeyUsageForRevocation(tx, userId);
+    if (banked.keyIds.length > 0) {
       await tx
         .update(vpnKeysTable)
-        .set({ revokedAt: new Date(), xrayCleanupPendingAt: new Date() })
-        .where(and(eq(vpnKeysTable.userId, userId), isNull(vpnKeysTable.revokedAt)));
+        .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
+        .where(inArray(vpnKeysTable.id, banked.keyIds));
     }
     await tx.delete(sessionsTable).where(eq(sessionsTable.userId, userId));
-  });
+  }));
 
   // Remove from Xray nodes (non-fatal — DB revokedAt is already the authority).
   for (const { key, node } of activeKeys) {

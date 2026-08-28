@@ -7,6 +7,8 @@ import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
 import { removeRemoteXrayClient } from "../../lib/remoteNode";
 import { issueKeyForUser } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
+import { bankActiveKeyUsageForRevocation } from "../../lib/trafficCarryover";
+import { afterTrafficDeltasFlushed } from "../../lib/trafficPolling";
 
 const IssueAdminVpnKeyBody = z.object({
   userId: z.number().int().positive(),
@@ -154,12 +156,17 @@ router.delete("/admin/vpn-keys/:keyId", requireAuth, requireAdmin, async (req, r
   // the DB-owned source of truth); the stale Xray entry will not accept new
   // connections because no valid session will reference it. This is the same
   // write order as the user-facing DELETE /vpn-keys/:keyId route.
-  await db
-    .update(vpnKeysTable)
-    .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
-    .where(eq(vpnKeysTable.id, keyId));
+  const revoked = await afterTrafficDeltasFlushed(() => db.transaction(async (tx) => {
+    await bankActiveKeyUsageForRevocation(tx, existing.key.userId, [keyId]);
+    const [updated] = await tx
+      .update(vpnKeysTable)
+      .set({ revokedAt: new Date(), revokedReason: "admin", xrayCleanupPendingAt: new Date() })
+      .where(and(eq(vpnKeysTable.id, keyId), isNull(vpnKeysTable.revokedAt)))
+      .returning({ id: vpnKeysTable.id });
+    return Boolean(updated);
+  }));
 
-  if (!existing.key.revokedAt) {
+  if (revoked) {
     if (existing.node.managementApiUrl) {
       try {
         await removeRemoteXrayClient(existing.node, existing.key.uuid);

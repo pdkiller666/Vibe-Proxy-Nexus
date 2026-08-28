@@ -19,6 +19,8 @@ import { buildSubscriptionUrl } from "../lib/subscription";
 import { buildServingVlessLink } from "../lib/vless";
 import { isTrafficLimitBlocked, issueKeyForUser, resolveTotalSlots } from "../lib/keyIssuance";
 import { logger } from "../lib/logger";
+import { bankActiveKeyUsageForRevocation } from "../lib/trafficCarryover";
+import { afterTrafficDeltasFlushed } from "../lib/trafficPolling";
 
 const router: IRouter = Router();
 
@@ -198,14 +200,31 @@ router.delete("/vpn-keys/:keyId", requireAuth, async (req, res): Promise<void> =
   // reconcile, no user data integrity issue. The previous (unsafe) order was
   // Xray-first: DB still said active while the device couldn't connect, which
   // presented the user with a "working" key that did nothing.
+  let revoked = false;
   try {
-    await db
-      .update(vpnKeysTable)
-      .set({ revokedAt: new Date(), revokedReason: "user", xrayCleanupPendingAt: new Date() })
-      .where(and(eq(vpnKeysTable.id, existing.key.id), eq(vpnKeysTable.userId, user.id)));
+    revoked = await afterTrafficDeltasFlushed(() => db.transaction(async (tx) => {
+      await bankActiveKeyUsageForRevocation(tx, user.id, [existing.key.id]);
+      const [updated] = await tx
+        .update(vpnKeysTable)
+        .set({ revokedAt: new Date(), revokedReason: "user", xrayCleanupPendingAt: new Date() })
+        .where(
+          and(
+            eq(vpnKeysTable.id, existing.key.id),
+            eq(vpnKeysTable.userId, user.id),
+            isNull(vpnKeysTable.revokedAt),
+          ),
+        )
+        .returning({ id: vpnKeysTable.id });
+      return Boolean(updated);
+    }));
   } catch (err) {
     req.log.error({ err, keyId: existing.key.id }, "Failed to revoke VPN key in DB");
     res.status(500).json({ error: "Failed to revoke VPN key" });
+    return;
+  }
+
+  if (!revoked) {
+    res.sendStatus(204);
     return;
   }
 
@@ -365,24 +384,36 @@ router.post("/vpn-keys/:keyId/relocate", requireAuth, async (req, res): Promise<
   }
 
   // Revoke the old key: DB-first (source of truth), then Xray (non-fatal).
+  let revokedSource = false;
   try {
-    await db
-      .update(vpnKeysTable)
-    .set({ revokedAt: new Date(), revokedReason: "user", xrayCleanupPendingAt: new Date() })
-      .where(and(eq(vpnKeysTable.id, existing.key.id), eq(vpnKeysTable.userId, user.id)));
+    revokedSource = await afterTrafficDeltasFlushed(() => db.transaction(async (tx) => {
+      await bankActiveKeyUsageForRevocation(tx, user.id, [existing.key.id]);
+      const [revoked] = await tx
+        .update(vpnKeysTable)
+        .set({ revokedAt: new Date(), revokedReason: "user", xrayCleanupPendingAt: new Date() })
+        .where(
+          and(
+            eq(vpnKeysTable.id, existing.key.id),
+            eq(vpnKeysTable.userId, user.id),
+            isNull(vpnKeysTable.revokedAt),
+          ),
+        )
+        .returning({ id: vpnKeysTable.id });
+      return Boolean(revoked);
+    }));
   } catch (err) {
     logger.error({ err, oldKeyId: existing.key.id, newKeyId: result.key.id },
       "relocate: new key issued but old key DB revoke failed — old key left active for cleanup");
   }
 
-  if (existing.node.managementApiUrl) {
+  if (revokedSource && existing.node.managementApiUrl) {
     try {
       await removeRemoteXrayClient(existing.node, existing.key.uuid);
       await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, existing.key.id));
     } catch (err) {
       logger.warn({ err, uuid: existing.key.uuid }, "relocate: old remote Xray client removal failed (ignored)");
     }
-  } else if (isLocalXrayEnabled()) {
+  } else if (revokedSource && isLocalXrayEnabled()) {
     try {
       await removeXrayClient(existing.key.uuid);
       await db.update(vpnKeysTable).set({ xrayCleanupPendingAt: null }).where(eq(vpnKeysTable.id, existing.key.id));

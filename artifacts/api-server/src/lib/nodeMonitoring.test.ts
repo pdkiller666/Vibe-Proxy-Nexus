@@ -3,6 +3,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   db,
+  plansTable,
+  subscriptionsTable,
   usersTable,
   vpnKeysTable,
   vpnNodesTable,
@@ -15,6 +17,8 @@ describe("pending VPN key replacement reconciliation", () => {
   let newNodeId: number;
   let oldKeyId: number;
   let newKeyId: number;
+  let planId: number;
+  let subscriptionId: number;
 
   beforeAll(async () => {
     const suffix = randomBytes(8).toString("hex");
@@ -28,6 +32,29 @@ describe("pending VPN key replacement reconciliation", () => {
       })
       .returning({ id: usersTable.id });
     userId = user.id;
+
+    const [plan] = await db
+      .insert(plansTable)
+      .values({
+        name: `Reconcile plan ${suffix}`,
+        priceRub: 100,
+        durationDays: 30,
+        trafficLimitGb: 10,
+      })
+      .returning({ id: plansTable.id });
+    planId = plan.id;
+
+    const [subscription] = await db
+      .insert(subscriptionsTable)
+      .values({
+        userId,
+        planId,
+        status: "active",
+        startsAt: new Date(),
+        endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: subscriptionsTable.id });
+    subscriptionId = subscription.id;
 
     const [oldNode] = await db
       .insert(vpnNodesTable)
@@ -61,6 +88,8 @@ describe("pending VPN key replacement reconciliation", () => {
         vlessLink: "vless://old",
         deepLink: "old://key",
         provisionedAt: new Date(),
+        periodUpBytes: 1_200,
+        periodDownBytes: 2_300,
       })
       .returning({ id: vpnKeysTable.id });
     oldKeyId = oldKey.id;
@@ -84,8 +113,10 @@ describe("pending VPN key replacement reconciliation", () => {
   afterAll(async () => {
     await db.delete(vpnKeysTable).where(eq(vpnKeysTable.id, newKeyId));
     await db.delete(vpnKeysTable).where(eq(vpnKeysTable.id, oldKeyId));
+    await db.delete(subscriptionsTable).where(eq(subscriptionsTable.id, subscriptionId));
     await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, oldNodeId));
     await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, newNodeId));
+    await db.delete(plansTable).where(eq(plansTable.id, planId));
     await db.delete(usersTable).where(eq(usersTable.id, userId));
   });
 
@@ -110,5 +141,11 @@ describe("pending VPN key replacement reconciliation", () => {
       .from(vpnKeysTable)
       .where(eq(vpnKeysTable.id, oldKeyId));
     expect(oldKey.revokedAt).not.toBeNull();
+
+    const [subscription] = await db
+      .select({ carried: subscriptionsTable.carriedOverPeriodBytes })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, subscriptionId));
+    expect(subscription.carried).toBe(3_500);
   });
 });

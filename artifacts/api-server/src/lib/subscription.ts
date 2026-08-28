@@ -9,7 +9,7 @@ import { resolvePublicAddress } from "./domain";
  * (background jobs) — both are the same drizzle-postgres shape, so a
  * callback typed against `db.transaction`'s parameter works for either.
  */
-type PgTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type PgTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Canonical "current subscription" selector: the most recently started,

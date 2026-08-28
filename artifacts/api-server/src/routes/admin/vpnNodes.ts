@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { asc, eq, isNull, and, ne, or, sql } from "drizzle-orm";
+import { asc, eq, inArray, isNull, and, ne, or, sql } from "drizzle-orm";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { db, vpnKeysTable, vpnNodesTable, systemEventsTable } from "@workspace/db";
@@ -19,6 +19,8 @@ import { issueKeyForUser, resolveTotalSlots } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
 import { maybeRecordMetricSnapshot } from "../../lib/nodeMonitoring";
 import { getLocalSystemStatus } from "../../lib/sysStatus";
+import { bankActiveKeyUsageForRevocation } from "../../lib/trafficCarryover";
+import { afterTrafficDeltasFlushed } from "../../lib/trafficPolling";
 
 const router: IRouter = Router();
 const execAsync = promisify(exec);
@@ -90,6 +92,11 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
     res.status(404).json({ error: "VPN node not found" });
     return;
   }
+
+  // Stop new issuance before taking the migration snapshot. If this request
+  // later fails, leaving the node inactive is safer than placing fresh keys
+  // onto a node an admin is trying to remove.
+  await db.update(vpnNodesTable).set({ isActive: false }).where(eq(vpnNodesTable.id, nodeId));
 
   // 2. Load all keys on this node (active + historical). We delete them all so
   //    the ON DELETE RESTRICT FK constraint doesn't block the node deletion.
@@ -330,8 +337,23 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
   // 4. Delete all keys for this node, then the node itself.
   //    Both in a try/catch so a concurrent race doesn't leave partial state.
   try {
-    await db.delete(vpnKeysTable).where(eq(vpnKeysTable.nodeId, nodeId));
-    await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
+    await afterTrafficDeltasFlushed(() => db.transaction(async (tx) => {
+      const remainingActive = await tx
+        .select({ id: vpnKeysTable.id, userId: vpnKeysTable.userId })
+        .from(vpnKeysTable)
+        .where(and(eq(vpnKeysTable.nodeId, nodeId), isNull(vpnKeysTable.revokedAt)));
+      const byUser = new Map<number, number[]>();
+      for (const key of remainingActive) {
+        const ids = byUser.get(key.userId) ?? [];
+        ids.push(key.id);
+        byUser.set(key.userId, ids);
+      }
+      for (const [userId, keyIds] of byUser) {
+        await bankActiveKeyUsageForRevocation(tx, userId, keyIds);
+      }
+      await tx.delete(vpnKeysTable).where(eq(vpnKeysTable.nodeId, nodeId));
+      await tx.delete(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
+    }));
   } catch (err) {
     logger.error({ err, nodeId }, "delete node: DB deletion failed");
     res.status(500).json({ error: "Не удалось удалить узел из базы данных" });

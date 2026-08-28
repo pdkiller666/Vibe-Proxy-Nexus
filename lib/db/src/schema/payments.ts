@@ -59,6 +59,11 @@ export const paymentsTable = pgTable(
     webhookEventId: text("webhook_event_id"),
   },
   (table) => [
+    // PostgreSQL cannot express this cross-table ownership rule as a CHECK
+    // constraint. The production schema installs the
+    // payments_subscription_owner_guard trigger, and all application writes
+    // validate the same invariant before inserting or changing a payment.
+    // subscription_id may remain NULL for balance top-ups.
     index("payments_user_id_idx").on(table.userId),
     // Admin dashboard's pending-payments queue and the FreeKassa webhook
     // both filter by status on every request/callback.

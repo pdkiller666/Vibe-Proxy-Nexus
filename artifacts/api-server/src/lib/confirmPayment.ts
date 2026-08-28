@@ -114,14 +114,39 @@ export async function confirmPaymentById(
     }
     try {
       const updatedPayment = await db.transaction(async (tx) => {
+        // Lock and re-read the payment before touching the subscription. The
+        // database FK only guarantees that the subscription exists; ownership
+        // is a separate invariant that must be checked before the increment.
+        const [lockedPayment] = await tx
+          .select({
+            status: paymentsTable.status,
+            userId: paymentsTable.userId,
+            subscriptionId: paymentsTable.subscriptionId,
+          })
+          .from(paymentsTable)
+          .where(eq(paymentsTable.id, payment.id))
+          .for("update");
+        if (
+          !lockedPayment ||
+          lockedPayment.status !== "pending" ||
+          lockedPayment.subscriptionId !== payment.subscriptionId
+        ) {
+          throw new Error("PAYMENT_STATE_CHANGED");
+        }
+
         const [sub] = await tx
           .select({
             id: subscriptionsTable.id,
+            userId: subscriptionsTable.userId,
             status: subscriptionsTable.status,
           })
           .from(subscriptionsTable)
-          .where(eq(subscriptionsTable.id, payment.subscriptionId!));
-        if (!sub || sub.status !== "active")
+          .where(eq(subscriptionsTable.id, payment.subscriptionId!))
+          .for("update");
+        if (!sub || sub.userId !== lockedPayment.userId) {
+          throw new Error("PAYMENT_SUBSCRIPTION_OWNER_MISMATCH");
+        }
+        if (sub.status !== "active")
           throw new Error("SUBSCRIPTION_NOT_ACTIVE");
         // Atomic SQL increment — prevents lost update under concurrent confirmations
         await tx
@@ -146,6 +171,13 @@ export async function confirmPaymentById(
       await notifyPaymentConfirmed(updatedPayment, notificationOptions);
       return { ok: true, payment: updatedPayment };
     } catch (err) {
+      if (err instanceof Error && err.message === "PAYMENT_SUBSCRIPTION_OWNER_MISMATCH") {
+        return {
+          ok: false,
+          status: 409,
+          error: "Payment does not belong to the selected subscription",
+        };
+      }
       if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
         return {
           ok: false,
@@ -177,12 +209,33 @@ export async function confirmPaymentById(
         // while this confirmation is in flight. Lock and re-check the payment
         // before granting traffic so a stale read cannot grant twice.
         const [lockedPayment] = await tx
-          .select({ status: paymentsTable.status })
+          .select({
+            status: paymentsTable.status,
+            userId: paymentsTable.userId,
+            subscriptionId: paymentsTable.subscriptionId,
+          })
           .from(paymentsTable)
           .where(eq(paymentsTable.id, payment.id))
           .for("update");
-        if (!lockedPayment || lockedPayment.status !== "pending") {
+        if (
+          !lockedPayment ||
+          lockedPayment.status !== "pending" ||
+          lockedPayment.subscriptionId !== payment.subscriptionId
+        ) {
           throw new Error("PAYMENT_STATE_CHANGED");
+        }
+
+        // Extra-traffic policy: payment.userId is authoritative, while a
+        // linked subscription may be redirected only when it belongs to that
+        // same user (for example, after a renewal). Reject malformed or
+        // imported cross-owner pairs before changing either row.
+        const [linkedSub] = await tx
+          .select({ userId: subscriptionsTable.userId })
+          .from(subscriptionsTable)
+          .where(eq(subscriptionsTable.id, lockedPayment.subscriptionId!))
+          .for("update");
+        if (!linkedSub || linkedSub.userId !== lockedPayment.userId) {
+          throw new Error("PAYMENT_SUBSCRIPTION_OWNER_MISMATCH");
         }
 
         // Lock and read the user's CURRENT subscription in one step —
@@ -244,6 +297,13 @@ export async function confirmPaymentById(
       await notifyPaymentConfirmed(updatedPayment.updatedPay, notificationOptions);
       return { ok: true, payment: updatedPayment.updatedPay };
     } catch (err) {
+      if (err instanceof Error && err.message === "PAYMENT_SUBSCRIPTION_OWNER_MISMATCH") {
+        return {
+          ok: false,
+          status: 409,
+          error: "Payment does not belong to the selected subscription",
+        };
+      }
       if (err instanceof Error && err.message === "SUBSCRIPTION_NOT_ACTIVE") {
         return {
           ok: false,
@@ -339,18 +399,74 @@ export async function confirmPaymentById(
 
   try {
     const updatedPayment = await db.transaction(async (tx) => {
-      // Lock the subscription row being activated so two concurrent
-      // confirmations (e.g. admin + YooMoney webhook arriving simultaneously)
-      // cannot both read the same currentActive and compute the same startsAt,
-      // which would make both subscriptions start at the same time instead of
-      // in sequence. The FOR UPDATE lock serialises this critical section.
+      // Lock and re-read both rows before taking any fulfillment action.
+      // The FK on payments.subscriptionId only guarantees that the
+      // subscription exists; it does not guarantee that both rows belong to
+      // the same user. Imported or manually edited data must never activate
+      // one user's subscription from another user's payment.
+      const [lockedPayment] = await tx
+        .select({
+          status: paymentsTable.status,
+          userId: paymentsTable.userId,
+          subscriptionId: paymentsTable.subscriptionId,
+        })
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, payment.id))
+        .for("update");
+      if (!lockedPayment || lockedPayment.status !== "pending") {
+        throw new Error("Payment state changed concurrently");
+      }
+      if (lockedPayment.subscriptionId !== subscription.id) {
+        throw new Error("Payment state changed concurrently");
+      }
+
+      const [lockedSubscription] = await tx
+        .select({
+          status: subscriptionsTable.status,
+          userId: subscriptionsTable.userId,
+        })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.id, subscription.id))
+        .for("update");
+      if (!lockedSubscription || lockedSubscription.status === "active") {
+        throw new Error("Subscription state changed concurrently");
+      }
+      if (lockedPayment.userId !== lockedSubscription.userId) {
+        throw new Error("PAYMENT_SUBSCRIPTION_OWNER_MISMATCH");
+      }
+
+      // Subscription activation is a per-user critical section. Locking only
+      // the subscription being activated is insufficient: two confirmations
+      // for different pending rows would take different locks and could both
+      // calculate the same startsAt. The shared user-row lock makes every
+      // activation for this subscriber run strictly in sequence.
       await tx.execute(
-        sql`SELECT id FROM subscriptions WHERE id = ${subscription.id} FOR UPDATE`,
+        sql`SELECT id FROM users WHERE id = ${lockedPayment.userId} FOR UPDATE`,
       );
 
-      // Re-read currentActive *inside* the transaction (after the lock) so
-      // startsAt/endsAt reflect the true DB state at this moment, not a
-      // snapshot taken before the transaction started.
+      // Lock and re-check the exact rows after acquiring the per-user lock.
+      // This also protects against a same-payment retry whose pre-transaction
+      // reads became stale while it waited for another confirmation to commit.
+      const [paymentAfterUserLock] = await tx
+        .select({ status: paymentsTable.status })
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, payment.id))
+        .for("update");
+      if (!paymentAfterUserLock || paymentAfterUserLock.status !== "pending") {
+        throw new Error("Payment state changed concurrently");
+      }
+
+      const [subscriptionAfterUserLock] = await tx
+        .select({ status: subscriptionsTable.status })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.id, subscription.id))
+        .for("update");
+      if (!subscriptionAfterUserLock || subscriptionAfterUserLock.status === "active") {
+        throw new Error("Subscription state changed concurrently");
+      }
+
+      // Re-read currentActive inside the transaction after the user lock so
+      // startsAt/endsAt reflect the preceding confirmation's committed row.
       const now = new Date();
       const [currentActive] = await tx
         .select()
@@ -385,7 +501,7 @@ export async function confirmPaymentById(
         .where(
           and(
             eq(subscriptionsTable.id, subscription.id),
-            eq(subscriptionsTable.status, subscription.status),
+            eq(subscriptionsTable.status, lockedSubscription.status),
           ),
         )
         .returning();
@@ -394,7 +510,12 @@ export async function confirmPaymentById(
 
       await tx
         .update(subscriptionsTable)
-        .set({ status: "expired", endsAt: now })
+        // A fixed-duration predecessor already ends exactly where this new
+        // paid period starts. Retire its status without truncating endsAt;
+        // overwriting it with now would discard the period just chained above.
+        // Hourly activation is an immediate switch, so it still closes the
+        // previous period at the switch instant.
+        .set(isHourly ? { status: "expired", endsAt: now } : { status: "expired" })
         .where(
           and(
             eq(subscriptionsTable.userId, subscription.userId),
@@ -489,7 +610,14 @@ export async function confirmPaymentById(
     await notifyPaymentConfirmed(updatedPayment, notificationOptions);
 
     return { ok: true, payment: updatedPayment };
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message === "PAYMENT_SUBSCRIPTION_OWNER_MISMATCH") {
+      return {
+        ok: false,
+        status: 409,
+        error: "Payment does not belong to the selected subscription",
+      };
+    }
     return {
       ok: false,
       status: 409,

@@ -1163,6 +1163,54 @@ try {
   `);
   console.log("heal-schema: M-42 subscriptions.carried_over_period_bytes column added");
 
+  // ── M-43: payments.subscription_id/user_id ownership guard ───────────────
+  // A plain FK only proves that subscription_id exists.  The trigger closes
+  // the remaining integrity gap without using a composite FK whose
+  // ON DELETE SET NULL action would also null the required payments.user_id.
+  // Existing malformed rows are detached first; they remain auditable but
+  // cannot later be confirmed against the wrong user's subscription.
+  const { rowCount: detachedPayments } = await client.query(`
+    UPDATE payments AS p
+       SET subscription_id = NULL
+     WHERE p.subscription_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1
+           FROM subscriptions AS s
+          WHERE s.id = p.subscription_id
+            AND s.user_id = p.user_id
+       )
+  `);
+  await client.query(`
+    CREATE OR REPLACE FUNCTION payments_subscription_owner_guard()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = public
+    AS $$
+    BEGIN
+      IF NEW.subscription_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1
+             FROM subscriptions AS s
+            WHERE s.id = NEW.subscription_id
+              AND s.user_id = NEW.user_id
+         )
+      THEN
+        RAISE EXCEPTION 'payment subscription owner mismatch'
+          USING ERRCODE = '23514';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+  `);
+  await client.query(`
+    DROP TRIGGER IF EXISTS payments_subscription_owner_guard ON payments;
+    CREATE TRIGGER payments_subscription_owner_guard
+      BEFORE INSERT OR UPDATE OF subscription_id, user_id ON payments
+      FOR EACH ROW
+      EXECUTE FUNCTION payments_subscription_owner_guard();
+  `);
+  console.log(`heal-schema: M-43 payments subscription ownership guard (detached ${detachedPayments ?? 0} malformed rows)`);
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);
