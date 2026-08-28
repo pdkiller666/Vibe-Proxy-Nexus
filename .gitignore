@@ -61,3 +61,6 @@ Thumbs.db
 
 # Diagnostic screenshots attached during support conversations stay local.
 /attached_assets/Screenshot_*.jpg
+
+# Text logs attached during support conversations stay local.
+/attached_assets/Pasted-*.txt

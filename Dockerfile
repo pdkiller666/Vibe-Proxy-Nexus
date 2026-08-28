@@ -71,7 +71,8 @@ COPY deploy/amvera-all-in-one/heal-schema-m41.mjs ./db-migrate/heal-schema-m41.m
 COPY deploy/amvera-all-in-one/xray-config.json.template ./xray/config.json.template
 COPY deploy/amvera-all-in-one/supervisord.conf ./supervisord.conf
 COPY deploy/amvera-all-in-one/entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+COPY deploy/amvera-all-in-one/xray-log-bridge.sh ./xray-log-bridge.sh
+RUN chmod +x ./entrypoint.sh ./xray-log-bridge.sh
 
 ENV NODE_ENV=production
 ENV STATIC_DIR=/app/public
