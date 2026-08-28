@@ -84,4 +84,8 @@ describe("Amvera M-41 schema repair", () => {
     expect(criticalMigrationSection).toContain("CREATE TRIGGER payments_subscription_owner_guard");
     expect(migrationSource.slice(m41Position)).toContain("runM41BestEffort");
   });
+
+  it("casts PostgreSQL name[] metadata to text[] for the Node pg driver", () => {
+    expect(migrationSource).toContain("array_agg(a.attname::text ORDER BY key_part.ordinality)");
+  });
 });

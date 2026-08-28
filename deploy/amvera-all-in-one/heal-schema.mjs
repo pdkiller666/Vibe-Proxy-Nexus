@@ -144,7 +144,7 @@ async function readM41Index() {
         i.indisready,
         i.indislive,
         am.amname AS index_method,
-        array_agg(a.attname ORDER BY key_part.ordinality)
+        array_agg(a.attname::text ORDER BY key_part.ordinality)
           FILTER (WHERE key_part.ordinality <= i.indnkeyatts) AS key_columns,
         array_agg((i.indoption[key_part.ordinality - 1] & 1) = 1 ORDER BY key_part.ordinality)
           FILTER (WHERE key_part.ordinality <= i.indnkeyatts) AS descending,
