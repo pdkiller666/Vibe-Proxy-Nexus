@@ -194,6 +194,14 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  if (payment.status === "refunded") {
+    // A provider retry may arrive after an admin recorded a return. Never
+    // re-open or re-credit a settled/refunded invoice from a late webhook.
+    logger.warn({ paymentId, operation_id: params.operation_id }, "YooMoney webhook: payment already refunded — ignoring");
+    res.status(200).send("OK");
+    return;
+  }
+
   if (payment.status === "confirmed") {
     // Check for a genuine double-charge: a second real YooMoney transfer
     // arriving for a label that was already settled by a different operation.
@@ -286,7 +294,7 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
         .from(paymentsTable)
         .where(eq(paymentsTable.id, payment.id));
 
-      if (!fresh || fresh.status === "confirmed" || fresh.status === "rejected") {
+      if (!fresh || fresh.status === "confirmed" || fresh.status === "rejected" || fresh.status === "refunded") {
         // (a) Concurrent delivery already finalised this payment.
         res.status(200).send("OK");
       } else {

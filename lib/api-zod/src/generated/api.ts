@@ -63,6 +63,7 @@ export const RegisterResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
+  "referredPayingUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
   "isTrialSubscription": zod.boolean(),
@@ -112,6 +113,7 @@ export const LoginResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
+  "referredPayingUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
   "isTrialSubscription": zod.boolean(),
@@ -189,6 +191,7 @@ export const GetMeResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
+  "referredPayingUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
   "isTrialSubscription": zod.boolean(),
@@ -233,6 +236,7 @@ export const UpdateMeResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
+  "referredPayingUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
   "isTrialSubscription": zod.boolean(),
@@ -282,6 +286,7 @@ export const ChangeMyEmailResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
+  "referredPayingUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
   "isTrialSubscription": zod.boolean(),
@@ -346,6 +351,7 @@ export const PatchMeAutoRenewResponse = zod.object({
   "referralCommissionPercent": zod.number(),
   "referralEarningsKopecks": zod.number(),
   "referredUserCount": zod.number(),
+  "referredPayingUserCount": zod.number(),
   "referralLinkHost": zod.string(),
   "isBanned": zod.boolean(),
   "isTrialSubscription": zod.boolean(),
@@ -517,7 +523,7 @@ export const ListMySubscriptionsResponse = zod.array(ListMySubscriptionsResponse
  */
 export const CreateSubscriptionBody = zod.object({
   "planId": zod.number(),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']).optional()
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']).optional()
 })
 
 export const CreateSubscriptionResponse = zod.object({
@@ -550,16 +556,19 @@ export const CreateSubscriptionResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
   "hasScreenshot": zod.boolean().optional(),
   "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "confirmedAt": zod.coerce.date().nullish()
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
 }),zod.null()])
 })
 
@@ -571,16 +580,19 @@ export const ListMyPaymentsResponseItem = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
   "hasScreenshot": zod.boolean().optional(),
   "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "confirmedAt": zod.coerce.date().nullish()
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
 })
 export const ListMyPaymentsResponse = zod.array(ListMyPaymentsResponseItem)
 
@@ -604,16 +616,19 @@ export const UpdatePaymentNoteResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
   "hasScreenshot": zod.boolean().optional(),
   "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "confirmedAt": zod.coerce.date().nullish()
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
 })
 
 
@@ -640,16 +655,19 @@ export const UpdatePaymentScreenshotResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
   "hasScreenshot": zod.boolean().optional(),
   "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "confirmedAt": zod.coerce.date().nullish()
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
 })
 
 
@@ -671,7 +689,7 @@ export const GetPaymentScreenshotResponse = zod.unknown()
 export const ListMyBalanceTransactionsResponseItem = zod.object({
   "id": zod.number(),
   "amountKopecks": zod.number(),
-  "type": zod.enum(['topup', 'debit', 'refund', 'referral']),
+  "type": zod.enum(['topup', 'debit', 'refund', 'referral', 'referral_reversal']),
   "description": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -1327,7 +1345,7 @@ export const UpdatePaymentSettingsResponse = zod.object({
  * @summary List payments (optionally filtered by status and/or userId)
  */
 export const ListAdminPaymentsQueryParams = zod.object({
-  "status": zod.enum(['pending', 'confirmed', 'rejected']).optional(),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']).optional(),
   "userId": zod.coerce.number().optional()
 })
 
@@ -1338,16 +1356,19 @@ export const ListAdminPaymentsResponseItem = zod.object({
   "userEmail": zod.string(),
   "planName": zod.string().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
   "hasScreenshot": zod.boolean().optional(),
   "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "confirmedAt": zod.coerce.date().nullish()
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
 })
 export const ListAdminPaymentsResponse = zod.array(ListAdminPaymentsResponseItem)
 
@@ -1363,16 +1384,19 @@ export const ConfirmPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
   "hasScreenshot": zod.boolean().optional(),
   "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "confirmedAt": zod.coerce.date().nullish()
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
 })
 
 
@@ -1391,16 +1415,56 @@ export const RejectPaymentResponse = zod.object({
   "id": zod.number(),
   "subscriptionId": zod.number().nullable(),
   "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
-  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
   "amountRub": zod.number(),
   "extraTrafficGb": zod.number().nullish(),
-  "status": zod.enum(['pending', 'confirmed', 'rejected']),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
   "reference": zod.string(),
   "userNote": zod.string().nullish(),
   "hasScreenshot": zod.boolean().optional(),
   "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "confirmedAt": zod.coerce.date().nullish()
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Record an external payment refund or chargeback and reverse its referral commission
+ */
+export const RefundPaymentParams = zod.object({
+  "paymentId": zod.coerce.number()
+})
+
+export const refundPaymentBodyKindDefault = `refund`;
+export const refundPaymentBodyReasonMax = 500;
+
+
+
+export const RefundPaymentBody = zod.object({
+  "kind": zod.enum(['refund', 'chargeback']).default(refundPaymentBodyKindDefault),
+  "reason": zod.string().max(refundPaymentBodyReasonMax).optional()
+})
+
+export const RefundPaymentResponse = zod.object({
+  "id": zod.number(),
+  "subscriptionId": zod.number().nullable(),
+  "type": zod.enum(['subscription', 'extra_device_slot', 'balance_topup', 'extra_traffic']),
+  "provider": zod.enum(['manual_sbp', 'yookassa', 'yoomoney', 'freekassa', 'balance', 'free_grant']),
+  "amountRub": zod.number(),
+  "extraTrafficGb": zod.number().nullish(),
+  "status": zod.enum(['pending', 'confirmed', 'rejected', 'refunded']),
+  "reference": zod.string(),
+  "userNote": zod.string().nullish(),
+  "hasScreenshot": zod.boolean().optional(),
+  "rejectionReason": zod.string().nullish(),
+  "refundKind": zod.union([zod.literal('refund'),zod.literal('chargeback'),zod.literal(null)]).nullish(),
+  "refundReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "confirmedAt": zod.coerce.date().nullish(),
+  "refundedAt": zod.coerce.date().nullish()
 })
 
 
@@ -1531,8 +1595,9 @@ export const ListAdminReferralsResponseItem = zod.object({
   "userId": zod.number(),
   "email": zod.string(),
   "name": zod.string().nullish(),
-  "referredCount": zod.number(),
-  "totalRevenueRub": zod.number(),
+  "referredCount": zod.number().describe('Number of registered users who used this referrer\'s link.'),
+  "payingReferredCount": zod.number().describe('Number of referred users with at least one confirmed subscription payment.'),
+  "totalRevenueRub": zod.number().describe('Confirmed subscription revenue from referred users; wallet top-ups are excluded.'),
   "commissionsRub": zod.number()
 })
 export const ListAdminReferralsResponse = zod.array(ListAdminReferralsResponseItem)
@@ -2180,7 +2245,7 @@ export const ListAdminUserBalanceTransactionsParams = zod.object({
 export const ListAdminUserBalanceTransactionsResponseItem = zod.object({
   "id": zod.number(),
   "amountKopecks": zod.number(),
-  "type": zod.enum(['topup', 'debit', 'refund', 'referral']),
+  "type": zod.enum(['topup', 'debit', 'refund', 'referral', 'referral_reversal']),
   "description": zod.string().nullish(),
   "paymentId": zod.number().nullish(),
   "createdAt": zod.coerce.date()

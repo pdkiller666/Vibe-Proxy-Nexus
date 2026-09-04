@@ -15,7 +15,7 @@ import { subscriptionsTable } from "./subscriptions";
 // with this provider are created-then-immediately-confirmed in a single
 // request so free grants leave an auditable trail in the payments table.
 export const paymentProviderValues = ["manual_sbp", "yookassa", "yoomoney", "freekassa", "balance", "free_grant"] as const;
-export const paymentStatusValues = ["pending", "confirmed", "rejected"] as const;
+export const paymentStatusValues = ["pending", "confirmed", "rejected", "refunded"] as const;
 export const paymentTypeValues = ["subscription", "extra_device_slot", "balance_topup", "extra_traffic"] as const;
 
 export const paymentsTable = pgTable(
@@ -46,8 +46,14 @@ export const paymentsTable = pgTable(
     screenshotData: text("screenshot_data"),
     screenshotMimeType: text("screenshot_mime_type"),
     rejectionReason: text("rejection_reason"),
+    // Set only when an already-confirmed external payment is returned or
+    // charged back. Kept separate from rejectionReason so a settled payment
+    // remains distinguishable from one that was never accepted.
+    refundKind: text("refund_kind", { enum: ["refund", "chargeback"] }),
+    refundReason: text("refund_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
     // Generic webhook dedup key — set by any payment-provider webhook handler
     // (currently YooMoney; ready for SBP/Tinkoff/YooKassa callbacks).
     // The provider stores its event/operation id here before confirming, so a

@@ -16,9 +16,12 @@ import {
   RejectPaymentBody,
   RejectPaymentParams,
   RejectPaymentResponse,
+  RefundPaymentBody,
+  RefundPaymentParams,
+  RefundPaymentResponse,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
-import { confirmPaymentById } from "../../lib/confirmPayment";
+import { confirmPaymentById, refundPaymentById } from "../../lib/confirmPayment";
 
 const router: IRouter = Router();
 
@@ -65,6 +68,9 @@ router.get(
         hasScreenshot: sql<boolean>`(${paymentsTable.screenshotData} IS NOT NULL)`,
         userEmail: usersTable.email,
         planName: plansTable.name,
+        refundKind: paymentsTable.refundKind,
+        refundReason: paymentsTable.refundReason,
+        refundedAt: paymentsTable.refundedAt,
       })
       .from(paymentsTable)
       .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
@@ -213,6 +219,37 @@ router.post(
     }
 
     res.json(RejectPaymentResponse.parse(withHasScreenshot(updatedPayment)));
+  },
+);
+
+router.post(
+  "/admin/payments/:paymentId/refund",
+  requireAuth,
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const params = RefundPaymentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const parsed = RefundPaymentBody.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const result = await refundPaymentById(
+      params.data.paymentId,
+      parsed.data.kind ?? "refund",
+      parsed.data.reason,
+    );
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+
+    res.json(RefundPaymentResponse.parse(withHasScreenshot(result.payment)));
   },
 );
 

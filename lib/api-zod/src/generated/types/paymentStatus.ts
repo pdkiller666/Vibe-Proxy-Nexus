@@ -13,4 +13,5 @@ export const PaymentStatus = {
   pending: 'pending',
   confirmed: 'confirmed',
   rejected: 'rejected',
+  refunded: 'refunded',
 } as const;

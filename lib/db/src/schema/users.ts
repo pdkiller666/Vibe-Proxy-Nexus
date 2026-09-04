@@ -1,4 +1,5 @@
-import { boolean, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -45,6 +46,10 @@ export const usersTable = pgTable("users", {
   inviteLinkId: integer("invite_link_id"),
 },
 (table) => [
+  check(
+    "users_no_self_referral_check",
+    sql`${table.referredByUserId} IS NULL OR ${table.referredByUserId} <> ${table.id}`,
+  ),
   // Referral-tree traversal and commission attribution walk this FK on every
   // subscription payment confirmation.
   index("users_referred_by_user_id_idx").on(table.referredByUserId),

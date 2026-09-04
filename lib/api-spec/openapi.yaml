@@ -997,6 +997,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Payment"
 
+  /admin/payments/{paymentId}/refund:
+    post:
+      operationId: refundPayment
+      tags: [admin]
+      summary: Record an external payment refund or chargeback and reverse its referral commission
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentRefund"
+      responses:
+        "200":
+          description: Refunded payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
   /admin/vpn-nodes/provision:
     post:
       operationId: provisionVpnNode
@@ -2052,6 +2077,7 @@ components:
           referralCommissionPercent,
           referralEarningsKopecks,
           referredUserCount,
+          referredPayingUserCount,
           referralLinkHost,
           extraTrafficGb,
           trafficLimitExceeded,
@@ -2115,11 +2141,15 @@ components:
         # user's wallet — pulled live from payment_settings, so it reflects
         # the current admin-configured rate, not a snapshot.
         referralCommissionPercent: { type: integer }
-        # Sum of all "referral" balance_transactions ever credited to this
-        # user (kopecks). Lifetime total, not tied to a billing period.
+        # Net lifetime referral commission in balance_transactions (kopecks):
+        # referral credits minus referral_reversal rows from refunds/chargebacks.
+        # Not tied to a billing period.
         referralEarningsKopecks: { type: integer }
         # Number of accounts registered using this user's referral code.
         referredUserCount: { type: integer }
+        # Paying means at least one confirmed subscription payment.
+        # Wallet top-ups do not qualify for referral progress or commission.
+        referredPayingUserCount: { type: integer }
         # Host to build the shareable referral link against: the
         # admin-configured primary public domain if it's currently healthy,
         # otherwise the request's own (technical) host as a safety-net
@@ -2439,11 +2469,12 @@ components:
       # freekassa is legacy-read-only: integration removed 2026-07-17, kept so
       # historical payment rows still serialize/validate.
       # balance: instant debit from the user's wallet balance (no moderation queue).
-      enum: [manual_sbp, yookassa, yoomoney, freekassa, balance]
+      # free_grant: an auditable zero-cost admin grant; never earns referral commission.
+      enum: [manual_sbp, yookassa, yoomoney, freekassa, balance, free_grant]
 
     PaymentStatus:
       type: string
-      enum: [pending, confirmed, rejected]
+      enum: [pending, confirmed, rejected, refunded]
 
     PaymentType:
       type: string
@@ -2470,8 +2501,11 @@ components:
         # The image itself is fetched separately via GET .../screenshot/image.
         hasScreenshot: { type: boolean }
         rejectionReason: { type: ["string", "null"] }
+        refundKind: { type: ["string", "null"], enum: [refund, chargeback, null] }
+        refundReason: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: ["string", "null"], format: date-time }
+        refundedAt: { type: ["string", "null"], format: date-time }
 
     AdminPayment:
       type: object
@@ -2495,8 +2529,11 @@ components:
         userNote: { type: ["string", "null"] }
         hasScreenshot: { type: boolean }
         rejectionReason: { type: ["string", "null"] }
+        refundKind: { type: ["string", "null"], enum: [refund, chargeback, null] }
+        refundReason: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         confirmedAt: { type: ["string", "null"], format: date-time }
+        refundedAt: { type: ["string", "null"], format: date-time }
 
     PaymentNoteUpdate:
       type: object
@@ -2521,6 +2558,15 @@ components:
       type: object
       properties:
         reason: { type: string }
+
+    PaymentRefund:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [refund, chargeback]
+          default: refund
+        reason: { type: string, maxLength: 500 }
 
     ErrorEnvelope:
       type: object
@@ -2705,7 +2751,7 @@ components:
 
     BalanceTransactionType:
       type: string
-      enum: [topup, debit, refund, referral]
+      enum: [topup, debit, refund, referral, referral_reversal]
 
     BalanceTransaction:
       type: object
@@ -3042,7 +3088,7 @@ components:
         amountKopecks: { type: integer }
         type:
           type: string
-          enum: [topup, debit, refund, referral]
+          enum: [topup, debit, refund, referral, referral_reversal]
         description: { type: ["string", "null"] }
         paymentId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
@@ -3222,13 +3268,20 @@ components:
 
     AdminReferralEntry:
       type: object
-      required: [userId, email, referredCount, totalRevenueRub, commissionsRub]
+      required: [userId, email, referredCount, payingReferredCount, totalRevenueRub, commissionsRub]
       properties:
         userId: { type: integer }
         email: { type: string }
         name: { type: ["string", "null"] }
-        referredCount: { type: integer }
-        totalRevenueRub: { type: integer }
+        referredCount:
+          type: integer
+          description: Number of registered users who used this referrer's link.
+        payingReferredCount:
+          type: integer
+          description: Number of referred users with at least one confirmed subscription payment.
+        totalRevenueRub:
+          type: integer
+          description: Confirmed subscription revenue from referred users; wallet top-ups are excluded.
         commissionsRub: { type: integer }
 
     AdminNotification:

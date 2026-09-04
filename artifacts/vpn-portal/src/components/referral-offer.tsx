@@ -34,7 +34,6 @@ function referralDetails(me: {
 
   return {
     commission,
-    refsNeeded: Math.ceil(100 / commission),
     link: referralLinkFor(me.referralLinkHost, me.referralCode),
   };
 }
@@ -71,7 +70,7 @@ export function ReferralOfferCard({
   }
 
   async function handleShare() {
-    const text = `Присоединяйся к VPNexus по моей ссылке. Я получаю ${commission}% с каждой твоей оплаты на баланс — это помогает оплачивать подписку.`;
+    const text = `Присоединяйся к VPNexus по моей ссылке. Я получаю ${commission}% с каждой подтверждённой оплаты подписки на баланс — пополнения кошелька не учитываются.`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "VPNexus", text, url: link });
@@ -94,9 +93,9 @@ export function ReferralOfferCard({
         <div className="flex items-start gap-2">
           <Gift className="w-4 h-4 shrink-0 mt-0.5" />
           <p className="text-sm">
-            Пригласите друзей: <strong>{details.commission}%</strong> с каждой их оплаты поступает на внутренний
-            баланс и автоматически идёт в счёт вашей подписки. Примерно {details.refsNeeded} оплативших друзей —
-            и подписка окупается.
+            Пригласите друзей: <strong>{details.commission}%</strong> с каждой подтверждённой оплаты их подписки
+            поступает на внутренний баланс и автоматически идёт в счёт вашей подписки. Пополнения кошелька в
+            комиссию не входят.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -145,18 +144,18 @@ export function ReferralOfferCard({
         </div>
         <div className="space-y-1">
           <p className="text-xs font-bold uppercase tracking-widest text-orange-600">Делитесь выгодой</p>
-          <h2 className="text-xl font-black tracking-tight">Приглашайте друзей — пользуйтесь бесплатно</h2>
+          <h2 className="text-xl font-black tracking-tight">Приглашайте друзей — получайте бонусы</h2>
         </div>
       </div>
 
       <div className="mt-4 space-y-2 text-sm leading-relaxed text-muted-foreground">
         <p>
-          Получайте <strong className="text-foreground">{details.commission}%</strong> от каждой оплаты приглашённого
-          пользователя на внутренний баланс.
+          Получайте <strong className="text-foreground">{details.commission}%</strong> от каждой подтверждённой
+          оплаты подписки приглашённого пользователя на внутренний баланс.
         </p>
         <p>Баланс автоматически идёт в счёт подписки — никакого вывода не нужно.</p>
         <p className="font-medium text-foreground">
-          Пригласите примерно {details.refsNeeded} человек — и подписка окупается сама.
+          Размер начисления зависит от суммы оплаты подписки. Пополнения кошелька не учитываются.
         </p>
       </div>
 
@@ -313,7 +312,7 @@ export function ReferralFirstPaymentDialog() {
         <DialogHeader className="pr-8">
           <DialogTitle>Ваша подписка активна — поделитесь выгодой</DialogTitle>
           <DialogDescription>
-            Это предложение показывается один раз после первой успешной оплаты.
+            Это предложение показывается один раз после первой успешной оплаты подписки.
           </DialogDescription>
         </DialogHeader>
         <ReferralOfferCard />

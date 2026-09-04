@@ -1316,7 +1316,8 @@ export function ReferralsManagement() {
     <div className="space-y-4">
       <div className="text-sm text-muted-foreground">
         Пользователи, которые привлекли хотя бы одного участника по реф. ссылке.
-        Доход — сумма подтверждённых платежей приглашённых пользователей; комиссия — начисления на баланс реферера.
+        Регистрации, платящие рефералы и комиссия показаны отдельно. Доход — только сумма подтверждённых оплат
+        подписки; пополнения кошелька исключены.
       </div>
       {rows.length === 0 ? (
         <div className="bg-muted/50 border border-border p-10 text-center text-sm text-muted-foreground">
@@ -1329,8 +1330,9 @@ export function ReferralsManagement() {
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 <th className="text-left px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Реферер</th>
-                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Приглашено</th>
-                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Доход рефер.</th>
+                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Регистраций</th>
+                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Платящих</th>
+                <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Доход подписок</th>
                 <th className="text-right px-4 py-2 text-xs font-bold uppercase text-muted-foreground">Комиссия</th>
               </tr>
             </thead>
@@ -1342,9 +1344,10 @@ export function ReferralsManagement() {
                     {r.name && <div className="text-xs text-muted-foreground font-mono">{r.email}</div>}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono font-bold">{r.referredCount}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-bold">{r.payingReferredCount}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{r.totalRevenueRub} ₽</td>
                   <td className="px-4 py-2.5 text-right font-mono">
-                    <span className={r.commissionsRub > 0 ? "text-green-600 font-bold" : "text-muted-foreground"}>
+                    <span className={r.commissionsRub > 0 ? "text-green-600 font-bold" : r.commissionsRub < 0 ? "text-orange-600 font-bold" : "text-muted-foreground"}>
                       {r.commissionsRub} ₽
                     </span>
                   </td>
@@ -1356,6 +1359,9 @@ export function ReferralsManagement() {
                 <td className="px-4 py-2 text-xs text-muted-foreground">Итого рефереров: {rows.length}</td>
                 <td className="px-4 py-2 text-right font-mono font-bold text-xs">
                   {rows.reduce((s, r) => s + r.referredCount, 0)}
+                </td>
+                <td className="px-4 py-2 text-right font-mono font-bold text-xs">
+                  {rows.reduce((s, r) => s + r.payingReferredCount, 0)}
                 </td>
                 <td className="px-4 py-2 text-right font-mono text-xs">
                   {rows.reduce((s, r) => s + r.totalRevenueRub, 0)} ₽

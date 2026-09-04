@@ -78,6 +78,7 @@ import type {
   Me,
   Payment,
   PaymentNoteUpdate,
+  PaymentRefund,
   PaymentReject,
   PaymentScreenshotUpdate,
   PaymentSettings,
@@ -3860,6 +3861,77 @@ export const useRejectPayment = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRejectPaymentMutationOptions(options));
+    }
+
+export const getRefundPaymentUrl = (paymentId: number,) => {
+
+
+
+
+  return `/api/admin/payments/${paymentId}/refund`
+}
+
+/**
+ * @summary Record an external payment refund or chargeback and reverse its referral commission
+ */
+export const refundPayment = async (paymentId: number,
+    paymentRefund?: PaymentRefund, options?: RequestInit): Promise<Payment> => {
+
+  return customFetch<Payment>(getRefundPaymentUrl(paymentId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(paymentRefund)
+  }
+);}
+
+
+
+
+export const getRefundPaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refundPayment>>, TError,{paymentId: number;data?: BodyType<PaymentRefund>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refundPayment>>, TError,{paymentId: number;data?: BodyType<PaymentRefund>}, TContext> => {
+
+const mutationKey = ['refundPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refundPayment>>, {paymentId: number;data?: BodyType<PaymentRefund>}> = (props) => {
+          const {paymentId,data} = props ?? {};
+
+          return  refundPayment(paymentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefundPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof refundPayment>>>
+    export type RefundPaymentMutationBody = BodyType<PaymentRefund> | undefined
+    export type RefundPaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Record an external payment refund or chargeback and reverse its referral commission
+ */
+export const useRefundPayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refundPayment>>, TError,{paymentId: number;data?: BodyType<PaymentRefund>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof refundPayment>>,
+        TError,
+        {paymentId: number;data?: BodyType<PaymentRefund>},
+        TContext
+      > => {
+      return useMutation(getRefundPaymentMutationOptions(options));
     }
 
 export const getProvisionVpnNodeUrl = () => {

@@ -177,11 +177,17 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     db.select({ value: count() }).from(usersTable).where(gte(usersTable.createdAt, startOf30Days)),
     // Total users who joined via a referral link.
     db.select({ value: count() }).from(usersTable).where(isNotNull(usersTable.referredByUserId)),
-    // Referral commissions credited this calendar month.
+    // Net referral commissions for this calendar month. Reversals from
+    // refunds/chargebacks must reduce the displayed liability as well.
     db
       .select({ value: sum(balanceTransactionsTable.amountKopecks) })
       .from(balanceTransactionsTable)
-      .where(and(eq(balanceTransactionsTable.type, "referral"), gte(balanceTransactionsTable.createdAt, startOfMonth))),
+      .where(
+        and(
+          inArray(balanceTransactionsTable.type, ["referral", "referral_reversal"]),
+          gte(balanceTransactionsTable.createdAt, startOfMonth),
+        ),
+      ),
     db
       .select({ planName: plansTable.name, count: count() })
       .from(subscriptionsTable)

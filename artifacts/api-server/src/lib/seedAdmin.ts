@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
 import { hashPassword } from "./password";
 import { logger } from "./logger";
-import { assignReferralCode } from "./referralCode";
+import { generateReferralCode } from "./referralCode";
 
 /**
  * Seeds a default admin account from ADMIN_EMAIL / ADMIN_PASSWORD env vars.
@@ -45,12 +45,15 @@ export async function seedDefaultAdmin(): Promise<void> {
     }
 
     const passwordHash = await hashPassword(password);
-    const [admin] = await db.insert(usersTable).values({ email, passwordHash, role: "admin" }).returning();
+    const [admin] = await db
+      .insert(usersTable)
+      .values({ email, passwordHash, role: "admin", referralCode: generateReferralCode() })
+      .returning();
     if (admin) {
       // The seeded admin has no referrer — it's the root of the invite chain
       // that every other registration (see auth.ts /register) must trace
       // back to via a referral code.
-      await assignReferralCode(admin.id);
+      logger.info({ email }, "Assigned referral code to seeded default admin");
     }
     logger.info({ email }, "Seeded default admin user from ADMIN_EMAIL/ADMIN_PASSWORD environment variables");
   } catch (err) {

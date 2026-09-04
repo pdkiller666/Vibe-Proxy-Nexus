@@ -6,6 +6,7 @@ import {
   useListAdminPayments,
   useConfirmPayment,
   useRejectPayment,
+  useRefundPayment,
   useListPlans,
   useCreatePlan,
   useUpdatePlan,
@@ -112,6 +113,25 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(exp === 0 ? 0 : 1)} ${units[exp]}`;
 }
 
+function paymentProviderLabel(provider: string): string {
+  switch (provider) {
+    case "yoomoney":
+      return "ЮMoney";
+    case "yookassa":
+      return "ЮKassa";
+    case "freekassa":
+      return "FreeKassa";
+    case "balance":
+      return "Баланс";
+    case "free_grant":
+      return "Бесплатная выдача";
+    case "manual_sbp":
+      return "СБП";
+    default:
+      return provider;
+  }
+}
+
 function Metric({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
   return (
     <div className={`bg-card border p-5 ${highlight ? "border-orange-400 bg-orange-50/50" : "border-border"}`}>
@@ -178,16 +198,16 @@ function useUnifiedPoller(currentAdminId: number | undefined): {
           const data: AdminNotification[] = await res.json();
 
           const pendingPayments = data.filter((n) => n.status === "pending");
-          const statusChanges  = data.filter((n) => n.status === "confirmed" || n.status === "rejected");
+          const statusChanges  = data.filter(
+            (n) => n.status === "confirmed" || n.status === "rejected" || n.status === "refunded",
+          );
 
           // Toast for newly-submitted pending payments (first time we see them).
           for (const n of pendingPayments) {
             const key = `${n.id}:pending`;
             if (!seenEventKeys.current.has(key)) {
               seenEventKeys.current.add(key);
-              const providerLabel =
-                n.provider === "yoomoney" ? "ЮMoney" :
-                n.provider === "balance"  ? "Баланс" : "СБП";
+              const providerLabel = paymentProviderLabel(n.provider);
               const typeLabel =
                 n.type === "extra_device_slot" ? "Доп. устройство" :
                 n.type === "balance_topup"     ? "Пополнение баланса" :
@@ -197,7 +217,7 @@ function useUnifiedPoller(currentAdminId: number | undefined): {
             }
           }
 
-          // Toast for confirmed / rejected (deduplicated by id+status).
+          // Toast for confirmed / rejected / refunded (deduplicated by id+status).
           for (const n of statusChanges) {
             const key = `${n.id}:${n.status}`;
             if (!seenEventKeys.current.has(key)) {
@@ -207,8 +227,11 @@ function useUnifiedPoller(currentAdminId: number | undefined): {
                 n.type === "balance_topup"     ? "Пополнение баланса" :
                 n.type === "extra_traffic"     ? `Доп. трафик${n.extraTrafficGb ? ` (+${n.extraTrafficGb} ГБ)` : ""}` :
                                                  "Подписка";
+              const providerLabel = paymentProviderLabel(n.provider);
               if (n.status === "confirmed") {
-                toast({ title: "Платёж подтверждён", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽` });
+                toast({ title: "Платёж подтверждён", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽ · ${providerLabel}` });
+              } else if (n.status === "refunded") {
+                toast({ title: "Платёж возвращён", description: `${n.userEmail} · ${typeLabel} · ${n.amountRub} ₽ · ${providerLabel}`, variant: "destructive" });
               } else {
                 toast({ title: "Платёж отклонён", description: `${n.userEmail} · ${n.amountRub} ₽`, variant: "destructive" });
               }
@@ -718,8 +741,8 @@ function formatWaitTime(createdAt: string): string {
 }
 
 function PaymentsQueue() {
-  const [statusFilter, setStatusFilter] = useState<"pending" | "confirmed" | "rejected" | "all">("pending");
-  const [providerFilter, setProviderFilter] = useState<"all" | "yoomoney" | "manual_sbp" | "balance">("all");
+  const [statusFilter, setStatusFilter] = useState<"pending" | "confirmed" | "rejected" | "refunded" | "all">("pending");
+  const [providerFilter, setProviderFilter] = useState<"all" | "yoomoney" | "yookassa" | "manual_sbp" | "balance" | "free_grant">("all");
   const [sort, setSort] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc");
   const [search, setSearch] = useState("");
   const { data: payments, isLoading } = useListAdminPayments(
@@ -728,6 +751,7 @@ function PaymentsQueue() {
   );
   const { mutate: confirm } = useConfirmPayment();
   const { mutate: reject } = useRejectPayment();
+  const { mutate: refund } = useRefundPayment();
   const { toast } = useToast();
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [reason, setReason] = useState("");
@@ -771,6 +795,22 @@ function PaymentsQueue() {
           setReason("");
         },
         onError: () => toast({ title: "Ошибка отклонения", variant: "destructive" }),
+      },
+    );
+  }
+
+  function handleRefund(paymentId: number, kind: "refund" | "chargeback") {
+    const label = kind === "chargeback" ? "chargeback" : "возврат";
+    if (!window.confirm(`Зафиксировать ${label} по этому внешнему платежу? Комиссия реферера будет списана.`)) return;
+    refund(
+      { paymentId, data: { kind } },
+      {
+        onSuccess: () => {
+          invalidate();
+          queryClient.invalidateQueries({ queryKey: ["me"] });
+          toast({ title: kind === "chargeback" ? "Chargeback зафиксирован" : "Возврат зафиксирован" });
+        },
+        onError: () => toast({ title: "Ошибка возврата", variant: "destructive" }),
       },
     );
   }
@@ -819,6 +859,7 @@ function PaymentsQueue() {
           <option value="pending">Ожидающие</option>
           <option value="confirmed">Подтверждённые</option>
           <option value="rejected">Отклонённые</option>
+          <option value="refunded">Возвращённые</option>
           <option value="all">Все</option>
         </select>
         <select
@@ -828,8 +869,10 @@ function PaymentsQueue() {
         >
           <option value="all">Все методы</option>
           <option value="yoomoney">ЮMoney</option>
+          <option value="yookassa">ЮKassa</option>
           <option value="manual_sbp">СБП</option>
           <option value="balance">Баланс</option>
+          <option value="free_grant">Бесплатная выдача</option>
         </select>
         <select
           value={sort}
@@ -881,7 +924,7 @@ function PaymentsQueue() {
               <div className="text-sm text-muted-foreground font-mono flex items-center gap-2 flex-wrap">
                 <span>{payment.amountRub} ₽ · {payment.reference} · {formatDate(payment.createdAt)}</span>
                 <span className="text-[11px] px-1.5 py-0.5 bg-muted font-mono rounded">
-                  {payment.provider === "yoomoney" ? "ЮMoney" : payment.provider === "balance" ? "Баланс" : "СБП"}
+                  {paymentProviderLabel(payment.provider)}
                 </span>
                 {payment.status === "pending" && (
                   <span className="flex items-center gap-1 text-[11px] text-orange-600 font-mono">
@@ -891,6 +934,12 @@ function PaymentsQueue() {
               </div>
               {payment.userNote && (
                 <div className="text-sm mt-1 italic text-muted-foreground">«{payment.userNote}»</div>
+              )}
+              {payment.status === "refunded" && payment.refundKind && (
+                <div className="text-sm mt-1 text-orange-700">
+                  {payment.refundKind === "chargeback" ? "Chargeback" : "Возврат"}
+                  {payment.refundReason ? `: ${payment.refundReason}` : ""}
+                </div>
               )}
               {payment.hasScreenshot && (
                 <a
@@ -919,10 +968,39 @@ function PaymentsQueue() {
                 </button>
               </div>
             ) : (
-              <div
-                className={`text-xs font-bold uppercase px-3 py-1 ${payment.status === "confirmed" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}
-              >
-                {payment.status === "confirmed" ? "Подтверждён" : "Отклонён"}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div
+                  className={`text-xs font-bold uppercase px-3 py-1 ${
+                    payment.status === "confirmed"
+                      ? "bg-primary/10 text-primary"
+                      : payment.status === "refunded"
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-destructive/10 text-destructive"
+                  }`}
+                >
+                  {payment.status === "confirmed"
+                    ? "Подтверждён"
+                    : payment.status === "refunded"
+                      ? "Возвращён"
+                      : "Отклонён"}
+                </div>
+                {payment.status === "confirmed" &&
+                  ["manual_sbp", "yoomoney", "yookassa", "freekassa"].includes(payment.provider) && (
+                    <>
+                      <button
+                        onClick={() => handleRefund(payment.id, "refund")}
+                        className="flex items-center gap-1.5 border border-orange-600 text-orange-700 font-bold px-3 py-1 text-xs hover:bg-orange-50 transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Возврат
+                      </button>
+                      <button
+                        onClick={() => handleRefund(payment.id, "chargeback")}
+                        className="flex items-center gap-1.5 border border-destructive text-destructive font-bold px-3 py-1 text-xs hover:bg-destructive/10 transition-colors"
+                      >
+                        Chargeback
+                      </button>
+                    </>
+                  )}
               </div>
             )}
           </div>
@@ -3220,9 +3298,7 @@ function NotificationBell() {
                     </div>
                     <div className="divide-y divide-border">
                       {payments.map((n) => {
-                        const providerLabel =
-                          n.provider === "yoomoney" ? "ЮMoney" :
-                          n.provider === "balance"  ? "Баланс" : "СБП";
+                        const providerLabel = paymentProviderLabel(n.provider);
                         const typeLabel =
                           n.type === "extra_device_slot" ? "Доп. устройство" :
                           n.type === "balance_topup"     ? "Пополнение" :
@@ -3230,10 +3306,12 @@ function NotificationBell() {
                                                            "Подписка";
                         const statusCls =
                           n.status === "pending"   ? "text-orange-600" :
-                          n.status === "confirmed" ? "text-green-600"  : "text-destructive";
+                          n.status === "confirmed" ? "text-green-600"  :
+                          n.status === "refunded"  ? "text-orange-600" : "text-destructive";
                         const statusLabel =
                           n.status === "pending"   ? "Ожидает" :
-                          n.status === "confirmed" ? "Подтверждён" : "Отклонён";
+                          n.status === "confirmed" ? "Подтверждён" :
+                          n.status === "refunded"  ? "Возвращён" : "Отклонён";
                         return (
                           <div key={n.id} className="px-3 py-2.5 flex items-start gap-2 text-xs">
                             <CreditCard className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />

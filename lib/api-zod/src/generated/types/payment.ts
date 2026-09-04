@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PaymentProvider } from './paymentProvider';
+import type { PaymentRefundKind } from './paymentRefundKind';
 import type { PaymentStatus } from './paymentStatus';
 import type { PaymentType } from './paymentType';
 
@@ -25,7 +26,13 @@ export interface Payment {
   hasScreenshot?: boolean;
   /** @nullable */
   rejectionReason?: string | null;
+  /** @nullable */
+  refundKind?: PaymentRefundKind;
+  /** @nullable */
+  refundReason?: string | null;
   createdAt: Date;
   /** @nullable */
   confirmedAt?: Date | null;
+  /** @nullable */
+  refundedAt?: Date | null;
 }

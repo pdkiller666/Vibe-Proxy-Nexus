@@ -40,6 +40,7 @@ export interface Me {
   referralCommissionPercent: number;
   referralEarningsKopecks: number;
   referredUserCount: number;
+  referredPayingUserCount: number;
   referralLinkHost: string;
   isBanned: boolean;
   isTrialSubscription: boolean;

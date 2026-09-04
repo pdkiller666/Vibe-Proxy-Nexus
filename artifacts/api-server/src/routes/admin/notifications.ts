@@ -7,7 +7,8 @@ const router: IRouter = Router();
 
 /**
  * GET /admin/notifications?since=<ISO>
- * Returns recent payment events (new pending + confirmed + rejected) since the given timestamp.
+ * Returns recent payment events (new pending + confirmed + rejected + refunded)
+ * since the given timestamp.
  * Designed for polling-based admin notifications — lightweight, no persistent state server-side.
  */
 router.get("/admin/notifications", requireAuth, requireAdmin, async (req, res): Promise<void> => {
@@ -39,11 +40,16 @@ router.get("/admin/notifications", requireAuth, requireAdmin, async (req, res): 
         // ALL currently pending payments — no time filter so the bell always
         // shows the full queue regardless of when the admin opened the page.
         eq(paymentsTable.status, "pending"),
-        // Recent confirmed / rejected payments for toast notifications only.
-        and(
-          inArray(paymentsTable.status, ["confirmed", "rejected"]),
-          gte(paymentsTable.confirmedAt, since),
-        ),
+          // Recent confirmed / rejected payments for toast notifications only.
+          and(
+            inArray(paymentsTable.status, ["confirmed", "rejected"]),
+            gte(paymentsTable.confirmedAt, since),
+          ),
+          // A refund happens after confirmation, so it has its own timestamp.
+          and(
+            eq(paymentsTable.status, "refunded"),
+            gte(paymentsTable.refundedAt, since),
+          ),
       ),
     )
     .orderBy(paymentsTable.createdAt)

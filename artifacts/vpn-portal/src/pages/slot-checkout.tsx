@@ -12,7 +12,7 @@ import { PayFromBalanceButton } from "@/components/pay-from-balance-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle, Smartphone } from "lucide-react";
+import { Copy, CheckCircle2, Clock, XCircle, RotateCcw, AlertTriangle, Smartphone } from "lucide-react";
 import { YooMoneyPaymentButtons } from "@/components/yoomoney-payment-buttons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
@@ -140,6 +140,7 @@ export default function SlotCheckout() {
     pending: { label: "Ожидает подтверждения", icon: Clock, color: "text-primary" },
     confirmed: { label: "Подтверждён — устройство добавлено", icon: CheckCircle2, color: "text-green-600" },
     rejected: { label: "Отклонён", icon: XCircle, color: "text-destructive" },
+    refunded: { label: "Возвращён", icon: RotateCcw, color: "text-orange-600" },
   } as const;
 
   const status = statusConfig[payment.status];

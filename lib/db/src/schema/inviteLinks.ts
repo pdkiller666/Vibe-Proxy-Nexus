@@ -42,7 +42,8 @@ export const inviteLinksTable = pgTable(
     trialDays: integer("trial_days"),
     // Maximum registrations allowed via this link. Null = unlimited.
     maxUses: integer("max_uses"),
-    // Atomically incremented in auth.ts on every successful registration.
+    // Atomically reserved and incremented in auth.ts for every committed
+    // registration.
     usedCount: integer("used_count").notNull().default(0),
     // Soft-disable without deletion. Deactivated links are refused at
     // registration time regardless of usedCount / expiresAt.

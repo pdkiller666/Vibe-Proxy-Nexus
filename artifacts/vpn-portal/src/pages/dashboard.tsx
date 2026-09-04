@@ -262,11 +262,8 @@ function ReferralSection() {
   const referralLink = `https://${me.referralLinkHost}${basePath}/sign-up?ref=${me.referralCode}`;
   const commission  = me.referralCommissionPercent;
   const invited     = me.referredUserCount;
+  const paying      = me.referredPayingUserCount;
   const earned      = me.referralEarningsKopecks;
-
-  const refsNeeded  = commission > 0 ? Math.ceil(100 / commission) : null;
-  const progressPct = refsNeeded ? Math.min(100, Math.round((invited / refsNeeded) * 100)) : 0;
-  const isFree      = refsNeeded !== null && invited >= refsNeeded;
 
   function copyLink() {
     navigator.clipboard.writeText(referralLink).then(() => {
@@ -298,13 +295,7 @@ function ReferralSection() {
           <div className="font-bold flex items-center gap-2">
             <Gift className="w-4 h-4 text-primary shrink-0" />
             Реферальная программа
-            {isFree && (
-              <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
-                <CheckCircle2 className="w-3 h-3" />
-                Окупается
-              </span>
-            )}
-            {!isFree && invited > 0 && (
+            {invited > 0 && (
               <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold bg-primary/10 text-primary rounded-full">
                 {invited}
               </span>
@@ -312,7 +303,7 @@ function ReferralSection() {
           </div>
           <div className="text-sm text-muted-foreground mt-0.5">
             {commission > 0
-              ? `${commission}% с каждой оплаты реферала`
+              ? `${commission}% с каждой подтверждённой оплаты подписки`
               : "Приглашайте друзей"}
           </div>
         </div>
@@ -325,32 +316,32 @@ function ReferralSection() {
         {/* Описание — внутри тела, видно только при раскрытии */}
         <div className="px-5 pt-4 pb-2">
           <p className="text-base font-black tracking-tight leading-snug">
-            {isFree
-              ? "Ваша подписка окупается рефералами"
-              : "Пользуйтесь бесплатно — приглашайте друзей"}
+            Приглашайте друзей — получайте бонусы
           </p>
-          {commission > 0 && !isFree && refsNeeded && (
+          {commission > 0 && (
             <p className="text-sm text-muted-foreground mt-1">
-              {refsNeeded === 1
-                ? "Достаточно одного оплатившего реферала — и подписка окупается"
-                : `Пригласите ${refsNeeded} человек — их оплаты перекроют стоимость вашей подписки`}
-            </p>
-          )}
-          {isFree && (
-            <p className="text-sm text-green-600 font-medium mt-1">
-              Комиссия с рефералов уже покрывает стоимость подписки
+              Комиссия зависит от суммы подтверждённой подписки каждого реферала.
+              Пополнения кошелька в неё не входят.
             </p>
           )}
         </div>
 
         {/* Статистика */}
-        <div className={`grid divide-x divide-border border-b border-border ${commission > 0 ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid divide-x divide-border border-b border-border ${commission > 0 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1"}`}>
           <div className="px-5 py-4">
             <div className="text-3xl font-black">{invited}</div>
             <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">
-              {invited === 1 ? "приглашённый" : "приглашено"}
+              {invited === 1 ? "регистрация" : "регистраций"}
             </div>
           </div>
+          {commission > 0 && (
+            <div className="px-5 py-4">
+              <div className="text-3xl font-black">{paying}</div>
+              <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wide">
+                {paying === 1 ? "платящий реферал" : "платящих рефералов"}
+              </div>
+            </div>
+          )}
           {commission > 0 && (
             <div className="px-5 py-4">
               <div className={`text-3xl font-black ${earned > 0 ? "text-green-600" : ""}`}>
@@ -360,29 +351,6 @@ function ReferralSection() {
             </div>
           )}
         </div>
-
-        {/* Прогресс к бесплатной подписке */}
-        {commission > 0 && refsNeeded && (
-          <div className="px-5 py-3 border-b border-border space-y-2">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>До бесплатной подписки</span>
-              <span className={isFree ? "text-green-600 font-semibold" : ""}>
-                {invited} / {refsNeeded}
-              </span>
-            </div>
-            <div className="h-1.5 bg-muted overflow-hidden">
-              <div
-                className={`h-full transition-all ${isFree ? "bg-green-500" : "bg-primary"}`}
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-            {!isFree && invited === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Поделитесь ссылкой — каждый оплативший друг приближает вас к бесплатной подписке
-              </p>
-            )}
-          </div>
-        )}
 
         {/* Ссылка и код */}
         <div className="p-5 space-y-4">
@@ -425,7 +393,7 @@ function ReferralSection() {
 
           {/* Механика */}
           <div className="border-t border-border pt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-            <span>✓ Зачисляется сразу после оплаты реферала</span>
+            <span>✓ Зачисляется сразу после подтверждения оплаты подписки</span>
             <span>✓ Идёт в счёт вашей подписки</span>
             <span>✓ Без вывода, замкнутый баланс</span>
           </div>
@@ -475,7 +443,7 @@ function AutoRenewReferralOffer() {
       <RefreshCw className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
       <div className="flex-1 min-w-0">
         <span className="font-semibold">Подписка автоматически продлена.</span>{" "}
-        Поделитесь своей ссылкой, чтобы будущие оплаты друзей помогали покрывать её стоимость.
+        Поделитесь своей ссылкой, чтобы будущие оплаты подписок друзей приносили комиссию на баланс.
         <ReferralOfferCard compact />
       </div>
     </div>

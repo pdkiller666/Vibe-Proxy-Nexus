@@ -11,7 +11,11 @@ export interface AdminReferralEntry {
   email: string;
   /** @nullable */
   name?: string | null;
+  /** Number of registered users who used this referrer's link. */
   referredCount: number;
+  /** Number of referred users with at least one confirmed subscription payment. */
+  payingReferredCount: number;
+  /** Confirmed subscription revenue from referred users; wallet top-ups are excluded. */
   totalRevenueRub: number;
   commissionsRub: number;
 }

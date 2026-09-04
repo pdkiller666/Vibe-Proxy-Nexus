@@ -147,6 +147,7 @@ export interface Me {
   referralCommissionPercent: number;
   referralEarningsKopecks: number;
   referredUserCount: number;
+  referredPayingUserCount: number;
   referralLinkHost: string;
   isBanned: boolean;
   isTrialSubscription: boolean;
@@ -412,6 +413,7 @@ export const PaymentProvider = {
   yoomoney: 'yoomoney',
   freekassa: 'freekassa',
   balance: 'balance',
+  free_grant: 'free_grant',
 } as const;
 
 export interface SubscriptionInput {
@@ -426,6 +428,18 @@ export const PaymentStatus = {
   pending: 'pending',
   confirmed: 'confirmed',
   rejected: 'rejected',
+  refunded: 'refunded',
+} as const;
+
+/**
+ * @nullable
+ */
+export type PaymentRefundKind = typeof PaymentRefundKind[keyof typeof PaymentRefundKind] | null;
+
+
+export const PaymentRefundKind = {
+  refund: 'refund',
+  chargeback: 'chargeback',
 } as const;
 
 export interface Payment {
@@ -444,10 +458,27 @@ export interface Payment {
   hasScreenshot?: boolean;
   /** @nullable */
   rejectionReason?: string | null;
+  /** @nullable */
+  refundKind?: PaymentRefundKind;
+  /** @nullable */
+  refundReason?: string | null;
   createdAt: string;
   /** @nullable */
   confirmedAt?: string | null;
+  /** @nullable */
+  refundedAt?: string | null;
 }
+
+/**
+ * @nullable
+ */
+export type AdminPaymentRefundKind = typeof AdminPaymentRefundKind[keyof typeof AdminPaymentRefundKind] | null;
+
+
+export const AdminPaymentRefundKind = {
+  refund: 'refund',
+  chargeback: 'chargeback',
+} as const;
 
 export interface AdminPayment {
   id: number;
@@ -469,9 +500,15 @@ export interface AdminPayment {
   hasScreenshot?: boolean;
   /** @nullable */
   rejectionReason?: string | null;
+  /** @nullable */
+  refundKind?: AdminPaymentRefundKind;
+  /** @nullable */
+  refundReason?: string | null;
   createdAt: string;
   /** @nullable */
   confirmedAt?: string | null;
+  /** @nullable */
+  refundedAt?: string | null;
 }
 
 export interface PaymentNoteUpdate {
@@ -493,6 +530,12 @@ export interface PaymentScreenshotUpdate {
 }
 
 export interface PaymentReject {
+  reason?: string;
+}
+
+export interface PaymentRefund {
+  kind?: PaymentRefundKind;
+  /** @maxLength 500 */
   reason?: string;
 }
 
@@ -665,6 +708,7 @@ export const BalanceTransactionType = {
   debit: 'debit',
   refund: 'refund',
   referral: 'referral',
+  referral_reversal: 'referral_reversal',
 } as const;
 
 export interface BalanceTransaction {
@@ -903,6 +947,7 @@ export const AdminBalanceTransactionType = {
   debit: 'debit',
   refund: 'refund',
   referral: 'referral',
+  referral_reversal: 'referral_reversal',
 } as const;
 
 export interface AdminBalanceTransaction {
@@ -1047,7 +1092,11 @@ export interface AdminReferralEntry {
   email: string;
   /** @nullable */
   name?: string | null;
+  /** Number of registered users who used this referrer's link. */
   referredCount: number;
+  /** Number of referred users with at least one confirmed subscription payment. */
+  payingReferredCount: number;
+  /** Confirmed subscription revenue from referred users; wallet top-ups are excluded. */
   totalRevenueRub: number;
   commissionsRub: number;
 }

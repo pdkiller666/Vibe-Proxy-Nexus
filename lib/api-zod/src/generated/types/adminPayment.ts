@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminPaymentRefundKind } from './adminPaymentRefundKind';
 import type { PaymentProvider } from './paymentProvider';
 import type { PaymentStatus } from './paymentStatus';
 import type { PaymentType } from './paymentType';
@@ -29,7 +30,13 @@ export interface AdminPayment {
   hasScreenshot?: boolean;
   /** @nullable */
   rejectionReason?: string | null;
+  /** @nullable */
+  refundKind?: AdminPaymentRefundKind;
+  /** @nullable */
+  refundReason?: string | null;
   createdAt: Date;
   /** @nullable */
   confirmedAt?: Date | null;
+  /** @nullable */
+  refundedAt?: Date | null;
 }

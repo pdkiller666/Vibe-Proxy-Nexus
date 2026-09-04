@@ -14,7 +14,7 @@ import {
   vpnKeysTable,
 } from "@workspace/db";
 import app from "../app";
-import { confirmPaymentById } from "../lib/confirmPayment";
+import { confirmPaymentById, refundPaymentById } from "../lib/confirmPayment";
 import { hashPassword } from "../lib/password";
 
 const request = supertest(app);
@@ -27,12 +27,18 @@ type TestUser = {
   cookie: string;
 };
 
-async function createUser(): Promise<TestUser> {
+async function createUser(options: { role?: "user" | "admin"; referredByUserId?: number } = {}): Promise<TestUser> {
   const email = `referral-offer-${uid()}@example.com`;
   const passwordHash = await hashPassword(password);
   const [user] = await db
     .insert(usersTable)
-    .values({ email, passwordHash, referralCode: uid() })
+    .values({
+      email,
+      passwordHash,
+      referralCode: uid(),
+      role: options.role,
+      referredByUserId: options.referredByUserId,
+    })
     .returning({ id: usersTable.id });
 
   const login = await request.post("/api/auth/login").send({ email, password });
@@ -136,7 +142,10 @@ describe("referral offer notifications", () => {
     }
   });
 
-  async function seedSubscriptionPayment(userId: number): Promise<number> {
+  async function seedSubscriptionPayment(
+    userId: number,
+    provider: "manual_sbp" | "balance" | "free_grant" = "manual_sbp",
+  ): Promise<number> {
     const [subscription] = await db
       .insert(subscriptionsTable)
       .values({ userId, planId, status: "pending_payment" })
@@ -149,7 +158,7 @@ describe("referral offer notifications", () => {
         userId,
         subscriptionId: subscription!.id,
         type: "subscription",
-        provider: "manual_sbp",
+        provider,
         amountRub: 100,
         status: "pending",
         reference: `REF-SUB-${uid()}`,
@@ -239,7 +248,7 @@ describe("referral offer notifications", () => {
     );
   });
 
-  it("queues the balance-topup referral card and the first-payment dialog event", async () => {
+  it("does not queue referral offers for a balance top-up", async () => {
     const user = await createUser();
     userIds.push(user.id);
     const paymentId = await seedBalanceTopupPayment(user.id);
@@ -255,16 +264,64 @@ describe("referral offer notifications", () => {
           eventType: "payment_confirmed",
           metadata: expect.objectContaining({ paymentId, type: "balance_topup" }),
         }),
+      ]),
+    );
+    expect(notifications.body).not.toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           eventType: "referral_payment_offer",
           metadata: expect.objectContaining({ paymentId, type: "balance_topup" }),
         }),
+      ]),
+    );
+    expect(notifications.body).not.toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           eventType: "referral_first_payment_offer",
           metadata: expect.objectContaining({ paymentId, type: "balance_topup" }),
         }),
       ]),
     );
+  });
+
+  it("does not queue referral offers for balance-funded or free-grant subscriptions", async () => {
+    for (const provider of ["balance", "free_grant"] as const) {
+      const user = await createUser();
+      userIds.push(user.id);
+      const paymentId = await seedSubscriptionPayment(user.id, provider);
+
+      const result = await confirmPaymentById(paymentId);
+      expect(result.ok).toBe(true);
+
+      const notifications = await request
+        .get("/api/notifications")
+        .set("Cookie", user.cookie);
+      expect(notifications.status).toBe(200);
+      expect(notifications.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            eventType: "payment_confirmed",
+            metadata: expect.objectContaining({ paymentId, type: "subscription" }),
+          }),
+        ]),
+      );
+      expect(notifications.body).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            eventType: "referral_payment_offer",
+            metadata: expect.objectContaining({ paymentId }),
+          }),
+        ]),
+      );
+      expect(notifications.body).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            eventType: "referral_first_payment_offer",
+            metadata: expect.objectContaining({ paymentId }),
+          }),
+        ]),
+      );
+    }
   });
 
   it("does not create a first-payment dialog for background renewal or a zero referral commission", async () => {
@@ -321,5 +378,135 @@ describe("referral offer notifications", () => {
         expect.objectContaining({ eventType: "referral_payment_offer" }),
       ]),
     );
+  });
+
+  it("keeps user and admin referral analytics aligned across payment states and repeated payments", async () => {
+    const referrer = await createUser();
+    userIds.push(referrer.id);
+    const admin = await createUser({ role: "admin" });
+    userIds.push(admin.id);
+    const adminCookie = admin.cookie;
+
+    const registeredOnly = await createUser({ referredByUserId: referrer.id });
+    const pendingPayer = await createUser({ referredByUserId: referrer.id });
+    const topupPayer = await createUser({ referredByUserId: referrer.id });
+    const balancePayer = await createUser({ referredByUserId: referrer.id });
+    const freeGrantPayer = await createUser({ referredByUserId: referrer.id });
+    const payingPayer = await createUser({ referredByUserId: referrer.id });
+    userIds.push(
+      registeredOnly.id,
+      pendingPayer.id,
+      topupPayer.id,
+      balancePayer.id,
+      freeGrantPayer.id,
+      payingPayer.id,
+    );
+
+    // Six registrations count immediately, but a pending subscription does
+    // not make its owner a paying referral.
+    await seedSubscriptionPayment(pendingPayer.id);
+    const pendingMe = await request.get("/api/me").set("Cookie", referrer.cookie);
+    expect(pendingMe.status).toBe(200);
+    expect(pendingMe.body.referredUserCount).toBe(6);
+    expect(pendingMe.body.referredPayingUserCount).toBe(0);
+    expect(pendingMe.body.referralEarningsKopecks).toBe(0);
+
+    // A confirmed wallet top-up is still not subscription revenue, referral
+    // progress, or a commission.
+    const topupPaymentId = await seedBalanceTopupPayment(topupPayer.id);
+    const topupResult = await confirmPaymentById(topupPaymentId);
+    expect(topupResult.ok).toBe(true);
+
+    const afterTopupMe = await request.get("/api/me").set("Cookie", referrer.cookie);
+    expect(afterTopupMe.status).toBe(200);
+    expect(afterTopupMe.body.referredUserCount).toBe(6);
+    expect(afterTopupMe.body.referredPayingUserCount).toBe(0);
+    expect(afterTopupMe.body.referralEarningsKopecks).toBe(0);
+
+    // Subscription rows funded from the wallet or granted for free are also
+    // excluded, even though their payment type is "subscription".
+    const balanceSubscriptionPaymentId = await seedSubscriptionPayment(
+      balancePayer.id,
+      "balance",
+    );
+    const balanceSubscriptionResult = await confirmPaymentById(
+      balanceSubscriptionPaymentId,
+    );
+    expect(balanceSubscriptionResult.ok).toBe(true);
+    const freeGrantSubscriptionPaymentId = await seedSubscriptionPayment(
+      freeGrantPayer.id,
+      "free_grant",
+    );
+    const freeGrantSubscriptionResult = await confirmPaymentById(
+      freeGrantSubscriptionPaymentId,
+    );
+    expect(freeGrantSubscriptionResult.ok).toBe(true);
+
+    const afterInternalSubscriptionsMe = await request
+      .get("/api/me")
+      .set("Cookie", referrer.cookie);
+    expect(afterInternalSubscriptionsMe.status).toBe(200);
+    expect(afterInternalSubscriptionsMe.body.referredUserCount).toBe(6);
+    expect(afterInternalSubscriptionsMe.body.referredPayingUserCount).toBe(0);
+    expect(afterInternalSubscriptionsMe.body.referralEarningsKopecks).toBe(0);
+
+    // Confirm two subscription payments for the same referred user. The
+    // analytics must count one paying user, sum both real payments once, and
+    // match the two ledger commissions.
+    const firstSubscriptionPaymentId = await seedSubscriptionPayment(payingPayer.id);
+    const firstSubscriptionResult = await confirmPaymentById(firstSubscriptionPaymentId);
+    expect(firstSubscriptionResult.ok).toBe(true);
+    const secondSubscriptionPaymentId = await seedSubscriptionPayment(payingPayer.id);
+    const secondSubscriptionResult = await confirmPaymentById(secondSubscriptionPaymentId);
+    expect(secondSubscriptionResult.ok).toBe(true);
+
+    const me = await request.get("/api/me").set("Cookie", referrer.cookie);
+    expect(me.status).toBe(200);
+    expect(me.body.referredUserCount).toBe(6);
+    expect(me.body.referredPayingUserCount).toBe(1);
+    expect(me.body.referralEarningsKopecks).toBe(2_000);
+
+    const adminReferrals = await request
+      .get("/api/admin/referrals")
+      .set("Cookie", adminCookie);
+    expect(adminReferrals.status).toBe(200);
+    expect(adminReferrals.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          userId: referrer.id,
+          referredCount: 6,
+          payingReferredCount: 1,
+          totalRevenueRub: 200,
+          commissionsRub: 20,
+        }),
+      ]),
+    );
+
+    // A returned subscription payment must remove its commission from both
+    // user-facing and admin-facing lifetime analytics, not only from balance.
+    const refundResult = await refundPaymentById(secondSubscriptionPaymentId);
+    expect(refundResult.ok).toBe(true);
+
+    const afterRefundMe = await request.get("/api/me").set("Cookie", referrer.cookie);
+    expect(afterRefundMe.status).toBe(200);
+    expect(afterRefundMe.body.referredPayingUserCount).toBe(1);
+    expect(afterRefundMe.body.referralEarningsKopecks).toBe(1_000);
+
+    const afterRefundAdminReferrals = await request
+      .get("/api/admin/referrals")
+      .set("Cookie", adminCookie);
+    expect(afterRefundAdminReferrals.status).toBe(200);
+    expect(afterRefundAdminReferrals.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          userId: referrer.id,
+          referredCount: 6,
+          payingReferredCount: 1,
+          totalRevenueRub: 100,
+          commissionsRub: 10,
+        }),
+      ]),
+    );
+
   });
 });

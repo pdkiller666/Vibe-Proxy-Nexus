@@ -30,13 +30,16 @@ import {
 } from "../lib/passwordReset";
 import { logger } from "../lib/logger";
 import { issueKeyForUser } from "../lib/keyIssuance";
-import { assignReferralCode } from "../lib/referralCode";
+import { generateReferralCode, isReferralCodeUniqueViolation } from "../lib/referralCode";
 
 const router: IRouter = Router();
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+
+class InviteLinkUnavailableError extends Error {}
+class DuplicateEmailError extends Error {}
 
 router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
@@ -53,7 +56,8 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
   //   1. Admin invite links (invite_links table) — carry per-link plan/trial
   //      overrides and a usage counter. Code length is 12 chars, deliberately
   //      longer than the 8-char user referral codes, so the two pools never
-  //      collide. Rejected when isActive=false, expired, or maxUses reached.
+  //      collide. Rejected when isActive=false or expired. The maxUses check
+  //      is reserved atomically below, in the same transaction as user creation.
   //   2. User referral codes (users.referral_code) — standard invite chain;
   //      no per-link overrides; commission attribution still applies.
   const trimmedRef = ref.trim();
@@ -66,18 +70,15 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
         eq(inviteLinksTable.code, trimmedRef),
         eq(inviteLinksTable.isActive, true),
         or(isNull(inviteLinksTable.expiresAt), gt(inviteLinksTable.expiresAt, new Date())),
-        or(isNull(inviteLinksTable.maxUses), lt(inviteLinksTable.usedCount, inviteLinksTable.maxUses)),
       ),
     );
 
   let referrerId: number;
-  let resolvedInviteLinkId: number | null = null;
 
   if (inviteLink) {
     // Admin-created invite link — use the link creator as referrer so any
     // configured commission flows to the admin who issued the link.
     referrerId = inviteLink.createdByUserId;
-    resolvedInviteLinkId = inviteLink.id;
   } else {
     // Fall back to standard user referral code.
     const [referrer] = await db
@@ -100,28 +101,89 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
 
   const passwordHash = await hashPassword(password);
 
-  const [user] = await db
-    .insert(usersTable)
-    .values({ email, passwordHash, name: name ?? null, referredByUserId: referrerId, inviteLinkId: resolvedInviteLinkId })
-    .onConflictDoNothing({ target: usersTable.email })
-    .returning();
+  let registration: {
+    user: typeof usersTable.$inferSelect;
+    inviteLink: typeof inviteLinksTable.$inferSelect | null;
+  } | undefined;
+  for (let attempt = 0; attempt < 10 && !registration; attempt++) {
+    const referralCode = generateReferralCode();
 
-  if (!user) {
-    res.status(409).json({ error: "Пользователь с таким email уже зарегистрирован" });
-    return;
+    try {
+      registration = await db.transaction(async (tx) => {
+        let reservedInviteLink: typeof inviteLinksTable.$inferSelect | null = null;
+
+        if (inviteLink) {
+          // The conditional UPDATE is both the availability check and the
+          // reservation. PostgreSQL serializes concurrent updates of this row,
+          // so only registrations that observe a remaining slot can increment
+          // usedCount. Keep it in the same transaction as user creation so a
+          // duplicate-email conflict or referral-code collision rolls the
+          // reservation back.
+          const [reserved] = await tx
+            .update(inviteLinksTable)
+            .set({ usedCount: sql`${inviteLinksTable.usedCount} + 1` })
+            .where(
+              and(
+                eq(inviteLinksTable.id, inviteLink.id),
+                eq(inviteLinksTable.isActive, true),
+                or(isNull(inviteLinksTable.expiresAt), gt(inviteLinksTable.expiresAt, new Date())),
+                or(isNull(inviteLinksTable.maxUses), lt(inviteLinksTable.usedCount, inviteLinksTable.maxUses)),
+              ),
+            )
+            .returning();
+
+          if (!reserved) {
+            throw new InviteLinkUnavailableError();
+          }
+          reservedInviteLink = reserved;
+        }
+
+        const [createdUser] = await tx
+          .insert(usersTable)
+          .values({
+            email,
+            passwordHash,
+            name: name ?? null,
+            referralCode,
+            referredByUserId: referrerId,
+            inviteLinkId: reservedInviteLink?.id ?? null,
+          })
+          .onConflictDoNothing({ target: usersTable.email })
+          .returning();
+
+        if (!createdUser) {
+          throw new DuplicateEmailError();
+        }
+
+        return { user: createdUser, inviteLink: reservedInviteLink };
+      });
+    } catch (error) {
+      if (isReferralCodeUniqueViolation(error)) {
+        if (attempt === 9) throw error;
+        logger.warn({ attempt: attempt + 1 }, "Referral code collision during registration; retrying");
+        continue;
+      }
+      if (error instanceof InviteLinkUnavailableError) {
+        res.status(400).json({ error: "Недействительная реферальная ссылка. Регистрация возможна только по приглашению." });
+        return;
+      }
+      if (error instanceof DuplicateEmailError) {
+        res.status(409).json({ error: "Пользователь с таким email уже зарегистрирован" });
+        return;
+      }
+      throw error;
+    }
   }
 
-  await assignReferralCode(user.id);
-
-  // Atomically increment usage counter so the admin can track registrations
-  // per invite link. Done after successful user creation (not inside the
-  // onConflictDoNothing block) so a duplicate-email race never inflates the count.
-  if (resolvedInviteLinkId !== null) {
-    await db
-      .update(inviteLinksTable)
-      .set({ usedCount: sql`${inviteLinksTable.usedCount} + 1` })
-      .where(eq(inviteLinksTable.id, resolvedInviteLinkId));
+  if (!registration) {
+    throw new Error("Registration transaction completed without a user");
   }
+
+  const { user, inviteLink: reservedInviteLink } = registration;
+
+  // Use the row returned by the reservation so trial settings come from the
+  // exact link that successfully granted this registration.
+  const inviteLinkForTrial = reservedInviteLink ?? undefined;
 
   // Trial subscription: if enabled in settings, create an active subscription
   // immediately so the user can try the service without paying first.
@@ -139,10 +201,12 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
     // trialDays=0 on an invite link signals "promo-only mode": the user is
     // entitled to purchase a promo plan directly — no free trial is granted.
     // The promo plan entitlement is recorded implicitly via users.inviteLinkId.
-    const skipTrial = inviteLink?.trialDays === 0;
+    const skipTrial = inviteLinkForTrial?.trialDays === 0;
 
     const hasInviteLinkTrialOverride =
-      !skipTrial && inviteLink != null && (inviteLink.planId != null || inviteLink.trialDays != null);
+      !skipTrial &&
+      inviteLinkForTrial != null &&
+      (inviteLinkForTrial.planId != null || inviteLinkForTrial.trialDays != null);
 
     if (!skipTrial && (settings?.trialEnabled || hasInviteLinkTrialOverride)) {
       // Resolve the trial plan: admin-selected first, auto-select as fallback.
@@ -155,7 +219,7 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
       //   1. invite link planId override (per-link, set at link creation time)
       //   2. global trialPlanId from payment_settings (admin-selected)
       //   3. cheapest active monthly plan (auto-select fallback)
-      const overridePlanId = inviteLink?.planId ?? settings.trialPlanId ?? null;
+      const overridePlanId = inviteLinkForTrial?.planId ?? settings.trialPlanId ?? null;
 
       if (overridePlanId) {
         // Verify the plan is still active — if deleted/deactivated, fall through
@@ -186,7 +250,7 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
 
       if (trialPlan) {
         // trialDays priority: invite-link override → global setting → 5-day default.
-        const trialDays = inviteLink?.trialDays ?? settings.trialDays ?? 5;
+        const trialDays = inviteLinkForTrial?.trialDays ?? settings.trialDays ?? 5;
         const startsAt = new Date();
         const endsAt = new Date(startsAt.getTime() + trialDays * 24 * 60 * 60 * 1000);
         await db.insert(subscriptionsTable).values({
@@ -224,7 +288,8 @@ router.post("/auth/register", registerRateLimit, registerPerCodeRateLimit, async
   const { token, expiresAt } = await createSession(user.id);
   setSessionCookie(res, token, expiresAt);
 
-  // Re-fetch: assignReferralCode() updated the row after `user` was read.
+  // Re-fetch so the response includes any values written by the registration
+  // transaction and the trial setup that followed it.
   const [freshUser] = await db.select().from(usersTable).where(eq(usersTable.id, user.id));
   res.json(RegisterResponse.parse(await buildMeData(freshUser ?? user, req.get("host") ?? "")));
 });

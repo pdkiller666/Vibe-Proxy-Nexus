@@ -12,12 +12,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, CheckCircle2, Clock, XCircle, AlertTriangle, Wallet } from "lucide-react";
+import { Copy, CheckCircle2, Clock, XCircle, RotateCcw, AlertTriangle, Wallet } from "lucide-react";
 import { YooMoneyPaymentButtons } from "@/components/yoomoney-payment-buttons";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import { PaymentScreenshotUpload } from "@/components/payment-screenshot-upload";
-import { ReferralPaymentOffer } from "@/components/referral-offer";
 import { useScrollToExpanded } from "@/hooks/use-scroll-to-expanded";
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -133,6 +132,7 @@ export default function BalanceTopup() {
     pending: { label: "Ожидает подтверждения", icon: Clock, color: "text-primary" },
     confirmed: { label: "Подтверждён — баланс пополнен", icon: CheckCircle2, color: "text-green-600" },
     rejected: { label: "Отклонён", icon: XCircle, color: "text-destructive" },
+    refunded: { label: "Возвращён", icon: RotateCcw, color: "text-orange-600" },
   } as const;
 
   const status = statusConfig[payment.status];
@@ -157,12 +157,10 @@ export default function BalanceTopup() {
       </div>
 
       {payment.status === "confirmed" && (
-        <>
-          <div className="bg-green-50 border border-green-200 p-4 text-sm text-green-800">
-            Баланс пополнен на {payment.amountRub} ₽. Вы можете использовать средства для оплаты услуг.
-          </div>
-          <ReferralPaymentOffer paymentId={payment.id} />
-        </>
+        <div className="bg-green-50 border border-green-200 p-4 text-sm text-green-800">
+          Баланс пополнен на {payment.amountRub} ₽. Вы можете использовать средства для оплаты услуг.
+          Пополнение кошелька не начисляет реферальную комиссию.
+        </div>
       )}
 
       {payment.status === "rejected" && payment.rejectionReason && (

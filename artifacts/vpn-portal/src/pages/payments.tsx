@@ -51,12 +51,14 @@ const balanceTxLabel: Record<string, string> = {
   debit: "Списание",
   refund: "Возврат",
   referral: "Реферальная комиссия",
+  referral_reversal: "Отмена реферальной комиссии",
 };
 
 const statusConfig = {
   pending: { label: "Ожидает", icon: Clock, className: "bg-primary/10 text-primary" },
   confirmed: { label: "Подтверждён", icon: CheckCircle2, className: "bg-green-100 text-green-700" },
   rejected: { label: "Отклонён", icon: XCircle, className: "bg-destructive/10 text-destructive" },
+  refunded: { label: "Возвращён", icon: RotateCcw, className: "bg-orange-100 text-orange-700" },
 } as const;
 
 function paymentTypeLabel(type: string): string {
@@ -371,18 +373,20 @@ function TxRow({ tx }: { tx: BalanceTransaction }) {
     tx.type === "topup" ? ArrowUpCircle :
     tx.type === "refund" ? RotateCcw :
     tx.type === "referral" ? Users :
+    tx.type === "referral_reversal" ? RotateCcw :
     ArrowDownCircle;
+  const isReversal = tx.type === "referral_reversal";
   return (
     <div className="flex items-center justify-between gap-3 py-2.5">
       <div className="flex items-center gap-2 min-w-0">
-        <Icon className={`w-4 h-4 shrink-0 ${isPositive ? "text-green-600" : "text-muted-foreground"}`} />
+        <Icon className={`w-4 h-4 shrink-0 ${isReversal ? "text-orange-600" : isPositive ? "text-green-600" : "text-muted-foreground"}`} />
         <div className="min-w-0">
           <p className="text-sm font-semibold">{balanceTxLabel[tx.type] ?? tx.type}</p>
           {tx.description && <p className="text-xs text-muted-foreground truncate">{tx.description}</p>}
         </div>
       </div>
       <div className="text-right shrink-0">
-        <p className={`text-sm font-bold ${isPositive ? "text-green-600" : "text-foreground"}`}>
+        <p className={`text-sm font-bold ${isReversal ? "text-orange-600" : isPositive ? "text-green-600" : "text-foreground"}`}>
           {isPositive ? "+" : "-"}
           {formatKopecks(Math.abs(tx.amountKopecks))}
         </p>
@@ -435,6 +439,9 @@ function providerLabel(provider: string | undefined | null): string | null {
   if (provider === "yoomoney") return "ЮMoney";
   if (provider === "manual_sbp") return "СБП";
   if (provider === "balance") return "Баланс";
+  if (provider === "yookassa") return "ЮKassa";
+  if (provider === "free_grant") return "Бесплатная выдача";
+  if (provider === "freekassa") return "FreeKassa";
   return null;
 }
 
@@ -454,6 +461,9 @@ function PaymentRow({ payment }: { payment: Payment }) {
         </p>
         {payment.status === "rejected" && payment.rejectionReason && (
           <p className="text-xs text-destructive mt-0.5">{payment.rejectionReason}</p>
+        )}
+        {payment.status === "refunded" && payment.refundReason && (
+          <p className="text-xs text-orange-700 mt-0.5">{payment.refundReason}</p>
         )}
       </div>
       <span className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold shrink-0 ${status.className}`}>

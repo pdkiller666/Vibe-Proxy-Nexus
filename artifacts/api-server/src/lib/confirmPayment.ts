@@ -12,6 +12,10 @@ import {
   type Payment,
 } from "@workspace/db";
 import { ensureActiveKeyForUser } from "./keyIssuance";
+import {
+  isReferralCommissionEligible,
+  isReferralCommissionProvider,
+} from "./referralEligibility";
 import { lockCurrentSubscription } from "./subscription";
 
 type PaymentNotificationOptions = {
@@ -35,7 +39,7 @@ async function notifyPaymentConfirmed(payment: Payment, options: PaymentNotifica
 
       if (
         options.suppressReferralFirstOffer ||
-        (payment.type !== "subscription" && payment.type !== "balance_topup")
+        !isReferralCommissionEligible(payment)
       ) {
         return;
       }
@@ -566,7 +570,11 @@ export async function confirmPaymentById(
         .select({ referredByUserId: usersTable.referredByUserId })
         .from(usersTable)
         .where(eq(usersTable.id, subscription.userId));
-      if (payer?.referredByUserId) {
+      if (
+        isReferralCommissionEligible(payment) &&
+        payer?.referredByUserId &&
+        payer.referredByUserId !== subscription.userId
+      ) {
         const [settings] = await tx
           .select({
             referralCommissionPercent:
@@ -584,19 +592,28 @@ export async function confirmPaymentById(
             .from(usersTable)
             .where(eq(usersTable.id, payer.referredByUserId));
           if (referrer) {
-            await tx
-              .update(usersTable)
-              .set({
-                balanceKopecks: sql`${usersTable.balanceKopecks} + ${commissionKopecks}`,
+            // The partial unique index is the source of truth for exactly-once
+            // crediting. Only the transaction that inserted the ledger row may
+            // mutate the referrer's balance.
+            const [commission] = await tx
+              .insert(balanceTransactionsTable)
+              .values({
+                userId: payer.referredByUserId,
+                amountKopecks: commissionKopecks,
+                type: "referral",
+                paymentId: payment.id,
+                description: `Реферальное вознаграждение (${percent}%) за оплату подписки — ${payment.amountRub} ₽`,
               })
-              .where(eq(usersTable.id, payer.referredByUserId));
-            await tx.insert(balanceTransactionsTable).values({
-              userId: payer.referredByUserId,
-              amountKopecks: commissionKopecks,
-              type: "referral",
-              paymentId: payment.id,
-              description: `Реферальное вознаграждение (${percent}%) за оплату подписки — ${payment.amountRub} ₽`,
-            });
+              .onConflictDoNothing()
+              .returning({ id: balanceTransactionsTable.id });
+            if (commission) {
+              await tx
+                .update(usersTable)
+                .set({
+                  balanceKopecks: sql`${usersTable.balanceKopecks} + ${commissionKopecks}`,
+                })
+                .where(eq(usersTable.id, payer.referredByUserId));
+            }
           }
         }
       }
@@ -623,5 +640,190 @@ export async function confirmPaymentById(
       status: 409,
       error: "Payment or subscription state changed concurrently, please retry",
     };
+  }
+}
+
+export type PaymentRefundKind = "refund" | "chargeback";
+
+export type RefundResult =
+  | { ok: true; payment: Payment }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Mark a confirmed external payment as returned/charged back. Subscription
+ * payments reverse their referral commission, while balance top-ups reverse
+ * the wallet credit itself. Payment state, balance mutation, and ledger
+ * entries share one transaction so provider/admin retries cannot duplicate
+ * either correction.
+ *
+ * This does not pretend to send money back to the provider and does not
+ * silently revoke service already delivered; it records the provider-side
+ * refund/chargeback and removes the corresponding internal liability.
+ */
+export async function refundPaymentById(
+  paymentId: number,
+  kind: PaymentRefundKind = "refund",
+  reason?: string,
+): Promise<RefundResult> {
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.id, paymentId));
+
+  if (!payment) return { ok: false, status: 404, error: "Payment not found" };
+  if (payment.status === "refunded") return { ok: true, payment };
+  if (payment.status !== "confirmed") {
+    return {
+      ok: false,
+      status: 409,
+      error: "Only a confirmed payment can be refunded",
+    };
+  }
+  if (!isReferralCommissionProvider(payment.provider)) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Only external payments can be refunded",
+    };
+  }
+
+  try {
+    const updatedPayment = await db.transaction(async (tx) => {
+      const [lockedPayment] = await tx
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, payment.id))
+        .for("update");
+
+      if (!lockedPayment) throw new Error("PAYMENT_REFUND_STATE_CHANGED");
+      if (lockedPayment.status === "refunded") return lockedPayment;
+      if (lockedPayment.status !== "confirmed") {
+        throw new Error("PAYMENT_REFUND_STATE_CHANGED");
+      }
+      if (!isReferralCommissionProvider(lockedPayment.provider)) {
+        throw new Error("PAYMENT_REFUND_PROVIDER_NOT_ALLOWED");
+      }
+
+      if (lockedPayment.type === "balance_topup") {
+        // A confirmed top-up created this wallet credit. Reverse that exact
+        // amount, not a referral commission. The payment row is locked above,
+        // so the status transition and this correction are one idempotent
+        // critical section. A negative balance is intentional when the user
+        // already spent the credited funds.
+        const [existingRefund] = await tx
+          .select({ id: balanceTransactionsTable.id })
+          .from(balanceTransactionsTable)
+          .where(
+            and(
+              eq(balanceTransactionsTable.paymentId, lockedPayment.id),
+              eq(balanceTransactionsTable.type, "refund"),
+            ),
+          )
+          .limit(1)
+          .for("update");
+
+        if (!existingRefund) {
+          const refundKopecks = lockedPayment.amountRub * 100;
+          await tx
+            .update(usersTable)
+            .set({
+              balanceKopecks: sql`${usersTable.balanceKopecks} - ${refundKopecks}`,
+            })
+            .where(eq(usersTable.id, lockedPayment.userId));
+          await tx.insert(balanceTransactionsTable).values({
+            userId: lockedPayment.userId,
+            amountKopecks: -refundKopecks,
+            type: "refund",
+            paymentId: lockedPayment.id,
+            description:
+              kind === "chargeback"
+                ? `Возврат пополнения: chargeback по платежу #${lockedPayment.id}`
+                : `Возврат пополнения по платежу #${lockedPayment.id}`,
+          });
+        }
+      } else {
+        const [commission] = await tx
+          .select({
+            id: balanceTransactionsTable.id,
+            userId: balanceTransactionsTable.userId,
+            amountKopecks: balanceTransactionsTable.amountKopecks,
+          })
+          .from(balanceTransactionsTable)
+          .where(
+            and(
+              eq(balanceTransactionsTable.paymentId, lockedPayment.id),
+              eq(balanceTransactionsTable.type, "referral"),
+            ),
+          )
+          .for("update");
+
+        if (commission && commission.amountKopecks > 0) {
+          const [reversal] = await tx
+            .insert(balanceTransactionsTable)
+            .values({
+              userId: commission.userId,
+              amountKopecks: -commission.amountKopecks,
+              type: "referral_reversal",
+              paymentId: lockedPayment.id,
+              description:
+                kind === "chargeback"
+                  ? `Отмена реферального вознаграждения: chargeback по платежу #${lockedPayment.id}`
+                  : `Отмена реферального вознаграждения: возврат по платежу #${lockedPayment.id}`,
+            })
+            .onConflictDoNothing()
+            .returning({ id: balanceTransactionsTable.id });
+
+          if (reversal) {
+            // A negative balance is intentional: spending the commission before
+            // a chargeback must not turn the returned amount into free credit.
+            await tx
+              .update(usersTable)
+              .set({
+                balanceKopecks: sql`${usersTable.balanceKopecks} - ${commission.amountKopecks}`,
+              })
+              .where(eq(usersTable.id, commission.userId));
+          }
+        }
+      }
+
+      const [updated] = await tx
+        .update(paymentsTable)
+        .set({
+          status: "refunded",
+          refundKind: kind,
+          refundReason: reason ?? null,
+          refundedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(paymentsTable.id, lockedPayment.id),
+            eq(paymentsTable.status, "confirmed"),
+          ),
+        )
+        .returning();
+      if (!updated) throw new Error("PAYMENT_REFUND_STATE_CHANGED");
+      return updated;
+    });
+
+    return { ok: true, payment: updatedPayment };
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message === "PAYMENT_REFUND_PROVIDER_NOT_ALLOWED"
+    ) {
+      return {
+        ok: false,
+        status: 409,
+        error: "Only external payments can be refunded",
+      };
+    }
+    if (err instanceof Error && err.message === "PAYMENT_REFUND_STATE_CHANGED") {
+      return {
+        ok: false,
+        status: 409,
+        error: "Payment state changed concurrently, please retry",
+      };
+    }
+    throw err;
   }
 }

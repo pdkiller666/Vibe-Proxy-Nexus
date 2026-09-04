@@ -22,6 +22,7 @@ import {
   isHealthyM41Index,
   runM41BestEffort,
 } from "./heal-schema-m41.mjs";
+import { runM44ReferralLedgerRepair } from "./heal-schema-m44.mjs";
 
 const { Client } = pg;
 
@@ -1191,6 +1192,14 @@ try {
   // DESC. This is only an optimization, so a problem repairing the partial
   // index must never prevent the critical M-42/M-43 safeguards above.
   await runM41BestEffort(ensureM41SubscriptionExpiryIndex);
+
+  // ── M-44: referral ledger idempotency + payment refunds ────────────────
+  // Commission and its reversal are separate immutable ledger rows. Repair
+  // duplicate legacy commissions and prepare both partial unique indexes as a
+  // single atomic unit. M-41 above intentionally remains separate because its
+  // CREATE INDEX CONCURRENTLY operation is not allowed inside a transaction.
+  await runM44ReferralLedgerRepair(client);
+  console.log("heal-schema: M-44 referral ledger idempotency, refund columns, and self-referral guard");
 
   console.log("heal-schema: done");
 } catch (err) {

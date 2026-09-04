@@ -1,6 +1,7 @@
-import { and, count, desc, eq, gt, isNotNull, isNull, lt, or, sum } from "drizzle-orm";
-import { db, balanceTransactionsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
+import { and, count, countDistinct, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sum } from "drizzle-orm";
+import { db, balanceTransactionsTable, paymentsTable, paymentSettingsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, type User } from "@workspace/db";
 import { resolvePublicAddress } from "./domain";
+import { REFERRAL_COMMISSION_PROVIDER_VALUES } from "./referralEligibility";
 
 export async function buildMeData(user: User, requestHost?: string) {
   // Defense in depth: the background job in subscriptionLifecycle.ts flips
@@ -122,12 +123,35 @@ export async function buildMeData(user: User, requestHost?: string) {
   const [earningsResult] = await db
     .select({ total: sum(balanceTransactionsTable.amountKopecks) })
     .from(balanceTransactionsTable)
-    .where(and(eq(balanceTransactionsTable.userId, user.id), eq(balanceTransactionsTable.type, "referral")));
+    .where(
+      and(
+        eq(balanceTransactionsTable.userId, user.id),
+        inArray(balanceTransactionsTable.type, ["referral", "referral_reversal"]),
+      ),
+    );
 
   const [{ count: referredUserCount }] = await db
     .select({ count: count() })
     .from(usersTable)
     .where(eq(usersTable.referredByUserId, user.id));
+
+  // Referral commissions are created only for confirmed, positive subscription
+  // payments from an external provider. Keep the progress metric on the same
+  // policy: registrations are reported separately, while a referred user
+  // counts as paying after at least one eligible payment.
+  const [{ count: referredPayingUserCount }] = await db
+    .select({ count: countDistinct(paymentsTable.userId) })
+    .from(usersTable)
+    .innerJoin(paymentsTable, eq(paymentsTable.userId, usersTable.id))
+    .where(
+      and(
+        eq(usersTable.referredByUserId, user.id),
+        eq(paymentsTable.status, "confirmed"),
+        eq(paymentsTable.type, "subscription"),
+        gt(paymentsTable.amountRub, 0),
+        inArray(paymentsTable.provider, REFERRAL_COMMISSION_PROVIDER_VALUES),
+      ),
+    );
 
   const fallbackHost = requestHost || "";
   const { host: referralLinkHost } = await resolvePublicAddress({ host: fallbackHost, sni: fallbackHost });
@@ -156,6 +180,7 @@ export async function buildMeData(user: User, requestHost?: string) {
     referralCommissionPercent: settings?.referralCommissionPercent ?? 0,
     referralEarningsKopecks: Number(earningsResult?.total ?? 0),
     referredUserCount,
+    referredPayingUserCount,
     referralLinkHost,
     isBanned: user.isBanned,
     isTrialSubscription,

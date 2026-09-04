@@ -14,4 +14,5 @@ export const AdminBalanceTransactionType = {
   debit: 'debit',
   refund: 'refund',
   referral: 'referral',
+  referral_reversal: 'referral_reversal',
 } as const;

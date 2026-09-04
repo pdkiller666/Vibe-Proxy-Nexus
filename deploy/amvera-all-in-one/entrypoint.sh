@@ -57,6 +57,16 @@ else
   printf '%s' "$RENDERED" > "$XRAY_CONFIG_PATH"
 fi
 
+# The current payment API reads the M-44 refund columns. Ensure those three
+# additive columns exist before the web process starts, while keeping a strict
+# timeout so an unavailable DB cannot recreate the old Amvera health-check
+# restart loop. The full data repair and schema push remain in the background.
+if timeout 15 node /app/db-migrate/ensure-payment-refund-columns.mjs; then
+  echo "Payment refund columns are ready."
+else
+  echo "WARNING: payment refund column bootstrap failed or timed out — continuing."
+fi
+
 # Push DB schema in the background (idempotent: no-op if schema already
 # matches). Uses the self-contained @workspace/db deploy (schema +
 # drizzle-kit) baked into the image at build time. --force skips the

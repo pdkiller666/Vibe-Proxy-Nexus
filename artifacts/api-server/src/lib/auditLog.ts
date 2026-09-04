@@ -62,6 +62,7 @@ const ACTION_MAP: Record<string, string> = {
   // Payments
   "POST /admin/payments/:id/confirm": "confirm_payment",
   "POST /admin/payments/:id/reject": "reject_payment",
+  "POST /admin/payments/:id/refund": "refund_payment",
   "PATCH /admin/payments/:id/note": "update_payment_note",
 
   // Support

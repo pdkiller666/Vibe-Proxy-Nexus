@@ -15,4 +15,5 @@ export const PaymentProvider = {
   yoomoney: 'yoomoney',
   freekassa: 'freekassa',
   balance: 'balance',
+  free_grant: 'free_grant',
 } as const;

@@ -15,6 +15,33 @@ function generateCandidateCode(): string {
   return code;
 }
 
+export function generateReferralCode(): string {
+  return generateCandidateCode();
+}
+
+export function isReferralCodeUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 4 && current; depth++) {
+    const candidate = current as {
+      code?: unknown;
+      constraint?: unknown;
+      cause?: unknown;
+    };
+
+    if (
+      candidate.code === "23505" &&
+      (candidate.constraint == null || candidate.constraint === "users_referral_code_unique")
+    ) {
+      return true;
+    }
+
+    current = candidate.cause;
+  }
+
+  return false;
+}
+
 /**
  * Assigns a fresh, unique referral code to `userId`. Retries a handful of
  * times on the (extremely unlikely) chance of a collision with an existing
@@ -22,7 +49,7 @@ function generateCandidateCode(): string {
  */
 export async function assignReferralCode(userId: number): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
-    const code = generateCandidateCode();
+    const code = generateReferralCode();
     try {
       await db.update(usersTable).set({ referralCode: code }).where(eq(usersTable.id, userId));
       return code;

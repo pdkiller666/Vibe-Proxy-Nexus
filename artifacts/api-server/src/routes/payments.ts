@@ -39,6 +39,9 @@ router.get("/payments/me", requireAuth, async (req, res): Promise<void> => {
       createdAt: paymentsTable.createdAt,
       confirmedAt: paymentsTable.confirmedAt,
       hasScreenshot: sql<boolean>`(${paymentsTable.screenshotData} IS NOT NULL)`,
+      refundKind: paymentsTable.refundKind,
+      refundReason: paymentsTable.refundReason,
+      refundedAt: paymentsTable.refundedAt,
     })
     .from(paymentsTable)
     .where(eq(paymentsTable.userId, user.id))

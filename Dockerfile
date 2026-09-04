@@ -66,6 +66,8 @@ COPY --from=builder /repo/artifacts/vpn-portal/dist/public ./public
 COPY --from=builder /tmp/db-deploy ./db-migrate
 COPY deploy/amvera-all-in-one/heal-schema.mjs ./db-migrate/heal-schema.mjs
 COPY deploy/amvera-all-in-one/heal-schema-m41.mjs ./db-migrate/heal-schema-m41.mjs
+COPY deploy/amvera-all-in-one/heal-schema-m44.mjs ./db-migrate/heal-schema-m44.mjs
+COPY deploy/amvera-all-in-one/ensure-payment-refund-columns.mjs ./db-migrate/ensure-payment-refund-columns.mjs
 
 # Deployment glue.
 COPY deploy/amvera-all-in-one/xray-config.json.template ./xray/config.json.template
