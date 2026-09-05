@@ -1335,15 +1335,11 @@ export default function Keys() {
                 <span className="text-xs font-mono text-muted-foreground">
                   Отозван{key.revokedReason ? ` · ${revokedReasonLabel[key.revokedReason] ?? key.revokedReason}` : ""}
                 </span>
-              ) : isAdmin ? (
+              ) : (
                 <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
                   <span className="truncate flex-1">{key.vlessLink}</span>
                   <CopyButton text={key.vlessLink} />
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                   Для подключения используйте ссылку выше.
-                </p>
               )}
             </div>
           ))}
