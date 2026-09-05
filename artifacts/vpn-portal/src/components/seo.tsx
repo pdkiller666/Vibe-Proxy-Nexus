@@ -46,8 +46,8 @@ export function Seo({ title, description, path, noindex = false, jsonLd }: SeoPr
 }
 
 export const homeSeo = {
-  title: "VPNexus — быстрый VPN без логов",
-  description: "VPNexus — быстрый и приватный VPN без логов. Защищённое подключение, стабильная скорость и простой старт.",
+  title: "VPNexus — быстрый и защищённый VPN",
+  description: "VPNexus — защищённое VPN-подключение со стабильной скоростью и простой настройкой.",
   path: "/",
   jsonLd: [
     {
@@ -56,7 +56,7 @@ export const homeSeo = {
       name: "VPNexus",
       url: SITE_URL,
       logo: IMAGE_URL,
-      description: "Приватный VPN-сервис без логов.",
+      description: "Сервис защищённого VPN-подключения.",
     },
     {
       "@context": "https://schema.org",

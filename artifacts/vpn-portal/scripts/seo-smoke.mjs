@@ -14,10 +14,10 @@ const artifactToml = new URL("../.replit-artifact/artifact.toml", import.meta.ur
 const publicPages = [
   {
     path: "/",
-    title: "VPNexus — быстрый VPN без логов",
-    description: "VPNexus — быстрый и приватный VPN без логов. Защищённое подключение, стабильная скорость и простой старт.",
+    title: "VPNexus — быстрый и защищённый VPN",
+    description: "VPNexus — защищённое VPN-подключение со стабильной скоростью и простой настройкой.",
     canonical: "https://vpnexus.pro/",
-    h1: "VPNexus — быстрый VPN без логов",
+    h1: "VPNexus — быстрый и защищённый VPN",
   },
   {
     paths: ["/terms", "/terms/"],
