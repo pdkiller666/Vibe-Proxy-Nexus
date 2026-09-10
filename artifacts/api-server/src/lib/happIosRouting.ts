@@ -1,7 +1,7 @@
 /**
- * Happ iOS routing profile helpers.
+ * Happ routing profile helpers.
  *
- * iOS Happ separates VPN connection (subscription URL) from routing
+ * Happ separates VPN connection (subscription URL) from routing
  * (happ://routing/add/<base64> deep link). This module:
  *   - Defines the default direct-bypass profile (Russian services + RFC-1918)
  *   - Merges admin-supplied overrides with the fixed infrastructure fields
@@ -10,8 +10,8 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-/** The admin-editable subset of a Happ iOS routing profile. */
-export interface HappIosRoutingProfile {
+/** The admin-editable subset of a Happ routing profile. */
+export interface HappRoutingProfile {
   /** Profile name shown in Happ (e.g. "VPNexus"). */
   name: string;
   /**
@@ -25,9 +25,12 @@ export interface HappIosRoutingProfile {
   directip: string[];
 }
 
+/** Legacy internal name retained for compatibility with the existing DB column. */
+export type HappIosRoutingProfile = HappRoutingProfile;
+
 // ── Default direct-sites list ─────────────────────────────────────────────────
 
-/** Full default direct-bypass domain list compiled from the Happ iOS routing
+/** Full default direct-bypass domain list compiled from the Happ routing
  *  profile shared by the operator. These are Russian services that must remain
  *  accessible without the VPN tunnel. Admin can override via admin panel. */
 export const DEFAULT_DIRECT_SITES: string[] = [
@@ -296,11 +299,11 @@ const FIXED_FIELDS = {
 
 /**
  * Merges an optional admin-supplied profile with the defaults.
- * Always returns a fully-populated HappIosRoutingProfile (never null).
+ * Always returns a fully-populated HappRoutingProfile (never null).
  */
-export function resolveHappIosRoutingProfile(
-  stored: HappIosRoutingProfile | null | undefined,
-): HappIosRoutingProfile {
+export function resolveHappRoutingProfile(
+  stored: HappRoutingProfile | null | undefined,
+): HappRoutingProfile {
   return {
     name: stored?.name ?? DEFAULT_PROFILE_NAME,
     directsites: stored?.directsites ?? DEFAULT_DIRECT_SITES,
@@ -309,10 +312,10 @@ export function resolveHappIosRoutingProfile(
 }
 
 /**
- * Builds the full Happ iOS routing profile object (including fixed infra fields)
+ * Builds the full Happ routing profile object (including fixed infra fields)
  * and returns the ready-to-use deep link URL: happ://routing/add/<base64>.
  */
-export function buildHappIosRoutingUrl(profile: HappIosRoutingProfile): string {
+export function buildHappRoutingUrl(profile: HappRoutingProfile): string {
   const fullProfile = {
     ...FIXED_FIELDS,
     name: profile.name,
@@ -323,3 +326,7 @@ export function buildHappIosRoutingUrl(profile: HappIosRoutingProfile): string {
   const b64 = Buffer.from(json, "utf8").toString("base64");
   return `happ://routing/add/${b64}`;
 }
+
+/** Legacy aliases for callers that still use the former iOS-specific names. */
+export const resolveHappIosRoutingProfile = resolveHappRoutingProfile;
+export const buildHappIosRoutingUrl = buildHappRoutingUrl;

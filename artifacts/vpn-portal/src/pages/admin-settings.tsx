@@ -7,13 +7,13 @@ import {
   useUploadSbpQr,
   useDeleteSbpQr,
 } from "@workspace/api-client-react";
-import type { Plan } from "@workspace/api-client-react";
+import type { AppLink, AppPlatform, Plan } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/query-client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Settings, Save, X, Check, Pencil, Trash2, Plus, Image as ImageIcon } from "lucide-react";
+import { AlertTriangle, Settings, Save, X, Check, Pencil, Trash2, Plus, ChevronUp, ChevronDown, Image as ImageIcon } from "lucide-react";
 export function PaymentSettingsForm() {
   // Refetch every 60 s so the domain-health alert auto-clears once the domain
   // is healthy again — same cadence as the server-side healthz cache TTL.
@@ -420,11 +420,11 @@ export function PaymentSettingsForm() {
       {/* QR code section — separate mutation, not part of the main form */}
       <SbpQrSection />
 
-      {/* iOS Happ routing profile — separate mutation */}
-      <HappIosRoutingSection />
+      {/* Happ routing profile — separate mutation */}
+      <HappRoutingSection />
 
       {/* App download links — separate mutation */}
-      <AppDownloadLinksSection />
+      <AppLinksSection />
     </div>
   );
 }
@@ -518,7 +518,7 @@ function SbpQrSection() {
   );
 }
 
-// ── iOS Happ routing profile editor ──────────────────────────────────────────
+// ── Happ routing profile editor ───────────────────────────────────────────────
 // Standalone section: admin edits the direct-bypass domain / CIDR list and the
 // profile name. Changes are saved via PATCH /admin/payment-settings and do NOT
 // require the main form to be submitted — separate "Save" button below.
@@ -541,7 +541,7 @@ function parseSitesFromDisplay(text: string): string[] {
     .map((l) => (l.includes(":") ? l : `domain:${l}`));
 }
 
-function HappIosRoutingSection() {
+function HappRoutingSection() {
   const { data: settings } = useGetPaymentSettings();
   const { mutate: update, isPending } = useUpdatePaymentSettings();
   const { toast } = useToast();
@@ -552,8 +552,8 @@ function HappIosRoutingSection() {
   const [initialized, setInitialized] = useState(false);
 
   // Seed form from API (effective profile — always non-null from server).
-  if (settings && !initialized) {
-    const p = settings.happIosRoutingProfile;
+  if (settings?.happRoutingProfile && !initialized) {
+    const p = settings.happRoutingProfile;
     setProfileName(p.name);
     setDirectSitesText(formatSitesForDisplay(p.directsites));
     setDirectIpText(p.directip.join("\n"));
@@ -570,11 +570,11 @@ function HappIosRoutingSection() {
         .filter((l) => l.length > 0),
     };
     update(
-      { data: { happIosRoutingProfile: profile } },
+      { data: { happRoutingProfile: profile } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
-          toast({ title: "Профиль iOS маршрутизации сохранён" });
+          toast({ title: "Профиль маршрутизации сохранён" });
         },
         onError: () => toast({ title: "Ошибка сохранения профиля", variant: "destructive" }),
       },
@@ -583,7 +583,7 @@ function HappIosRoutingSection() {
 
   function handleReset() {
     update(
-      { data: { happIosRoutingProfile: null } },
+      { data: { happRoutingProfile: null } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
@@ -596,25 +596,25 @@ function HappIosRoutingSection() {
   }
 
   return (
-    <div className="border border-border p-4 space-y-4 mt-2">
+      <div className="border border-border p-4 space-y-4 mt-2">
       <div>
-        <p className="text-sm font-semibold">iOS Happ — профиль маршрутизации</p>
+        <p className="text-sm font-semibold">Happ — профиль маршрутизации</p>
         <p className="text-xs text-muted-foreground mt-0.5">
           Управляйте списком сайтов и IP-адресов, которые будут проходить напрямую (обходить тоннель)
-          у iOS-пользователей. Изменения применяются мгновенно — пользователи переимпортируют
+          у пользователей Happ. Изменения применяются мгновенно — пользователи переимпортируют
           профиль нажатием кнопки на странице ключей.
         </p>
       </div>
 
       {/* Current deep link preview */}
-      {settings?.happIosRoutingUrl && (
+      {settings?.happRoutingUrl && (
         <div className="space-y-1">
           <p className="text-xs font-mono text-muted-foreground uppercase tracking-wide">Текущая ссылка профиля</p>
           <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 font-mono text-xs overflow-hidden">
-            <span className="truncate flex-1">{settings.happIosRoutingUrl}</span>
+            <span className="truncate flex-1">{settings.happRoutingUrl}</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            Пользователи открывают эту ссылку на iPhone — Happ применяет профиль автоматически.
+            Пользователи открывают эту ссылку в Happ — приложение применяет профиль автоматически.
           </p>
         </div>
       )}
@@ -685,40 +685,50 @@ function HappIosRoutingSection() {
   );
 }
 
-// ── App download links editor ─────────────────────────────────────────────────
-// Admin configures the 4 recommended client app links shown in the keys page
-// "Quick start" banners and iOS routing instructions. Saved via
-// PATCH /admin/payment-settings. Separate Save/Reset from the main form.
+// ── Application links editor ──────────────────────────────────────────────────
+// Admin can add, remove, reorder, and hide application links independently
+// for each platform. Saved via PATCH /admin/payment-settings.
 
-const APP_LINK_LABELS: Record<string, string> = {
-  happAndroid: "Happ — Android",
-  happIos: "Happ — iOS (App Store)",
-  v2rayng: "v2rayNG — Android",
-  v2rayn: "v2rayN — Windows",
-};
+const APP_PLATFORMS: Array<{ value: AppPlatform; label: string }> = [
+  { value: "android", label: "Android" },
+  { value: "ios", label: "iPhone" },
+  { value: "windows", label: "Windows" },
+];
 
-function AppDownloadLinksSection() {
+function AppLinksSection() {
   const { data: settings } = useGetPaymentSettings();
   const { mutate: update, isPending } = useUpdatePaymentSettings();
   const { toast } = useToast();
 
-  const [links, setLinks] = useState({
-    happAndroid: "",
-    happIos: "",
-    v2rayng: "",
-    v2rayn: "",
-  });
+  const [links, setLinks] = useState<AppLink[]>([]);
   const [initialized, setInitialized] = useState(false);
 
-  if (settings && !initialized) {
-    const l = settings.appDownloadLinks;
-    setLinks({ happAndroid: l.happAndroid, happIos: l.happIos, v2rayng: l.v2rayng, v2rayn: l.v2rayn });
+  if (settings?.appLinks && !initialized) {
+    setLinks(settings.appLinks.map((link) => ({ ...link, platforms: [...link.platforms] })));
     setInitialized(true);
   }
 
   function handleSave() {
+    const invalidLink = links.find((link) => !link.title.trim() || !link.url.trim() || link.platforms.length === 0);
+    if (invalidLink) {
+      toast({
+        title: "Заполните название, ссылку и хотя бы одну платформу",
+        variant: "destructive",
+      });
+      return;
+    }
+
     update(
-      { data: { appDownloadLinks: { happAndroid: links.happAndroid.trim(), happIos: links.happIos.trim(), v2rayng: links.v2rayng.trim(), v2rayn: links.v2rayn.trim() } } },
+      {
+        data: {
+          appLinks: links.map((link, index) => ({
+            ...link,
+            title: link.title.trim(),
+            url: link.url.trim(),
+            sortOrder: (index + 1) * 10,
+          })),
+        },
+      },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
@@ -731,7 +741,7 @@ function AppDownloadLinksSection() {
 
   function handleReset() {
     update(
-      { data: { appDownloadLinks: null } },
+      { data: { appLinks: null } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPaymentSettingsQueryKey() });
@@ -743,41 +753,149 @@ function AppDownloadLinksSection() {
     );
   }
 
+  function addLink() {
+    setLinks((previous) => [
+      ...previous,
+      {
+        id: `app-link-${crypto.randomUUID()}`,
+        title: "",
+        url: "",
+        platforms: ["windows"],
+        visible: true,
+        sortOrder: (previous.length + 1) * 10,
+      },
+    ]);
+  }
+
+  function updateLink(id: string, patch: Partial<AppLink>) {
+    setLinks((previous) => previous.map((link) => (link.id === id ? { ...link, ...patch } : link)));
+  }
+
+  function moveLink(index: number, direction: -1 | 1) {
+    setLinks((previous) => {
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= previous.length) return previous;
+      const next = [...previous];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  }
+
+  function togglePlatform(id: string, platform: AppPlatform) {
+    setLinks((previous) =>
+      previous.map((link) => {
+        if (link.id !== id) return link;
+        const platforms = link.platforms.includes(platform)
+          ? link.platforms.filter((item) => item !== platform)
+          : [...link.platforms, platform];
+        return { ...link, platforms };
+      }),
+    );
+  }
+
   return (
     <div className="border border-border p-4 space-y-4 mt-2">
       <div>
         <p className="text-sm font-semibold">Ссылки на приложения</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Настройте ссылки на скачивание VPN-клиентов, которые показываются пользователям
-          на странице ключей (баннер «Быстрый старт» и инструкции). Изменения применяются мгновенно.
+          Добавляйте кнопки приложений для нужных платформ, меняйте порядок и управляйте видимостью.
+          Изменения применяются мгновенно.
         </p>
       </div>
 
-      {(["happAndroid", "happIos", "v2rayng", "v2rayn"] as const).map((key) => (
-        <div key={key} className="space-y-1">
-          <label className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            {APP_LINK_LABELS[key]}
-          </label>
-          <div className="flex items-center gap-2">
-            <Input
-              value={links[key]}
-              onChange={(e) => setLinks((prev) => ({ ...prev, [key]: e.target.value }))}
-              placeholder="https://..."
-              className="rounded-none font-mono text-xs"
-            />
-            {links[key] && (
-              <a
-                href={links[key]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-xs text-muted-foreground hover:text-primary underline underline-offset-2 whitespace-nowrap"
+      {links.map((link, index) => (
+        <div key={link.id} className="border border-border/70 p-3 space-y-3">
+          <div className="flex items-start gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1">
+              <Input
+                value={link.title}
+                onChange={(e) => updateLink(link.id, { title: e.target.value })}
+                placeholder="Название кнопки, например «Скачать Happ»"
+                className="rounded-none text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <Input
+                  value={link.url}
+                  onChange={(e) => updateLink(link.id, { url: e.target.value })}
+                  placeholder="https://..."
+                  className="rounded-none font-mono text-xs"
+                />
+                {link.url && (
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs text-muted-foreground hover:text-primary underline underline-offset-2 whitespace-nowrap"
+                  >
+                    Открыть
+                  </a>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLinks((previous) => previous.filter((item) => item.id !== link.id))}
+              className="shrink-0 p-2 text-muted-foreground hover:text-destructive transition-colors"
+              title="Удалить ссылку"
+              aria-label={`Удалить ссылку ${index + 1}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => moveLink(index, -1)}
+                disabled={index === 0}
+                className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                title="Поднять выше"
+                aria-label={`Поднять ссылку ${index + 1}`}
               >
-                Открыть
-              </a>
-            )}
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveLink(index, 1)}
+                disabled={index === links.length - 1}
+                className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                title="Опустить ниже"
+                aria-label={`Опустить ссылку ${index + 1}`}
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 flex-wrap text-xs">
+            <span className="font-mono uppercase tracking-wide text-muted-foreground">Показывать в:</span>
+            {APP_PLATFORMS.map((platform) => (
+              <label key={platform.value} className="inline-flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={link.platforms.includes(platform.value)}
+                  onChange={() => togglePlatform(link.id, platform.value)}
+                />
+                {platform.label}
+              </label>
+            ))}
+            <label className="inline-flex items-center gap-1.5 ml-auto">
+              <input
+                type="checkbox"
+                checked={link.visible}
+                onChange={(e) => updateLink(link.id, { visible: e.target.checked })}
+              />
+              Видима пользователям
+            </label>
           </div>
         </div>
       ))}
+
+      <button
+        type="button"
+        onClick={addLink}
+        className="inline-flex items-center gap-2 border border-border px-3 py-2 text-sm hover:bg-muted transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        Добавить ссылку
+      </button>
 
       <div className="flex items-center gap-3 flex-wrap">
         <button

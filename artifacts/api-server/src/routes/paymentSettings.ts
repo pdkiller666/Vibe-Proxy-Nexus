@@ -3,13 +3,12 @@ import { db, paymentSettingsTable } from "@workspace/db";
 import { GetPaymentSettingsResponse } from "@workspace/api-zod";
 import { isPrimaryDomainHealthy } from "../lib/domain";
 import {
-  buildHappIosRoutingUrl,
-  resolveHappIosRoutingProfile,
-  type HappIosRoutingProfile,
+  buildHappRoutingUrl,
+  resolveHappRoutingProfile,
+  type HappRoutingProfile,
 } from "../lib/happIosRouting";
 import {
-  resolveAppDownloadLinks,
-  type AppDownloadLinks,
+  resolveAppLinks,
 } from "../lib/appDownloadLinks";
 
 const router: IRouter = Router();
@@ -28,12 +27,11 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
     isPrimaryDomainHealthy(),
   ]);
 
-  const storedProfile = settings?.happIosRoutingProfile as HappIosRoutingProfile | null | undefined;
-  const happIosRoutingProfile = resolveHappIosRoutingProfile(storedProfile);
-  const happIosRoutingUrl = buildHappIosRoutingUrl(happIosRoutingProfile);
+  const storedProfile = settings?.happIosRoutingProfile as HappRoutingProfile | null | undefined;
+  const happRoutingProfile = resolveHappRoutingProfile(storedProfile);
+  const happRoutingUrl = buildHappRoutingUrl(happRoutingProfile);
 
-  const storedLinks = settings?.appDownloadLinks as AppDownloadLinks | null | undefined;
-  const appDownloadLinks = resolveAppDownloadLinks(storedLinks);
+  const appLinks = resolveAppLinks(settings?.appDownloadLinks);
 
   if (!settings) {
     res.json(
@@ -58,9 +56,9 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
         hasSbpQr: false,
         balancePaymentsEnabled: false,
         primaryDomainHealthy,
-        happIosRoutingUrl,
-        happIosRoutingProfile,
-        appDownloadLinks,
+        happRoutingUrl,
+        happRoutingProfile,
+        appLinks,
       }),
     );
     return;
@@ -70,9 +68,9 @@ router.get("/payment-settings", async (_req, res): Promise<void> => {
     GetPaymentSettingsResponse.parse({
       ...withHasSbpQr(settings),
       primaryDomainHealthy,
-      happIosRoutingUrl,
-      happIosRoutingProfile,
-      appDownloadLinks,
+      happRoutingUrl,
+      happRoutingProfile,
+      appLinks,
     }),
   );
 });

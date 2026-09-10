@@ -4,13 +4,12 @@ import { db, paymentSettingsTable } from "@workspace/db";
 import { UpdatePaymentSettingsBody, UpdatePaymentSettingsResponse, UploadSbpQrBody } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import {
-  buildHappIosRoutingUrl,
-  resolveHappIosRoutingProfile,
-  type HappIosRoutingProfile,
+  buildHappRoutingUrl,
+  resolveHappRoutingProfile,
+  type HappRoutingProfile,
 } from "../../lib/happIosRouting";
 import {
-  resolveAppDownloadLinks,
-  type AppDownloadLinks,
+  resolveAppLinks,
 } from "../../lib/appDownloadLinks";
 
 const router: IRouter = Router();
@@ -25,11 +24,21 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
   }
 
   const [existing] = await db.select().from(paymentSettingsTable).limit(1);
+  const {
+    appLinks: requestedAppLinks,
+    happRoutingProfile: requestedHappRoutingProfile,
+    ...databasePatch
+  } = parsed.data;
+  const updatePatch = {
+    ...databasePatch,
+    ...(requestedAppLinks !== undefined ? { appDownloadLinks: requestedAppLinks } : {}),
+    ...(requestedHappRoutingProfile !== undefined ? { happIosRoutingProfile: requestedHappRoutingProfile } : {}),
+  };
 
   const [settings] = existing
     ? await db
         .update(paymentSettingsTable)
-        .set(parsed.data)
+        .set(updatePatch)
         .where(eq(paymentSettingsTable.id, existing.id))
         .returning()
     : await db
@@ -50,17 +59,17 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
           referralCommissionPercent: parsed.data.referralCommissionPercent ?? 0,
           sbpPaymentUrl: parsed.data.sbpPaymentUrl ?? "",
           showManualSbpDetails: parsed.data.showManualSbpDetails ?? false,
-          happIosRoutingProfile: parsed.data.happIosRoutingProfile ?? null,
+           appDownloadLinks: requestedAppLinks ?? null,
+           happIosRoutingProfile: requestedHappRoutingProfile ?? null,
         })
         .returning();
 
   // Compute derived fields from saved values (or defaults when null).
-  const storedProfile = settings!.happIosRoutingProfile as HappIosRoutingProfile | null;
-  const happIosRoutingProfile = resolveHappIosRoutingProfile(storedProfile);
-  const happIosRoutingUrl = buildHappIosRoutingUrl(happIosRoutingProfile);
+  const storedProfile = settings!.happIosRoutingProfile as HappRoutingProfile | null;
+  const happRoutingProfile = resolveHappRoutingProfile(storedProfile);
+  const happRoutingUrl = buildHappRoutingUrl(happRoutingProfile);
 
-  const storedLinks = settings!.appDownloadLinks as AppDownloadLinks | null;
-  const appDownloadLinks = resolveAppDownloadLinks(storedLinks);
+  const appLinks = resolveAppLinks(settings!.appDownloadLinks);
 
   // Strip QR blob and raw JSON columns from response — replace with derived fields.
   const {
@@ -75,9 +84,9 @@ router.patch("/admin/payment-settings", requireAuth, requireAdmin, async (req, r
     ...rest,
     hasSbpQr: Boolean(_d),
     primaryDomainHealthy: true, // live check skipped on write — client refetches
-    happIosRoutingUrl,
-    happIosRoutingProfile,
-    appDownloadLinks,
+    happRoutingUrl,
+    happRoutingProfile,
+    appLinks,
   }));
 });
 

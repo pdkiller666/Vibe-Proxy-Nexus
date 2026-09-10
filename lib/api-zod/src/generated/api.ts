@@ -428,6 +428,12 @@ export const ListPlansResponse = zod.array(ListPlansResponseItem)
 /**
  * @summary Get payment instructions (SBP details)
  */
+
+
+
+
+
+
 export const GetPaymentSettingsResponse = zod.object({
   "sbpPhone": zod.string(),
   "sbpBank": zod.string(),
@@ -451,18 +457,20 @@ export const GetPaymentSettingsResponse = zod.object({
   "hasSbpQr": zod.boolean(),
   "balancePaymentsEnabled": zod.boolean(),
   "primaryDomainHealthy": zod.boolean(),
-  "happIosRoutingUrl": zod.string(),
-  "happIosRoutingProfile": zod.object({
+  "happRoutingUrl": zod.string(),
+  "happRoutingProfile": zod.object({
   "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
   "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
   "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
-}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),
-  "appDownloadLinks": zod.object({
-  "happAndroid": zod.string().describe('Happ for Android (Google Play or direct APK URL)'),
-  "happIos": zod.string().describe('Happ for iOS (App Store URL)'),
-  "v2rayng": zod.string().describe('v2rayNG for Android (Google Play URL)'),
-  "v2rayn": zod.string().describe('v2rayN for Windows (GitHub releases URL)')
-}).describe('Admin-configurable download links for recommended VPN client apps.')
+}).describe('Admin-editable subset of the Happ routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),
+  "appLinks": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "title": zod.string().min(1),
+  "url": zod.string().url().min(1),
+  "platforms": zod.array(zod.enum(['android', 'ios', 'windows'])).min(1),
+  "visible": zod.boolean(),
+  "sortOrder": zod.number()
+}).describe('Admin-configurable application link shown on selected platform tabs.'))
 })
 
 
@@ -1269,6 +1277,10 @@ export const updatePaymentSettingsBodyReferralCommissionPercentMax = 100;
 
 
 
+
+
+
+
 export const UpdatePaymentSettingsBody = zod.object({
   "sbpPhone": zod.string().optional(),
   "sbpBank": zod.string().optional(),
@@ -1289,19 +1301,27 @@ export const UpdatePaymentSettingsBody = zod.object({
   "referralCommissionPercent": zod.number().min(updatePaymentSettingsBodyReferralCommissionPercentMin).max(updatePaymentSettingsBodyReferralCommissionPercentMax).optional(),
   "sbpPaymentUrl": zod.string().optional(),
   "showManualSbpDetails": zod.boolean().optional(),
-  "happIosRoutingProfile": zod.union([zod.object({
+  "happRoutingProfile": zod.union([zod.object({
   "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
   "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
   "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
-}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),zod.null()]).optional(),
-  "appDownloadLinks": zod.union([zod.object({
-  "happAndroid": zod.string().describe('Happ for Android (Google Play or direct APK URL)'),
-  "happIos": zod.string().describe('Happ for iOS (App Store URL)'),
-  "v2rayng": zod.string().describe('v2rayNG for Android (Google Play URL)'),
-  "v2rayn": zod.string().describe('v2rayN for Windows (GitHub releases URL)')
-}).describe('Admin-configurable download links for recommended VPN client apps.'),zod.null()]).optional(),
+}).describe('Admin-editable subset of the Happ routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),zod.null()]).optional(),
+  "appLinks": zod.union([zod.array(zod.object({
+  "id": zod.string().min(1),
+  "title": zod.string().min(1),
+  "url": zod.string().url().min(1),
+  "platforms": zod.array(zod.enum(['android', 'ios', 'windows'])).min(1),
+  "visible": zod.boolean(),
+  "sortOrder": zod.number()
+}).describe('Admin-configurable application link shown on selected platform tabs.')),zod.null()]).optional(),
   "balancePaymentsEnabled": zod.boolean().optional()
 })
+
+
+
+
+
+
 
 export const UpdatePaymentSettingsResponse = zod.object({
   "sbpPhone": zod.string(),
@@ -1326,18 +1346,20 @@ export const UpdatePaymentSettingsResponse = zod.object({
   "hasSbpQr": zod.boolean(),
   "balancePaymentsEnabled": zod.boolean(),
   "primaryDomainHealthy": zod.boolean(),
-  "happIosRoutingUrl": zod.string(),
-  "happIosRoutingProfile": zod.object({
+  "happRoutingUrl": zod.string(),
+  "happRoutingProfile": zod.object({
   "name": zod.string().describe('Profile name displayed in Happ (e.g. \"VPNexus\")'),
   "directsites": zod.array(zod.string()).describe('Xray domain-matcher rules for sites that bypass the tunnel. Format: \"domain:example.ru\" or \"regexp:\\\\.ru$\"\n'),
   "directip": zod.array(zod.string()).describe('CIDR blocks that bypass the tunnel (e.g. \"10.0.0.0\/8\")')
-}).describe('Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),
-  "appDownloadLinks": zod.object({
-  "happAndroid": zod.string().describe('Happ for Android (Google Play or direct APK URL)'),
-  "happIos": zod.string().describe('Happ for iOS (App Store URL)'),
-  "v2rayng": zod.string().describe('v2rayNG for Android (Google Play URL)'),
-  "v2rayn": zod.string().describe('v2rayN for Windows (GitHub releases URL)')
-}).describe('Admin-configurable download links for recommended VPN client apps.')
+}).describe('Admin-editable subset of the Happ routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ:\/\/routing\/add\/<base64> deep link.\n'),
+  "appLinks": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "title": zod.string().min(1),
+  "url": zod.string().url().min(1),
+  "platforms": zod.array(zod.enum(['android', 'ios', 'windows'])).min(1),
+  "visible": zod.boolean(),
+  "sortOrder": zod.number()
+}).describe('Admin-configurable application link shown on selected platform tabs.'))
 })
 
 

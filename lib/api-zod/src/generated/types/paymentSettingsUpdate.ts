@@ -5,8 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AppDownloadLinks } from './appDownloadLinks';
-import type { HappIosRoutingProfile } from './happIosRoutingProfile';
+import type { AppLink } from './appLink';
+import type { HappRoutingProfile } from './happRoutingProfile';
 
 export interface PaymentSettingsUpdate {
   sbpPhone?: string;
@@ -41,7 +41,7 @@ export interface PaymentSettingsUpdate {
   referralCommissionPercent?: number;
   sbpPaymentUrl?: string;
   showManualSbpDetails?: boolean;
-  happIosRoutingProfile?: HappIosRoutingProfile | null;
-  appDownloadLinks?: AppDownloadLinks | null;
+  happRoutingProfile?: HappRoutingProfile | null;
+  appLinks?: AppLink[] | null;
   balancePaymentsEnabled?: boolean;
 }

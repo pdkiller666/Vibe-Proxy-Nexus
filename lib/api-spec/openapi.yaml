@@ -2255,28 +2255,30 @@ components:
         data: { type: string }
         mimeType: { type: string }
 
-    AppDownloadLinks:
-      type: object
-      description: Admin-configurable download links for recommended VPN client apps.
-      required: [happAndroid, happIos, v2rayng, v2rayn]
-      properties:
-        happAndroid:
-          type: string
-          description: Happ for Android (Google Play or direct APK URL)
-        happIos:
-          type: string
-          description: Happ for iOS (App Store URL)
-        v2rayng:
-          type: string
-          description: v2rayNG for Android (Google Play URL)
-        v2rayn:
-          type: string
-          description: v2rayN for Windows (GitHub releases URL)
+    AppPlatform:
+      type: string
+      enum: [android, ios, windows]
 
-    HappIosRoutingProfile:
+    AppLink:
+      type: object
+      description: Admin-configurable application link shown on selected platform tabs.
+      required: [id, title, url, platforms, visible, sortOrder]
+      properties:
+        id: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1 }
+        url: { type: string, format: uri, minLength: 1 }
+        platforms:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/AppPlatform"
+        visible: { type: boolean }
+        sortOrder: { type: integer }
+
+    HappRoutingProfile:
       type: object
       description: >
-        Admin-editable subset of the Happ iOS routing profile.
+        Admin-editable subset of the Happ routing profile.
         The API merges this with fixed infrastructure defaults (DNS, geoip URLs,
         etc.) when building the happ://routing/add/<base64> deep link.
       required: [name, directsites, directip]
@@ -2297,7 +2299,7 @@ components:
 
     PaymentSettings:
       type: object
-      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy, happIosRoutingUrl, happIosRoutingProfile, appDownloadLinks, balancePaymentsEnabled]
+      required: [sbpPhone, sbpBank, sbpRecipientName, extraDeviceSlotPriceRub, allowFreeExtraDeviceSlot, extraTrafficPriceRub, extraTrafficPackageGb, allowFreeExtraTraffic, trialEnabled, trialDays, sbpPaymentUrl, showManualSbpDetails, hasSbpQr, yookassaEnabled, sbpEnabled, primaryDomainHealthy, happRoutingUrl, happRoutingProfile, appLinks, balancePaymentsEnabled]
       properties:
         sbpPhone: { type: string }
         sbpBank: { type: string }
@@ -2343,18 +2345,20 @@ components:
         # server's outbound healthz check failed, which typically indicates the
         # domain is blocked or misconfigured. Useful for admin alerting.
         primaryDomainHealthy: { type: boolean }
-        # Ready-to-use happ://routing/add/<base64> deep link for iOS Happ users.
+        # Ready-to-use happ://routing/add/<base64> deep link for Happ users.
         # Always present — falls back to built-in defaults when no custom profile
-        # is stored. Clients display this as a button; iOS Happ opens on tap.
-        happIosRoutingUrl: { type: string }
+        # is stored. Clients display this as a button.
+        happRoutingUrl: { type: string }
         # The effective routing profile currently in use (custom or merged defaults).
         # Admin reads this to populate the editing form; never null in the response.
-        happIosRoutingProfile:
-          $ref: "#/components/schemas/HappIosRoutingProfile"
-        # Effective download links for recommended client apps (custom or built-in defaults).
+        happRoutingProfile:
+          $ref: "#/components/schemas/HappRoutingProfile"
+        # Effective application links (custom or built-in defaults).
         # Never null in the response.
-        appDownloadLinks:
-          $ref: "#/components/schemas/AppDownloadLinks"
+        appLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppLink"
 
     PaymentSettingsUpdate:
       type: object
@@ -2379,15 +2383,17 @@ components:
         referralCommissionPercent: { type: integer, minimum: 0, maximum: 100 }
         sbpPaymentUrl: { type: string }
         showManualSbpDetails: { type: boolean }
-        # Admin-editable iOS Happ routing profile. Pass null to reset to defaults.
-        happIosRoutingProfile:
+        # Admin-editable Happ routing profile. Pass null to reset to defaults.
+        happRoutingProfile:
           oneOf:
-            - $ref: "#/components/schemas/HappIosRoutingProfile"
+            - $ref: "#/components/schemas/HappRoutingProfile"
             - type: "null"
-        # Admin-editable app download links. Pass null to reset to defaults.
-        appDownloadLinks:
+        # Admin-editable application links. Pass null to reset to defaults.
+        appLinks:
           oneOf:
-            - $ref: "#/components/schemas/AppDownloadLinks"
+            - type: array
+              items:
+                $ref: "#/components/schemas/AppLink"
             - type: "null"
         # Feature flag: enable/disable balance payments without a redeploy.
         balancePaymentsEnabled: { type: boolean }

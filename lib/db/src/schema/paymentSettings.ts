@@ -63,14 +63,14 @@ export const paymentSettingsTable = pgTable("payment_settings", {
   sbpEnabled: boolean("sbp_enabled").notNull().default(true),
   sbpQrCodeData: text("sbp_qr_code_data"),
   sbpQrCodeMimeType: text("sbp_qr_code_mime_type"),
-  // Admin-configurable download links for recommended client apps.
-  // null = use built-in defaults from appDownloadLinks.ts.
+  // Admin-configurable app links. New rows store an AppLink[] JSON array;
+  // the API still reads the previous fixed-key object format for a safe rollout.
   appDownloadLinks: jsonb("app_download_links")
-    .$type<{ happAndroid: string; happIos: string; v2rayng: string; v2rayn: string } | null>(),
-  // Admin-editable Happ iOS routing profile. Stored as JSON with the editable
+    .$type<unknown>(),
+  // Admin-editable Happ routing profile. Stored as JSON with the editable
   // subset of the full Happ profile (name, directsites, directip). The API
   // merges this with fixed infrastructure defaults when building the deep link.
-  // null = use built-in default (DEFAULT_DIRECT_SITES from happIosRouting.ts).
+  // null = use built-in default (DEFAULT_DIRECT_SITES from happRouting.ts).
   happIosRoutingProfile: jsonb("happ_ios_routing_profile")
     .$type<{ name: string; directsites: string[]; directip: string[] } | null>(),
   // Feature flag: when false the /balance-checkout endpoint returns 409 and

@@ -241,24 +241,35 @@ export interface SbpQrUpload {
   mimeType: string;
 }
 
+export type AppPlatform = typeof AppPlatform[keyof typeof AppPlatform];
+
+
+export const AppPlatform = {
+  android: 'android',
+  ios: 'ios',
+  windows: 'windows',
+} as const;
+
 /**
- * Admin-configurable download links for recommended VPN client apps.
+ * Admin-configurable application link shown on selected platform tabs.
  */
-export interface AppDownloadLinks {
-  /** Happ for Android (Google Play or direct APK URL) */
-  happAndroid: string;
-  /** Happ for iOS (App Store URL) */
-  happIos: string;
-  /** v2rayNG for Android (Google Play URL) */
-  v2rayng: string;
-  /** v2rayN for Windows (GitHub releases URL) */
-  v2rayn: string;
+export interface AppLink {
+  /** @minLength 1 */
+  id: string;
+  /** @minLength 1 */
+  title: string;
+  /** @minLength 1 */
+  url: string;
+  /** @minItems 1 */
+  platforms: AppPlatform[];
+  visible: boolean;
+  sortOrder: number;
 }
 
 /**
- * Admin-editable subset of the Happ iOS routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ://routing/add/<base64> deep link.
+ * Admin-editable subset of the Happ routing profile. The API merges this with fixed infrastructure defaults (DNS, geoip URLs, etc.) when building the happ://routing/add/<base64> deep link.
  */
-export interface HappIosRoutingProfile {
+export interface HappRoutingProfile {
   /** Profile name displayed in Happ (e.g. "VPNexus") */
   name: string;
   /** Xray domain-matcher rules for sites that bypass the tunnel. Format: "domain:example.ru" or "regexp:\\.ru$" */
@@ -292,9 +303,9 @@ export interface PaymentSettings {
   hasSbpQr: boolean;
   balancePaymentsEnabled: boolean;
   primaryDomainHealthy: boolean;
-  happIosRoutingUrl: string;
-  happIosRoutingProfile: HappIosRoutingProfile;
-  appDownloadLinks: AppDownloadLinks;
+  happRoutingUrl: string;
+  happRoutingProfile: HappRoutingProfile;
+  appLinks: AppLink[];
 }
 
 export interface PaymentSettingsUpdate {
@@ -330,8 +341,8 @@ export interface PaymentSettingsUpdate {
   referralCommissionPercent?: number;
   sbpPaymentUrl?: string;
   showManualSbpDetails?: boolean;
-  happIosRoutingProfile?: HappIosRoutingProfile | null;
-  appDownloadLinks?: AppDownloadLinks | null;
+  happRoutingProfile?: HappRoutingProfile | null;
+  appLinks?: AppLink[] | null;
   balancePaymentsEnabled?: boolean;
 }
 
