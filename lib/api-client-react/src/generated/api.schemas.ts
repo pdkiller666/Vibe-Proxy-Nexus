@@ -827,6 +827,13 @@ export interface UserRoleUpdate {
   role: UserRole;
 }
 
+export interface ActiveVpnNodeSummary {
+  nodeId: number;
+  nodeName: string;
+  region: string;
+  activeUsers: number;
+}
+
 export interface TopTrafficUser {
   userId: number;
   email: string;
@@ -856,6 +863,7 @@ export interface DashboardSummary {
   activeNow: number;
   activeOnVpn: number;
   activeOnSite: number;
+  activeVpnByNode: ActiveVpnNodeSummary[];
   expiringIn3Days: number;
   lowBalanceHourly: number;
   topTrafficUsers: TopTrafficUser[];

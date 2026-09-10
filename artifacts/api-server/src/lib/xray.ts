@@ -41,6 +41,14 @@ interface XrayClient {
   limitIp?: number;
 }
 
+export interface LocalXrayReconciliationResult {
+  changed: boolean;
+  added: number;
+  removed: number;
+  normalized: number;
+  activeCount: number;
+}
+
 export function isLocalXrayEnabled(): boolean {
   return Boolean(CONFIG_PATH);
 }
@@ -53,7 +61,39 @@ function withLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function readConfig(): Promise<Record<string, any>> {
+function clientForUuid(uuid: string): XrayClient {
+  return {
+    id: uuid,
+    email: uuid,
+    limitIp: 1,
+  };
+}
+
+/**
+ * Read the DB-owned set of clients for the local Xray instance.
+ *
+ * A successful query is required before any reconciliation can write the
+ * config. This is deliberate: a transient DB outage must never be interpreted
+ * as "there are no active clients", which would disconnect every local user.
+ */
+async function getActiveLocalXrayClients(): Promise<XrayClient[]> {
+  const activeKeys = await db
+    .select({ uuid: vpnKeysTable.uuid })
+    .from(vpnKeysTable)
+    .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
+    .where(
+      and(
+        isNull(vpnKeysTable.revokedAt),
+        isNull(vpnNodesTable.managementApiUrl),
+      ),
+    );
+
+  return [...new Set(activeKeys.map(({ uuid }) => uuid))]
+    .sort((a, b) => a.localeCompare(b))
+    .map(clientForUuid);
+}
+
+async function readConfig(restoreClients?: XrayClient[]): Promise<Record<string, any>> {
   try {
     const raw = await fs.readFile(CONFIG_PATH!, "utf-8");
     return JSON.parse(raw) as Record<string, any>;
@@ -77,22 +117,26 @@ async function readConfig(): Promise<Record<string, any>> {
       // (identified by managementApiUrl IS NULL — remote nodes use a REST API).
       // If the DB is unreachable we fall back to an empty clients list so
       // subsequent key issuance still works; the error is logged clearly.
+      //
+      // A caller that already performed a successful active-key query can pass
+      // those clients in. This avoids a second DB query during reconciliation,
+      // where a transient failure between the two reads must not turn recovery
+      // into an empty config.
+      let clients: XrayClient[] = [];
+      if (restoreClients !== undefined) {
+        clients = restoreClients;
+      } else {
+        try {
+          clients = await getActiveLocalXrayClients();
+        } catch (dbErr) {
+          logger.error(
+            { err: dbErr },
+            "xray: failed to query DB for active keys during ENOENT recovery — starting with empty clients list",
+          );
+        }
+      }
+
       try {
-        const activeKeys = await db
-          .select({ uuid: vpnKeysTable.uuid })
-          .from(vpnKeysTable)
-          .innerJoin(vpnNodesTable, eq(vpnKeysTable.nodeId, vpnNodesTable.id))
-          .where(and(
-            isNull(vpnKeysTable.revokedAt),
-            isNull(vpnNodesTable.managementApiUrl),
-          ));
-
-        const clients: XrayClient[] = activeKeys.map(({ uuid }) => ({
-          id: uuid,
-          email: uuid,
-          limitIp: 1,
-        }));
-
         if (Array.isArray(freshConfig?.["inbounds"]?.[0]?.["settings"]?.["clients"])) {
           freshConfig["inbounds"][0]["settings"]["clients"] = clients;
         }
@@ -101,10 +145,10 @@ async function readConfig(): Promise<Record<string, any>> {
           { count: clients.length },
           "xray: restored active clients from DB into fresh config",
         );
-      } catch (dbErr) {
+      } catch (configErr) {
         logger.error(
-          { err: dbErr },
-          "xray: failed to query DB for active keys during ENOENT recovery — starting with empty clients list",
+          { err: configErr },
+          "xray: failed to populate fresh config with active clients",
         );
       }
 
@@ -167,6 +211,104 @@ function getClients(config: Record<string, any>): XrayClient[] {
     throw new Error("Unexpected Xray config shape: inbounds[0].settings.clients missing");
   }
   return clients as XrayClient[];
+}
+
+/**
+ * Reconcile the running local Xray client list against the DB source of truth.
+ *
+ * The DB owns which UUIDs are active on the local node. The on-disk Xray
+ * config is a durable cache of that set, and Xray's in-memory config is
+ * refreshed only when the cache changes. Keeping this operation behind the
+ * same write lock as add/remove prevents a monitoring pass from overwriting a
+ * concurrent key issuance or revoke.
+ *
+ * The operation is intentionally fail-closed:
+ * - If the DB query fails, no config read/write is attempted.
+ * - If the config is malformed, the error is propagated and the next cycle
+ *   retries without changing anything.
+ * - A restart is scheduled only when the client list actually changes.
+ */
+export async function reconcileLocalXrayClients(): Promise<LocalXrayReconciliationResult> {
+  const unchanged: LocalXrayReconciliationResult = {
+    changed: false,
+    added: 0,
+    removed: 0,
+    normalized: 0,
+    activeCount: 0,
+  };
+
+  if (!isLocalXrayEnabled()) return unchanged;
+
+  return withLock(async () => {
+    const desiredClients = await getActiveLocalXrayClients();
+    const desiredById = new Map(desiredClients.map((client) => [client.id, client]));
+    const config = await readConfig(desiredClients);
+    const clients = getClients(config);
+
+    const next: XrayClient[] = [];
+    const seen = new Set<string>();
+    let added = 0;
+    let removed = 0;
+    let normalized = 0;
+
+    for (const client of clients) {
+      const desired = desiredById.get(client.id);
+      if (!desired || seen.has(client.id)) {
+        removed += 1;
+        continue;
+      }
+
+      seen.add(client.id);
+      if (client.email !== desired.email || client.limitIp !== desired.limitIp) {
+        normalized += 1;
+      }
+      next.push({
+        ...client,
+        id: desired.id,
+        email: desired.email,
+        limitIp: desired.limitIp,
+      });
+    }
+
+    for (const desired of desiredClients) {
+      if (seen.has(desired.id)) continue;
+      next.push(desired);
+      added += 1;
+    }
+
+    const changed = added > 0 || removed > 0 || normalized > 0;
+    if (!changed) {
+      return {
+        changed: false,
+        added: 0,
+        removed: 0,
+        normalized: 0,
+        activeCount: desiredClients.length,
+      };
+    }
+
+    config["inbounds"][0]["settings"]["clients"] = next;
+    await writeConfig(config);
+    scheduleXrayRestart();
+
+    logger.info(
+      {
+        activeCount: desiredClients.length,
+        added,
+        removed,
+        normalized,
+      },
+      "xray: reconciled local clients against active DB keys",
+    );
+
+    return {
+      changed: true,
+      added,
+      removed,
+      normalized,
+      activeCount: desiredClients.length,
+    };
+  });
 }
 
 // Debounced, fire-and-forget Xray restart. Callers (addXrayClient /

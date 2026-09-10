@@ -580,6 +580,37 @@ function SummarySection({ onOpenExpiringUsers }: { onOpenExpiringUsers: () => vo
         <Metric label="Доход (30 дней)" value={`${data.last30DaysRevenueRub} ₽`} />
         <Metric label="Открытых тикетов" value={data.openTickets} highlight={data.openTickets > 0} />
       </div>
+      <div className="bg-card border border-border p-5">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <Server className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <div className="text-xs font-mono uppercase text-muted-foreground">VPN-пользователи по нодам</div>
+          </div>
+          <span className="text-[11px] text-muted-foreground font-mono shrink-0">обновление: 30 сек</span>
+        </div>
+        {data.activeVpnByNode.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Нет активных VPN-нод</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {data.activeVpnByNode.map((node) => (
+              <div key={node.nodeId} className={`border p-3 ${node.activeUsers > 0 ? "border-blue-200 bg-blue-50/50" : "border-border bg-muted/20"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">{node.nodeName}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{node.region}</div>
+                  </div>
+                  <div className={`text-xl font-bold font-mono shrink-0 ${node.activeUsers > 0 ? "text-blue-700" : "text-muted-foreground"}`}>
+                    {node.activeUsers}
+                  </div>
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-2">
+                  {node.activeUsers === 1 ? "активный VPN-пользователь" : "активных VPN-пользователей"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="grid md:grid-cols-3 gap-4">
         <Metric label="Выпущено ключей" value={data.totalVpnKeys} />
         <Metric label="Новых за 7 дней" value={data.newUsersLast7Days} />

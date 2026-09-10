@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, or, sql, sum } from "drizzle-orm";
-import { db, balanceTransactionsTable, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable } from "@workspace/db";
+import { db, balanceTransactionsTable, paymentsTable, plansTable, subscriptionsTable, supportTicketsTable, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { GetAdminDashboardSummaryResponse, GetAdminTrafficPollingHealthResponse } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { ONLINE_THRESHOLD_MS } from "../../lib/session";
@@ -73,6 +73,7 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
     [totalVpnKeys],
     [openTickets],
     activityRows,
+    activeVpnByNodeRows,
     [expiringIn3DaysRow],
     [lowBalanceHourly],
     topTrafficRows,
@@ -125,6 +126,36 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
           ON k.user_id = u.id AND k.revoked_at IS NULL
         GROUP BY u.id, u.last_active_at
       ) t
+    `),
+    // Keep the same "VPN is the freshest signal" rule as activeOnVpn above,
+    // but group the qualifying users by active VPN node. A user with active
+    // keys on multiple nodes is counted once on each node that has fresh
+    // traffic, which is the useful view for node load.
+    db.execute<{ node_id: string; node_name: string; region: string; active_users: string }>(sql`
+      SELECT
+        n.id AS node_id,
+        n.name AS node_name,
+        n.region,
+        COUNT(DISTINCT CASE
+          WHEN k.last_traffic_at >= ${vpnOnlineThreshold}
+               AND (u.last_active_at IS NULL OR latest_vpn.last_traffic_at >= u.last_active_at)
+            THEN u.id
+        END)::int AS active_users
+      FROM ${vpnNodesTable} n
+      LEFT JOIN ${vpnKeysTable} k
+        ON k.node_id = n.id AND k.revoked_at IS NULL
+      LEFT JOIN ${usersTable} u
+        ON u.id = k.user_id
+      LEFT JOIN (
+        SELECT user_id, MAX(last_traffic_at) AS last_traffic_at
+        FROM ${vpnKeysTable}
+        WHERE revoked_at IS NULL
+        GROUP BY user_id
+      ) latest_vpn
+        ON latest_vpn.user_id = u.id
+      WHERE n.is_active = true
+      GROUP BY n.id, n.name, n.region
+      ORDER BY n.name ASC, n.id ASC
     `),
     // Keep the latest-active-row selection separate from the expiry filter so
     // duplicate active rows cannot inflate the count or change which row wins.
@@ -235,6 +266,12 @@ router.get("/admin/dashboard/summary", requireAuth, requireAdmin, async (_req, r
       activeOnVpn: Number(activityRows.rows[0]?.active_on_vpn ?? 0),
       activeOnSite: Number(activityRows.rows[0]?.active_on_site ?? 0),
       activeNow: Number(activityRows.rows[0]?.active_on_vpn ?? 0) + Number(activityRows.rows[0]?.active_on_site ?? 0),
+      activeVpnByNode: activeVpnByNodeRows.rows.map((row) => ({
+        nodeId: Number(row.node_id),
+        nodeName: row.node_name,
+        region: row.region,
+        activeUsers: Number(row.active_users ?? 0),
+      })),
       expiringIn3Days,
       lowBalanceHourly: Number(lowBalanceHourly?.value ?? 0),
       topTrafficUsers: topTrafficRows.map((r) => ({

@@ -30,7 +30,11 @@ import { logger } from "./logger";
 import { bankActiveKeyUsageForRevocation } from "./trafficCarryover";
 import { afterTrafficDeltasFlushed } from "./trafficPolling";
 import { issueKeyForUser, resolveTotalSlots } from "./keyIssuance";
-import { removeXrayClient, isLocalXrayEnabled } from "./xray";
+import {
+  removeXrayClient,
+  isLocalXrayEnabled,
+  reconcileLocalXrayClients,
+} from "./xray";
 import { removeRemoteXrayClient } from "./remoteNode";
 import { getLocalSystemStatus, type SystemStatus } from "./sysStatus";
 
@@ -564,6 +568,12 @@ async function pollNode(node: {
 // ─── Job entry point ──────────────────────────────────────────────────────────
 
 async function runNodeMonitoringCycle(): Promise<void> {
+  try {
+    await reconcileLocalXrayClients();
+  } catch (err) {
+    logger.error({ err }, "nodeMonitoring: active local Xray client reconciliation failed");
+  }
+
   try {
     await reconcilePendingXrayCleanups();
   } catch (err) {

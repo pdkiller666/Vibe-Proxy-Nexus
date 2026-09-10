@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ActiveVpnNodeSummary } from './activeVpnNodeSummary';
 import type { PlanDistributionEntry } from './planDistributionEntry';
 import type { RevenueByDayEntry } from './revenueByDayEntry';
 import type { TopTrafficUser } from './topTrafficUser';
@@ -20,6 +21,7 @@ export interface DashboardSummary {
   activeNow: number;
   activeOnVpn: number;
   activeOnSite: number;
+  activeVpnByNode: ActiveVpnNodeSummary[];
   expiringIn3Days: number;
   lowBalanceHourly: number;
   topTrafficUsers: TopTrafficUser[];

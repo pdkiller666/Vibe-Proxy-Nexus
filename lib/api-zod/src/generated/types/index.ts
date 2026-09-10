@@ -7,6 +7,7 @@
  */
 
 export * from './acknowledgeAllSystemEventsResult';
+export * from './activeVpnNodeSummary';
 export * from './adminAuditLogAction';
 export * from './adminAuditLogEntry';
 export * from './adminAuditLogEntryDetails';

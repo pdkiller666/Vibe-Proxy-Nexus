@@ -238,4 +238,61 @@ describe("readConfig() ENOENT recovery", () => {
     const { logger } = await import("./logger");
     expect(vi.mocked(logger.error)).toHaveBeenCalled();
   });
+
+  it("reconciles missing, stale, duplicate, and legacy client entries", async () => {
+    const fsMod = await import("fs");
+    const readFileMock = vi.mocked(fsMod.promises.readFile);
+    readFileMock.mockResolvedValueOnce(
+      JSON.stringify({
+        inbounds: [
+          {
+            settings: {
+              clients: [
+                { id: "active-1", email: "legacy-label" },
+                { id: "stale-client", email: "stale-client", limitIp: 1 },
+                { id: "active-1", email: "active-1", limitIp: 1 },
+              ],
+            },
+          },
+        ],
+      }) as any,
+    );
+
+    const dbMod = await import("@workspace/db");
+    const whereMock = (dbMod.db.select({} as any) as any).from().innerJoin().where;
+    vi.mocked(whereMock).mockResolvedValueOnce([
+      { uuid: "active-1" },
+      { uuid: "active-2" },
+    ]);
+
+    const { reconcileLocalXrayClients } = await import("./xray");
+    await expect(reconcileLocalXrayClients()).resolves.toEqual({
+      changed: true,
+      added: 1,
+      removed: 2,
+      normalized: 1,
+      activeCount: 2,
+    });
+
+    const writeFileMock = vi.mocked(fsMod.promises.writeFile);
+    expect(writeFileMock).toHaveBeenCalledTimes(1);
+    const writtenConfig = JSON.parse(writeFileMock.mock.calls[0][1] as string);
+    expect(writtenConfig.inbounds[0].settings.clients).toEqual([
+      { id: "active-1", email: "active-1", limitIp: 1 },
+      { id: "active-2", email: "active-2", limitIp: 1 },
+    ]);
+  });
+
+  it("does not read or write the config when the active-key query fails", async () => {
+    const fsMod = await import("fs");
+    const readFileMock = vi.mocked(fsMod.promises.readFile);
+    const dbMod = await import("@workspace/db");
+    const whereMock = (dbMod.db.select({} as any) as any).from().innerJoin().where;
+    vi.mocked(whereMock).mockRejectedValueOnce(new Error("DB unavailable"));
+
+    const { reconcileLocalXrayClients } = await import("./xray");
+    await expect(reconcileLocalXrayClients()).rejects.toThrow("DB unavailable");
+    expect(readFileMock).not.toHaveBeenCalled();
+    expect(vi.mocked(fsMod.promises.writeFile)).not.toHaveBeenCalled();
+  });
 });

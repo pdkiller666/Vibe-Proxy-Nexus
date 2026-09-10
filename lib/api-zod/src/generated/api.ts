@@ -1092,6 +1092,12 @@ export const GetAdminDashboardSummaryResponse = zod.object({
   "activeNow": zod.number(),
   "activeOnVpn": zod.number(),
   "activeOnSite": zod.number(),
+  "activeVpnByNode": zod.array(zod.object({
+  "nodeId": zod.number(),
+  "nodeName": zod.string(),
+  "region": zod.string(),
+  "activeUsers": zod.number()
+})),
   "expiringIn3Days": zod.number(),
   "lowBalanceHourly": zod.number(),
   "topTrafficUsers": zod.array(zod.object({
