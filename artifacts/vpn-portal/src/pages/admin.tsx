@@ -12,6 +12,7 @@ import {
   useUpdatePlan,
   useDeletePlan,
   useListAdminVpnNodes,
+  useMigrateVpnNodeKeys,
   useCreateVpnNode,
   useUpdateVpnNode,
   useDeleteVpnNode,
@@ -842,6 +843,41 @@ function PaymentsQueue() {
           toast({ title: kind === "chargeback" ? "Chargeback зафиксирован" : "Возврат зафиксирован" });
         },
         onError: () => toast({ title: "Ошибка возврата", variant: "destructive" }),
+      },
+    );
+  }
+
+  function handleMigrate(node: VpnNode) {
+    const activeKeyCount = node.activeUserCount ?? 0;
+    if (activeKeyCount === 0) {
+      toast({ title: "На этой ноде нет активных ключей" });
+      return;
+    }
+    if (!window.confirm(`Перенести ${activeKeyCount} активных ключей с ноды «${node.name}» на рабочие ноды?`)) {
+      return;
+    }
+
+    setMigratingId(node.id);
+    migrateNode(
+      { nodeId: node.id },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
+          toast({
+            title: "Миграция завершена",
+            description: `Перенесено: ${data.migratedKeys} из ${data.totalKeys}. Ошибок: ${data.failedMigrations}.`,
+            variant: data.failedMigrations > 0 ? "destructive" : undefined,
+          });
+        },
+        onError: (err: unknown) => {
+          const msg =
+            err && typeof err === "object" && "message" in err
+              ? (err as { message: string }).message
+              : "Не удалось запустить миграцию";
+          toast({ title: "Ошибка миграции", description: msg, variant: "destructive" });
+        },
+        onSettled: () => setMigratingId(null),
       },
     );
   }
@@ -2377,6 +2413,7 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   );
 }
 function NodesManagement() {
+  const { mutate: migrateNode, isPending: migrating } = useMigrateVpnNodeKeys();
   const { data: nodes, isLoading } = useListAdminVpnNodes();
   const { mutate: deleteNode } = useDeleteVpnNode();
   const { toast } = useToast();
@@ -2384,6 +2421,7 @@ function NodesManagement() {
   const [managingId, setManagingId] = useState<number | null>(null);
   const [newNodeMode, setNewNodeMode] = useState<null | "provision" | "manual">(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [migratingId, setMigratingId] = useState<number | null>(null);
   const [regionFilter, setRegionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [sort, setSort] = useState<"default" | "clients_desc" | "name">("default");
@@ -2528,6 +2566,15 @@ function NodesManagement() {
                 >
                   <Activity className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Управление</span>
+                </button>
+                <button
+                  onClick={() => handleMigrate(node)}
+                  disabled={migrating}
+                  className="flex items-center gap-1 text-xs px-2 py-1 border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50"
+                  title="Перенести активные ключи на рабочие ноды"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${migratingId === node.id ? "animate-spin" : ""}`} />
+                  <span className="hidden sm:inline">{migratingId === node.id ? "Миграция..." : "Мигрировать"}</span>
                 </button>
                 <button onClick={() => { setEditingId(node.id); setManagingId(null); }} className="p-2 text-muted-foreground hover:text-primary">
                   <Pencil className="w-4 h-4" />
@@ -3428,6 +3475,7 @@ const ACTION_LABELS: Record<string, string> = {
   create_vpn_node:              "Создание VPN-узла",
   update_vpn_node:              "Редактирование VPN-узла",
   delete_vpn_node:              "Удаление VPN-узла",
+  migrate_vpn_node_keys:        "Миграция ключей VPN",
   restart_xray:                 "Перезапуск Xray на узле",
   provision_vpn_node:           "Установка нового VPN-узла",
   // ── Ключи VPN ─────────────────────────────────────────────────────────────

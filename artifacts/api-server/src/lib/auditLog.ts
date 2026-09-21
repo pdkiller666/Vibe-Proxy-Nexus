@@ -42,6 +42,7 @@ const ACTION_MAP: Record<string, string> = {
   "POST /admin/vpn-nodes": "create_vpn_node",
   "PATCH /admin/vpn-nodes/:id": "update_vpn_node",
   "DELETE /admin/vpn-nodes/:id": "delete_vpn_node",
+  "POST /admin/vpn-nodes/:id/migrate-keys": "migrate_vpn_node_keys",
   "POST /admin/vpn-nodes/:id/system/restart-xray": "restart_xray",
   "POST /admin/vpn-nodes/provision": "provision_vpn_node",
 

@@ -119,6 +119,31 @@ describe("admin vpn node capacity fields", () => {
     );
   });
 
+  it("returns an empty migration summary for a node without active keys", async () => {
+    const [node] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Migration source ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "migration.example.com",
+        sni: "migration.example.com",
+        isActive: false,
+      })
+      .returning({ id: vpnNodesTable.id });
+    nodeIds.push(node.id);
+
+    const res = await request
+      .post(`/api/admin/vpn-nodes/${node.id}/migrate-keys`)
+      .set("Cookie", adminCookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      totalKeys: 0,
+      migratedKeys: 0,
+      failedMigrations: 0,
+    });
+  });
+
   it("reflects active (non-revoked) key count on update", async () => {
     const [node] = await db
       .insert(vpnNodesTable)

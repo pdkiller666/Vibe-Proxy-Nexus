@@ -958,6 +958,13 @@ export interface DeleteVpnNodeResult {
   failedMigrations: number;
 }
 
+export interface MigrateVpnNodeResult {
+  totalKeys: number;
+  migratedKeys: number;
+  failedMigrations: number;
+}
+
+
 export type AdminBalanceTransactionType = typeof AdminBalanceTransactionType[keyof typeof AdminBalanceTransactionType];
 
 

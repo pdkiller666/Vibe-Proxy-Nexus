@@ -8,6 +8,8 @@ import {
   CreateVpnNodeResponse,
   DeleteVpnNodeParams,
   DeleteVpnNodeResponse,
+  MigrateVpnNodeParams,
+  MigrateVpnNodeResponse,
   UpdateVpnNodeBody,
   UpdateVpnNodeParams,
   UpdateVpnNodeResponse,
@@ -22,6 +24,7 @@ import { getLocalSystemStatus } from "../../lib/sysStatus";
 import { bankActiveKeyUsageForRevocation } from "../../lib/trafficCarryover";
 import { afterTrafficDeltasFlushed } from "../../lib/trafficPolling";
 import { flagEmojiForNode } from "../../lib/vless";
+import { migrateKeysFromNode } from "../../lib/adminKeyMigration";
 
 const router: IRouter = Router();
 const execAsync = promisify(exec);
@@ -101,6 +104,26 @@ router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, 
     .where(and(eq(vpnKeysTable.nodeId, node.id), isNull(vpnKeysTable.revokedAt)));
 
   res.json(UpdateVpnNodeResponse.parse({ ...node, activeUserCount: count }));
+});
+
+router.post("/admin/vpn-nodes/:nodeId/migrate-keys", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const params = MigrateVpnNodeParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const result = await migrateKeysFromNode(params.data.nodeId);
+  if (result.kind === "not_found") {
+    res.status(404).json({ error: "VPN node not found" });
+    return;
+  }
+  if (result.kind === "in_progress") {
+    res.status(409).json({ error: "Миграция ключей с этой ноды уже выполняется." });
+    return;
+  }
+
+  res.json(MigrateVpnNodeResponse.parse(result.result));
 });
 
 router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, res): Promise<void> => {

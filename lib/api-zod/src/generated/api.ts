@@ -1636,6 +1636,19 @@ export const DeleteVpnNodeResponse = zod.object({
   "failedMigrations": zod.number()
 })
 
+/**
+ * @summary Migrate active keys from a VPN node to other active nodes
+ */
+export const MigrateVpnNodeParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const MigrateVpnNodeResponse = zod.object({
+  "totalKeys": zod.number(),
+  "migratedKeys": zod.number(),
+  "failedMigrations": zod.number()
+})
+
 
 /**
  * @summary List referrers with their stats

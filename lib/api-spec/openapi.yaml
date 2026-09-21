@@ -1116,6 +1116,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeleteVpnNodeResult"
 
+  /admin/vpn-nodes/{nodeId}/migrate-keys:
+    post:
+      operationId: migrateVpnNodeKeys
+      tags: [admin]
+      summary: Migrate active keys from a VPN node to other active nodes
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Migration summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MigrateVpnNodeResult"
+        "404":
+          description: VPN node not found
+        "409":
+          description: Migration is already running for this node
+
   /admin/referrals:
     get:
       operationId: listAdminReferrals
@@ -3103,6 +3126,14 @@ components:
       type: object
       required: [migratedKeys, failedMigrations]
       properties:
+        migratedKeys: { type: integer }
+        failedMigrations: { type: integer }
+
+    MigrateVpnNodeResult:
+      type: object
+      required: [totalKeys, migratedKeys, failedMigrations]
+      properties:
+        totalKeys: { type: integer }
         migratedKeys: { type: integer }
         failedMigrations: { type: integer }
 

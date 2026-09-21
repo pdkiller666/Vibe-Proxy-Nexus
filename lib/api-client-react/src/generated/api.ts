@@ -75,6 +75,7 @@ import type {
   ListAdminTicketsParams,
   ListAdminVpnKeysParams,
   LoginInput,
+  MigrateVpnNodeResult,
   Me,
   Payment,
   PaymentNoteUpdate,
@@ -4269,6 +4270,75 @@ export const useDeleteVpnNode = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteVpnNodeMutationOptions(options));
+    }
+
+export const getMigrateVpnNodeKeysUrl = (nodeId: number,) => {
+
+
+
+
+  return `/api/admin/vpn-nodes/${nodeId}/migrate-keys`
+}
+
+/**
+ * @summary Migrate active keys from a VPN node to other active nodes
+ */
+export const migrateVpnNodeKeys = async (nodeId: number, options?: RequestInit): Promise<MigrateVpnNodeResult> => {
+
+  return customFetch<MigrateVpnNodeResult>(getMigrateVpnNodeKeysUrl(nodeId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMigrateVpnNodeKeysMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof migrateVpnNodeKeys>>, TError,{nodeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof migrateVpnNodeKeys>>, TError,{nodeId: number}, TContext> => {
+
+const mutationKey = ['migrateVpnNodeKeys'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof migrateVpnNodeKeys>>, {nodeId: number}> = (props) => {
+          const {nodeId} = props ?? {};
+
+          return  migrateVpnNodeKeys(nodeId,requestOptions)
+        }
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MigrateVpnNodeKeysMutationResult = NonNullable<Awaited<ReturnType<typeof migrateVpnNodeKeys>>>
+
+    export type MigrateVpnNodeKeysMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Migrate active keys from a VPN node to other active nodes
+ */
+export const useMigrateVpnNodeKeys = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof migrateVpnNodeKeys>>, TError,{nodeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+  ): UseMutationResult<
+        Awaited<ReturnType<typeof migrateVpnNodeKeys>>,
+        TError,
+        {nodeId: number},
+        TContext
+      > => {
+      return useMutation(getMigrateVpnNodeKeysMutationOptions(options));
     }
 
 export const getListAdminReferralsUrl = () => {
