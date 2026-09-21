@@ -30,6 +30,11 @@ vi.mock("../lib/confirmPayment", () => ({
   confirmPaymentById: vi.fn(),
 }));
 
+vi.mock("../lib/domain", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/domain")>()),
+  getPrimaryPublicDomain: vi.fn().mockResolvedValue("trusted-payments.example"),
+}));
+
 import { confirmPaymentById } from "../lib/confirmPayment";
 const mockConfirm = vi.mocked(confirmPaymentById);
 
@@ -80,6 +85,7 @@ const createdPaymentIds: number[] = [];
 beforeAll(async () => {
   // Inject the test secret so the webhook handler accepts our signatures.
   process.env.YOOMONEY_NOTIFICATION_SECRET = TEST_SECRET;
+  process.env.YOOMONEY_RECEIVER = "41001000000000";
 
   const [plan] = await db
     .insert(plansTable)
@@ -90,6 +96,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.YOOMONEY_NOTIFICATION_SECRET;
+  delete process.env.YOOMONEY_RECEIVER;
 
   for (const id of createdPaymentIds) {
     await db.delete(paymentsTable).where(eq(paymentsTable.id, id));
@@ -141,6 +148,58 @@ async function seedPendingPayment(amountRub = 500): Promise<{ paymentId: number;
   return { paymentId: payment.id, subscriptionId: subscription.id, userId: user.id };
 }
 
+describe("YooMoney checkout redirect", () => {
+  it("uses the trusted public domain instead of the request Host header", async () => {
+    const password = "checkout-test-password";
+    const email = `ym-checkout-${randomBytes(6).toString("hex")}@example.com`;
+    const passwordHash = await hashPassword(password);
+    const [user] = await db
+      .insert(usersTable)
+      .values({ email, passwordHash, role: "user", referralCode: randomBytes(8).toString("hex") })
+      .returning({ id: usersTable.id });
+    createdUserIds.push(user.id);
+
+    const [subscription] = await db
+      .insert(subscriptionsTable)
+      .values({ userId: user.id, planId, status: "pending_payment" })
+      .returning({ id: subscriptionsTable.id });
+    createdSubscriptionIds.push(subscription.id);
+
+    const [payment] = await db
+      .insert(paymentsTable)
+      .values({
+        userId: user.id,
+        subscriptionId: subscription.id,
+        provider: "yoomoney",
+        amountRub: 500,
+        status: "pending",
+        reference: `YM-CHECKOUT-${randomBytes(4).toString("hex")}`,
+      })
+      .returning({ id: paymentsTable.id });
+    createdPaymentIds.push(payment.id);
+
+    const login = await request.post("/api/auth/login").send({ email, password });
+    expect(login.status).toBe(200);
+    const setCookie = login.headers["set-cookie"];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+    const sessionCookie = cookies.find((cookie: string) => cookie.startsWith("vpn_session="));
+    expect(sessionCookie).toBeDefined();
+
+    const res = await request
+      .get(`/api/payments/yoomoney/checkout/${payment.id}?method=card`)
+      .set("Cookie", sessionCookie!.split(";")[0])
+      .set("Host", "attacker.example");
+
+    expect(res.status).toBe(302);
+    const redirect = new URL(res.headers.location);
+    expect(redirect.origin).toBe("https://yoomoney.ru");
+    expect(redirect.searchParams.get("successURL")).toBe(
+      `https://trusted-payments.example/checkout/${subscription.id}`,
+    );
+    expect(res.headers.location).not.toContain("attacker.example");
+  });
+});
+
 // ── Webhook dedup scenarios ───────────────────────────────────────────────────
 
 describe("YooMoney webhook dedup", () => {
@@ -164,7 +223,9 @@ describe("YooMoney webhook dedup", () => {
 
     expect(res.status).toBe(200);
     expect(mockConfirm).toHaveBeenCalledOnce();
-    expect(mockConfirm).toHaveBeenCalledWith(paymentId);
+    expect(mockConfirm).toHaveBeenCalledWith(paymentId, {
+      confirmationSource: "yoomoney_webhook",
+    });
 
     // webhookEventId must be persisted to enable idempotent retries.
     const [row] = await db

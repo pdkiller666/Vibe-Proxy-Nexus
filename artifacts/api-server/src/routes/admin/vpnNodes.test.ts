@@ -224,6 +224,34 @@ describe("admin vpn node capacity fields", () => {
     expect(res.status).toBe(200);
     expect(res.body.maxUsers).toBeNull();
   });
+
+  it("clears the auto-recovery marker when an admin explicitly disables a node", async () => {
+    const [node] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Node ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "test.example.com",
+        sni: "test.example.com",
+        isActive: true,
+        consecutiveFailures: 2,
+      })
+      .returning({ id: vpnNodesTable.id });
+    nodeIds.push(node.id);
+
+    const res = await request
+      .patch(`/api/admin/vpn-nodes/${node.id}`)
+      .set("Cookie", adminCookie)
+      .send({ isActive: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.isActive).toBe(false);
+    const [updated] = await db
+      .select({ consecutiveFailures: vpnNodesTable.consecutiveFailures })
+      .from(vpnNodesTable)
+      .where(eq(vpnNodesTable.id, node.id));
+    expect(updated?.consecutiveFailures).toBe(0);
+  });
 });
 
 describe("manual VPN key migration", () => {

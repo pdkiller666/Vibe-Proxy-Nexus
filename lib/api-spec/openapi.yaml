@@ -1055,7 +1055,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/VpnNode"
-
     post:
       operationId: createVpnNode
       tags: [admin]
@@ -1115,6 +1114,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteVpnNodeResult"
+        "409":
+          description: Deletion was aborted because one or more active keys could not be migrated; the node remains inactive
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, migratedKeys, failedMigrations]
+                properties:
+                  error:
+                    type: string
+                  migratedKeys:
+                    type: integer
+                  failedMigrations:
+                    type: integer
 
   /admin/vpn-nodes/{nodeId}/migrate-keys:
     post:

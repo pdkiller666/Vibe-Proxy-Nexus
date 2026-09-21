@@ -117,13 +117,21 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 // No-op when STATIC_DIR is unset (e.g. Replit dev).
 mountStaticFrontend(app);
 
-startSessionCleanupJob();
-startSubscriptionExpiryJob();
-startTrafficPollingJob();
-startHourlyBillingJob();
-startNodeMonitoringJob();
-startReconcileBalancePaymentsJob();
-startAutoRenewJob();
-startAuditLogCleanupJob();
+// Route tests import this module directly. Starting production background
+// workers during those tests makes them race the fixtures and can cause the
+// traffic poller to contact test-only remote Management API URLs. Jobs that
+// have their own tests are invoked explicitly there; never start them as an
+// import side effect in the test runtime.
+const isTestRuntime = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+if (!isTestRuntime) {
+  startSessionCleanupJob();
+  startSubscriptionExpiryJob();
+  startTrafficPollingJob();
+  startHourlyBillingJob();
+  startNodeMonitoringJob();
+  startReconcileBalancePaymentsJob();
+  startAutoRenewJob();
+  startAuditLogCleanupJob();
+}
 
 export default app;

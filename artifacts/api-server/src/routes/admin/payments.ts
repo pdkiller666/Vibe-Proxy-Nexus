@@ -114,7 +114,9 @@ router.post(
     // all payment types (subscription activation, extra slot/traffic, balance
     // top-up) and their referral commissions, period counter resets, and key
     // issuance guarantees. No logic is duplicated here.
-    const result = await confirmPaymentById(params.data.paymentId);
+    const result = await confirmPaymentById(params.data.paymentId, {
+      confirmationSource: "admin_manual",
+    });
 
     if (!result.ok) {
       res.status(result.status).json({ error: result.error });

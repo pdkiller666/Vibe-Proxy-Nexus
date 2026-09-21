@@ -795,6 +795,15 @@ function PaymentsQueue() {
   }
 
   function handleConfirm(paymentId: number) {
+    const payment = payments?.find((item) => item.id === paymentId);
+    if (!payment || payment.provider !== "manual_sbp") return;
+    if (
+      !window.confirm(
+        "Подтверждайте только после проверки поступления этой суммы в банковском приложении или по СБП.\n\nЯ проверил поступление денег и подтверждаю платёж.",
+      )
+    ) {
+      return;
+    }
     confirm(
       { paymentId },
       {
@@ -846,43 +855,6 @@ function PaymentsQueue() {
       },
     );
   }
-
-  const handleMigrate = (node: VpnNode) => {
-    const activeKeyCount = node.activeUserCount ?? 0;
-    if (activeKeyCount === 0) {
-      toast({ title: "На этой ноде нет активных ключей" });
-      return;
-    }
-    if (confirmMigrateId !== node.id) {
-      setConfirmMigrateId(node.id);
-      return;
-    }
-
-    setConfirmMigrateId(null);
-    setMigratingId(node.id);
-    migrateNode(
-      { nodeId: node.id },
-      {
-        onSuccess: (data) => {
-          queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
-          toast({
-            title: "Миграция завершена",
-            description: `Перенесено: ${data.migratedKeys} из ${data.totalKeys}. Ошибок: ${data.failedMigrations}.`,
-            variant: data.failedMigrations > 0 ? "destructive" : undefined,
-          });
-        },
-        onError: (err: unknown) => {
-          const msg =
-            err && typeof err === "object" && "message" in err
-              ? (err as { message: string }).message
-              : "Не удалось запустить миграцию";
-          toast({ title: "Ошибка миграции", description: msg, variant: "destructive" });
-        },
-        onSettled: () => setMigratingId(null),
-      },
-    );
-  };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -1023,12 +995,18 @@ function PaymentsQueue() {
             </div>
             {payment.status === "pending" ? (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleConfirm(payment.id)}
-                  className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity"
-                >
-                  <Check className="w-4 h-4" /> Подтвердить
-                </button>
+                {payment.provider === "manual_sbp" ? (
+                  <button
+                    onClick={() => handleConfirm(payment.id)}
+                    className="flex items-center gap-1.5 bg-primary text-primary-foreground font-bold px-4 py-2 text-sm hover:opacity-90 transition-opacity"
+                  >
+                    <Check className="w-4 h-4" /> Подтвердить после проверки
+                  </button>
+                ) : (
+                  <span className="text-xs font-bold text-orange-700 max-w-48 text-right">
+                    Ожидается подтверждение {payment.provider === "yoomoney" ? "ЮMoney" : "провайдера"}
+                  </span>
+                )}
                 <button
                   onClick={() => setRejectingId(rejectingId === payment.id ? null : payment.id)}
                   className="flex items-center gap-1.5 border border-destructive text-destructive font-bold px-4 py-2 text-sm hover:bg-destructive/10 transition-colors"
@@ -2415,8 +2393,8 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   );
 }
 function NodesManagement() {
-  const { mutate: migrateNode, isPending: migrating } = useMigrateVpnNodeKeys();
   const { data: nodes, isLoading } = useListAdminVpnNodes();
+  const { mutate: migrateNode, isPending: migrating } = useMigrateVpnNodeKeys();
   const { mutate: deleteNode } = useDeleteVpnNode();
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
@@ -2439,14 +2417,8 @@ function NodesManagement() {
       { nodeId },
       {
         onSuccess: (data) => {
-          queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
-          if (data.failedMigrations > 0) {
-            toast({
-              title: `Узел удалён (ключей перенесено: ${data.migratedKeys}, не удалось: ${data.failedMigrations})`,
-              description: "Пользователи с непереноситыми ключами остались без VPN. Проверьте логи.",
-              variant: "destructive",
-            });
-          } else if (data.migratedKeys > 0) {
+           queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
+          if (data.migratedKeys > 0) {
             toast({
               title: `Узел удалён`,
               description: `${data.migratedKeys} ${data.migratedKeys === 1 ? "ключ перенесён" : "ключей перенесено"} на другие серверы.`,
@@ -2456,15 +2428,55 @@ function NodesManagement() {
           }
         },
         onError: (err: unknown) => {
+          // A failed migration leaves the node in the DB but marks it
+          // inactive, so refresh the list even though the mutation failed.
+           queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
           const msg =
             err && typeof err === "object" && "message" in err
               ? (err as { message: string }).message
               : "Ошибка удаления узла";
-          toast({ title: msg, variant: "destructive" });
+          toast({ title: "Узел не удалён", description: msg, variant: "destructive" });
         },
       },
     );
   }
+
+  const handleMigrate = (node: VpnNode) => {
+    const activeKeyCount = node.activeUserCount ?? 0;
+    if (activeKeyCount === 0) {
+      toast({ title: "На этой ноде нет активных ключей" });
+      return;
+    }
+    if (confirmMigrateId !== node.id) {
+      setConfirmMigrateId(node.id);
+      return;
+    }
+
+    setConfirmMigrateId(null);
+    setMigratingId(node.id);
+    migrateNode(
+      { nodeId: node.id },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnKeysQueryKey() });
+          toast({
+            title: "Миграция завершена",
+            description: `Перенесено: ${data.migratedKeys} из ${data.totalKeys}. Ошибок: ${data.failedMigrations}.`,
+            variant: data.failedMigrations > 0 ? "destructive" : undefined,
+          });
+        },
+        onError: (err: unknown) => {
+          const msg =
+            err && typeof err === "object" && "message" in err
+              ? (err as { message: string }).message
+              : "Не удалось запустить миграцию";
+          toast({ title: "Ошибка миграции", description: msg, variant: "destructive" });
+        },
+        onSettled: () => setMigratingId(null),
+      },
+    );
+  };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 

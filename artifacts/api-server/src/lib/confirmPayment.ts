@@ -21,7 +21,21 @@ import { lockCurrentSubscription } from "./subscription";
 type PaymentNotificationOptions = {
   /** Background renewals use their own Dashboard notification and must never open the first-payment modal. */
   suppressReferralFirstOffer?: boolean;
+  /**
+   * Restrict who is allowed to trigger fulfillment. Internal callers keep the
+   * legacy behavior; external entrypoints must identify their trusted source.
+   */
+  confirmationSource?: "admin_manual" | "yoomoney_webhook";
 };
+
+function confirmationSourceAllowed(
+  provider: Payment["provider"],
+  source: PaymentNotificationOptions["confirmationSource"],
+): boolean {
+  if (source === "admin_manual") return provider === "manual_sbp";
+  if (source === "yoomoney_webhook") return provider === "yoomoney";
+  return true;
+}
 
 /** Insert user-facing confirmation events. Best-effort — never throws. */
 async function notifyPaymentConfirmed(payment: Payment, options: PaymentNotificationOptions = {}): Promise<void> {
@@ -107,6 +121,16 @@ export async function confirmPaymentById(
   if (!payment) return { ok: false, status: 404, error: "Payment not found" };
   if (payment.status !== "pending")
     return { ok: false, status: 409, error: "Payment is not pending" };
+  if (!confirmationSourceAllowed(payment.provider, notificationOptions.confirmationSource)) {
+    return {
+      ok: false,
+      status: 409,
+      error:
+        notificationOptions.confirmationSource === "admin_manual"
+          ? "Only manual SBP payments can be confirmed by an administrator"
+          : "Payment provider does not match the webhook",
+    };
+  }
 
   if (payment.type === "extra_device_slot") {
     if (!payment.subscriptionId) {
@@ -124,6 +148,7 @@ export async function confirmPaymentById(
         const [lockedPayment] = await tx
           .select({
             status: paymentsTable.status,
+            provider: paymentsTable.provider,
             userId: paymentsTable.userId,
             subscriptionId: paymentsTable.subscriptionId,
           })
@@ -133,6 +158,10 @@ export async function confirmPaymentById(
         if (
           !lockedPayment ||
           lockedPayment.status !== "pending" ||
+          !confirmationSourceAllowed(
+            lockedPayment.provider,
+            notificationOptions.confirmationSource,
+          ) ||
           lockedPayment.subscriptionId !== payment.subscriptionId
         ) {
           throw new Error("PAYMENT_STATE_CHANGED");
@@ -215,6 +244,7 @@ export async function confirmPaymentById(
         const [lockedPayment] = await tx
           .select({
             status: paymentsTable.status,
+            provider: paymentsTable.provider,
             userId: paymentsTable.userId,
             subscriptionId: paymentsTable.subscriptionId,
           })
@@ -224,6 +254,10 @@ export async function confirmPaymentById(
         if (
           !lockedPayment ||
           lockedPayment.status !== "pending" ||
+          !confirmationSourceAllowed(
+            lockedPayment.provider,
+            notificationOptions.confirmationSource,
+          ) ||
           lockedPayment.subscriptionId !== payment.subscriptionId
         ) {
           throw new Error("PAYMENT_STATE_CHANGED");
@@ -330,6 +364,25 @@ export async function confirmPaymentById(
       payment.provider === "yoomoney" ? "ЮMoney" : "СБП";
     try {
       const updatedPayment = await db.transaction(async (tx) => {
+        const [lockedPayment] = await tx
+          .select({
+            status: paymentsTable.status,
+            provider: paymentsTable.provider,
+          })
+          .from(paymentsTable)
+          .where(eq(paymentsTable.id, payment.id))
+          .for("update");
+        if (
+          !lockedPayment ||
+          lockedPayment.status !== "pending" ||
+          !confirmationSourceAllowed(
+            lockedPayment.provider,
+            notificationOptions.confirmationSource,
+          )
+        ) {
+          throw new Error("PAYMENT_STATE_CHANGED");
+        }
+
         await tx
           .update(usersTable)
           .set({
@@ -411,13 +464,21 @@ export async function confirmPaymentById(
       const [lockedPayment] = await tx
         .select({
           status: paymentsTable.status,
+          provider: paymentsTable.provider,
           userId: paymentsTable.userId,
           subscriptionId: paymentsTable.subscriptionId,
         })
         .from(paymentsTable)
         .where(eq(paymentsTable.id, payment.id))
         .for("update");
-      if (!lockedPayment || lockedPayment.status !== "pending") {
+      if (
+        !lockedPayment ||
+        lockedPayment.status !== "pending" ||
+        !confirmationSourceAllowed(
+          lockedPayment.provider,
+          notificationOptions.confirmationSource,
+        )
+      ) {
         throw new Error("Payment state changed concurrently");
       }
       if (lockedPayment.subscriptionId !== subscription.id) {
@@ -452,11 +513,21 @@ export async function confirmPaymentById(
       // This also protects against a same-payment retry whose pre-transaction
       // reads became stale while it waited for another confirmation to commit.
       const [paymentAfterUserLock] = await tx
-        .select({ status: paymentsTable.status })
+        .select({
+          status: paymentsTable.status,
+          provider: paymentsTable.provider,
+        })
         .from(paymentsTable)
         .where(eq(paymentsTable.id, payment.id))
         .for("update");
-      if (!paymentAfterUserLock || paymentAfterUserLock.status !== "pending") {
+      if (
+        !paymentAfterUserLock ||
+        paymentAfterUserLock.status !== "pending" ||
+        !confirmationSourceAllowed(
+          paymentAfterUserLock.provider,
+          notificationOptions.confirmationSource,
+        )
+      ) {
         throw new Error("Payment state changed concurrently");
       }
 

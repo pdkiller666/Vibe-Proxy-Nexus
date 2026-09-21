@@ -13,6 +13,11 @@ RUN corepack enable
 
 WORKDIR /repo
 
+# Force a fresh builder stage when a production frontend fix must not be
+# satisfied from Amvera's cached workspace/image layers.
+ARG APP_BUILD_CACHE_BUST=2026-09-21-migration-handler
+RUN echo "build cache: ${APP_BUILD_CACHE_BUST}"
+
 COPY . .
 
 RUN pnpm install --frozen-lockfile
@@ -49,9 +54,7 @@ RUN apt-get update \
         supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --retry-max-time 300 \
-        --connect-timeout 30 --max-time 300 \
-        -o /tmp/xray.zip \
+RUN curl -fsSL -o /tmp/xray.zip \
         "https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-linux-64.zip" \
     && unzip /tmp/xray.zip -d /usr/local/bin xray \
     && chmod +x /usr/local/bin/xray \

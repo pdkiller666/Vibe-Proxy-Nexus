@@ -35,7 +35,7 @@ import {
   isLocalXrayEnabled,
   reconcileLocalXrayClients,
 } from "./xray";
-import { removeRemoteXrayClient } from "./remoteNode";
+import { addRemoteXrayClient, listRemoteXrayClients, removeRemoteXrayClient } from "./remoteNode";
 import { getLocalSystemStatus, type SystemStatus } from "./sysStatus";
 
 const NODE_MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -251,6 +251,203 @@ export async function reconcilePendingXrayCleanups(): Promise<void> {
   }
 }
 
+type RemoteReconciliationNode = {
+  id: number;
+  name: string;
+  managementApiUrl: string | null;
+  managementApiSecret: string | null;
+};
+
+async function getCurrentRemoteKeyState(uuid: string): Promise<{
+  nodeId: number;
+  revokedAt: Date | null;
+} | null> {
+  const [key] = await db
+    .select({
+      nodeId: vpnKeysTable.nodeId,
+      revokedAt: vpnKeysTable.revokedAt,
+    })
+    .from(vpnKeysTable)
+    .where(eq(vpnKeysTable.uuid, uuid))
+    .limit(1);
+
+  return key ?? null;
+}
+
+async function isRemoteKeyStillActiveOnNode(uuid: string, nodeId: number): Promise<boolean> {
+  const key = await getCurrentRemoteKeyState(uuid);
+  return key?.nodeId === nodeId && key.revokedAt === null;
+}
+
+async function addCanonicalRemoteClientIfStillActive(
+  node: RemoteReconciliationNode,
+  uuid: string,
+): Promise<boolean> {
+  if (!(await isRemoteKeyStillActiveOnNode(uuid, node.id))) return false;
+
+  await addRemoteXrayClient(node, uuid, uuid, 1);
+
+  try {
+    if (await isRemoteKeyStillActiveOnNode(uuid, node.id)) return true;
+  } catch (err) {
+    // The DB is the source of truth. If it cannot confirm that the key is
+    // still active after provisioning, fail closed and remove the client.
+    try {
+      await removeRemoteXrayClient(node, uuid);
+    } catch (cleanupErr) {
+      logger.error(
+        { err: cleanupErr, nodeId: node.id, nodeName: node.name, uuid },
+        "nodeMonitoring: failed to compensate remote client after DB revalidation error",
+      );
+    }
+    throw err;
+  }
+
+  await removeRemoteXrayClient(node, uuid);
+  logger.info(
+    { nodeId: node.id, nodeName: node.name, uuid },
+    "nodeMonitoring: removed remote client after concurrent key revoke or migration",
+  );
+  return false;
+}
+
+/**
+ * Reconcile one active remote node against the database source of truth.
+ *
+ * Safety rules:
+ * - list failure aborts the whole node pass before any mutation;
+ * - only active DB keys assigned to this node are recreated;
+ * - only revoked DB keys assigned to this node can be removed;
+ * - unknown UUIDs and UUIDs owned by another node are left untouched.
+ *
+ * Serializing add/remove operations per node avoids restarting the remote Xray
+ * process several times concurrently when a node has multiple missing clients.
+ */
+export async function reconcileRemoteXrayNode(node: RemoteReconciliationNode): Promise<void> {
+  if (!node.managementApiUrl) return;
+
+  try {
+    const [activeKeys, knownKeys] = await Promise.all([
+      db
+        .select({
+          uuid: vpnKeysTable.uuid,
+        })
+        .from(vpnKeysTable)
+        .where(and(eq(vpnKeysTable.nodeId, node.id), isNull(vpnKeysTable.revokedAt))),
+      db
+        .select({
+          uuid: vpnKeysTable.uuid,
+          revokedAt: vpnKeysTable.revokedAt,
+        })
+        .from(vpnKeysTable)
+        .where(eq(vpnKeysTable.nodeId, node.id)),
+    ]);
+
+    // Do not mutate a remote config unless we have a complete, successful
+    // inventory response. A timeout or malformed response must fail closed.
+    const remoteClients = await listRemoteXrayClients(node);
+    const remoteByUuid = new Map<string, typeof remoteClients>();
+    for (const client of remoteClients) {
+      const clients = remoteByUuid.get(client.uuid) ?? [];
+      clients.push(client);
+      remoteByUuid.set(client.uuid, clients);
+    }
+
+    const knownByUuid = new Map(knownKeys.map((key) => [key.uuid, key]));
+    let added = 0;
+    let removed = 0;
+    let repaired = 0;
+
+    // Restore active DB keys missing from the remote config.
+    for (const key of activeKeys) {
+      if (remoteByUuid.has(key.uuid)) continue;
+
+      try {
+        // Xray's traffic stats are keyed by its "email" field. Keep that
+        // identity equal to the UUID used by the stats poller; the user-facing
+        // key label must never be used here.
+        if (await addCanonicalRemoteClientIfStillActive(node, key.uuid)) {
+          added++;
+          logger.warn(
+            { nodeId: node.id, nodeName: node.name, uuid: key.uuid },
+            "nodeMonitoring: restored missing remote Xray client",
+          );
+        }
+      } catch (err) {
+        logger.warn(
+          { err, nodeId: node.id, nodeName: node.name, uuid: key.uuid },
+          "nodeMonitoring: failed to restore missing remote Xray client",
+        );
+      }
+    }
+
+    // Remove only stale clients that this node owns in the DB. Unknown and
+    // foreign-node UUIDs are deliberately not touched.
+    for (const [uuid, clients] of remoteByUuid) {
+      const known = knownByUuid.get(uuid);
+      if (!known) continue;
+
+      const canonical =
+        clients.length === 1 &&
+        clients[0]!.label === uuid &&
+        clients[0]!.limitIp === 1;
+
+      try {
+        const current = await getCurrentRemoteKeyState(uuid);
+        // The row may have been deleted or reassigned after the initial
+        // snapshot. Unknown and foreign-node UUIDs are never mutated.
+        if (!current || current.nodeId !== node.id) continue;
+        const isActiveHere = current.revokedAt === null;
+        if (isActiveHere && canonical) continue;
+
+        await removeRemoteXrayClient(node, uuid);
+        removed++;
+
+        if (isActiveHere) {
+          if (await addCanonicalRemoteClientIfStillActive(node, uuid)) {
+            repaired++;
+          }
+        }
+      } catch (err) {
+        logger.warn(
+          { err, nodeId: node.id, nodeName: node.name, uuid, count: clients.length },
+          "nodeMonitoring: failed to reconcile remote Xray client",
+        );
+      }
+    }
+
+    if (added > 0 || removed > 0) {
+      logger.info(
+        { nodeId: node.id, nodeName: node.name, added, removed, repaired },
+        "nodeMonitoring: reconciled remote Xray clients",
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      { err, nodeId: node.id, nodeName: node.name },
+      "nodeMonitoring: remote Xray reconciliation skipped after inventory failure",
+    );
+  }
+}
+
+/**
+ * Reconcile every active remote node. The local node is excluded by the
+ * managementApiUrl predicate and continues through reconcileLocalXrayClients().
+ */
+export async function reconcileRemoteXrayClients(): Promise<void> {
+  const nodes = await db
+    .select({
+      id: vpnNodesTable.id,
+      name: vpnNodesTable.name,
+      managementApiUrl: vpnNodesTable.managementApiUrl,
+      managementApiSecret: vpnNodesTable.managementApiSecret,
+    })
+    .from(vpnNodesTable)
+    .where(and(eq(vpnNodesTable.isActive, true), isNotNull(vpnNodesTable.managementApiUrl)));
+
+  await Promise.all(nodes.map((node) => reconcileRemoteXrayNode(node)));
+}
+
 /**
  * When a node is auto-deactivated, migrate all its active VPN keys to other
  * healthy nodes so affected users regain connectivity without admin intervention.
@@ -441,6 +638,24 @@ async function migrateKeysFromDeactivatedNode(node: {
 
 // ─── Per-node poll logic ──────────────────────────────────────────────────────
 
+export async function deactivateNodeAtObservedFailureCount(
+  nodeId: number,
+  failures: number,
+): Promise<boolean> {
+  const [deactivated] = await jobsDb
+    .update(vpnNodesTable)
+    .set({ isActive: false })
+    .where(
+      and(
+        eq(vpnNodesTable.id, nodeId),
+        eq(vpnNodesTable.isActive, true),
+        eq(vpnNodesTable.consecutiveFailures, failures),
+      ),
+    )
+    .returning({ id: vpnNodesTable.id });
+  return Boolean(deactivated);
+}
+
 async function pollNode(node: {
   id: number;
   name: string;
@@ -462,13 +677,19 @@ async function pollNode(node: {
     const msg = err instanceof Error ? err.message : String(err);
 
     // Persist the incremented counter to DB and read back the new value.
+    const eligibleState = node.isActive
+      ? eq(vpnNodesTable.isActive, true)
+      : and(eq(vpnNodesTable.isActive, false), gt(vpnNodesTable.consecutiveFailures, 0));
     const [updated] = await jobsDb
       .update(vpnNodesTable)
       .set({ consecutiveFailures: sql`${vpnNodesTable.consecutiveFailures} + 1` })
-      .where(eq(vpnNodesTable.id, node.id))
+      .where(and(eq(vpnNodesTable.id, node.id), eligibleState))
       .returning({ consecutiveFailures: vpnNodesTable.consecutiveFailures });
 
-    const failures = updated?.consecutiveFailures ?? node.consecutiveFailures + 1;
+    // A concurrent admin action may have manually disabled the node and reset
+    // its failure marker. Do not recreate that marker from an in-flight poll.
+    if (!updated) return;
+    const failures = updated.consecutiveFailures;
 
     logger.warn(
       { nodeId: node.id, nodeName: node.name, failures, err: msg },
@@ -477,11 +698,9 @@ async function pollNode(node: {
 
     // Only act on active nodes that just crossed the threshold.
     if (failures >= FAILURE_ALERT_THRESHOLD && node.isActive) {
-      // Deactivate the node in the DB.
-      await jobsDb
-        .update(vpnNodesTable)
-        .set({ isActive: false })
-        .where(eq(vpnNodesTable.id, node.id));
+      // Deactivate only if no successful or newer poll changed the counter
+      // after this failure was recorded.
+      if (!(await deactivateNodeAtObservedFailureCount(node.id, failures))) return;
 
       logger.warn(
         { nodeId: node.id, nodeName: node.name, failures },
@@ -505,11 +724,30 @@ async function pollNode(node: {
 
   // ── Successful poll ────────────────────────────────────────────────────────
 
-  // Reset the persistent failure counter.
-  await jobsDb
-    .update(vpnNodesTable)
-    .set({ consecutiveFailures: 0 })
-    .where(eq(vpnNodesTable.id, node.id));
+  if (node.isActive) {
+    const [stillActive] = await jobsDb
+      .update(vpnNodesTable)
+      .set({ consecutiveFailures: 0 })
+      .where(and(eq(vpnNodesTable.id, node.id), eq(vpnNodesTable.isActive, true)))
+      .returning({ id: vpnNodesTable.id });
+    if (!stillActive) return;
+  } else {
+    // Only an auto-deactivated node retains a positive failure marker. The
+    // CAS predicate prevents an in-flight successful poll from reactivating a
+    // node that an admin manually disabled and reset to zero.
+    const [reactivated] = await jobsDb
+      .update(vpnNodesTable)
+      .set({ isActive: true, consecutiveFailures: 0 })
+      .where(
+        and(
+          eq(vpnNodesTable.id, node.id),
+          eq(vpnNodesTable.isActive, false),
+          gt(vpnNodesTable.consecutiveFailures, 0),
+        ),
+      )
+      .returning({ id: vpnNodesTable.id });
+    if (!reactivated) return;
+  }
 
   // Record a metric snapshot (debounced to METRIC_WRITE_INTERVAL_MS).
   // disk fields default to 0 when the remote node omits them.
@@ -523,11 +761,6 @@ async function pollNode(node: {
 
   // If the node was previously auto-deactivated, bring it back.
   if (!node.isActive) {
-    await jobsDb
-      .update(vpnNodesTable)
-      .set({ isActive: true })
-      .where(eq(vpnNodesTable.id, node.id));
-
     await emitEvent("node_recovered", node.id, node.name, {
       cpuPercent: status.cpuPercent,
     });
@@ -572,6 +805,12 @@ async function runNodeMonitoringCycle(): Promise<void> {
     await reconcileLocalXrayClients();
   } catch (err) {
     logger.error({ err }, "nodeMonitoring: active local Xray client reconciliation failed");
+  }
+
+  try {
+    await reconcileRemoteXrayClients();
+  } catch (err) {
+    logger.error({ err }, "nodeMonitoring: active remote Xray client reconciliation failed");
   }
 
   try {

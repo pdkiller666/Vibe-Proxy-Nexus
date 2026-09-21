@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "seo-smoke"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "vpn-node"
+
 [[workflows.workflow]]
 name = "seo-smoke"
 author = "agent"
@@ -27,6 +31,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/vpn-portal run test:seo"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "vpn-node"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run test:vpn-node"
 
 [workflows.workflow.metadata]
 isValidation = true
@@ -52,3 +67,6 @@ VPS_DE_USER = "root"
 VPS_NL1_HOST = "87.199.200.19"
 VPS_NL1_USER = "root"
 BASE_PATH = "/"
+AMVERA_PROD_DB_HOST = "vpnexus-db1-pdkiller666.tcp-waw0.amvera.tech"
+AMVERA_PROD_DB_PORT = "5432"
+AMVERA_PROD_DB_NAME = "Vpnexus-db1"

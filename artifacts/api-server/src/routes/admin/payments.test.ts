@@ -91,7 +91,9 @@ describe("admin payments confirm/reject flow", () => {
     }
   });
 
-  async function seedPendingPayment(): Promise<{ subscriptionId: number; paymentId: number }> {
+  async function seedPendingPayment(
+    provider: "manual_sbp" | "yoomoney" = "manual_sbp",
+  ): Promise<{ subscriptionId: number; paymentId: number }> {
     // Use a fresh user per call — the payments table has a partial unique index
     // (one pending subscription payment per user at a time). Reusing the shared
     // userId across tests that each leave a payment in "pending" state would
@@ -110,7 +112,7 @@ describe("admin payments confirm/reject flow", () => {
       .values({
         subscriptionId: subscription.id,
         userId: freshUser.id,
-        provider: "manual_sbp",
+        provider,
         amountRub: 10000,
         status: "pending",
         reference: `TEST-${randomBytes(4).toString("hex")}`,
@@ -153,6 +155,29 @@ describe("admin payments confirm/reject flow", () => {
     expect(subscription?.status).toBe("active");
     expect(subscription?.startsAt).not.toBeNull();
     expect(subscription?.endsAt).not.toBeNull();
+  });
+
+  it("does not let an administrator manually confirm a YooMoney payment", async () => {
+    const { subscriptionId, paymentId } = await seedPendingPayment("yoomoney");
+
+    const res = await request
+      .post(`/api/admin/payments/${paymentId}/confirm`)
+      .set("Cookie", adminCookie);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("manual SBP");
+
+    const [payment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, paymentId));
+    const [subscription] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.id, subscriptionId));
+
+    expect(payment?.status).toBe("pending");
+    expect(subscription?.status).toBe("pending_payment");
   });
 
   it("rejecting a pending payment marks payment and subscription rejected with a reason", async () => {

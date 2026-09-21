@@ -1,0 +1,40 @@
+name: VPN node
+
+on:
+  push:
+    paths:
+      - "deploy/amvera-vpn-node/**"
+      - ".github/workflows/vpn-node.yml"
+  pull_request:
+    paths:
+      - "deploy/amvera-vpn-node/**"
+      - ".github/workflows/vpn-node.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.9.5
+      - name: Validate lock and Management API
+        run: bash ./deploy/amvera-vpn-node/check.sh
+      - name: Reject Xray archive with wrong checksum
+        run: |
+          if docker build \
+            --file deploy/amvera-vpn-node/Dockerfile \
+            --build-arg XRAY_SHA256="$(printf '0%.0s' {1..64})" \
+            --tag vpn-node-invalid-xray \
+            deploy/amvera-vpn-node; then
+            echo "Docker build accepted an invalid Xray checksum" >&2
+            exit 1
+          fi
+      - name: Build VPN node image
+        run: docker build --file deploy/amvera-vpn-node/Dockerfile deploy/amvera-vpn-node

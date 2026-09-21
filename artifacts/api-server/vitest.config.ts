@@ -6,5 +6,6 @@ export default defineConfig({
     // sequence so a fixture in one file cannot change global dashboard
     // counters while another file is comparing its API responses.
     fileParallelism: false,
+    setupFiles: ["./src/test/setup.ts"],
   },
 });

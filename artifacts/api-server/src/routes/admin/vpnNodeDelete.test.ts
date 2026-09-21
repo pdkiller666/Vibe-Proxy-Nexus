@@ -13,7 +13,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import supertest from "supertest";
 import { db, plansTable, subscriptionsTable, systemEventsTable, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
@@ -113,6 +113,12 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
 
   afterAll(async () => {
     // Delete any nodes that weren't removed by the handler (e.g. the 403 test's node).
+    // Remove their fixture keys first because vpn_keys.node_id is ON DELETE
+    // RESTRICT. This also cleans up a failed-migration node so it cannot affect
+    // a later auto-selection test in the shared development database.
+    if (createdNodeIds.length > 0) {
+      await db.delete(vpnKeysTable).where(inArray(vpnKeysTable.nodeId, createdNodeIds));
+    }
     for (const id of createdNodeIds) {
       await db.delete(vpnNodesTable).where(eq(vpnNodesTable.id, id)).catch(() => {/* already deleted by handler */});
     }
@@ -121,33 +127,39 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
     }
   });
 
-  it("removes active keys from Xray and deletes them from the database", async () => {
+  it("keeps the node and active key when migration cannot be completed", async () => {
     // Arrange: a remote node with one active key.
     const { id: nodeId } = await createRemoteNode();
     createdNodeIds.push(nodeId);
     const { id: keyId, uuid: keyUuid } = await insertKey(adminId, nodeId);
+    await db
+      .update(vpnNodesTable)
+      .set({ consecutiveFailures: 3 })
+      .where(eq(vpnNodesTable.id, nodeId));
 
     // Act.
     const res = await request
       .delete(`/api/admin/vpn-nodes/${nodeId}`)
       .set("Cookie", adminCookie);
 
-    // Act succeeded.
-    expect(res.status).toBe(200);
+    // Deletion is rejected instead of stranding the active key.
+    expect(res.status).toBe(409);
 
     // The admin user has no active subscription, so resolveTotalSlots() returns null
     // and migration fails for the key (failedMigrations=1). The handler does NOT call
     // removeRemoteXrayClient when a migration is skipped — it only calls it after a
-    // successful re-issue on another node. The key is still hard-deleted at step 4.
+    // successful re-issue on another node. The node is kept inactive for retry.
     expect(res.body).toMatchObject({ migratedKeys: 0, failedMigrations: 1 });
 
-    // Assert: key row is gone from DB (hard-deleted by the handler at step 4).
+    // Assert: the active key remains in DB so the user keeps access.
     const keys = await db.select().from(vpnKeysTable).where(eq(vpnKeysTable.id, keyId));
-    expect(keys).toHaveLength(0);
+    expect(keys).toHaveLength(1);
 
-    // Assert: node row is gone from DB.
+    // Assert: the node remains, but is inactive so new keys are not issued to it.
     const nodes = await db.select().from(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
-    expect(nodes).toHaveLength(0);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]!.isActive).toBe(false);
+    expect(nodes[0]!.consecutiveFailures).toBe(0);
   });
 
   it("carries over traffic counters onto the migrated key instead of resetting them to zero", async () => {
@@ -449,7 +461,7 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
     releaseProvisioning();
     const res = await deletePromise;
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(409);
     // Must be reported as a failed migration, never as a successful one.
     expect(res.body).toMatchObject({ migratedKeys: 0, failedMigrations: 1 });
 
@@ -466,6 +478,13 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
       lastKnownPeriodUpBytes: PERIOD_UP,
       lastKnownPeriodDownBytes: PERIOD_DOWN,
     });
+
+    // The source node and key remain intact after the failed transfer.
+    const sourceRows = await db.select().from(vpnKeysTable).where(eq(vpnKeysTable.id, key.id));
+    expect(sourceRows).toHaveLength(1);
+    const sourceNodes = await db.select().from(vpnNodesTable).where(eq(vpnNodesTable.id, sourceNodeId));
+    expect(sourceNodes).toHaveLength(1);
+    expect(sourceNodes[0]!.isActive).toBe(false);
 
     await db.delete(systemEventsTable).where(eq(systemEventsTable.userId, user.id));
     await db.delete(vpnKeysTable).where(eq(vpnKeysTable.userId, user.id));

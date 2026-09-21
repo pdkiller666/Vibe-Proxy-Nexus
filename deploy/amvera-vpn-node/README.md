@@ -208,6 +208,20 @@ chmod +x setup-vps.sh && sudo ./setup-vps.sh
 
 ## Обновление ноды
 
+Перед публикацией изменений Python-зависимостей обновите lock-файл и запустите
+проверку из корня репозитория:
+
+```bash
+bash deploy/amvera-vpn-node/update-lock.sh
+pnpm run test:vpn-node
+```
+
+Прямые зависимости редактируются только в `bot/requirements.in`.
+`bot/requirements.txt` генерируется автоматически, содержит полный граф
+транзитивных зависимостей и SHA-256 hashes. Docker устанавливает пакеты с
+`--require-hashes`, поэтому ручное редактирование lock-файла или незаметное
+изменение версии на PyPI приведёт к ошибке сборки.
+
 ```bash
 cd /opt/vpn-node
 git pull

@@ -4,6 +4,7 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import { db, paymentsTable } from "@workspace/db";
 import { requireAuth } from "../lib/auth";
 import { confirmPaymentById } from "../lib/confirmPayment";
+import { getPrimaryPublicDomain } from "../lib/domain";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -85,7 +86,9 @@ router.get("/payments/yoomoney/checkout/:paymentId", requireAuth, async (req, re
   }
 
   // Return URL — YooMoney redirects the user back after a successful payment.
-  const origin = `${req.protocol}://${req.get("host")}`;
+  // Never derive this from Host/X-Forwarded-Host: those are request-controlled
+  // and could turn YooMoney's successURL into an open redirect.
+  const origin = `https://${await getPrimaryPublicDomain()}`;
   let returnPath: string;
   if (payment.type === "balance_topup") {
     returnPath = `/balance-topup/${payment.id}`;
@@ -310,7 +313,9 @@ async function handleWebhook(req: Request, res: Response): Promise<void> {
     }
   }
 
-  const result = await confirmPaymentById(payment.id);
+  const result = await confirmPaymentById(payment.id, {
+    confirmationSource: "yoomoney_webhook",
+  });
   if (!result.ok) {
     if (result.status === 409) {
       // Concurrent confirmation — idempotent success.

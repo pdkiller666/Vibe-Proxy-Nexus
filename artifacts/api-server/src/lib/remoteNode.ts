@@ -2,7 +2,7 @@
  * HTTP client helpers for the remote-node Management REST API.
  *
  * The remote node runs `deploy/amvera-vpn-node/bot/api_server.py`, which
- * exposes POST /clients, DELETE /clients/{uuid}, and GET /stats.
+ * exposes POST /clients, GET /clients, DELETE /clients/{uuid}, and GET /stats.
  *
  * All call sites must guard with `node.managementApiUrl != null` before
  * calling these functions — the local Amvera node has managementApiUrl = null
@@ -29,6 +29,12 @@ export const remoteNodePollingHealth = new Map<string, RemoteNodePollHealth>();
 export type RemoteNodeRef = Pick<VpnNode, "managementApiUrl" | "managementApiSecret" | "name">;
 
 const REMOTE_FETCH_TIMEOUT_MS = 15_000;
+
+export interface RemoteXrayClient {
+  uuid: string;
+  label: string | null;
+  limitIp: number | null;
+}
 
 async function remoteNodeFetch(
   node: RemoteNodeRef,
@@ -87,6 +93,54 @@ export async function removeRemoteXrayClient(
     const text = await res.text().catch(() => "");
     throw new Error(`Remote node ${node.name}: HTTP ${res.status} on DELETE /clients/${uuid}: ${text}`);
   }
+}
+
+/**
+ * Lists the clients currently present in a remote node's Xray config.
+ *
+ * The management API returns Xray client objects with `id` and `email`
+ * properties. Keep the normalized shape here so reconciliation does not
+ * depend on the remote node's config field names.
+ */
+export async function listRemoteXrayClients(node: RemoteNodeRef): Promise<RemoteXrayClient[]> {
+  const res = await remoteNodeFetch(node, "/clients", { method: "GET" });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Remote node ${node.name}: HTTP ${res.status} on GET /clients: ${text}`);
+  }
+
+  const raw = await res.json();
+  if (!Array.isArray(raw)) {
+    throw new Error(`Remote node ${node.name}: invalid response from GET /clients`);
+  }
+
+  const clients: RemoteXrayClient[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`Remote node ${node.name}: invalid client entry from GET /clients`);
+    }
+    const record = entry as Record<string, unknown>;
+    const rawUuid = typeof record.id === "string"
+      ? record.id
+      : typeof record.uuid === "string"
+        ? record.uuid
+        : null;
+    const uuid = rawUuid?.trim();
+    if (!uuid) {
+      throw new Error(`Remote node ${node.name}: client entry has no UUID`);
+    }
+
+    clients.push({
+      uuid,
+      label: typeof record.email === "string"
+        ? record.email
+        : typeof record.label === "string"
+          ? record.label
+          : null,
+      limitIp: typeof record.limitIp === "number" ? record.limitIp : null,
+    });
+  }
+  return clients;
 }
 
 /**

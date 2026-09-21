@@ -39,7 +39,6 @@ router.get("/admin/vpn-nodes", requireAuth, requireAdmin, async (_req, res): Pro
     .select({ nodeId: vpnKeysTable.nodeId })
     .from(vpnKeysTable)
     .where(isNull(vpnKeysTable.revokedAt));
-
   const countsByNode = new Map<number, number>();
   for (const { nodeId } of activeKeys) {
     countsByNode.set(nodeId, (countsByNode.get(nodeId) ?? 0) + 1);
@@ -53,7 +52,6 @@ router.get("/admin/vpn-nodes", requireAuth, requireAdmin, async (_req, res): Pro
     })),
   );
 });
-
 
 router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const parsed = CreateVpnNodeBody.safeParse(req.body);
@@ -87,9 +85,13 @@ router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, 
     return;
   }
 
+  const updateData =
+    parsed.data.isActive === undefined
+      ? parsed.data
+      : { ...parsed.data, consecutiveFailures: 0 };
   const [node] = await db
     .update(vpnNodesTable)
-    .set(parsed.data)
+    .set(updateData)
     .where(eq(vpnNodesTable.id, params.data.nodeId))
     .returning();
 
@@ -145,7 +147,10 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
   // Stop new issuance before taking the migration snapshot. If this request
   // later fails, leaving the node inactive is safer than placing fresh keys
   // onto a node an admin is trying to remove.
-  await db.update(vpnNodesTable).set({ isActive: false }).where(eq(vpnNodesTable.id, nodeId));
+  await db
+    .update(vpnNodesTable)
+    .set({ isActive: false, consecutiveFailures: 0 })
+    .where(eq(vpnNodesTable.id, nodeId));
 
   // 2. Load all keys on this node (active + historical). We delete them all so
   //    the ON DELETE RESTRICT FK constraint doesn't block the node deletion.
@@ -159,8 +164,9 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
   // 3. Migrate active keys to other nodes before deleting them.
   //    For each key: issue a replacement on the least-loaded same-region node
   //    (falling back to globally least-loaded if no same-region capacity exists),
-  //    then revoke the old key. Failures are logged but don't abort the deletion
-  //    — the key will be removed along with the node regardless.
+  //    then revoke the old key. Any failed migration aborts the deletion below;
+  //    removing the node while an active key has no replacement would strand
+  //    that user without VPN access.
   let migratedKeys = 0;
   let failedMigrations = 0;
 
@@ -189,12 +195,13 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
       activeKeys.map(async (key) => {
         const totalSlots = slotsMap.get(key.userId) ?? null;
 
-        // No active subscription → key cannot be re-issued; it will be deleted with the node.
+        // No active subscription → key cannot be re-issued, so the node must
+        // remain in place rather than deleting the user's only key.
         if (totalSlots === null) {
           failedMigrations++;
           logger.warn(
             { userId: key.userId, keyId: key.id },
-            "delete node: no active subscription, key deleted without migration",
+            "delete node: no active subscription, node deletion will be aborted",
           );
           return;
         }
@@ -239,7 +246,7 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
           failedMigrations++;
           logger.warn(
             { userId: key.userId, keyId: key.id, error: result.error },
-            "delete node: no available node for key migration, key deleted without replacement",
+            "delete node: no available node for key migration, node deletion will be aborted",
           );
           return;
         }
@@ -290,10 +297,9 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
           // durable admin-visible event with the exact counters that could
           // not be transferred (for manual reconciliation), unwind the
           // just-issued replacement, and report this as a failed migration —
-          // same outcome as "no available node" above. The old key row
-          // itself cannot be preserved: vpn_keys.node_id is NOT NULL with
-          // ON DELETE RESTRICT, so every key on this node (migrated or not)
-          // must be gone before the node row can be deleted below.
+          // same outcome as "no available node" above. The old key row remains
+          // because the counter-transfer transaction rolled back; keeping the
+          // node is what preserves access while an admin investigates.
           logger.error(
             { err, oldKeyId: key.id, newKeyId: result.key.id },
             "delete node: failed to carry over traffic history to migrated key — unwinding replacement, reporting as a failed migration",
@@ -381,6 +387,23 @@ router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req,
         }
       }),
     );
+  }
+
+  // Fail closed: successful migrations may already have moved some keys, but
+  // the source node and every key that could not be migrated must remain
+  // available. The node is intentionally left inactive (set above) so no new
+  // keys are issued to it while the admin resolves the failed migration.
+  if (failedMigrations > 0) {
+    logger.error(
+      { nodeId, name: node.name, migratedKeys, failedMigrations },
+      "delete node: aborting because not all active keys were migrated",
+    );
+    res.status(409).json({
+      error: "Не удалось перенести все активные ключи. Узел сохранён и отключён для новых выдач.",
+      migratedKeys,
+      failedMigrations,
+    });
+    return;
   }
 
   // 4. Delete all keys for this node, then the node itself.
