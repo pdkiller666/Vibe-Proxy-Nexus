@@ -847,7 +847,7 @@ function PaymentsQueue() {
     );
   }
 
-  function handleMigrate(node: VpnNode) {
+  const handleMigrate = (node: VpnNode) => {
     const activeKeyCount = node.activeUserCount ?? 0;
     if (activeKeyCount === 0) {
       toast({ title: "На этой ноде нет активных ключей" });
@@ -882,7 +882,7 @@ function PaymentsQueue() {
         onSettled: () => setMigratingId(null),
       },
     );
-  }
+  };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
