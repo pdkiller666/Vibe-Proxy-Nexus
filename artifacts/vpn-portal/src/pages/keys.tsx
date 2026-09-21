@@ -528,6 +528,7 @@ export default function Keys() {
   const [showRoutingQR, setShowRoutingQR] = useState(false);
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<number | null>(null);
   const [platform, setPlatform] = useState<Platform>(getInitialPlatform);
   const [adminKeySearch, setAdminKeySearch] = useState("");
   const [adminKeyStatus, setAdminKeyStatus] = useState<"all" | "active" | "revoked">("all");
@@ -1298,15 +1299,41 @@ export default function Keys() {
                     <p className="text-xs text-muted-foreground mt-1 ml-6 break-all">{key.userEmail}</p>
                   )}
                 </div>
-                {!key.revokedAt && me?.role === "admin" && (
-                  <button
-                    onClick={() => handleRevoke(key.id)}
-                    disabled={revokingId === key.id}
-                    className="flex items-center gap-1.5 text-sm text-destructive hover:opacity-70 transition-opacity shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Отозвать
-                  </button>
+                {!key.revokedAt && (
+                  confirmRevokeId === key.id ? (
+                    <div className="flex items-center gap-2 text-sm shrink-0">
+                      <span className="text-muted-foreground">Отключить устройство?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmRevokeId(null);
+                          handleRevoke(key.id);
+                        }}
+                        disabled={revokingId === key.id}
+                        className="text-destructive font-semibold hover:opacity-70 transition-opacity disabled:opacity-50"
+                      >
+                        {revokingId === key.id ? "Отключаем..." : "Да"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRevokeId(null)}
+                        disabled={revokingId === key.id}
+                        className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                      >
+                        Нет
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRevokeId(key.id)}
+                      disabled={revokingId === key.id}
+                      className="flex items-center gap-1.5 text-sm text-destructive hover:opacity-70 transition-opacity shrink-0 disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Отозвать
+                    </button>
+                  )
                 )}
               </div>
               {editingKeyId === key.id && (
