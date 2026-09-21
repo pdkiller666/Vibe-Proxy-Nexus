@@ -1518,6 +1518,27 @@ export const ProvisionVpnNodeResponse = zod.object({
 
 
 /**
+ * @summary List all VPN nodes for administration
+ */
+export const ListAdminVpnNodesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "region": zod.string(),
+  "host": zod.string().nullish(),
+  "port": zod.number().optional(),
+  "sni": zod.string(),
+  "managementApiUrl": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "maxUsers": zod.number().nullish(),
+  "activeUserCount": zod.number().optional(),
+  "flagEmoji": zod.string().nullish(),
+  "certSha256": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+export const ListAdminVpnNodesResponse = zod.array(ListAdminVpnNodesResponseItem)
+
+
+/**
  * @summary Register a VPN node
  */
 

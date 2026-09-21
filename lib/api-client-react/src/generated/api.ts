@@ -4004,6 +4004,62 @@ export const useProvisionVpnNode = <TError = ErrorType<unknown>,
       return useMutation(getProvisionVpnNodeMutationOptions(options));
     }
 
+export const getListAdminVpnNodesUrl = () => {
+
+
+
+
+  return `/api/admin/vpn-nodes`
+}
+
+/**
+ * @summary List all VPN nodes for administration
+ */
+export const listAdminVpnNodes = async ( options?: RequestInit): Promise<VpnNode[]> => {
+
+  return customFetch<VpnNode[]>(getListAdminVpnNodesUrl(),
+  {
+    ...options,
+    method: 'GET'
+  }
+);}
+
+
+
+export const getListAdminVpnNodesQueryKey = () => {
+    return [
+    `/api/admin/vpn-nodes`
+    ] as const;
+    }
+
+
+export const getListAdminVpnNodesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminVpnNodes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminVpnNodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminVpnNodesQueryKey();
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminVpnNodes>>> = ({ signal }) => listAdminVpnNodes({ signal, ...requestOptions });
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminVpnNodes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminVpnNodesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminVpnNodes>>>
+export type ListAdminVpnNodesQueryError = ErrorType<unknown>
+
+/**
+ * @summary List all VPN nodes for administration
+ */
+export function useListAdminVpnNodes<TData = Awaited<ReturnType<typeof listAdminVpnNodes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminVpnNodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminVpnNodesQueryOptions(options)
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 export const getCreateVpnNodeUrl = () => {
 
 

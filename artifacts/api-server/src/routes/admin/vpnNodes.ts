@@ -21,9 +21,35 @@ import { maybeRecordMetricSnapshot } from "../../lib/nodeMonitoring";
 import { getLocalSystemStatus } from "../../lib/sysStatus";
 import { bankActiveKeyUsageForRevocation } from "../../lib/trafficCarryover";
 import { afterTrafficDeltasFlushed } from "../../lib/trafficPolling";
+import { flagEmojiForNode } from "../../lib/vless";
 
 const router: IRouter = Router();
 const execAsync = promisify(exec);
+
+router.get("/admin/vpn-nodes", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const nodes = await db
+    .select()
+    .from(vpnNodesTable)
+    .orderBy(asc(vpnNodesTable.name));
+
+  const activeKeys = await db
+    .select({ nodeId: vpnKeysTable.nodeId })
+    .from(vpnKeysTable)
+    .where(isNull(vpnKeysTable.revokedAt));
+
+  const countsByNode = new Map<number, number>();
+  for (const { nodeId } of activeKeys) {
+    countsByNode.set(nodeId, (countsByNode.get(nodeId) ?? 0) + 1);
+  }
+
+  res.json(
+    nodes.map((node) => ({
+      ...node,
+      activeUserCount: countsByNode.get(node.id) ?? 0,
+      flagEmoji: flagEmojiForNode(node) ?? null,
+    })),
+  );
+});
 
 
 router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Promise<void> => {

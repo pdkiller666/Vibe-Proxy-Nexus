@@ -90,6 +90,35 @@ describe("admin vpn node capacity fields", () => {
     nodeIds.push(res.body.id);
   });
 
+  it("lists inactive nodes so admins can reactivate them", async () => {
+    const [node] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Inactive ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "inactive.example.com",
+        sni: "inactive.example.com",
+        isActive: false,
+      })
+      .returning();
+    nodeIds.push(node.id);
+
+    const res = await request
+      .get("/api/admin/vpn-nodes")
+      .set("Cookie", adminCookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: node.id,
+          isActive: false,
+          activeUserCount: 0,
+        }),
+      ]),
+    );
+  });
+
   it("reflects active (non-revoked) key count on update", async () => {
     const [node] = await db
       .insert(vpnNodesTable)

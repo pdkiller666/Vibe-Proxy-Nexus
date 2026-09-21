@@ -11,7 +11,7 @@ import {
   useCreatePlan,
   useUpdatePlan,
   useDeletePlan,
-  useListVpnNodes,
+  useListAdminVpnNodes,
   useCreateVpnNode,
   useUpdateVpnNode,
   useDeleteVpnNode,
@@ -31,7 +31,7 @@ import {
   getGetAdminDashboardSummaryQueryKey,
   getListAdminPaymentsQueryKey,
   getListPlansQueryKey,
-  getListVpnNodesQueryKey,
+  getListAdminVpnNodesQueryKey,
   getListAdminUsersQueryKey,
   getGetPaymentSettingsQueryKey,
   useListAdminTickets,
@@ -1393,7 +1393,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
         } else if (data["type"] === "done") {
           setJobStatus("done");
           setNewNodeId(data["nodeId"] as number);
-          queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
           es.close();
         } else if (data["type"] === "error") {
           setJobStatus("error");
@@ -1687,7 +1687,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       maxUsers: maxUsers ? Number(maxUsers) : null,
     };
     const onSuccess = () => {
-      queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
       toast({ title: node ? "Узел обновлён" : "Узел создан" });
       onDone();
     };
@@ -2377,7 +2377,7 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   );
 }
 function NodesManagement() {
-  const { data: nodes, isLoading } = useListVpnNodes();
+  const { data: nodes, isLoading } = useListAdminVpnNodes();
   const { mutate: deleteNode } = useDeleteVpnNode();
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
@@ -2398,7 +2398,7 @@ function NodesManagement() {
       { nodeId },
       {
         onSuccess: (data) => {
-          queryClient.invalidateQueries({ queryKey: getListVpnNodesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAdminVpnNodesQueryKey() });
           if (data.failedMigrations > 0) {
             toast({
               title: `Узел удалён (ключей перенесено: ${data.migratedKeys}, не удалось: ${data.failedMigrations})`,

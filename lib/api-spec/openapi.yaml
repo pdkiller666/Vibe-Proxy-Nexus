@@ -1042,6 +1042,20 @@ paths:
                 $ref: "#/components/schemas/VpnNodeProvisionStarted"
 
   /admin/vpn-nodes:
+    get:
+      operationId: listAdminVpnNodes
+      tags: [admin]
+      summary: List all VPN nodes for administration
+      responses:
+        "200":
+          description: All registered VPN nodes, including inactive nodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VpnNode"
+
     post:
       operationId: createVpnNode
       tags: [admin]
