@@ -853,10 +853,12 @@ function PaymentsQueue() {
       toast({ title: "На этой ноде нет активных ключей" });
       return;
     }
-    if (!window.confirm(`Перенести ${activeKeyCount} активных ключей с ноды «${node.name}» на рабочие ноды?`)) {
+    if (confirmMigrateId !== node.id) {
+      setConfirmMigrateId(node.id);
       return;
     }
 
+    setConfirmMigrateId(null);
     setMigratingId(node.id);
     migrateNode(
       { nodeId: node.id },
@@ -2421,6 +2423,7 @@ function NodesManagement() {
   const [managingId, setManagingId] = useState<number | null>(null);
   const [newNodeMode, setNewNodeMode] = useState<null | "provision" | "manual">(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmMigrateId, setConfirmMigrateId] = useState<number | null>(null);
   const [migratingId, setMigratingId] = useState<number | null>(null);
   const [regionFilter, setRegionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -2567,15 +2570,40 @@ function NodesManagement() {
                   <Activity className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Управление</span>
                 </button>
-                <button
-                  onClick={() => handleMigrate(node)}
-                  disabled={migrating}
-                  className="flex items-center gap-1 text-xs px-2 py-1 border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50"
-                  title="Перенести активные ключи на рабочие ноды"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${migratingId === node.id ? "animate-spin" : ""}`} />
-                  <span className="hidden sm:inline">{migratingId === node.id ? "Миграция..." : "Мигрировать"}</span>
-                </button>
+                {confirmMigrateId === node.id ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">
+                      Перенести {node.activeUserCount ?? 0} ключей?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleMigrate(node)}
+                      disabled={migrating}
+                      className="text-xs px-2 py-1 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      Да
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMigrateId(null)}
+                      disabled={migrating}
+                      className="text-xs px-2 py-1 border border-border hover:bg-muted disabled:opacity-50"
+                    >
+                      Нет
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleMigrate(node)}
+                    disabled={migrating}
+                    className="flex items-center gap-1 text-xs px-2 py-1 border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50"
+                    title="Перенести активные ключи на рабочие ноды"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${migratingId === node.id ? "animate-spin" : ""}`} />
+                    <span className="hidden sm:inline">{migratingId === node.id ? "Миграция..." : "Мигрировать"}</span>
+                  </button>
+                )}
                 <button onClick={() => { setEditingId(node.id); setManagingId(null); }} className="p-2 text-muted-foreground hover:text-primary">
                   <Pencil className="w-4 h-4" />
                 </button>
