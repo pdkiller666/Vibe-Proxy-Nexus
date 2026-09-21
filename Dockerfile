@@ -49,7 +49,9 @@ RUN apt-get update \
         supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL -o /tmp/xray.zip \
+RUN curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --retry-max-time 300 \
+        --connect-timeout 30 --max-time 300 \
+        -o /tmp/xray.zip \
         "https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-linux-64.zip" \
     && unzip /tmp/xray.zip -d /usr/local/bin xray \
     && chmod +x /usr/local/bin/xray \
