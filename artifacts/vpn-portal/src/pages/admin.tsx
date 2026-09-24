@@ -1689,6 +1689,9 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   }
 
   function handleSubmit() {
+    const trimmedManagementApiUrl = managementApiUrl.trim();
+    const trimmedManagementApiSecret = managementApiSecret.trim();
+
     const commonFields = {
       name,
       region,
@@ -1697,8 +1700,12 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       sni,
       publicKey: publicKey || undefined,
       shortId: shortId || undefined,
-      managementApiUrl: managementApiUrl || undefined,
-      managementApiSecret: managementApiSecret || undefined,
+      // Empty string must be sent as null. If we send undefined, JSON.stringify
+      // drops the field and the backend keeps the previous Management API URL.
+      managementApiUrl: trimmedManagementApiUrl === "" ? null : trimmedManagementApiUrl,
+      // When a node is switched back to local mode, clear the secret as well.
+      managementApiSecret:
+        trimmedManagementApiUrl === "" ? null : trimmedManagementApiSecret === "" ? undefined : trimmedManagementApiSecret,
       isActive,
       maxUsers: maxUsers ? Number(maxUsers) : null,
     };

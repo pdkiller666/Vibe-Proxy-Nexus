@@ -29,6 +29,25 @@ import { migrateKeysFromNode } from "../../lib/adminKeyMigration";
 const router: IRouter = Router();
 const execAsync = promisify(exec);
 
+function normalizeNullableString(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") return value as string;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+function normalizeVpnNodePayload<T extends { managementApiUrl?: string | null; managementApiSecret?: string | null; certSha256?: string | null }>(
+  data: T,
+): T {
+  const normalized = { ...data };
+  if ("managementApiUrl" in normalized) normalized.managementApiUrl = normalizeNullableString(normalized.managementApiUrl);
+  if ("managementApiSecret" in normalized) normalized.managementApiSecret = normalizeNullableString(normalized.managementApiSecret);
+  if ("certSha256" in normalized) normalized.certSha256 = normalizeNullableString(normalized.certSha256);
+  if (normalized.managementApiUrl === null) normalized.managementApiSecret = null;
+  return normalized;
+}
+
 router.get("/admin/vpn-nodes", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const nodes = await db
     .select()
@@ -63,9 +82,10 @@ router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Pro
 
   // `host` is optional in the API schema (some callers rely on SNI == host)
   // but NOT NULL in the DB — fall back to sni when omitted.
+  const createData = normalizeVpnNodePayload(parsed.data);
   const [node] = await db
     .insert(vpnNodesTable)
-    .values({ ...parsed.data, host: parsed.data.host ?? parsed.data.sni })
+    .values({ ...createData, host: createData.host ?? createData.sni })
     .returning();
   res.status(201).json(CreateVpnNodeResponse.parse({ ...node, activeUserCount: 0 }));
 });
@@ -85,10 +105,11 @@ router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, 
     return;
   }
 
+  const normalizedPatch = normalizeVpnNodePayload(parsed.data);
   const updateData =
-    parsed.data.isActive === undefined
-      ? parsed.data
-      : { ...parsed.data, consecutiveFailures: 0 };
+    normalizedPatch.isActive === undefined
+      ? normalizedPatch
+      : { ...normalizedPatch, consecutiveFailures: 0 };
   const [node] = await db
     .update(vpnNodesTable)
     .set(updateData)

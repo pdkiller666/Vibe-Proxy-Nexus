@@ -1,0 +1,25 @@
+meta:
+  environment: docker
+  toolchain:
+    name: docker
+    version: latest
+
+build:
+  dockerfile: Dockerfile
+
+run:
+  # Single port: 8080 (web/API + VPN) -> servicePort 80, through Amvera's normal
+  # HTTPS ingress bound to the app's domain. Traefik terminates TLS and forwards
+  # HTTP — including WebSocket upgrades — to the container. The Node server serves
+  # the web/API and also proxies the VPN WebSocket upgrade (VPN_WS_PATH) to a
+  # local Xray inbound, so VLESS rides on a standard HTTPS/WebSocket tunnel.
+  # Raw-TCP VLESS through Amvera's "MONGO" TCP ingress does NOT work — that
+  # controller treats the TLS-terminated stream as HTTP and corrupts the payload
+  # (see .agents/memory/amvera-raw-tcp-port.md).
+  containerPort: "8080"
+  servicePort: "80"
+  # Persist the live Xray config (issued clients) across restarts/redeploys.
+  persistenceMount: /etc/xray
+  # NOTE: Amvera does not support an `env:` key in amvera.yaml. Required env vars
+  # (DATABASE_URL, SESSION_SECRET) must be set manually in the Amvera dashboard
+  # under the project's "Configuration" tab.

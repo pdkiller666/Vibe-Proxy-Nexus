@@ -587,8 +587,8 @@ export interface VpnNodeInput {
   region: string;
   host?: string;
   port?: number;
-  managementApiUrl?: string;
-  managementApiSecret?: string;
+  managementApiUrl?: string | null;
+  managementApiSecret?: string | null;
   publicKey?: string;
   shortId?: string;
   /** @minLength 1 */
@@ -628,8 +628,8 @@ export interface VpnNodeUpdate {
   region?: string;
   host?: string;
   port?: number;
-  managementApiUrl?: string;
-  managementApiSecret?: string;
+  managementApiUrl?: string | null;
+  managementApiSecret?: string | null;
   publicKey?: string;
   shortId?: string;
   /** @minLength 1 */
