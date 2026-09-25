@@ -237,6 +237,41 @@ describe("buildXrayClientConfig — VLESS outbound (domain node)", () => {
 
 });
 
+describe("buildXrayClientConfig — Reality outbound", () => {
+  it("emits TCP Reality settings and Vision flow", () => {
+    const config = buildXrayClientConfig([{
+      ...DOMAIN_OUTBOUND,
+      transport: "reality",
+      address: "203.0.113.10",
+      port: 8443,
+      sni: "example.com",
+      realityPublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      realityShortId: "a1b2c3d4",
+    }]);
+    const outbound = (config.outbounds as Array<Record<string, unknown>>)
+      .find((item) => item.protocol === "vless")!;
+    const settings = outbound.settings as {
+      vnext: Array<{ address: string; port: number; users: Array<{ flow: string }> }>;
+    };
+    const stream = outbound.streamSettings as {
+      network: string;
+      security: string;
+      realitySettings: Record<string, unknown>;
+    };
+    expect(settings.vnext[0]?.address).toBe("203.0.113.10");
+    expect(settings.vnext[0]?.port).toBe(8443);
+    expect(settings.vnext[0]?.users[0]?.flow).toBe("xtls-rprx-vision");
+    expect(stream.network).toBe("tcp");
+    expect(stream.security).toBe("reality");
+    expect(stream.realitySettings).toMatchObject({
+      serverName: "example.com",
+      fingerprint: "chrome",
+      publicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      shortId: "a1b2c3d4",
+    });
+  });
+});
+
 // ─── IP node TLS handling ─────────────────────────────────────────────────────
 
 describe("buildXrayClientConfig — IP node with certSha256", () => {

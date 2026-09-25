@@ -364,6 +364,9 @@ router.get(
             address:    resolved.host,
             sni:        resolved.sni || resolved.host,
             port:       node.port ?? 443,
+            transport:  node.transport,
+            realityPublicKey: node.publicKey,
+            realityShortId: node.shortId,
             isIpNode:
               isIpAddress(resolved.host) || isIpAddress(node.sni),
             certSha256: node.certSha256 ?? null,

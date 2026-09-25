@@ -41,7 +41,7 @@ COPY supervisord.conf ./supervisord.conf
 COPY render-config.sh ./render-config.sh
 RUN chmod +x ./render-config.sh
 
-EXPOSE 443 8443
+EXPOSE 443 8443 8444
 
 ENV XRAY_CONFIG_PATH=/etc/xray/config.json
 
@@ -49,7 +49,7 @@ ENV XRAY_CONFIG_PATH=/etc/xray/config.json
 # (PID 1) stays alive when a child crashes, so both checks are required.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD supervisorctl status xray | grep -q RUNNING \
-      && python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8443/health', timeout=3).read()" \
+      && python -c "import os, urllib.request; port=os.environ.get('PORT', '8443'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3).read()" \
       || exit 1
 
 ENTRYPOINT ["/app/render-config.sh"]

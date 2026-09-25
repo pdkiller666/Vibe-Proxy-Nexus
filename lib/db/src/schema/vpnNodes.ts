@@ -2,6 +2,9 @@ import { boolean, index, integer, pgTable, serial, text, timestamp, uniqueIndex 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+export const VPN_NODE_TRANSPORTS = ["ws", "reality"] as const;
+export type VpnNodeTransport = (typeof VPN_NODE_TRANSPORTS)[number];
+
 export const vpnNodesTable = pgTable(
   "vpn_nodes",
   {
@@ -16,6 +19,9 @@ export const vpnNodesTable = pgTable(
     // (5432/27017/6379) instead, since 443 is always TLS-terminated by Amvera's
     // own edge (see .agents/memory/amvera-raw-tcp-port.md).
     port: integer("port").notNull().default(443),
+    // Reality nodes are opt-in test nodes: public issuance and automatic
+    // migrations remain on WS unless an admin explicitly selects a node.
+    transport: text("transport").$type<VpnNodeTransport>().notNull().default("ws"),
     // Remote Management API fields (null → this is the local Amvera node).
     // When managementApiUrl is set, keyIssuance routes add/revoke requests to
     // the remote node's Management REST API instead of writing to the local

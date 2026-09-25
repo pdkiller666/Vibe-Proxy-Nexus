@@ -120,7 +120,17 @@ router.post("/admin/vpn-keys/issue", requireAuth, requireAdmin, async (req, res)
 
     let result: Awaited<ReturnType<typeof issueKeyForUser>>;
     try {
-      result = await issueKeyForUser(userId, Number.MAX_SAFE_INTEGER, nodeId);
+      result = await issueKeyForUser(
+        userId,
+        Number.MAX_SAFE_INTEGER,
+        nodeId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { allowRealityNode: true },
+      );
     } catch (err) {
       // issueKeyForUser has internal try-catch for all expected paths; this
       // outer catch handles truly unexpected exceptions (e.g. DB pool exhausted

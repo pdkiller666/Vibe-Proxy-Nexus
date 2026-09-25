@@ -1201,6 +1201,33 @@ try {
   await runM44ReferralLedgerRepair(client);
   console.log("heal-schema: M-44 referral ledger idempotency, refund columns, and self-referral guard");
 
+  // ── M-45: vpn_nodes.transport — explicit WS vs Reality transport ─────────
+  await client.query(`
+    ALTER TABLE vpn_nodes
+      ADD COLUMN IF NOT EXISTS transport text DEFAULT 'ws';
+    UPDATE vpn_nodes
+       SET transport = 'ws'
+     WHERE transport IS NULL OR transport = '';
+    ALTER TABLE vpn_nodes
+      ALTER COLUMN transport SET DEFAULT 'ws',
+      ALTER COLUMN transport SET NOT NULL;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+          FROM pg_constraint
+         WHERE conname = 'vpn_nodes_transport_check'
+           AND conrelid = 'vpn_nodes'::regclass
+      ) THEN
+        ALTER TABLE vpn_nodes
+          ADD CONSTRAINT vpn_nodes_transport_check
+          CHECK (transport IN ('ws', 'reality'));
+      END IF;
+    END;
+    $$;
+  `);
+  console.log("heal-schema: M-45 vpn_nodes.transport");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

@@ -15,9 +15,9 @@ import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { db, vpnNodesTable, provisioningJobsTable } from "@workspace/db";
+import { db, vpnKeysTable, vpnNodesTable, provisioningJobsTable } from "@workspace/db";
 import type { ProvisionLogLine } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -31,6 +31,9 @@ export interface ProvisioningOpts {
   domain: string;
   nodeName: string;
   nodeRegion: string;
+  transport?: "ws" | "reality";
+  realitySni?: string;
+  realityDest?: string;
 }
 
 export type ProvisionLogLevel = "info" | "step" | "success" | "error";
@@ -255,7 +258,7 @@ function runCommand(
   conn: Client,
   cmd: string,
   job: ProvisioningJob,
-  opts?: { timeoutMs?: number; allowFailure?: boolean },
+  opts?: { timeoutMs?: number; allowFailure?: boolean; silent?: boolean },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const timeoutMs = opts?.timeoutMs ?? 5 * 60_000; // 5 min default
@@ -275,7 +278,7 @@ function runCommand(
         // Emit each non-empty line to the log
         for (const line of text.split("\n")) {
           const trimmed = line.trim();
-          if (trimmed) emitLog(job, trimmed);
+          if (trimmed && !opts?.silent) emitLog(job, trimmed);
         }
       };
 
@@ -482,6 +485,192 @@ server {
 /** Path to the bundled deploy files (copied by build.mjs at build time). */
 const VPN_NODE_DEPLOY_DIR = path.resolve(__dirname, "vpn-node-deploy");
 
+export function parseRealityX25519Output(output: string): {
+  privateKey: string;
+  publicKey: string;
+} {
+  const privateKey = output.match(/(?:Private\s*Key|PrivateKey):\s*([A-Za-z0-9_-]+)/i)?.[1];
+  const publicKey = output.match(
+    /(?:Public\s*Key|PublicKey|Password(?:\s*\(PublicKey\))?):\s*([A-Za-z0-9_-]+)/i,
+  )?.[1];
+  const keyPattern = /^[A-Za-z0-9_-]{43}=?$/;
+  if (!privateKey || !keyPattern.test(privateKey) || !publicKey || !keyPattern.test(publicKey)) {
+    throw new Error("Не удалось разобрать X25519 Reality-ключи из вывода Xray");
+  }
+  return { privateKey, publicKey };
+}
+
+/**
+ * Reality has a deliberately separate path: it owns TCP 443 directly and
+ * never installs/configures the WS reverse proxy. Management remains on the
+ * same remote REST port used by existing production nodes.
+ */
+async function provisionRealityAsync(
+  job: ProvisioningJob,
+  opts: ProvisioningOpts,
+  conn: Client,
+): Promise<void> {
+  const managementApiUrl = `http://${opts.sshHost}:8443`;
+  const existing = await db
+    .select({ id: vpnNodesTable.id })
+    .from(vpnNodesTable)
+    .where(
+      or(
+        eq(vpnNodesTable.managementApiUrl, managementApiUrl),
+        and(
+          eq(vpnNodesTable.host, opts.sshHost),
+          eq(vpnNodesTable.port, 443),
+        ),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) {
+    const active = await db
+      .select({ id: vpnKeysTable.id })
+      .from(vpnKeysTable)
+      .where(and(eq(vpnKeysTable.nodeId, existing[0].id), isNull(vpnKeysTable.revokedAt)))
+      .limit(1);
+    if (active[0]) {
+      throw new Error("A node with this management address has active keys; refusing to reconfigure it");
+    }
+    throw new Error("A node with this management address already exists; refusing to convert it");
+  }
+  const existingInstall = await runCommand(
+    conn,
+    "if [ -e /opt/vpn-node ]; then echo existing-install; fi",
+    job,
+    { timeoutMs: 15_000 },
+  );
+  if (existingInstall.includes("existing-install")) {
+    throw new Error("Reality auto-setup only runs on a fresh VPS; /opt/vpn-node already exists");
+  }
+  const listeners = await runCommand(
+    conn,
+    "for table in /proc/net/tcp /proc/net/tcp6; do if [ -r \"$table\" ]; then awk 'NR > 1 && $4 == \"0A\" { split($2, fields, \":\"); port = tolower(fields[2]); if (port == \"01bb\" || port == \"20fb\") print $2 }' \"$table\"; fi; done",
+    job,
+    { timeoutMs: 15_000 },
+  );
+  if (listeners.trim()) {
+    throw new Error("Ports 443 or 8443 are already in use; refusing unsafe Reality provisioning");
+  }
+
+  const sni = opts.realitySni?.trim();
+  const isDnsHostname = (value: string) => {
+    const hostname = value.endsWith(".") ? value.slice(0, -1) : value;
+    if (!hostname || hostname.length > 253) return false;
+    const labels = hostname.split(".");
+    return labels.length >= 2 && labels.every((label) =>
+      label.length <= 63 &&
+      /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+    );
+  };
+  if (!sni || !isDnsHostname(sni)) {
+    throw new Error("Reality SNI must be a valid DNS hostname");
+  }
+  const destination = opts.realityDest?.trim() || `${sni}:443`;
+  const destinationMatch = /^([A-Za-z0-9.-]+):(\d{1,5})$/.exec(destination);
+  if (
+    !destinationMatch ||
+    !isDnsHostname(destinationMatch[1]!) ||
+    Number(destinationMatch[2]) < 1 ||
+    Number(destinationMatch[2]) > 65535
+  ) {
+    throw new Error("Reality destination must be a valid DNS host and TCP port from 1 to 65535");
+  }
+
+  emitStep(job, "📦 Установка Docker без изменения WebSocket/Nginx-конфигурации...");
+  await runCommand(conn, [
+    "export DEBIAN_FRONTEND=noninteractive",
+    "apt-get update -qq",
+    "apt-get install -y --no-install-recommends curl gnupg ca-certificates lsb-release openssl ufw",
+    "install -m 0755 -d /etc/apt/keyrings",
+    "rm -f /etc/apt/keyrings/docker.gpg",
+    "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg",
+    "chmod a+r /etc/apt/keyrings/docker.gpg",
+    "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \\\"$VERSION_CODENAME\\\") stable\" > /etc/apt/sources.list.d/docker.list",
+    "apt-get update -qq",
+    "apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-compose-plugin",
+    "systemctl enable docker",
+    "for i in 1 2 3 4 5; do systemctl start docker && break || (echo \"Docker start attempt $i failed, retrying...\"; sleep 3); done",
+    "docker info >/dev/null",
+  ].join(" && "), job, { timeoutMs: 10 * 60_000 });
+  await uploadTarDir(conn, VPN_NODE_DEPLOY_DIR, "/opt/vpn-node", job);
+  await runCommand(conn, "chmod +x /opt/vpn-node/render-config.sh", job);
+
+  const secret = (await runCommand(conn, "openssl rand -hex 32", job, { silent: true }))
+    .trim()
+    .split(/\s+/)
+    .pop();
+  if (!secret || !/^[0-9a-f]{64}$/.test(secret)) {
+    throw new Error("Не удалось сгенерировать Management API secret");
+  }
+  await writeRemoteFileViaExec(
+    conn,
+    "/opt/vpn-node/.env",
+    `MGMT_API_SECRET=${secret}\nPORT=8443\n`,
+    job,
+  );
+  await runCommand(conn, "chmod 600 /opt/vpn-node/.env", job);
+
+  // Build the image first so Xray generates its key using the exact binary
+  // that will serve this node. The command is silent so the private key can
+  // never enter persisted logs or the SSE response.
+  await runCommand(conn, "cd /opt/vpn-node && docker compose build", job, { timeoutMs: 10 * 60_000 });
+  emitStep(job, "🔑 Генерация Reality-ключей на VPS...");
+  const keyOutput = await runCommand(conn, "cd /opt/vpn-node && docker compose run --rm --entrypoint /usr/local/bin/xray vpn-node x25519", job, { silent: true, timeoutMs: 60_000 });
+  const { privateKey, publicKey } = parseRealityX25519Output(keyOutput);
+  const shortId = (await runCommand(conn, "openssl rand -hex 8", job, { silent: true })).trim().split(/\s+/).pop();
+  if (!shortId || !/^[0-9a-f]{16}$/i.test(shortId)) throw new Error("Не удалось сгенерировать Reality Short ID");
+
+  const env = [
+    `MGMT_API_SECRET=${secret}`,
+    "PORT=8443",
+    "REALITY_ENABLED=true",
+    "REALITY_PORT=443",
+    `REALITY_PRIVATE_KEY=${privateKey}`,
+    `REALITY_SHORT_ID=${shortId}`,
+    `REALITY_SERVER_NAME=${sni}`,
+    `REALITY_DEST=${destination}`,
+    "",
+  ].join("\n");
+  await writeRemoteFileViaExec(conn, "/opt/vpn-node/.env", env, job);
+  await runCommand(conn, "chmod 600 /opt/vpn-node/.env", job);
+
+  emitStep(job, "🔒 Настройка firewall по существующей схеме удалённых нод...");
+  await runCommand(conn, [
+    "ufw allow 22/tcp comment SSH",
+    "ufw allow 443/tcp comment VPN-Reality",
+    "ufw allow 8443/tcp comment VPN-MgmtAPI",
+    "ufw --force enable",
+    "ufw status | grep -q 'Status: active'",
+  ].join(" && "), job, { timeoutMs: 30_000 });
+
+  emitStep(job, "🐳 Запуск Reality и Management API...");
+  await runCommand(conn, "cd /opt/vpn-node && docker compose up -d", job, { timeoutMs: 10 * 60_000 });
+  const health = await runCommand(conn, "curl -fsS --max-time 10 http://localhost:8443/health", job, { timeoutMs: 30_000 });
+  if (!health.includes("ok")) throw new Error("Reality Management API health check failed");
+
+  const [node] = await db.insert(vpnNodesTable).values({
+    name: opts.nodeName,
+    region: opts.nodeRegion,
+    host: opts.sshHost,
+    port: 443,
+    transport: "reality",
+    sni,
+    publicKey,
+    shortId,
+    managementApiUrl,
+    managementApiSecret: secret,
+    isActive: true,
+  }).returning();
+  if (!node) throw new Error("DB insert returned no Reality node");
+  emitSuccess(job, `Узел «${opts.nodeName}» зарегистрирован (id=${node.id}) ✓`);
+  job.status = "done";
+  job.nodeId = node.id;
+  await persistJobFinish(job, "done", { nodeId: node.id });
+  job.emitter.emit("done", node.id);
+}
+
 async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Promise<void> {
   const { sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion } = opts;
   let conn: Client | null = null;
@@ -498,6 +687,10 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     emitStep(job, `🔌 Подключение к ${sshHost} по SSH...`);
     conn = await connectSSH(opts);
     emitSuccess(job, "SSH-соединение установлено ✓");
+    if (opts.transport === "reality") {
+      await provisionRealityAsync(job, opts, conn);
+      return;
+    }
 
     // ── Step 2: Update apt + install Docker, Nginx, certbot ────────────────
     emitStep(job, "📦 Обновление системы и установка Docker, Nginx, certbot...");

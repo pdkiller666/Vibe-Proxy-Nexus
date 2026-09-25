@@ -56,7 +56,7 @@ async function createAdmin(): Promise<{ id: number; cookie: string }> {
   return { id: user.id, cookie: sessionCookie.split(";")[0] };
 }
 
-async function createNodeInRegion(region: string): Promise<{ id: number }> {
+async function createNodeInRegion(region: string, transport: "ws" | "reality" = "ws"): Promise<{ id: number }> {
   const [node] = await db
     .insert(vpnNodesTable)
     .values({
@@ -67,6 +67,9 @@ async function createNodeInRegion(region: string): Promise<{ id: number }> {
       isActive: true,
       managementApiUrl: "http://fake-mgmt.example.com",
       managementApiSecret: "fake-secret",
+      transport,
+      publicKey: transport === "reality" ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" : null,
+      shortId: transport === "reality" ? "a1b2c3d4" : null,
     })
     .returning({ id: vpnNodesTable.id });
   return { id: node.id };
@@ -201,7 +204,7 @@ describe("DELETE /admin/vpn-nodes/:nodeId", () => {
     const carryOverRegion = `carryover-${randomBytes(4).toString("hex")}`;
     const { id: sourceNodeId } = await createNodeInRegion(carryOverRegion);
     createdNodeIds.push(sourceNodeId);
-    const { id: targetNodeId } = await createNodeInRegion(carryOverRegion);
+    const { id: targetNodeId } = await createNodeInRegion(carryOverRegion, "reality");
     createdNodeIds.push(targetNodeId);
 
     const PERIOD_UP = 3 * 1024 * 1024 * 1024;

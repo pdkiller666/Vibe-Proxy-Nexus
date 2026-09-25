@@ -6,8 +6,9 @@
 - [Amvera amvera.yaml real schema](amvera-yaml-schema.md) — no `ports` list field exists at all, only `run.containerPort` (single int); clean build log does not mean config is valid, check app log too.
 - [Amvera internal DB TLS verification](amvera-internal-db-tls.md) — sslmode=require against self-signed CNPG cert breaks every query identically (looks like missing schema, isn't); fix with rejectUnauthorized:false.
 - [VPN node seeding](vpn-node-seeding.md) — key issuance 404s if `vpn_nodes` is empty; all-in-one deploy needs one row seeded from REALITY_* env vars, not automatic.
-- [Amvera raw TCP port limitation](amvera-raw-tcp-port.md) — containerPort's comma-separated list is HTTP-only; confirmed Amvera always terminates TLS on 443 itself, no raw TCP passthrough for Reality/VLESS without Dedicated IPv4. Resolved via VLESS+WebSocket (see file for details).
-- [Multi-node WS architecture](multi-node-ws-arch.md) — remote VPS nodes via Management REST API; local Amvera node via on-disk Xray config; vpn_nodes.managementApiUrl IS NULL = local.
+- [Amvera raw TCP port limitation](amvera-raw-tcp-port.md) — Amvera terminates public TLS; Reality runs on external raw-TCP VPS nodes and is now available to normal users and migrations.
+- [Shared VDSina reverse-DNS certificate limits](shared-vdsina-certificate-limit.md) — provider hostnames under `hosted-by-vdsina.com` can hit a shared Let's Encrypt domain limit; use an owned domain or a private SSH tunnel.
+- [Multi-node WS architecture](multi-node-ws-arch.md) — remote VPS nodes use Management REST; the dev admin path is a workspace-scoped SSH tunnel, so stopping or restarting it breaks node polling.
 - [VPN subscription URL design](vpn-subscription-links.md) — self-updating subscription link (stateless HMAC token, base64 body, branded headers) replaces raw pasted vless links; key labels must never contain user email.
 - [Xray gRPC proto loading & stats](xray-grpc-proto-loading.md) — protobufjs needs resolvePath override for include-root-relative proto imports; QueryStats(reset:true) works, GetUsersStats is UNIMPLEMENTED; Xray "email" tag must be a unique id (UUID), never a user-facing label.
 - [Artifact re-registration on re-import](artifact-reregistration.md) — listArtifacts() empty + proxy 502 despite intact artifact.toml files? createArtifact for one artifact re-registers the others too.
@@ -57,3 +58,4 @@
 - [Post-reimport memory/secrets drift](imported-project-memory-drift.md) — ~25 indexed topic files were missing after a 2026-08-26 GitHub reimport (shallow/grafted git history); verify stale-looking claims against current code before trusting them.
 - [Dev-environment admin login requires ADMIN_PASSWORD](dev-admin-seed-requires-password.md) — ADMIN_EMAIL alone seeds nothing; fresh/reimported dev DB has no admin account and /admin is unreachable until ADMIN_PASSWORD secret is also set + API server restarted.
 - [All-in-one deploy env gating](deploy-env-gating.md) — STATIC_DIR and XRAY_CONFIG_PATH env vars gate prod-only behaviors (serving built SPA, editing local Xray config) so the same codebase works unmodified in Replit dev and the Amvera container.
+- [VPN-node Python lock refresh](vpn-node-lock-refresh.md) — `uv pip compile` preserves versions from an existing output file unless the updater passes `--upgrade`; the smoke checker compiles to a fresh temp file.

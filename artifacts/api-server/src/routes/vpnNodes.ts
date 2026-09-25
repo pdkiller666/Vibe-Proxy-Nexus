@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { db, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { ListVpnNodesResponse } from "@workspace/api-zod";
 import { flagEmojiForNode } from "../lib/vless.js";
@@ -10,7 +10,11 @@ router.get("/vpn-nodes", async (_req, res): Promise<void> => {
   const nodes = await db
     .select()
     .from(vpnNodesTable)
-    .where(eq(vpnNodesTable.isActive, true))
+    .where(
+      and(
+        eq(vpnNodesTable.isActive, true),
+      ),
+    )
     .orderBy(asc(vpnNodesTable.name));
 
   // Cheap enough to compute per-request (admin node count is small) and

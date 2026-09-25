@@ -173,6 +173,9 @@ export async function issueKeyForUser(
   idempotencyKey?: string,
   replaceKeyId?: number,
   enforceTrafficBlock?: boolean,
+  // Kept for call-site compatibility; all active transports are now
+  // available to regular users as well as administrators.
+  options?: { allowRealityNode?: boolean },
 ): Promise<IssueKeyResult> {
   return withUserIssueLock(userId, () =>
     issueKeyForUserInner(
@@ -184,6 +187,7 @@ export async function issueKeyForUser(
       idempotencyKey,
       replaceKeyId,
       enforceTrafficBlock,
+      options,
     ),
   );
 }
@@ -205,6 +209,7 @@ async function issueKeyForUserInner(
   idempotencyKey?: string,
   replaceKeyId?: number,
   enforceTrafficBlock?: boolean,
+  options?: { allowRealityNode?: boolean },
 ): Promise<IssueKeyResult> {
   // Idempotent replay: a retried request (same client-generated UUID) gets
   // the key issued by the first attempt instead of a duplicate. Checked
@@ -247,7 +252,10 @@ async function issueKeyForUserInner(
 
     if (!node) {
       const [exists] = await db
-        .select({ id: vpnNodesTable.id })
+        .select({
+          id: vpnNodesTable.id,
+          transport: vpnNodesTable.transport,
+        })
         .from(vpnNodesTable)
         .where(
           and(
@@ -258,9 +266,10 @@ async function issueKeyForUserInner(
       return replayOrFail(userId, idempotencyKey, {
         ok: false,
         status: exists ? 409 : 404,
-        error: exists
-          ? "Selected VPN node has reached its user capacity"
-          : "No available VPN node found",
+        error:
+            exists
+              ? "Selected VPN node has reached its user capacity"
+              : "No available VPN node found",
       });
     }
 
@@ -289,7 +298,12 @@ async function issueKeyForUserInner(
       .select({ node: vpnNodesTable })
       .from(vpnNodesTable)
       .leftJoin(activeCounts, eq(activeCounts.nodeId, vpnNodesTable.id))
-      .where(and(eq(vpnNodesTable.isActive, true), nodeHasCapacity))
+      .where(
+        and(
+          eq(vpnNodesTable.isActive, true),
+          nodeHasCapacity,
+        ),
+      )
       // Least-loaded node first: pick the one with fewest active keys overall.
       // coalesce handles nodes that have never had a key (count IS NULL → 0).
       .orderBy(asc(sql`coalesce(${activeCounts.count}, 0)`))

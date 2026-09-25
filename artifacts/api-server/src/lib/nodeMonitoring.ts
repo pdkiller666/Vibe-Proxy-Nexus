@@ -464,6 +464,7 @@ async function migrateKeysFromDeactivatedNode(node: {
   region: string;
   managementApiUrl: string | null;
   managementApiSecret: string | null;
+  transport: "ws" | "reality";
 }): Promise<void> {
   const activeKeys = await db
     .select()
@@ -660,6 +661,7 @@ async function pollNode(node: {
   id: number;
   name: string;
   region: string;
+  transport: "ws" | "reality";
   isActive: boolean;
   consecutiveFailures: number;
   managementApiUrl: string | null;
@@ -834,6 +836,7 @@ async function runNodeMonitoringCycle(): Promise<void> {
       id: vpnNodesTable.id,
       name: vpnNodesTable.name,
       region: vpnNodesTable.region,
+      transport: vpnNodesTable.transport,
       isActive: vpnNodesTable.isActive,
       consecutiveFailures: vpnNodesTable.consecutiveFailures,
       managementApiUrl: vpnNodesTable.managementApiUrl,
@@ -853,6 +856,9 @@ async function runNodeMonitoringCycle(): Promise<void> {
   // node doesn't hold up the rest.
   await Promise.allSettled(nodes.map((node) => pollNode(node)));
 }
+
+/** Test hook for exercising one complete monitoring cycle without timers. */
+export const runNodeMonitoringCycleForTests = runNodeMonitoringCycle;
 
 export function startNodeMonitoringJob(): NodeJS.Timeout {
   const run = () => {

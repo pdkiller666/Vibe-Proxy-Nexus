@@ -191,11 +191,12 @@ fi
 
 # ── Firewall (ufw) ────────────────────────────────────────────────────────────
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
-    info "Opening firewall ports 22, 80, 443, 8443..."
+    info "Opening firewall ports 22, 80, 443, 8443, 8444..."
     ufw allow 22/tcp   comment "SSH"    > /dev/null
     ufw allow 80/tcp   comment "HTTP"   > /dev/null
     ufw allow 443/tcp  comment "VPN"    > /dev/null
-    ufw allow 8443/tcp comment "MGMT"   > /dev/null
+    ufw allow 8443/tcp comment "MGMT or Reality" > /dev/null
+    ufw allow 8444/tcp comment "Reality MGMT"    > /dev/null
     # Cockpit port 9090 must NOT be publicly accessible — SSH tunnel only
     ufw deny 9090      comment "Cockpit (SSH-tunnel only)" > /dev/null
     info "Port 9090 (Cockpit) blocked — accessible only via SSH tunnel."

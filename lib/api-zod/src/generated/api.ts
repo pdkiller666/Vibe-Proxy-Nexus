@@ -483,6 +483,9 @@ export const ListVpnNodesResponseItem = zod.object({
   "region": zod.string(),
   "host": zod.string().nullish(),
   "port": zod.number().optional(),
+  "transport": zod.enum(['ws', 'reality']),
+  "publicKey": zod.string().nullable(),
+  "shortId": zod.string().nullable(),
   "sni": zod.string(),
   "managementApiUrl": zod.string().nullish(),
   "isActive": zod.boolean(),
@@ -1501,7 +1504,7 @@ export const RefundPaymentResponse = zod.object({
  */
 
 
-
+export const provisionVpnNodeBodyTransportDefault = `ws`;
 
 export const ProvisionVpnNodeBody = zod.object({
   "sshHost": zod.string().describe('IP address of the VPS'),
@@ -1509,7 +1512,10 @@ export const ProvisionVpnNodeBody = zod.object({
   "sshPassword": zod.string().describe('SSH password (used once, never stored)'),
   "domain": zod.string().describe('Technical domain pointing to the VPS IP'),
   "nodeName": zod.string().min(1),
-  "nodeRegion": zod.string().min(1)
+  "nodeRegion": zod.string().min(1),
+  "transport": zod.enum(['ws', 'reality']).default(provisionVpnNodeBodyTransportDefault),
+  "realitySni": zod.string().optional().describe('Reality camouflage server name (required for reality)'),
+  "realityDest": zod.string().optional().describe('Reality fallback host:port (defaults to SNI:443)')
 })
 
 export const ProvisionVpnNodeResponse = zod.object({
@@ -1526,6 +1532,9 @@ export const ListAdminVpnNodesResponseItem = zod.object({
   "region": zod.string(),
   "host": zod.string().nullish(),
   "port": zod.number().optional(),
+  "transport": zod.enum(['ws', 'reality']),
+  "publicKey": zod.string().nullable(),
+  "shortId": zod.string().nullable(),
   "sni": zod.string(),
   "managementApiUrl": zod.string().nullish(),
   "isActive": zod.boolean(),
@@ -1543,7 +1552,7 @@ export const ListAdminVpnNodesResponse = zod.array(ListAdminVpnNodesResponseItem
  */
 
 
-
+export const createVpnNodeBodyTransportDefault = `ws`;
 
 
 
@@ -1552,10 +1561,11 @@ export const CreateVpnNodeBody = zod.object({
   "region": zod.string().min(1),
   "host": zod.string().optional(),
   "port": zod.number().optional(),
+  "transport": zod.enum(['ws', 'reality']).default(createVpnNodeBodyTransportDefault),
   "managementApiUrl": zod.string().nullish(),
   "managementApiSecret": zod.string().nullish(),
-  "publicKey": zod.string().optional(),
-  "shortId": zod.string().optional(),
+  "publicKey": zod.string().nullish(),
+  "shortId": zod.string().nullish(),
   "sni": zod.string().min(1),
   "isActive": zod.boolean().optional(),
   "maxUsers": zod.number().min(1).nullish(),
@@ -1568,6 +1578,9 @@ export const CreateVpnNodeResponse = zod.object({
   "region": zod.string(),
   "host": zod.string().nullish(),
   "port": zod.number().optional(),
+  "transport": zod.enum(['ws', 'reality']),
+  "publicKey": zod.string().nullable(),
+  "shortId": zod.string().nullable(),
   "sni": zod.string(),
   "managementApiUrl": zod.string().nullish(),
   "isActive": zod.boolean(),
@@ -1597,10 +1610,11 @@ export const UpdateVpnNodeBody = zod.object({
   "region": zod.string().min(1).optional(),
   "host": zod.string().optional(),
   "port": zod.number().optional(),
+  "transport": zod.enum(['ws', 'reality']).optional(),
   "managementApiUrl": zod.string().nullish(),
   "managementApiSecret": zod.string().nullish(),
-  "publicKey": zod.string().optional(),
-  "shortId": zod.string().optional(),
+  "publicKey": zod.string().nullish(),
+  "shortId": zod.string().nullish(),
   "sni": zod.string().min(1).optional(),
   "isActive": zod.boolean().optional(),
   "maxUsers": zod.number().min(1).nullish(),
@@ -1613,6 +1627,9 @@ export const UpdateVpnNodeResponse = zod.object({
   "region": zod.string(),
   "host": zod.string().nullish(),
   "port": zod.number().optional(),
+  "transport": zod.enum(['ws', 'reality']),
+  "publicKey": zod.string().nullable(),
+  "shortId": zod.string().nullable(),
   "sni": zod.string(),
   "managementApiUrl": zod.string().nullish(),
   "isActive": zod.boolean(),
@@ -1636,14 +1653,15 @@ export const DeleteVpnNodeResponse = zod.object({
   "failedMigrations": zod.number()
 })
 
+
 /**
  * @summary Migrate active keys from a VPN node to other active nodes
  */
-export const MigrateVpnNodeParams = zod.object({
+export const MigrateVpnNodeKeysParams = zod.object({
   "nodeId": zod.coerce.number()
 })
 
-export const MigrateVpnNodeResponse = zod.object({
+export const MigrateVpnNodeKeysResponse = zod.object({
   "totalKeys": zod.number(),
   "migratedKeys": zod.number(),
   "failedMigrations": zod.number()

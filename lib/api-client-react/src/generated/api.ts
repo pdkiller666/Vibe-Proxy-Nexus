@@ -76,8 +76,8 @@ import type {
   ListAdminTicketsParams,
   ListAdminVpnKeysParams,
   LoginInput,
-  MigrateVpnNodeResult,
   Me,
+  MigrateVpnNodeResult,
   Payment,
   PaymentNoteUpdate,
   PaymentRefund,
@@ -4358,7 +4358,8 @@ export const migrateVpnNodeKeys = async (nodeId: number, options?: RequestInit):
 
 
 
-export const getMigrateVpnNodeKeysMutationOptions = <TError = ErrorType<unknown>,
+
+export const getMigrateVpnNodeKeysMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof migrateVpnNodeKeys>>, TError,{nodeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof migrateVpnNodeKeys>>, TError,{nodeId: number}, TContext> => {
 
@@ -4382,18 +4383,19 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
+
   return  { mutationFn, ...mutationOptions }}
 
     export type MigrateVpnNodeKeysMutationResult = NonNullable<Awaited<ReturnType<typeof migrateVpnNodeKeys>>>
 
-    export type MigrateVpnNodeKeysMutationError = ErrorType<unknown>
+    export type MigrateVpnNodeKeysMutationError = ErrorType<void>
 
     /**
  * @summary Migrate active keys from a VPN node to other active nodes
  */
-export const useMigrateVpnNodeKeys = <TError = ErrorType<unknown>,
+export const useMigrateVpnNodeKeys = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof migrateVpnNodeKeys>>, TError,{nodeId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-  ): UseMutationResult<
+ ): UseMutationResult<
         Awaited<ReturnType<typeof migrateVpnNodeKeys>>,
         TError,
         {nodeId: number},

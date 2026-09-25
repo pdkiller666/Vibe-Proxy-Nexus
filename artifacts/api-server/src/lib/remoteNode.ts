@@ -26,7 +26,11 @@ export interface RemoteNodePollHealth {
  */
 export const remoteNodePollingHealth = new Map<string, RemoteNodePollHealth>();
 
-export type RemoteNodeRef = Pick<VpnNode, "managementApiUrl" | "managementApiSecret" | "name">;
+export type RemoteNodeRef = Pick<
+  VpnNode,
+  "managementApiUrl" | "managementApiSecret" | "name"
+> &
+  Partial<Pick<VpnNode, "transport">>;
 
 const REMOTE_FETCH_TIMEOUT_MS = 15_000;
 
@@ -65,7 +69,11 @@ export async function addRemoteXrayClient(
   label: string,
   limitIp?: number,
 ): Promise<void> {
-  const body: Record<string, unknown> = { uuid, label };
+  const body: Record<string, unknown> = {
+    uuid,
+    label,
+    transport: node.transport ?? "ws",
+  };
   if (limitIp !== undefined) body.limitIp = limitIp;
   const res = await remoteNodeFetch(node, "/clients", {
     method: "POST",

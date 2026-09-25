@@ -13,6 +13,7 @@ fi
 
 "$UV_BIN" pip compile \
   "$NODE_DIR/bot/requirements.in" \
+  --upgrade \
   --quiet \
   --python-version 3.12 \
   --generate-hashes \

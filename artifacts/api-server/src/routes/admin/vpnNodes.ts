@@ -8,8 +8,8 @@ import {
   CreateVpnNodeResponse,
   DeleteVpnNodeParams,
   DeleteVpnNodeResponse,
-  MigrateVpnNodeParams,
-  MigrateVpnNodeResponse,
+  MigrateVpnNodeKeysParams,
+  MigrateVpnNodeKeysResponse,
   UpdateVpnNodeBody,
   UpdateVpnNodeParams,
   UpdateVpnNodeResponse,
@@ -37,15 +37,54 @@ function normalizeNullableString(value: unknown): string | null | undefined {
   return trimmed === "" ? null : trimmed;
 }
 
-function normalizeVpnNodePayload<T extends { managementApiUrl?: string | null; managementApiSecret?: string | null; certSha256?: string | null }>(
+function normalizeVpnNodePayload<T extends {
+  managementApiUrl?: string | null;
+  managementApiSecret?: string | null;
+  certSha256?: string | null;
+  publicKey?: string | null;
+  shortId?: string | null;
+}>(
   data: T,
 ): T {
   const normalized = { ...data };
   if ("managementApiUrl" in normalized) normalized.managementApiUrl = normalizeNullableString(normalized.managementApiUrl);
   if ("managementApiSecret" in normalized) normalized.managementApiSecret = normalizeNullableString(normalized.managementApiSecret);
   if ("certSha256" in normalized) normalized.certSha256 = normalizeNullableString(normalized.certSha256);
+  if ("publicKey" in normalized) normalized.publicKey = normalizeNullableString(normalized.publicKey);
+  if ("shortId" in normalized) normalized.shortId = normalizeNullableString(normalized.shortId);
   if (normalized.managementApiUrl === null) normalized.managementApiSecret = null;
   return normalized;
+}
+
+function realityConfigurationError(node: {
+  transport: string;
+  host: string | null | undefined;
+  port: number | null | undefined;
+  sni: string | null | undefined;
+  managementApiUrl: string | null | undefined;
+  publicKey: string | null | undefined;
+  shortId: string | null | undefined;
+}): string | null {
+  if (node.transport !== "reality") return null;
+  if (!node.host) {
+    return "Для Reality укажите прямой Host/IP тестовой VPS (не только SNI)";
+  }
+  if (!node.managementApiUrl) {
+    return "VLESS+Reality доступен только для отдельной удалённой VPS-ноды";
+  }
+  if (!Number.isInteger(node.port) || node.port! < 1 || node.port! > 65535) {
+    return "Укажите корректный TCP-порт Reality-ноды";
+  }
+  if (!node.sni || !/^[A-Za-z0-9.-]+$/.test(node.sni)) {
+    return "Укажите корректный Reality Server Name (SNI)";
+  }
+  if (!node.publicKey || !/^[A-Za-z0-9_-]{43}=?$/.test(node.publicKey)) {
+    return "Для VLESS+Reality укажите X25519 Public Key";
+  }
+  if (!node.shortId || !/^[0-9a-fA-F]{1,16}$/.test(node.shortId)) {
+    return "Short ID должен содержать от 1 до 16 шестнадцатеричных символов";
+  }
+  return null;
 }
 
 router.get("/admin/vpn-nodes", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
@@ -83,6 +122,24 @@ router.post("/admin/vpn-nodes", requireAuth, requireAdmin, async (req, res): Pro
   // `host` is optional in the API schema (some callers rely on SNI == host)
   // but NOT NULL in the DB — fall back to sni when omitted.
   const createData = normalizeVpnNodePayload(parsed.data);
+  if (createData.transport === "reality" && !parsed.data.host?.trim()) {
+    res.status(400).json({ error: "Для Reality-ноды нужен прямой Host/IP VPS, отдельно от SNI" });
+    return;
+  }
+  const realityError = realityConfigurationError({
+    transport: createData.transport ?? "ws",
+    host: createData.host,
+    port: createData.port,
+    sni: createData.sni,
+    managementApiUrl: createData.managementApiUrl,
+    publicKey: createData.publicKey,
+    shortId: createData.shortId,
+  });
+  if (realityError) {
+    res.status(400).json({ error: realityError });
+    return;
+  }
+
   const [node] = await db
     .insert(vpnNodesTable)
     .values({ ...createData, host: createData.host ?? createData.sni })
@@ -105,7 +162,82 @@ router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, 
     return;
   }
 
+  const [currentNode] = await db
+    .select()
+    .from(vpnNodesTable)
+    .where(eq(vpnNodesTable.id, params.data.nodeId));
+  if (!currentNode) {
+    res.status(404).json({ error: "VPN node not found" });
+    return;
+  }
+
   const normalizedPatch = normalizeVpnNodePayload(parsed.data);
+  const nextTransport = normalizedPatch.transport ?? currentNode.transport;
+  const nextManagementApiUrl =
+    normalizedPatch.managementApiUrl === undefined
+      ? currentNode.managementApiUrl
+      : normalizedPatch.managementApiUrl;
+  const nextHost =
+    normalizedPatch.host === undefined
+      ? currentNode.host
+      : normalizedPatch.host;
+  const nextPort =
+    normalizedPatch.port === undefined
+      ? currentNode.port
+      : normalizedPatch.port;
+  const nextSni =
+    normalizedPatch.sni === undefined
+      ? currentNode.sni
+      : normalizedPatch.sni;
+  const nextPublicKey =
+    normalizedPatch.publicKey === undefined
+      ? currentNode.publicKey
+      : normalizedPatch.publicKey;
+  const nextShortId =
+    normalizedPatch.shortId === undefined
+      ? currentNode.shortId
+      : normalizedPatch.shortId;
+  const realityError = realityConfigurationError({
+    transport: nextTransport,
+    host: nextHost,
+    port: nextPort,
+    sni: nextSni,
+    managementApiUrl: nextManagementApiUrl,
+    publicKey: nextPublicKey,
+    shortId: nextShortId,
+  });
+  if (realityError) {
+    res.status(400).json({ error: realityError });
+    return;
+  }
+
+  const realityProfileChanged =
+    (currentNode.transport === "reality" || nextTransport === "reality") &&
+    (nextTransport !== currentNode.transport ||
+      nextHost !== currentNode.host ||
+      nextPort !== currentNode.port ||
+      nextSni !== currentNode.sni ||
+      nextManagementApiUrl !== currentNode.managementApiUrl ||
+      nextPublicKey !== currentNode.publicKey ||
+      nextShortId !== currentNode.shortId);
+  if (realityProfileChanged) {
+    const [{ count: activeKeyCount }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(vpnKeysTable)
+      .where(
+        and(
+          eq(vpnKeysTable.nodeId, currentNode.id),
+          isNull(vpnKeysTable.revokedAt),
+        ),
+      );
+    if (activeKeyCount > 0) {
+      res.status(409).json({
+        error: "Нельзя менять транспорт, адрес, порт или параметры Reality-ноды с активными ключами",
+      });
+      return;
+    }
+  }
+
   const updateData =
     normalizedPatch.isActive === undefined
       ? normalizedPatch
@@ -130,7 +262,7 @@ router.patch("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, 
 });
 
 router.post("/admin/vpn-nodes/:nodeId/migrate-keys", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const params = MigrateVpnNodeParams.safeParse(req.params);
+  const params = MigrateVpnNodeKeysParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
@@ -146,7 +278,7 @@ router.post("/admin/vpn-nodes/:nodeId/migrate-keys", requireAuth, requireAdmin, 
     return;
   }
 
-  res.json(MigrateVpnNodeResponse.parse(result.result));
+  res.json(MigrateVpnNodeKeysResponse.parse(result.result));
 });
 
 router.delete("/admin/vpn-nodes/:nodeId", requireAuth, requireAdmin, async (req, res): Promise<void> => {

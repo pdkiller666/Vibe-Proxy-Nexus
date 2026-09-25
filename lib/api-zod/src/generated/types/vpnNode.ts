@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VpnNodeTransport } from './vpnNodeTransport';
 
 export interface VpnNode {
   id: number;
@@ -13,6 +14,11 @@ export interface VpnNode {
   /** @nullable */
   host?: string | null;
   port?: number;
+  transport: VpnNodeTransport;
+  /** @nullable */
+  publicKey: string | null;
+  /** @nullable */
+  shortId: string | null;
   sni: string;
   /** @nullable */
   managementApiUrl?: string | null;

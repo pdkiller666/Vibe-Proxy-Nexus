@@ -16,6 +16,8 @@ import command_pb2_grpc
 
 CONFIG_PATH = Path(os.environ.get("XRAY_CONFIG_PATH", "/etc/xray/config.json"))
 XRAY_API_ADDR = os.environ.get("XRAY_API_ADDR", "127.0.0.1:10085")
+WS_INBOUND_TAG = "vless-ws"
+REALITY_INBOUND_TAG = "vless-reality"
 
 _lock = threading.Lock()
 
@@ -37,22 +39,36 @@ def _reload_xray() -> None:
     subprocess.run(["supervisorctl", "restart", "xray"], check=False)
 
 
-def add_client(uuid: str, label: str, limit_ip: int | None = None) -> None:
+def _inbound(config: dict, transport: str) -> dict:
+    if transport not in {"ws", "reality"}:
+        raise ValueError("transport must be 'ws' or 'reality'")
+    tag = REALITY_INBOUND_TAG if transport == "reality" else WS_INBOUND_TAG
+    for inbound in config.get("inbounds", []):
+        if inbound.get("tag") == tag:
+            return inbound
+    raise ValueError(f"Xray inbound {tag!r} is not configured")
+
+
+def add_client(
+    uuid: str, label: str, limit_ip: int | None = None, transport: str = "ws"
+) -> None:
     with _lock:
         config = _load_config()
-        clients = config["inbounds"][0]["settings"]["clients"]
+        clients = _inbound(config, transport)["settings"]["clients"]
 
         if any(c.get("id") == uuid for c in clients):
             return
 
-        # WebSocket transport does not use XTLS flow — the "flow" field is
-        # only required for VLESS + XTLS-Reality/Vision (raw TCP). Omitting
-        # it here keeps the config valid for the WS inbound.
+        # Reality clients require Vision flow; WS clients must not carry it.
         #
         # limitIp is retained as a compatibility hint for a custom Xray build.
         # The pinned vanilla core does not reliably enforce it. Do not add a
         # raw WebSocket/session limit here: one phone opens many WS tunnels.
-        client: dict = {"id": uuid, "email": label}
+        # Xray's traffic-stat name is keyed by `email`. Reality stats must
+        # reconcile with the central DB by UUID, not by a user-facing label.
+        client: dict = {"id": uuid, "email": uuid if transport == "reality" else label}
+        if transport == "reality":
+            client["flow"] = "xtls-rprx-vision"
         if limit_ip is not None and limit_ip > 0:
             client["limitIp"] = limit_ip
         clients.append(client)
@@ -63,11 +79,15 @@ def add_client(uuid: str, label: str, limit_ip: int | None = None) -> None:
 def remove_client(uuid: str) -> bool:
     with _lock:
         config = _load_config()
-        clients = config["inbounds"][0]["settings"]["clients"]
-        before = len(clients)
-        clients[:] = [c for c in clients if c.get("id") != uuid]
+        removed = 0
+        for inbound in config.get("inbounds", []):
+            if inbound.get("tag") not in {WS_INBOUND_TAG, REALITY_INBOUND_TAG}:
+                continue
+            clients = inbound.get("settings", {}).get("clients", [])
+            removed += sum(1 for c in clients if c.get("id") == uuid)
+            clients[:] = [c for c in clients if c.get("id") != uuid]
 
-        if len(clients) == before:
+        if removed == 0:
             return False
 
         _save_config(config)
@@ -78,7 +98,14 @@ def remove_client(uuid: str) -> bool:
 def list_clients() -> list[dict]:
     with _lock:
         config = _load_config()
-        return list(config["inbounds"][0]["settings"]["clients"])
+        result = []
+        for inbound in config.get("inbounds", []):
+            if inbound.get("tag") not in {WS_INBOUND_TAG, REALITY_INBOUND_TAG}:
+                continue
+            transport = "reality" if inbound.get("tag") == REALITY_INBOUND_TAG else "ws"
+            for client in inbound.get("settings", {}).get("clients", []):
+                result.append({**client, "transport": transport})
+        return result
 
 
 def get_stats() -> list[dict]:

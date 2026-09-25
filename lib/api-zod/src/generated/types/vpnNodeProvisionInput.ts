@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VpnNodeProvisionInputTransport } from './vpnNodeProvisionInputTransport';
 
 export interface VpnNodeProvisionInput {
   /** IP address of the VPS */
@@ -19,4 +20,9 @@ export interface VpnNodeProvisionInput {
   nodeName: string;
   /** @minLength 1 */
   nodeRegion: string;
+  transport?: VpnNodeProvisionInputTransport;
+  /** Reality camouflage server name (required for reality) */
+  realitySni?: string;
+  /** Reality fallback host:port (defaults to SNI:443) */
+  realityDest?: string;
 }

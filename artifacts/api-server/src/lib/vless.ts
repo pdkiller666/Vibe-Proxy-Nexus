@@ -62,22 +62,11 @@ export function generatePaymentReference(subscriptionId: number): string {
 }
 
 /**
- * Builds a VLESS + WebSocket + TLS connection URI for a given node + client
- * UUID.
+ * Builds the client URI for a node's explicitly configured transport.
  *
- * Amvera's edge (Traefik) always terminates TLS with a real Let's Encrypt
- * certificate for the node's domain. Raw-TCP VLESS through Amvera's TCP ("MONGO")
- * ingress does NOT work: that controller treats the TLS-terminated stream as
- * HTTP (via ALPN) and returns plaintext, corrupting a raw VLESS payload — and
- * Reality is fundamentally incompatible with edge TLS termination anyway (see
- * .agents/memory/amvera-raw-tcp-port.md).
- *
- * The elegant, robust solution is VLESS over WebSocket on the normal HTTPS web
- * domain: the WS upgrade is legitimate HTTP, so Traefik forwards it cleanly to
- * the container, where the Node server proxies the upgrade to a local Xray
- * WebSocket inbound (security "none"). Clients connect with security=tls +
- * sni=<web domain> + type=ws + path=<VPN_WS_PATH> and speak VLESS over that
- * standard HTTPS/WebSocket tunnel.
+ * WS+TLS remains the default and is used by the local Amvera node. Reality is
+ * only supported on a remote VPS with raw TCP; node validation and node-side
+ * config keep it away from Amvera's TLS-terminating ingress.
  */
 /** Returns true for bare IPv4 addresses (e.g. "1.2.3.4"). */
 function isIpAddress(value: string): boolean {
@@ -104,17 +93,34 @@ export function buildVlessLink(
   const isIpNode = isIpAddress(host) || isIpAddress(node.sni);
   const certSha256 = "certSha256" in node ? (node as { certSha256: string | null }).certSha256 : null;
 
-  const params = new URLSearchParams({
-    type: "ws",
-    security: "tls",
-    sni: node.sni,
-    fp: "chrome",
-    host: node.sni,
-    path: VPN_WS_PATH,
-    encryption: "none",
-    ...(isIpNode && certSha256 ? { pinnedPeerCertSha256: certSha256 } : {}),
-    ...(isIpNode && !certSha256 ? { allowInsecure: "1" } : {}),
-  });
+  let params: URLSearchParams;
+  if (node.transport === "reality") {
+    if (!node.publicKey || !node.shortId) {
+      throw new Error(`Reality node "${node.name}" is missing its public key or short ID`);
+    }
+    params = new URLSearchParams({
+      type: "tcp",
+      security: "reality",
+      sni: node.sni,
+      fp: "chrome",
+      pbk: node.publicKey,
+      sid: node.shortId,
+      flow: "xtls-rprx-vision",
+      encryption: "none",
+    });
+  } else {
+    params = new URLSearchParams({
+      type: "ws",
+      security: "tls",
+      sni: node.sni,
+      fp: "chrome",
+      host: node.sni,
+      path: VPN_WS_PATH,
+      encryption: "none",
+      ...(isIpNode && certSha256 ? { pinnedPeerCertSha256: certSha256 } : {}),
+      ...(isIpNode && !certSha256 ? { allowInsecure: "1" } : {}),
+    });
+  }
 
   const flag = flagEmojiForNode(node);
   const fragment = flag ? `${flag} ${label}` : label;

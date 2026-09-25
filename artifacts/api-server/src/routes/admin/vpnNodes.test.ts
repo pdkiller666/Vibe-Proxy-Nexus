@@ -225,6 +225,82 @@ describe("admin vpn node capacity fields", () => {
     expect(res.body.maxUsers).toBeNull();
   });
 
+  it("protects an active Reality profile from endpoint and credential changes", async () => {
+    const [node] = await db.insert(vpnNodesTable).values({
+      name: `Reality profile ${randomBytes(4).toString("hex")}`,
+      region: "test",
+      host: "203.0.113.60",
+      port: 443,
+      sni: "example.com",
+      transport: "reality",
+      publicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      shortId: "a1b2c3d4",
+      managementApiUrl: "https://reality-profile.example.com",
+      isActive: true,
+      maxUsers: 3,
+    }).returning();
+    nodeIds.push(node.id);
+
+    const [key] = await db.insert(vpnKeysTable).values({
+      userId: adminId,
+      nodeId: node.id,
+      uuid: randomBytes(16).toString("hex"),
+      label: "active-reality-profile",
+      vlessLink: "vless://active-reality-profile",
+      deepLink: "v2raytun://active-reality-profile",
+    }).returning({ id: vpnKeysTable.id });
+    vpnKeyIds.push(key.id);
+
+    const profileChanges = [
+      { host: "203.0.113.61" },
+      { port: 8443 },
+      { sni: "another.example.com" },
+      { managementApiUrl: "https://another-reality.example.com" },
+      { transport: "ws" },
+      { publicKey: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB" },
+      { shortId: "b1b2c3d4" },
+    ];
+
+    for (const patch of profileChanges) {
+      const response = await request
+        .patch(`/api/admin/vpn-nodes/${node.id}`)
+        .set("Cookie", adminCookie)
+        .send(patch);
+      expect(response.status, JSON.stringify(patch)).toBe(409);
+    }
+
+    const capacityUpdate = await request
+      .patch(`/api/admin/vpn-nodes/${node.id}`)
+      .set("Cookie", adminCookie)
+      .send({ maxUsers: 10 });
+    expect(capacityUpdate.status).toBe(200);
+    expect(capacityUpdate.body.maxUsers).toBe(10);
+  });
+
+  it("rejects invalid Reality creation parameters", async () => {
+    const common = {
+      name: `Invalid Reality ${randomBytes(4).toString("hex")}`,
+      region: "test",
+      host: "203.0.113.62",
+      transport: "reality",
+      publicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      shortId: "a1b2c3d4",
+      managementApiUrl: "https://invalid-reality.example.com",
+    };
+
+    const missingSni = await request
+      .post("/api/admin/vpn-nodes")
+      .set("Cookie", adminCookie)
+      .send(common);
+    expect(missingSni.status).toBe(400);
+
+    const invalidPort = await request
+      .post("/api/admin/vpn-nodes")
+      .set("Cookie", adminCookie)
+      .send({ ...common, sni: "example.com", port: 0 });
+    expect(invalidPort.status).toBe(400);
+  });
+
   it("clears the auto-recovery marker when an admin explicitly disables a node", async () => {
     const [node] = await db
       .insert(vpnNodesTable)
@@ -318,6 +394,9 @@ describe("manual VPN key migration", () => {
           region,
           host: "target.test.example.com",
           sni: "target.test.example.com",
+          transport: "reality",
+          publicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          shortId: "a1b2c3d4",
           isActive: true,
         },
       ])

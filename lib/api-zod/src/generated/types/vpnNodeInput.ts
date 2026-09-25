@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VpnNodeInputTransport } from './vpnNodeInputTransport';
 
 export interface VpnNodeInput {
   /** @minLength 1 */
@@ -13,10 +14,15 @@ export interface VpnNodeInput {
   region: string;
   host?: string;
   port?: number;
+  transport?: VpnNodeInputTransport;
+  /** @nullable */
   managementApiUrl?: string | null;
+  /** @nullable */
   managementApiSecret?: string | null;
-  publicKey?: string;
-  shortId?: string;
+  /** @nullable */
+  publicKey?: string | null;
+  /** @nullable */
+  shortId?: string | null;
   /** @minLength 1 */
   sni: string;
   isActive?: boolean;

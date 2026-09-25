@@ -559,6 +559,14 @@ export interface CheckoutResult {
   payment: Payment | null;
 }
 
+export type VpnNodeTransport = typeof VpnNodeTransport[keyof typeof VpnNodeTransport];
+
+
+export const VpnNodeTransport = {
+  ws: 'ws',
+  reality: 'reality',
+} as const;
+
 export interface VpnNode {
   id: number;
   name: string;
@@ -566,6 +574,11 @@ export interface VpnNode {
   /** @nullable */
   host?: string | null;
   port?: number;
+  transport: VpnNodeTransport;
+  /** @nullable */
+  publicKey: string | null;
+  /** @nullable */
+  shortId: string | null;
   sni: string;
   /** @nullable */
   managementApiUrl?: string | null;
@@ -580,6 +593,14 @@ export interface VpnNode {
   createdAt?: string;
 }
 
+export type VpnNodeInputTransport = typeof VpnNodeInputTransport[keyof typeof VpnNodeInputTransport];
+
+
+export const VpnNodeInputTransport = {
+  ws: 'ws',
+  reality: 'reality',
+} as const;
+
 export interface VpnNodeInput {
   /** @minLength 1 */
   name: string;
@@ -587,10 +608,15 @@ export interface VpnNodeInput {
   region: string;
   host?: string;
   port?: number;
+  transport?: VpnNodeInputTransport;
+  /** @nullable */
   managementApiUrl?: string | null;
+  /** @nullable */
   managementApiSecret?: string | null;
-  publicKey?: string;
-  shortId?: string;
+  /** @nullable */
+  publicKey?: string | null;
+  /** @nullable */
+  shortId?: string | null;
   /** @minLength 1 */
   sni: string;
   isActive?: boolean;
@@ -601,6 +627,14 @@ export interface VpnNodeInput {
   maxUsers?: number | null;
   certSha256?: string;
 }
+
+export type VpnNodeProvisionInputTransport = typeof VpnNodeProvisionInputTransport[keyof typeof VpnNodeProvisionInputTransport];
+
+
+export const VpnNodeProvisionInputTransport = {
+  ws: 'ws',
+  reality: 'reality',
+} as const;
 
 export interface VpnNodeProvisionInput {
   /** IP address of the VPS */
@@ -615,11 +649,24 @@ export interface VpnNodeProvisionInput {
   nodeName: string;
   /** @minLength 1 */
   nodeRegion: string;
+  transport?: VpnNodeProvisionInputTransport;
+  /** Reality camouflage server name (required for reality) */
+  realitySni?: string;
+  /** Reality fallback host:port (defaults to SNI:443) */
+  realityDest?: string;
 }
 
 export interface VpnNodeProvisionStarted {
   jobId: string;
 }
+
+export type VpnNodeUpdateTransport = typeof VpnNodeUpdateTransport[keyof typeof VpnNodeUpdateTransport];
+
+
+export const VpnNodeUpdateTransport = {
+  ws: 'ws',
+  reality: 'reality',
+} as const;
 
 export interface VpnNodeUpdate {
   /** @minLength 1 */
@@ -628,10 +675,15 @@ export interface VpnNodeUpdate {
   region?: string;
   host?: string;
   port?: number;
+  transport?: VpnNodeUpdateTransport;
+  /** @nullable */
   managementApiUrl?: string | null;
+  /** @nullable */
   managementApiSecret?: string | null;
-  publicKey?: string;
-  shortId?: string;
+  /** @nullable */
+  publicKey?: string | null;
+  /** @nullable */
+  shortId?: string | null;
   /** @minLength 1 */
   sni?: string;
   isActive?: boolean;

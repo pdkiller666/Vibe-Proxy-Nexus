@@ -3,6 +3,23 @@ import { z } from "zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { startProvisioning, getJob, getJobFromDb } from "../../lib/sshProvisioner";
 
+function isDnsHostname(value: string): boolean {
+  const hostname = value.endsWith(".") ? value.slice(0, -1) : value;
+  if (!hostname || hostname.length > 253) return false;
+  const labels = hostname.split(".");
+  return labels.length >= 2 && labels.every((label) =>
+    label.length <= 63 &&
+    /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+  );
+}
+
+function isHostPort(value: string): boolean {
+  const match = /^([A-Za-z0-9.-]+):(\d{1,5})$/.exec(value);
+  if (!match || !isDnsHostname(match[1]!)) return false;
+  const port = Number(match[2]);
+  return port >= 1 && port <= 65535;
+}
+
 // Defined inline to avoid workspace-package resolution issues during tsc.
 // The shape must stay in sync with the openapi.yaml VpnNodeProvisionInput schema.
 const ProvisionVpnNodeBody = z.object({
@@ -12,6 +29,20 @@ const ProvisionVpnNodeBody = z.object({
   domain:      z.string().min(1),
   nodeName:    z.string().min(1),
   nodeRegion:  z.string().min(1),
+  transport: z.enum(["ws", "reality"]).default("ws"),
+  realitySni: z.string().trim().min(1).max(253).optional(),
+  realityDest: z.string().trim().min(1).optional(),
+}).superRefine((value, ctx) => {
+  if (value.transport !== "reality") return;
+  if (!isDnsHostname(value.realitySni ?? "")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["realitySni"], message: "Reality SNI must be a valid DNS hostname" });
+  }
+  if (!isDnsHostname(value.sshHost)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sshHost"], message: "Reality node host must be a direct DNS name or IPv4 address" });
+  }
+  if (value.realityDest && !isHostPort(value.realityDest)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["realityDest"], message: "Reality destination must be a DNS host and a TCP port from 1 to 65535" });
+  }
 });
 
 const router: IRouter = Router();

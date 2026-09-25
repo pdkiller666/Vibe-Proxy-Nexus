@@ -2647,13 +2647,16 @@ components:
 
     VpnNode:
       type: object
-      required: [id, name, region, sni, isActive]
+      required: [id, name, region, sni, isActive, transport, publicKey, shortId]
       properties:
         id: { type: integer }
         name: { type: string }
         region: { type: string }
         host: { type: ["string", "null"] }
         port: { type: integer }
+        transport: { type: string, enum: [ws, reality] }
+        publicKey: { type: ["string", "null"] }
+        shortId: { type: ["string", "null"] }
         sni: { type: string }
         # Exposed so the admin UI can show remote vs local node status.
         # managementApiSecret is intentionally NOT exposed for security.
@@ -2675,10 +2678,11 @@ components:
         region: { type: string, minLength: 1 }
         host: { type: string }
         port: { type: integer }
-        managementApiUrl: { type: string }
-        managementApiSecret: { type: string }
-        publicKey: { type: string }
-        shortId: { type: string }
+        transport: { type: string, enum: [ws, reality], default: ws }
+        managementApiUrl: { type: ["string", "null"] }
+        managementApiSecret: { type: ["string", "null"] }
+        publicKey: { type: ["string", "null"] }
+        shortId: { type: ["string", "null"] }
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
         maxUsers: { type: ["integer", "null"], minimum: 1 }
@@ -2694,6 +2698,9 @@ components:
         domain:      { type: string, description: "Technical domain pointing to the VPS IP" }
         nodeName:    { type: string, minLength: 1 }
         nodeRegion:  { type: string, minLength: 1 }
+        transport:   { type: string, enum: [ws, reality], default: ws }
+        realitySni:  { type: string, description: "Reality camouflage server name (required for reality)" }
+        realityDest: { type: string, description: "Reality fallback host:port (defaults to SNI:443)" }
 
     VpnNodeProvisionStarted:
       type: object
@@ -2708,10 +2715,11 @@ components:
         region: { type: string, minLength: 1 }
         host: { type: string }
         port: { type: integer }
-        managementApiUrl: { type: string }
-        managementApiSecret: { type: string }
-        publicKey: { type: string }
-        shortId: { type: string }
+        transport: { type: string, enum: [ws, reality] }
+        managementApiUrl: { type: ["string", "null"] }
+        managementApiSecret: { type: ["string", "null"] }
+        publicKey: { type: ["string", "null"] }
+        shortId: { type: ["string", "null"] }
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
         maxUsers: { type: ["integer", "null"], minimum: 1 }

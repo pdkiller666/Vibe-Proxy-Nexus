@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import socket
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import aiogram
 import aiohttp
@@ -90,6 +92,56 @@ def verify_running_api() -> None:
         raise RuntimeError("Management API did not stop cleanly")
 
 
+def verify_transport_client_config() -> None:
+    original_path = xray_manager.CONFIG_PATH
+    original_reload = xray_manager._reload_xray
+    ws_uuid = "11111111-1111-4111-8111-111111111111"
+    reality_uuid = "22222222-2222-4222-8222-222222222222"
+    try:
+        with tempfile.TemporaryDirectory(prefix="vpn-node-smoke-") as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "inbounds": [
+                            {
+                                "tag": "vless-ws",
+                                "settings": {"clients": []},
+                            },
+                            {
+                                "tag": "vless-reality",
+                                "settings": {"clients": []},
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            xray_manager.CONFIG_PATH = config_path
+            xray_manager._reload_xray = lambda: None
+            xray_manager.add_client(ws_uuid, "test-phone", transport="ws")
+            xray_manager.add_client(reality_uuid, "test-tablet", transport="reality")
+
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            ws_client = config["inbounds"][0]["settings"]["clients"][0]
+            reality_client = config["inbounds"][1]["settings"]["clients"][0]
+            if ws_client.get("email") != "test-phone" or "flow" in ws_client:
+                raise RuntimeError(f"WS client config changed unexpectedly: {ws_client}")
+            if reality_client.get("email") != reality_uuid:
+                raise RuntimeError("Reality traffic identity must be the UUID")
+            if reality_client.get("flow") != "xtls-rprx-vision":
+                raise RuntimeError("Reality client is missing Vision flow")
+            if len(xray_manager.list_clients()) != 2:
+                raise RuntimeError("Expected WS and Reality clients in the inventory")
+            if not xray_manager.remove_client(reality_uuid):
+                raise RuntimeError("Reality client removal failed")
+            if len(xray_manager.list_clients()) != 1:
+                raise RuntimeError("Reality client removal affected the wrong inventory")
+    finally:
+        xray_manager.CONFIG_PATH = original_path
+        xray_manager._reload_xray = original_reload
+
+
 def main() -> None:
     if sys.version_info[:2] != (3, 12):
         raise RuntimeError(f"Python 3.12 is required, got {sys.version.split()[0]}")
@@ -104,6 +156,7 @@ def main() -> None:
         raise RuntimeError(f"Missing Management API routes: {sorted(missing)}")
 
     verify_running_api()
+    verify_transport_client_config()
 
     # Keep imports referenced so static tooling cannot silently remove them.
     assert command_pb2 and command_pb2_grpc and xray_manager

@@ -18,6 +18,7 @@
 
 - Replit supplies the development `DATABASE_URL` through its built-in PostgreSQL database; after connecting a clean database, run `pnpm --filter @workspace/db run push` once to create the schema.
 - Development secrets: `SESSION_SECRET` and `ADMIN_PASSWORD`; ordinary settings: `ADMIN_EMAIL`, `NODE_ENV=development`, `BASE_PATH=/`. `YOOMONEY_NOTIFICATION_SECRET` and `YOOMONEY_RECEIVER` are needed only when exercising automatic ЮMoney payments.
+- The Replit **Run** button starts the managed API and web portal together. The API schema is installed in the development database; use the separate `seo-smoke` and `vpn-node` workflows only for checks.
 - Start only the managed artifact workflows: `artifacts/api-server: API Server` and `artifacts/vpn-portal: web`. They supply the required `PORT` and proxy routing; do not replace them with ad-hoc workflows.
 - The SEO validation command is `pnpm --filter @workspace/vpn-portal run test:seo`; it explicitly supplies `PORT=4173` and `BASE_PATH=/`, which the Vite config requires for a production build.
 - Replit-to-GitHub deployment through `./deploy.sh` additionally requires the `GITHUB_TOKEN` secret with permission to write repository contents. Amvera production secrets, especially its own `DATABASE_URL`, stay in the Amvera panel and must not be replaced with Replit development values.

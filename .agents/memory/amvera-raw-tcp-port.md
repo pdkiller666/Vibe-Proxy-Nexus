@@ -71,3 +71,47 @@ live (full Docker image: Vite + xray download + node build), and the old
 container keeps serving until it does. Do not judge a change from a timed wait
 alone — confirm the live build with a deterministic marker (a temporary endpoint
 returning a known string, or the served vless-link format) before any prod test.
+
+## Remote Reality nodes
+
+**Rule:** Reality cannot run through Amvera's TLS-terminating ingress, so it
+must use a separate external VPS with raw TCP. The product now intentionally
+allows active Reality nodes in public location lists, normal user issuance,
+least-loaded assignment, and automatic migration alongside WS. WS remains the
+default transport for newly created nodes. Store the public key and short ID in
+the database; keep the Reality private key on the VPS. Use TCP 443 for the
+Reality listener.
+
+The automatic Reality provisioner follows the existing production Management
+API REST route on port 8443 and opens that port in UFW. The tested Reality VPS
+uses port 8444 through a private SSH tunnel instead; do not assume those access
+paths are equivalent. Verify the intended production route and firewall policy
+before running provisioning on a live VPS.
+
+**Why:** Amvera cannot pass the raw Reality handshake, while the product
+requirement now explicitly includes normal-user assignment and migration.
+Management API exposure remains an infrastructure boundary: a mismatch can
+leave a node reachable for clients but unmanageable by the API.
+
+**How to apply:** keep Reality on external raw-TCP VPS nodes, preserve WS as
+the default, and allow configured Reality nodes through normal issuance and
+migration. Before live provisioning, confirm Management API reachability and
+firewall policy; do not reconfigure an existing test or production node as part
+of a code-only change.
+
+## Reality connection diagnosis
+
+**Rule:** a client-side `dialing TCP` message or local TUN `accepted` entry
+does not prove that a Reality connection reached the VPS. Correlate the test
+time with server-side Xray logs and per-key counters. A `REALITY: processed
+invalid connection` entry confirms a connection attempt reached Reality, but
+not that the Reality handshake or VLESS authentication succeeded; a server-side
+accepted VLESS entry or increasing per-key counters is stronger confirmation.
+
+**Why:** mobile client logs can show retries without reporting the final
+transport failure, while locally accepted TUN flows only show that the client
+app captured traffic.
+
+**How to apply:** record the test time, inspect Xray logs on the selected
+remote node for that same interval, then check the selected key's counters
+before changing Reality parameters or moving ports.

@@ -48,6 +48,7 @@ class CreateClientBody:
         self.limitIp = limitIp
 
 
+from typing import Literal
 from pydantic import BaseModel
 
 
@@ -55,6 +56,9 @@ class CreateClientBody(BaseModel):
     uuid: str
     label: str
     limitIp: int | None = None
+    # Missing remains the legacy WS path. Reality is explicitly opt-in per
+    # client so existing central servers cannot accidentally switch transports.
+    transport: Literal["ws", "reality"] = "ws"
 
 
 class TrafficStat(BaseModel):
@@ -74,8 +78,11 @@ def create_client(
     x_management_secret: str | None = Header(default=None),
 ) -> dict:
     _check_secret(x_management_secret)
-    xray_manager.add_client(body.uuid, body.label, body.limitIp)
-    return {"uuid": body.uuid, "label": body.label}
+    try:
+        xray_manager.add_client(body.uuid, body.label, body.limitIp, body.transport)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"uuid": body.uuid, "label": body.label, "transport": body.transport}
 
 
 @app.delete("/clients/{client_uuid}", status_code=204)

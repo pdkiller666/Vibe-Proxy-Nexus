@@ -32,6 +32,11 @@ export interface XrayOutboundParams {
   sni: string;
   /** TCP port (typically 443). */
   port: number;
+  /** Transport; omitted means the existing WebSocket+TLS behavior. */
+  transport?: "ws" | "reality";
+  /** Reality server public key and short ID; required for transport=reality. */
+  realityPublicKey?: string | null;
+  realityShortId?: string | null;
   /**
    * When the node has a bare IP address rather than a domain name, TLS
    * verification must be handled specially (pinned cert or allow-insecure).
@@ -147,6 +152,42 @@ function buildVlessOutbound(
   params: XrayOutboundParams,
   tag: string,
 ): Record<string, unknown> {
+  if (params.transport === "reality") {
+    if (!params.realityPublicKey || !params.realityShortId) {
+      throw new Error("Reality outbound requires a server public key and short ID");
+    }
+    return {
+      protocol: "vless",
+      tag,
+      settings: {
+        vnext: [
+          {
+            address: params.address,
+            port: params.port,
+            users: [
+              {
+                id: params.uuid,
+                encryption: "none",
+                flow: "xtls-rprx-vision",
+              },
+            ],
+          },
+        ],
+      },
+      streamSettings: {
+        network: "tcp",
+        security: "reality",
+        realitySettings: {
+          serverName: params.sni,
+          fingerprint: "chrome",
+          publicKey: params.realityPublicKey,
+          shortId: params.realityShortId,
+          spiderX: "/",
+        },
+      },
+    };
+  }
+
   const tlsSettings: Record<string, unknown> = {
     serverName:   params.sni,
     fingerprint:  "chrome",

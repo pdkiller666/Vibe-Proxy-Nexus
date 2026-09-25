@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "bash", "web", "python-3.12", "postgresql-16"]
+modules = ["bash", "python-3.12", "web", "nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -18,11 +18,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "seo-smoke"
+args = "artifacts/api-server: API Server"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "vpn-node"
+args = "artifacts/vpn-portal: web"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-reality-management-tunnel"
 
 [[workflows.workflow]]
 name = "seo-smoke"
@@ -45,6 +49,17 @@ args = "pnpm run test:vpn-node"
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow]]
+name = "test-reality-management-tunnel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "test -n \"$VPS_SSH_USERNAME\" && test -n \"$VPS_SSH_PASSWORD\" || { echo 'Required SSH secrets are unavailable'; exit 1; }; command -v sshpass >/dev/null 2>&1 || { echo 'sshpass is unavailable'; exit 1; }; while :; do SSHPASS=\"$VPS_SSH_PASSWORD\" sshpass -e ssh -N -T -L 127.0.0.1:18444:127.0.0.1:8444 -o StrictHostKeyChecking=yes -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 \"$VPS_SSH_USERNAME@77.238.246.37\"; status=$?; echo \"SSH management tunnel disconnected (exit $status); retrying in 5s\"; sleep 5; done"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"

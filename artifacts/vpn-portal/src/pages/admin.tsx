@@ -1378,6 +1378,9 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
   const [domain, setDomain] = useState("");
   const [nodeName, setNodeName] = useState("");
   const [nodeRegion, setNodeRegion] = useState("");
+  const [transport, setTransport] = useState<"ws" | "reality">("ws");
+  const [realitySni, setRealitySni] = useState("");
+  const [realityDest, setRealityDest] = useState("");
 
   // Step 3 — provisioning progress
   const [jobId, setJobId] = useState<string | null>(null);
@@ -1433,7 +1436,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
-  function doStart(opts: { sshHost: string; sshUser: string; sshPassword: string; domain: string; nodeName: string; nodeRegion: string }) {
+  function doStart(opts: { sshHost: string; sshUser: string; sshPassword: string; domain: string; nodeName: string; nodeRegion: string; transport: "ws" | "reality"; realitySni?: string; realityDest?: string }) {
     startProvision(
       { data: opts },
       {
@@ -1454,7 +1457,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
     setJobStatus(null);
     setErrorMessage("");
     setNewNodeId(null);
-    doStart({ sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion });
+    doStart({ sshHost, sshUser, sshPassword, domain: transport === "ws" ? domain : realitySni, nodeName, nodeRegion, transport, realitySni: realitySni || undefined, realityDest: realityDest || undefined });
   }
 
   function handleRetry() {
@@ -1465,7 +1468,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
     setNewNodeId(null);
     // Small delay so useEffect cleanup runs before new jobId is set
     setTimeout(() => {
-      doStart({ sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion });
+      doStart({ sshHost, sshUser, sshPassword, domain: transport === "ws" ? domain : realitySni, nodeName, nodeRegion, transport, realitySni: realitySni || undefined, realityDest: realityDest || undefined });
     }, 50);
   }
 
@@ -1477,7 +1480,8 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
   };
 
   const step1Valid = sshHost.trim() && sshUser.trim() && sshPassword.trim();
-  const step2Valid = domain.trim() && nodeName.trim() && nodeRegion.trim();
+  const step2Valid = nodeName.trim() && nodeRegion.trim() &&
+    (transport === "ws" ? domain.trim() : realitySni.trim());
 
   return (
     <div className="bg-muted/30 border border-border p-4 space-y-4">
@@ -1551,15 +1555,44 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
       {step === 2 && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Укажите домен VPS (технический, выданный провайдером) и имя узла.
+            Укажите транспорт и параметры нового узла. Reality использует TCP 443 и не меняет WebSocket-конфигурацию.
           </p>
+          {transport === "reality" && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Автонастройка Reality рассчитана на чистую VPS: порты 443 и 8443 должны быть свободны, а каталог /opt/vpn-node отсутствовать. Для клиентов откроется 443, Management API будет использовать существующий production-маршрут на 8443.
+            </p>
+          )}
           <div className="grid md:grid-cols-2 gap-3">
-            <Input
-              placeholder="Домен VPS (напр. v917715.hosted-by-vdsina.com)"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value.trim())}
-              className="rounded-none col-span-2"
-            />
+            <select value={transport} onChange={(e) => setTransport(e.target.value as "ws" | "reality")} className="border border-border bg-background px-3 py-2 text-sm col-span-2">
+              <option value="ws">WebSocket + TLS (обычный узел)</option>
+              <option value="reality">VLESS Reality (TCP 443)</option>
+            </select>
+            {transport === "ws" ? (
+              <Input
+                placeholder="Домен VPS (напр. v917715.hosted-by-vdsina.com)"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value.trim())}
+                className="rounded-none col-span-2"
+              />
+            ) : (
+              <>
+                <Input
+                  placeholder="Reality SNI / camouflage server name"
+                  value={realitySni}
+                  onChange={(e) => setRealitySni(e.target.value.trim())}
+                  className="rounded-none"
+                />
+                <Input
+                  placeholder="Fallback destination (по умолчанию SNI:443)"
+                  value={realityDest}
+                  onChange={(e) => setRealityDest(e.target.value.trim())}
+                  className="rounded-none"
+                />
+                <p className="text-xs text-muted-foreground col-span-2">
+                  Management API будет доступен на порту 8443 по существующему production-маршруту.
+                </p>
+              </>
+            )}
             <Input
               placeholder="Название узла (напр. Netherlands (VDSina))"
               value={nodeName}
@@ -1662,8 +1695,9 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
   const [host, setHost] = useState(node?.host ?? "");
   const [port, setPort] = useState(String(node?.port ?? 443));
   const [sni, setSni] = useState(node?.sni ?? "");
-  const [publicKey, setPublicKey] = useState("");
-  const [shortId, setShortId] = useState("");
+  const [transport, setTransport] = useState<VpnNode["transport"]>(node?.transport ?? "ws");
+  const [publicKey, setPublicKey] = useState(node?.publicKey ?? "");
+  const [shortId, setShortId] = useState(node?.shortId ?? "");
   const [managementApiUrl, setManagementApiUrl] = useState(node?.managementApiUrl ?? "");
   // managementApiSecret is intentionally NOT returned from the API for security.
   // The form always starts empty; leave blank to keep the existing secret unchanged.
@@ -1675,8 +1709,13 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
 
   // Original SNI — to detect domain changes on existing auto-provisioned nodes.
   const originalSni = node?.sni ?? "";
-  // True when editing an existing remote (auto-provisioned) node and the domain changed.
-  const sniChanged = !!node && !!node.managementApiUrl && sni.trim() !== "" && sni.trim() !== originalSni;
+  // Certbot is only relevant to the existing WebSocket + TLS path.
+  const sniChanged =
+    transport === "ws" &&
+    !!node &&
+    !!node.managementApiUrl &&
+    sni.trim() !== "" &&
+    sni.trim() !== originalSni;
   const certbotCmd = sni.trim()
     ? `certbot --nginx -d ${sni.trim()} --non-interactive --agree-tos --email admin@${sni.trim()}`
     : "";
@@ -1685,21 +1724,40 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
     setSni(val);
     // If host was in sync with the old SNI (typical for auto-provisioned nodes),
     // keep it in sync automatically so the user doesn't have to update both fields.
-    if (host === originalSni) setHost(val);
+    if (transport === "ws" && host === originalSni) setHost(val);
   }
 
   function handleSubmit() {
     const trimmedManagementApiUrl = managementApiUrl.trim();
     const trimmedManagementApiSecret = managementApiSecret.trim();
 
+    if (
+      transport === "reality" &&
+      (!host.trim() ||
+        !trimmedManagementApiUrl ||
+        !publicKey.trim() ||
+        !shortId.trim() ||
+        !sni.trim() ||
+        !Number.isInteger(Number(port)) ||
+        Number(port) < 1 ||
+        Number(port) > 65535)
+    ) {
+      toast({
+        title: "Для Reality-ноды нужны Host/IP, порт, SNI, удалённый Management API, Public Key и Short ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const commonFields = {
       name,
       region,
       host: host || undefined,
       port: port ? Number(port) : undefined,
+      transport,
       sni,
-      publicKey: publicKey || undefined,
-      shortId: shortId || undefined,
+      publicKey: transport === "reality" ? publicKey.trim() || null : null,
+      shortId: transport === "reality" ? shortId.trim() || null : null,
       // Empty string must be sent as null. If we send undefined, JSON.stringify
       // drops the field and the backend keeps the previous Management API URL.
       managementApiUrl: trimmedManagementApiUrl === "" ? null : trimmedManagementApiUrl,
@@ -1731,21 +1789,60 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
       <div className="grid md:grid-cols-2 gap-3">
         <Input placeholder="Название" value={name} onChange={(e) => setName(e.target.value)} className="rounded-none" />
         <Input placeholder="Регион" value={region} onChange={(e) => setRegion(e.target.value)} className="rounded-none" />
-        <Input placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} className="rounded-none" />
         <Input
-          placeholder="Порт (443 или 27017 для Amvera TCP)"
+          placeholder={transport === "reality" ? "Host / IP Reality-ноды" : "Host"}
+          value={host}
+          onChange={(e) => setHost(e.target.value)}
+          className="rounded-none"
+        />
+        <Input
+          placeholder="Порт ноды (обычно 443)"
           value={port}
           onChange={(e) => setPort(e.target.value)}
           className="rounded-none"
         />
-        <Input placeholder="SNI / домен" value={sni} onChange={(e) => handleSniChange(e.target.value)} className="rounded-none" />
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">Транспорт</span>
+          <select
+            value={transport}
+            onChange={(e) => {
+              const nextTransport = e.target.value as VpnNode["transport"];
+              setTransport(nextTransport);
+              if (port === "8443") setPort("443");
+            }}
+            className="h-9 w-full border border-input bg-background px-3 text-sm"
+          >
+            <option value="ws">VLESS + WebSocket + TLS</option>
+            <option value="reality">VLESS + Reality</option>
+          </select>
+        </label>
         <Input
-          placeholder="Reality Public Key"
-          value={publicKey}
-          onChange={(e) => setPublicKey(e.target.value)}
+          placeholder={transport === "reality" ? "Reality Server Name (SNI)" : "SNI / домен"}
+          value={sni}
+          onChange={(e) => handleSniChange(e.target.value)}
           className="rounded-none"
         />
-        <Input placeholder="Short ID" value={shortId} onChange={(e) => setShortId(e.target.value)} className="rounded-none" />
+        {transport === "reality" && (
+          <>
+            <Input
+              placeholder="Reality Public Key (X25519)"
+              value={publicKey}
+              onChange={(e) => setPublicKey(e.target.value)}
+              className="rounded-none"
+            />
+            <Input
+              placeholder="Reality Short ID (1–16 hex)"
+              value={shortId}
+              onChange={(e) => setShortId(e.target.value)}
+              className="rounded-none"
+            />
+            <p className="md:col-span-2 text-xs text-muted-foreground">
+              Reality работает на удалённой ноде с raw TCP. Она доступна в
+              обычной выдаче и миграции как любая другая локация. Host — прямой
+              адрес ноды; SNI должен совпадать с Reality Server Name.
+            </p>
+          </>
+        )}
         <Input
           placeholder="Лимит пользователей (пусто = без лимита)"
           value={maxUsers}
@@ -1753,7 +1850,7 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           className="rounded-none"
         />
         <Input
-          placeholder="Management API URL (пусто = локальный узел Amvera)"
+          placeholder="Management API URL удалённой ноды (production-маршрут)"
           value={managementApiUrl}
           onChange={(e) => setManagementApiUrl(e.target.value)}
           className="rounded-none col-span-2"
@@ -1765,12 +1862,14 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           onChange={(e) => setManagementApiSecret(e.target.value)}
           className="rounded-none col-span-2"
         />
-        <Input
-          placeholder="Cert SHA256 (base64, для IP-нод без домена — вместо allowInsecure)"
-          value={certSha256}
-          onChange={(e) => setCertSha256(e.target.value)}
-          className="rounded-none col-span-2"
-        />
+        {transport === "ws" && (
+          <Input
+            placeholder="Cert SHA256 (base64, для IP-нод без домена — вместо allowInsecure)"
+            value={certSha256}
+            onChange={(e) => setCertSha256(e.target.value)}
+            className="rounded-none col-span-2"
+          />
+        )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
           Активен
@@ -2790,11 +2889,19 @@ function VpnKeysManagement() {
   });
 
   const { data: activeNodes } = useQuery({
-    queryKey: ["vpn-nodes-active"],
+    queryKey: getListAdminVpnNodesQueryKey(),
     queryFn: async () => {
-      const res = await fetch("/api/vpn-nodes", { credentials: "include" });
+      // The public endpoint intentionally hides Reality nodes from normal
+      // selection. Admin key issuance must use the admin endpoint so an
+      // operator can explicitly select an isolated Reality test node.
+      const res = await fetch("/api/admin/vpn-nodes", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
-      return res.json() as Promise<Array<{ id: number; name: string }>>;
+      const nodes = (await res.json()) as Array<{
+        id: number;
+        name: string;
+        isActive: boolean;
+      }>;
+      return nodes.filter((node) => node.isActive);
     },
   });
 
