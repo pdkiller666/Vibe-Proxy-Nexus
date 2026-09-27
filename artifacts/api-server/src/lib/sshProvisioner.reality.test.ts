@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSelfSignedCertificateCommand,
+  parseSha256CertificateFingerprint,
   parseRealityX25519Output,
 } from "./sshProvisioner";
 
@@ -22,6 +23,20 @@ describe("buildSelfSignedCertificateCommand", () => {
       "/etc/ssl/vpn-node/key.pem",
     );
     expect(command).toContain("-addext 'subjectAltName=IP:203.0.113.10'");
+  });
+});
+
+describe("parseSha256CertificateFingerprint", () => {
+  it("accepts a canonical 32-byte base64 SHA-256 fingerprint", () => {
+    const fingerprint = Buffer.alloc(32, 0xab).toString("base64");
+    expect(parseSha256CertificateFingerprint(fingerprint)).toBe(fingerprint);
+  });
+
+  it("rejects missing, truncated, hex, and non-canonical fingerprints", () => {
+    expect(() => parseSha256CertificateFingerprint("")).toThrow("fingerprint TLS-сертификата");
+    expect(() => parseSha256CertificateFingerprint("YWJj")).toThrow("fingerprint TLS-сертификата");
+    expect(() => parseSha256CertificateFingerprint("a".repeat(64))).toThrow("fingerprint TLS-сертификата");
+    expect(() => parseSha256CertificateFingerprint(`${"A".repeat(42)}B=`)).toThrow("fingerprint TLS-сертификата");
   });
 });
 

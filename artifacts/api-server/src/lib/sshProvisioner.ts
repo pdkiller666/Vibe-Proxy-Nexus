@@ -421,6 +421,12 @@ server {
         proxy_read_timeout 86400s;
     }
 
+    # Keep the management health route available after certbot promotes this
+    # server block to HTTPS; the provisioning check validates that exact route.
+    location /health {
+        proxy_pass http://127.0.0.1:8443/health;
+    }
+
     # Everything else — no response to avoid leaking info
     location / {
         return 444;
@@ -503,6 +509,51 @@ export function buildSelfSignedCertificateCommand(
     `-subj ${shellQuote(`/CN=${host}`)}`,
     `-addext ${shellQuote(`subjectAltName=${sanType}:${host}`)}`,
   ].join(" ");
+}
+
+function isDnsHostname(value: string): boolean {
+  const hostname = value.endsWith(".") ? value.slice(0, -1) : value;
+  if (!hostname || hostname.length > 253) return false;
+  const labels = hostname.split(".");
+  return labels.length >= 2 && labels.every((label) =>
+    label.length <= 63 &&
+    /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+  );
+}
+
+function normalizeProvisioningHost(value: string, fieldName: string): string {
+  const host = value.trim().replace(/\.$/, "");
+  const ipVersion = isIP(host);
+  const malformedIpv4 = /^\d+(?:\.\d+){3}$/.test(host) && ipVersion !== 4;
+  if (ipVersion === 4 || (ipVersion === 0 && !malformedIpv4 && isDnsHostname(host))) {
+    return host;
+  }
+  throw new Error(`${fieldName} must be a valid DNS hostname or IPv4 address`);
+}
+
+function normalizeProvisioningDnsHostname(value: string, fieldName: string): string {
+  const host = value.trim().replace(/\.$/, "");
+  if (isIP(host) !== 0 || !isDnsHostname(host)) {
+    throw new Error(`${fieldName} must be a valid DNS hostname`);
+  }
+  return host;
+}
+
+/**
+ * Validate the output used in VLESS pinnedPeerCertSha256. Reject empty,
+ * truncated, hex, or otherwise malformed output rather than registering a
+ * self-signed node whose clients cannot verify its certificate.
+ */
+export function parseSha256CertificateFingerprint(output: string): string {
+  const fingerprint = output.trim();
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(fingerprint)) {
+    throw new Error("Не удалось получить SHA-256 fingerprint TLS-сертификата");
+  }
+  const decoded = Buffer.from(fingerprint, "base64");
+  if (decoded.length !== 32 || decoded.toString("base64") !== fingerprint) {
+    throw new Error("Получен некорректный SHA-256 fingerprint TLS-сертификата");
+  }
+  return fingerprint;
 }
 
 export function parseRealityX25519Output(output: string): {
@@ -712,7 +763,6 @@ exit 1`;
 }
 
 async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Promise<void> {
-  const { sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion } = opts;
   let conn: Client | null = null;
 
   // Amvera's nginx reverse-proxy closes SSE connections that are idle for
@@ -723,12 +773,24 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
   const heartbeat = setInterval(() => emitLog(job, "  ⏳ ..."), 25_000);
 
   try {
+    const sshHost = normalizeProvisioningHost(opts.sshHost, "SSH host");
+    const domain = opts.transport === "reality"
+      ? normalizeProvisioningDnsHostname(opts.realitySni?.trim() || opts.domain, "Reality SNI")
+      : normalizeProvisioningHost(opts.domain, "Node hostname");
+    const normalizedOpts: ProvisioningOpts = {
+      ...opts,
+      sshHost,
+      domain,
+      ...(opts.transport === "reality" ? { realitySni: domain } : {}),
+    };
+    const { nodeName, nodeRegion } = normalizedOpts;
+
     // ── Step 1: Connect ────────────────────────────────────────────────────
     emitStep(job, `🔌 Подключение к ${sshHost} по SSH...`);
-    conn = await connectSSH(opts);
+    conn = await connectSSH(normalizedOpts);
     emitSuccess(job, "SSH-соединение установлено ✓");
     if (opts.transport === "reality") {
-      await provisionRealityAsync(job, opts, conn);
+      await provisionRealityAsync(job, normalizedOpts, conn);
       return;
     }
 
@@ -882,7 +944,7 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     // Verify domain resolves to this host (best-effort)
     await runCommand(
       conn,
-      `host ${domain} || nslookup ${domain} || true`,
+      `host ${shellQuote(domain)} || nslookup ${shellQuote(domain)} || true`,
       job,
       { allowFailure: true },
     );
@@ -898,45 +960,47 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
     //   • LE rate limit (50 certs / registered domain / 7 days).
     //   • DNS not yet propagated at provisioning time.
     //
-    // IMPORTANT: a self-signed cert means VPN clients will silently refuse to
-    // connect (TLS verification fails). The job is marked with the cert's SHA256
-    // fingerprint so the admin UI can display a prominent warning.
+    // IP endpoints cannot receive a normal public certificate through this
+    // HTTP-01 flow, so use a SAN-bearing self-signed certificate with a client
+    // pin for them instead.
     let selfSignedCert = false;
     let selfSignedSha256: string | null = null;
 
     const certbotCmd = [
-      `certbot --nginx -d ${domain}`,
+      `certbot --nginx -d ${shellQuote(domain)}`,
       "--non-interactive",
       "--agree-tos",
-      `--email admin@${domain}`,
+      `--email ${shellQuote(`admin@${domain}`)}`,
       "--redirect",
     ].join(" ");
 
     let certbotSuccess = false;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        if (attempt === 2) {
-          emitLog(job, "⏳ Ждём 30 секунд перед повторной попыткой certbot (DNS propagation)...");
-          await runCommand(conn, "sleep 30", job, { timeoutMs: 45_000 });
+    if (isIP(domain) === 4) {
+      emitLog(job, "Для IPv4 Let's Encrypt HTTP-01 не используется; настроим сертификат с IP SAN и SHA-256 pinning.");
+    } else {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          if (attempt === 2) {
+            emitLog(job, "⏳ Ждём 30 секунд перед повторной попыткой certbot (DNS propagation)...");
+            await runCommand(conn, "sleep 30", job, { timeoutMs: 45_000 });
+          }
+          emitLog(job, `  certbot, попытка ${attempt}/2...`);
+          await runCommand(conn, certbotCmd, job, { timeoutMs: 5 * 60_000 });
+          await runCommand(conn, "systemctl reload nginx", job);
+          emitSuccess(job, "TLS сертификат Let's Encrypt получен ✓");
+          certbotSuccess = true;
+          break;
+        } catch (certbotErr) {
+          const msg = certbotErr instanceof Error ? certbotErr.message : String(certbotErr);
+          emitLog(job, `  попытка ${attempt} провалилась: ${msg.slice(0, 200)}`);
         }
-        emitLog(job, `  certbot, попытка ${attempt}/2...`);
-        await runCommand(conn, certbotCmd, job, { timeoutMs: 5 * 60_000 });
-        await runCommand(conn, "systemctl reload nginx", job);
-        emitSuccess(job, "TLS сертификат Let's Encrypt получен ✓");
-        certbotSuccess = true;
-        break;
-      } catch (certbotErr) {
-        const msg = certbotErr instanceof Error ? certbotErr.message : String(certbotErr);
-        emitLog(job, `  попытка ${attempt} провалилась: ${msg.slice(0, 200)}`);
       }
     }
 
     if (!certbotSuccess) {
-      // Both attempts failed — fall back to self-signed.
-      // This WILL break VPN clients until a real cert is obtained.
-      emitError(job, "❌ certbot не смог получить сертификат (2 попытки). Переходим к самоподписанному.");
-      emitError(job, "⚠️  ВНИМАНИЕ: VPN-клиенты НЕ СМОГУТ подключиться с самоподписанным сертификатом!");
-      emitError(job, "⚠️  После развёртывания зайди на сервер и выполни: certbot --nginx -d " + domain);
+      // Both attempts failed (or this is an IP endpoint); fall back to a
+      // self-signed certificate whose SAN and SHA-256 pin are verified below.
+      emitLog(job, "Let's Encrypt недоступен; создаём самоподписанный сертификат с SAN и SHA-256 pinning.");
 
       const certDir = "/etc/ssl/vpn-node";
       const certPath = `${certDir}/cert.pem`;
@@ -949,15 +1013,15 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
         { timeoutMs: 30_000 },
       );
 
-      // Compute SHA256 fingerprint of the self-signed cert so the DB can store
-      // it and the admin UI can show a warning badge on this node.
+      // Compute the exact SHA-256 fingerprint of the certificate in DER form.
+      // A missing or malformed value must fail provisioning before DB registration.
       const sha256Raw = await runCommand(
         conn,
-        `openssl x509 -in ${certPath} -outform DER | openssl dgst -sha256 -binary | base64`,
+        `openssl x509 -in ${shellQuote(certPath)} -outform DER | openssl dgst -sha256 -binary | openssl base64 -A`,
         job,
-        { timeoutMs: 15_000, allowFailure: true },
+        { timeoutMs: 15_000 },
       );
-      selfSignedSha256 = sha256Raw.trim().split("\n").pop()?.trim() ?? null;
+      selfSignedSha256 = parseSha256CertificateFingerprint(sha256Raw);
 
       // Replace the HTTP-only nginx config with a full HTTPS config.
       const nginxHttpsConfig = makeNginxHttpsConfig(domain, certPath, keyPath);
@@ -992,6 +1056,60 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
       throw new Error(`Health check вернул неожиданный ответ: ${healthOut.slice(0, 100)}`);
     }
     emitSuccess(job, `http://localhost:8443/health → ok ✓${selfSignedCert ? " (self-signed TLS)" : ""}`);
+
+    // Verify the certificate Nginx actually serves, not only the PEM on disk.
+    // For Let's Encrypt, curl also checks the public CA chain and hostname.
+    // For self-signed, verify SAN + exact SHA-256 pin because curl's CA check
+    // is deliberately bypassed only for this known certificate.
+    emitStep(job, "🔎 Проверка HTTPS-сертификата, SAN и fingerprint...");
+    const tlsSniArgument = isIP(domain) === 4 ? "-noservername" : `-servername ${shellQuote(domain)}`;
+    const presentedCertificateCommand =
+      `openssl s_client -connect 127.0.0.1:443 ${tlsSniArgument} -showcerts </dev/null 2>/dev/null | openssl x509`;
+    const hostnameCheckArgument = isIP(domain) === 4 ? "-checkip" : "-checkhost";
+    await runCommand(
+      conn,
+      `${presentedCertificateCommand} -noout ${hostnameCheckArgument} ${shellQuote(domain)}`,
+      job,
+      { timeoutMs: 20_000 },
+    );
+    const servedFingerprintOutput = await runCommand(
+      conn,
+      `${presentedCertificateCommand} -outform DER | openssl dgst -sha256 -binary | openssl base64 -A`,
+      job,
+      { timeoutMs: 20_000 },
+    );
+    const servedFingerprint = parseSha256CertificateFingerprint(servedFingerprintOutput);
+    if (selfSignedCert && servedFingerprint !== selfSignedSha256) {
+      throw new Error("Nginx отдаёт другой TLS-сертификат, чем закреплённый fingerprint; узел не зарегистрирован");
+    }
+
+    const localTlsHealthCommand = [
+      "curl -fsS --connect-timeout 5 --max-time 15",
+      ...(selfSignedCert ? ["--insecure"] : []),
+      `--connect-to ${shellQuote(`${domain}:443:127.0.0.1:443`)}`,
+      shellQuote(`https://${domain}/health`),
+    ].join(" ");
+    const tlsHealthOutput = await runCommand(
+      conn,
+      localTlsHealthCommand,
+      job,
+      { timeoutMs: 25_000 },
+    );
+    let tlsHealthStatus: unknown;
+    try {
+      tlsHealthStatus = JSON.parse(tlsHealthOutput).status;
+    } catch {
+      tlsHealthStatus = undefined;
+    }
+    if (tlsHealthStatus !== "ok") {
+      throw new Error("HTTPS /health через TLS-сертификат не вернул status=ok");
+    }
+    emitSuccess(
+      job,
+      selfSignedCert
+        ? `TLS SAN и SHA-256 pin проверены; HTTPS health доступен для ${domain} ✓`
+        : `TLS SAN, доверенная цепочка и HTTPS health проверены для ${domain} ✓`,
+    );
 
     // ── Step 11: Register (or update) node in DB ──────────────────────────
     // Use upsert semantics: if a node with the same managementApiUrl already

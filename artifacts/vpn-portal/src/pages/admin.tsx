@@ -2649,15 +2649,14 @@ function NodesManagement() {
                   <span className="text-muted-foreground font-normal">· {node.region}</span>
                   {!node.isActive && <span className="text-muted-foreground font-normal">(неактивен)</span>}
                   {node.managementApiUrl && <NodePollingHealthIndicator nodeName={node.name} />}
-                  {/* Warn when a remote node uses a self-signed cert (provisioner
-                      stores the SHA256 fingerprint in certSha256 only for self-signed;
-                      LE-cert nodes have certSha256 = null). */}
+                  {/* Self-signed TLS is pinned in generated client links. If the
+                      certificate is replaced with a CA-issued one, clear this pin. */}
                   {node.managementApiUrl && node.certSha256 && (
                     <span
-                      title={"Самоподписанный сертификат — VPN-клиенты не смогут подключиться!\nЗайди на сервер и выполни: certbot --nginx -d " + node.sni}
-                      className="text-xs font-normal bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-800 px-1.5 py-0.5 cursor-help"
+                      title={"Самоподписанный TLS-сертификат закреплён SHA-256 pin в ссылках клиентов. Если заменить сертификат на Let's Encrypt, очистите Cert SHA256 в настройках узла и обновите подписку клиентов."}
+                      className="text-xs font-normal bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-1.5 py-0.5 cursor-help"
                     >
-                      ⚠️ Self-signed cert
+                      ⚠️ Self-signed TLS · pin
                     </span>
                   )}
                 </div>
