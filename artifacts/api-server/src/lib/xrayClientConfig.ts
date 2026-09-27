@@ -38,14 +38,13 @@ export interface XrayOutboundParams {
   realityPublicKey?: string | null;
   realityShortId?: string | null;
   /**
-   * When the node has a bare IP address rather than a domain name, TLS
-   * verification must be handled specially (pinned cert or allow-insecure).
+   * Whether the node's host or SNI is a bare IP address.
    */
   isIpNode: boolean;
   /**
    * SHA-256 of the server's DER-encoded TLS certificate, base64-encoded.
-   * Required when isIpNode is true AND the client supports pinnedPeerCertificate256.
-   * If absent for an IP node, allowInsecure falls back to true.
+   * When present, pins the TLS certificate for either IP- or domain-backed
+   * nodes. If absent for an IP node, allowInsecure falls back to true.
    */
   certSha256?: string | null;
   /** Optional WebSocket path override for client-config compatibility/testing. */
@@ -194,14 +193,13 @@ function buildVlessOutbound(
     allowInsecure: false,
   };
 
-  if (params.isIpNode) {
-    if (params.certSha256) {
-      // Prefer explicit certificate pinning — more secure than allow-insecure.
-      tlsSettings.pinnedPeerCertificate256 = params.certSha256;
-    } else {
-      // No cert available: fall back to insecure.  Mirrors vless.ts behaviour.
-      tlsSettings.allowInsecure = true;
-    }
+  if (params.certSha256) {
+    // Prefer explicit certificate pinning — works for self-signed domain nodes
+    // as well as bare-IP nodes.
+    tlsSettings.pinnedPeerCertificate256 = params.certSha256;
+  } else if (params.isIpNode) {
+    // Preserve legacy behavior for bare IP nodes without a stored pin.
+    tlsSettings.allowInsecure = true;
   }
 
   return {

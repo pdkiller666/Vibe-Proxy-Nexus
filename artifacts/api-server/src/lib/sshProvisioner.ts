@@ -14,6 +14,7 @@ import { Client } from "ssh2";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { isIP } from "node:net";
 import path from "node:path";
 import { db, vpnKeysTable, vpnNodesTable, provisioningJobsTable } from "@workspace/db";
 import type { ProvisionLogLine } from "@workspace/db";
@@ -485,6 +486,25 @@ server {
 /** Path to the bundled deploy files (copied by build.mjs at build time). */
 const VPN_NODE_DEPLOY_DIR = path.resolve(__dirname, "vpn-node-deploy");
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+export function buildSelfSignedCertificateCommand(
+  host: string,
+  certPath: string,
+  keyPath: string,
+): string {
+  const sanType = isIP(host) ? "IP" : "DNS";
+  return [
+    "openssl req -x509 -nodes -days 3650 -newkey rsa:2048",
+    `-keyout ${shellQuote(keyPath)}`,
+    `-out ${shellQuote(certPath)}`,
+    `-subj ${shellQuote(`/CN=${host}`)}`,
+    `-addext ${shellQuote(`subjectAltName=${sanType}:${host}`)}`,
+  ].join(" ");
+}
+
 export function parseRealityX25519Output(output: string): {
   privateKey: string;
   publicKey: string;
@@ -924,7 +944,7 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
 
       await runCommand(
         conn,
-        `mkdir -p ${certDir} && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ${keyPath} -out ${certPath} -subj "/CN=${domain}"`,
+        `mkdir -p ${certDir} && ${buildSelfSignedCertificateCommand(domain, certPath, keyPath)}`,
         job,
         { timeoutMs: 30_000 },
       );

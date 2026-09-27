@@ -287,6 +287,19 @@ describe("buildXrayClientConfig — IP node with certSha256", () => {
   });
 });
 
+describe("buildXrayClientConfig — domain node with certSha256", () => {
+  it("pins a self-signed certificate without enabling allowInsecure", () => {
+    const certSha256 = "YXNkZmdoaWprbG1ub3BxcnN0dXZ3eHl6MDEyMzQ1Njc4OQ==";
+    const config = buildXrayClientConfig([{ ...DOMAIN_OUTBOUND, certSha256 }]);
+    const outbound = (config.outbounds as Array<Record<string, unknown>>)
+      .find((o) => o.protocol === "vless")!;
+    const tls = (outbound.streamSettings as { tlsSettings: Record<string, unknown> })
+      .tlsSettings;
+    expect(tls.pinnedPeerCertificate256).toBe(certSha256);
+    expect(tls.allowInsecure).toBe(false);
+  });
+});
+
 describe("buildXrayClientConfig — IP node without certSha256", () => {
   it("falls back to allowInsecure: true", () => {
     const config = buildXrayClientConfig([IP_OUTBOUND_NO_CERT]);

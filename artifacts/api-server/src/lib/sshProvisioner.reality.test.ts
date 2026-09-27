@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { parseRealityX25519Output } from "./sshProvisioner";
+import {
+  buildSelfSignedCertificateCommand,
+  parseRealityX25519Output,
+} from "./sshProvisioner";
+
+describe("buildSelfSignedCertificateCommand", () => {
+  it("adds a DNS SAN for a domain-backed self-signed certificate", () => {
+    const command = buildSelfSignedCertificateCommand(
+      "node.example.test",
+      "/etc/ssl/vpn-node/cert.pem",
+      "/etc/ssl/vpn-node/key.pem",
+    );
+    expect(command).toContain("-addext 'subjectAltName=DNS:node.example.test'");
+    expect(command).toContain("-subj '/CN=node.example.test'");
+  });
+
+  it("adds an IP SAN when the node address is an IP", () => {
+    const command = buildSelfSignedCertificateCommand(
+      "203.0.113.10",
+      "/etc/ssl/vpn-node/cert.pem",
+      "/etc/ssl/vpn-node/key.pem",
+    );
+    expect(command).toContain("-addext 'subjectAltName=IP:203.0.113.10'");
+  });
+});
 
 describe("parseRealityX25519Output", () => {
   const privateKey = "A".repeat(43);

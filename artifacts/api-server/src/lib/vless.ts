@@ -81,15 +81,14 @@ export function buildVlessLink(
   const host = node.host || node.sni;
   const port = node.port ?? 443;
 
-  // Self-signed certificates are used when the node has no real domain (bare IP).
-  // Older Xray cores used `allowInsecure=1`; newer cores (Xray 26+, used by Happ
-  // 2.17+) removed that parameter and require `pinnedPeerCertSha256` (SHA256 of
-  // the server's DER-encoded TLS certificate, in base64) instead.
+  // Self-signed certificates may also be used on domain-backed VPS nodes when
+  // Let's Encrypt is unavailable. Older Xray cores used `allowInsecure=1`;
+  // newer cores (Xray 26+, used by Happ 2.17+) require
+  // `pinnedPeerCertSha256` (SHA256 of the server's DER certificate, in base64).
   //
-  // When the node has a `certSha256` stored (admin-entered after running
-  // `openssl s_client … | openssl x509 -outform DER | openssl dgst -sha256 -binary | base64`),
-  // we emit `pinnedPeerCertSha256`. If that field is absent we fall back to
-  // `allowInsecure=1` so older clients and non-Happ apps keep working.
+  // When a node has `certSha256`, emit a pin regardless of whether its address
+  // is an IP or hostname. If the pin is absent, retain the legacy insecure
+  // fallback only for bare-IP nodes.
   const isIpNode = isIpAddress(host) || isIpAddress(node.sni);
   const certSha256 = "certSha256" in node ? (node as { certSha256: string | null }).certSha256 : null;
 
@@ -117,7 +116,7 @@ export function buildVlessLink(
       host: node.sni,
       path: VPN_WS_PATH,
       encryption: "none",
-      ...(isIpNode && certSha256 ? { pinnedPeerCertSha256: certSha256 } : {}),
+      ...(certSha256 ? { pinnedPeerCertSha256: certSha256 } : {}),
       ...(isIpNode && !certSha256 ? { allowInsecure: "1" } : {}),
     });
   }
