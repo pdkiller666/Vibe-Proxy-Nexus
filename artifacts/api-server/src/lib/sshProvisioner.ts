@@ -647,7 +647,27 @@ async function provisionRealityAsync(
 
   emitStep(job, "🐳 Запуск Reality и Management API...");
   await runCommand(conn, "cd /opt/vpn-node && docker compose up -d", job, { timeoutMs: 10 * 60_000 });
-  const health = await runCommand(conn, "curl -fsS --max-time 10 http://localhost:8443/health", job, { timeoutMs: 30_000 });
+  emitLog(job, "Ожидаем готовности Management API (до 60 секунд)...");
+  const healthCheckCommand = `attempt=1
+while [ "$attempt" -le 30 ]; do
+  if response=$(curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:8443/health 2>/dev/null) &&
+      printf '%s' "$response" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+    printf '%s\\n' "$response"
+    exit 0
+  fi
+  sleep 2
+  attempt=$((attempt + 1))
+done
+printf '%s\\n' 'Management API did not become ready after 30 attempts.' >&2
+docker compose ps --all >&2 || true
+docker compose logs --tail=80 vpn-node >&2 || true
+exit 1`;
+  const health = await runCommand(
+    conn,
+    `cd /opt/vpn-node && ${healthCheckCommand}`,
+    job,
+    { timeoutMs: 125_000 },
+  );
   if (!health.includes("ok")) throw new Error("Reality Management API health check failed");
 
   const [node] = await db.insert(vpnNodesTable).values({
