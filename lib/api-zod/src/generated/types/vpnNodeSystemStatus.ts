@@ -13,4 +13,20 @@ export interface VpnNodeSystemStatus {
   diskUsedBytes: number;
   diskTotalBytes: number;
   uptimeSeconds: number;
+  /** @nullable */
+  networkInterface?: string | null;
+  /** @nullable */
+  networkRxBytes?: number | null;
+  /** @nullable */
+  networkTxBytes?: number | null;
+  /**
+     * Xray client-to-node bytes recorded during the last 24 hours
+     * @nullable
+     */
+  xrayUpBytes24h?: number | null;
+  /**
+     * Xray node-to-client bytes recorded during the last 24 hours
+     * @nullable
+     */
+  xrayDownBytes24h?: number | null;
 }

@@ -13,4 +13,5 @@ export * from "./inviteLinks";
 export * from "./systemEvents";
 export * from "./provisioningJobs";
 export * from "./nodeMetricSnapshots";
+export * from "./nodeTrafficSnapshots";
 export * from "./adminAuditLog";

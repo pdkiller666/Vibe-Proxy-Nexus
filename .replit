@@ -28,6 +28,10 @@ args = "artifacts/vpn-portal: web"
 task = "workflow.run"
 args = "test-reality-management-tunnel"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "nl1-management-tunnel"
+
 [[workflows.workflow]]
 name = "seo-smoke"
 author = "agent"
@@ -54,9 +58,56 @@ isValidation = true
 name = "test-reality-management-tunnel"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "test -n \"$VPS_SSH_USERNAME\" && test -n \"$VPS_SSH_PASSWORD\" || { echo 'Required SSH secrets are unavailable'; exit 1; }; command -v sshpass >/dev/null 2>&1 || { echo 'sshpass is unavailable'; exit 1; }; while :; do SSHPASS=\"$VPS_SSH_PASSWORD\" sshpass -e ssh -N -T -L 127.0.0.1:18444:127.0.0.1:8444 -o StrictHostKeyChecking=yes -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 \"$VPS_SSH_USERNAME@77.238.246.37\"; status=$?; echo \"SSH management tunnel disconnected (exit $status); retrying in 5s\"; sleep 5; done"
+args = """
+test -n \"$VPS_SSH_USERNAME\" && test -n \"$VPS_SSH_PASSWORD\" || { echo 'Required SSH secrets are unavailable'; exit 1; }
+command -v sshpass >/dev/null 2>&1 || { echo 'sshpass is unavailable'; exit 1; }
+command -v ssh-keyscan >/dev/null 2>&1 || { echo 'ssh-keyscan is unavailable'; exit 1; }
+host='77.238.246.37'
+expected='SHA256:qZ2VTCiFZOFr4VDfOB1AirQUAGwpJI6apAcMxKJwfBI'
+known='/tmp/reality-management-known_hosts'
+candidate='/tmp/reality-management-known_hosts.candidate'
+ssh-keyscan -T 5 -p 22 -t ed25519 \"$host\" 2>/dev/null > \"$candidate\"
+actual=$(ssh-keygen -lf \"$candidate\" -E sha256 | awk 'NR==1 {print $2}')
+if [ \"$actual\" != \"$expected\" ]; then echo 'ED25519 fingerprint does not match provider-confirmed key; refusing SSH tunnel.' >&2; rm -f \"$candidate\"; exit 1; fi
+chmod 600 \"$candidate\"
+mv \"$candidate\" \"$known\"
+while :; do
+  SSHPASS=\"$VPS_SSH_PASSWORD\" sshpass -e ssh -N -T -L 127.0.0.1:18444:127.0.0.1:8443 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=\"$known\" -o GlobalKnownHostsFile=/dev/null -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 \"$VPS_SSH_USERNAME@$host\"
+  status=$?
+  echo \"SSH management tunnel disconnected (exit $status); retrying in 5s\"
+  sleep 5
+done"""
+
+[[workflows.workflow]]
+name = "nl1-management-tunnel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = """
+set -eu
+test -n \"$VPS_NL1_HOST\" && test -n \"$VPS_NL1_USER\" && test -n \"$VPS_NL1_PASSWORD\" || { echo 'Required NL1 SSH settings are unavailable'; exit 1; }
+command -v sshpass >/dev/null 2>&1 || { echo 'sshpass is unavailable'; exit 1; }
+command -v ssh-keyscan >/dev/null 2>&1 || { echo 'ssh-keyscan is unavailable'; exit 1; }
+expected='SHA256:QCDe42LzojmJF78SxJH1WLlc/UHJ7n46T3+epv7mOVc'
+known='/tmp/nl1-management-known_hosts'
+candidate='/tmp/nl1-management-known_hosts.candidate'
+ssh-keyscan -T 5 -p 22 -t ed25519 \"$VPS_NL1_HOST\" 2>/dev/null > \"$candidate\"
+actual=$(ssh-keygen -lf \"$candidate\" -E sha256 | awk 'NR==1 {print $2}')
+if [ \"$actual\" != \"$expected\" ]; then echo 'NL1 ED25519 fingerprint mismatch; refusing SSH tunnel.' >&2; rm -f \"$candidate\"; exit 1; fi
+chmod 600 \"$candidate\"
+mv \"$candidate\" \"$known\"
+while :; do
+  SSHPASS=\"$VPS_NL1_PASSWORD\" sshpass -e ssh -N -T -L 127.0.0.1:18445:127.0.0.1:8443 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=\"$known\" -o GlobalKnownHostsFile=/dev/null -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=15 \"$VPS_NL1_USER@$VPS_NL1_HOST\"
+  status=$?
+  echo \"NL1 SSH tunnel disconnected (exit $status); retrying in 5s\"
+  sleep 5
+done"""
 
 [workflows.workflow.metadata]
 outputType = "console"

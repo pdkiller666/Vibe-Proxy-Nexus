@@ -9,8 +9,13 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { db, plansTable, subscriptionsTable, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
-import { applyTrafficDeltas, enforceTrafficLimits } from "./trafficPolling";
+import { db, nodeTrafficSnapshotsTable, plansTable, subscriptionsTable, usersTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
+import {
+  applyTrafficDeltas,
+  calculateXrayAggregateDeltas,
+  enforceTrafficLimits,
+  sumRemoteXrayCounters,
+} from "./trafficPolling";
 
 // Prevent tests from attempting real gRPC calls to Xray.  applyTrafficDeltas
 // never touches xray.ts, and enforceTrafficLimits only calls into it when
@@ -19,6 +24,23 @@ vi.mock("./xray", () => ({
   isLocalXrayEnabled: () => false,
   removeXrayClient: vi.fn(),
 }));
+
+describe("monitor-only Xray aggregates", () => {
+  it("sums byte counters without requiring local UUID records", () => {
+    const totals = sumRemoteXrayCounters(new Map([
+      ["first-client", { uplinkBytes: 100, downlinkBytes: 200 }],
+      ["second-client", { uplinkBytes: 50, downlinkBytes: 75 }],
+    ]));
+    expect(totals).toEqual({ uplinkBytes: 150, downlinkBytes: 275 });
+  });
+
+  it("does not invent traffic when a cumulative counter decreases", () => {
+    expect(calculateXrayAggregateDeltas(
+      { uplinkBytes: 100, downlinkBytes: 200 },
+      { uplinkBytes: 80, downlinkBytes: 230 },
+    )).toEqual({ uplinkBytes: 0, downlinkBytes: 30 });
+  });
+});
 
 describe("applyTrafficDeltas", () => {
   let userId: number;
@@ -62,6 +84,7 @@ describe("applyTrafficDeltas", () => {
   });
 
   afterEach(async () => {
+    await db.delete(nodeTrafficSnapshotsTable).where(eq(nodeTrafficSnapshotsTable.nodeId, nodeId));
     for (const id of keyIds.splice(0)) {
       await db.delete(vpnKeysTable).where(eq(vpnKeysTable.id, id));
     }
@@ -146,6 +169,24 @@ describe("applyTrafficDeltas", () => {
     expect(key.periodDownBytes).toBe(3000);
     expect(key.lastSeenUpBytes).toBe(1500);
     expect(key.lastSeenDownBytes).toBe(3000);
+  });
+
+  it("records Xray byte deltas against the key's current node without double-counting repeated polls", async () => {
+    const { uuid } = await seedKey();
+    const counters = new Map([[uuid, { uplinkBytes: 1_250, downlinkBytes: 2_750 }]]);
+
+    await applyTrafficDeltas(counters);
+    await applyTrafficDeltas(counters);
+
+    const snapshots = await db
+      .select()
+      .from(nodeTrafficSnapshotsTable)
+      .where(eq(nodeTrafficSnapshotsTable.nodeId, nodeId));
+    expect(snapshots.length).toBe(2);
+    expect(snapshots.every((snapshot) => snapshot.source === "xray")).toBe(true);
+    expect(snapshots.every((snapshot) => snapshot.interfaceRxBytes === null && snapshot.interfaceTxBytes === null)).toBe(true);
+    expect(snapshots.reduce((sum, snapshot) => sum + (snapshot.xrayUpBytes ?? 0), 0)).toBe(1_250);
+    expect(snapshots.reduce((sum, snapshot) => sum + (snapshot.xrayDownBytes ?? 0), 0)).toBe(2_750);
   });
 
   it("is a no-op when no counters are provided", async () => {

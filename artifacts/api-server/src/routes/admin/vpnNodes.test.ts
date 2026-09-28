@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import {
   db,
+  nodeTrafficSnapshotsTable,
   plansTable,
   subscriptionsTable,
   usersTable,
@@ -124,6 +125,93 @@ describe("admin vpn node capacity fields", () => {
         }),
       ]),
     );
+  });
+
+  it("returns independent interface-counter deltas and Xray traffic history", async () => {
+    const [node] = await db
+      .insert(vpnNodesTable)
+      .values({
+        name: `Traffic history ${randomBytes(4).toString("hex")}`,
+        region: "test",
+        host: "traffic-history.example.com",
+        sni: "traffic-history.example.com",
+        isActive: false,
+      })
+      .returning({ id: vpnNodesTable.id });
+    nodeIds.push(node.id);
+
+    // Start on a 15-minute boundary so each pair of samples lands in a
+    // predictable API bucket. The earlier interface sample is the baseline
+    // used to calculate the first in-range delta.
+    const fromMs = Math.floor(Date.now() / 900_000) * 900_000 - 2 * 60 * 60 * 1000;
+    const from = new Date(fromMs).toISOString();
+    const to = new Date(fromMs + 30 * 60 * 1000).toISOString();
+    await db.insert(nodeTrafficSnapshotsTable).values([
+      {
+        nodeId: node.id,
+        source: "interface",
+        interfaceName: "eth0",
+        interfaceRxBytes: 1_000,
+        interfaceTxBytes: 2_000,
+        recordedAt: new Date(fromMs - 5 * 60 * 1000),
+      },
+      {
+        nodeId: node.id,
+        source: "interface",
+        interfaceName: "eth0",
+        interfaceRxBytes: 1_150,
+        interfaceTxBytes: 2_300,
+        recordedAt: new Date(fromMs + 5 * 60 * 1000),
+      },
+      {
+        nodeId: node.id,
+        source: "interface",
+        interfaceName: "eth0",
+        interfaceRxBytes: 1_800,
+        interfaceTxBytes: 3_500,
+        recordedAt: new Date(fromMs + 20 * 60 * 1000),
+      },
+      {
+        nodeId: node.id,
+        source: "xray",
+        xrayUpBytes: 700,
+        xrayDownBytes: 900,
+        recordedAt: new Date(fromMs + 8 * 60 * 1000),
+      },
+      {
+        nodeId: node.id,
+        source: "xray",
+        xrayUpBytes: 100,
+        xrayDownBytes: 200,
+        recordedAt: new Date(fromMs + 22 * 60 * 1000),
+      },
+    ]);
+
+    const interfaceHistory = await request
+      .get(`/api/admin/vpn-nodes/${node.id}/system/traffic`)
+      .query({ source: "interface", from, to })
+      .set("Cookie", adminCookie);
+    expect(interfaceHistory.status).toBe(200);
+    expect(interfaceHistory.body).toEqual({
+      source: "interface",
+      points: [
+        { ts: fromMs, inBytes: 150, outBytes: 300 },
+        { ts: fromMs + 15 * 60 * 1000, inBytes: 650, outBytes: 1_200 },
+      ],
+    });
+
+    const xrayHistory = await request
+      .get(`/api/admin/vpn-nodes/${node.id}/system/traffic`)
+      .query({ source: "xray", from, to })
+      .set("Cookie", adminCookie);
+    expect(xrayHistory.status).toBe(200);
+    expect(xrayHistory.body).toEqual({
+      source: "xray",
+      points: [
+        { ts: fromMs, inBytes: 700, outBytes: 900 },
+        { ts: fromMs + 15 * 60 * 1000, inBytes: 100, outBytes: 200 },
+      ],
+    });
   });
 
   it("returns an empty migration summary for a node without active keys", async () => {

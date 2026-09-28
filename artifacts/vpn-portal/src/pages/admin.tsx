@@ -100,6 +100,7 @@ import { Check, X, Trash2, Pencil, Plus, Users, CreditCard, Shield, Settings, Ke
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { SupportMessageAttachmentDisplay } from "@/components/support-attachment-picker";
+import { NodeTrafficHistoryPanel, type TrafficSource } from "@/components/NodeTrafficHistoryPanel";
 import type { SubscriptionFilter } from "./admin-users";
 
 function formatDate(iso: string) {
@@ -1844,7 +1845,9 @@ function NodeForm({ node, onDone }: { node?: VpnNode; onDone: () => void }) {
           </>
         )}
         <Input
-          placeholder="Лимит пользователей (пусто = без лимита)"
+          type="number"
+          min={0}
+          placeholder="Лимит пользователей (пусто = без лимита, 0 = только мониторинг)"
           value={maxUsers}
           onChange={(e) => setMaxUsers(e.target.value.replace(/[^0-9]/g, ""))}
           className="rounded-none"
@@ -2273,6 +2276,10 @@ function formatBytesShort(bytes: number): string {
   return `${(bytes / 1024).toFixed(0)} КБ`;
 }
 
+function formatRateMbps(bytesPerSecond: number): string {
+  return `${((bytesPerSecond * 8) / 1_000_000).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} Мбит/с`;
+}
+
 function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   const { toast } = useToast();
   const [logProcess, setLogProcess] = useState<"xray" | "mgmt-api">("xray");
@@ -2280,10 +2287,21 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   const [logsEnabled, setLogsEnabled] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [openMetric, setOpenMetric] = useState<MetricKey | null>(null);
+  const [openTrafficSource, setOpenTrafficSource] = useState<TrafficSource | null>(null);
+  const [networkRate, setNetworkRate] = useState<{
+    nodeId: number;
+    interfaceName: string;
+    rxBytes: number;
+    txBytes: number;
+    sampleAt: number;
+    rxBytesPerSecond: number | null;
+    txBytesPerSecond: number | null;
+  } | null>(null);
 
   // Status — auto-refresh every 30s once panel is open.
   const {
     data: status,
+    dataUpdatedAt: statusUpdatedAt,
     isFetching: statusFetching,
     error: statusError,
     refetch: refetchStatus,
@@ -2294,6 +2312,60 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
       retry: false,
     },
   });
+
+  const interfaceName = status?.networkInterface;
+  const networkRxBytes = status?.networkRxBytes;
+  const networkTxBytes = status?.networkTxBytes;
+  useEffect(() => {
+    if (
+      !interfaceName ||
+      !Number.isSafeInteger(networkRxBytes) ||
+      networkRxBytes! < 0 ||
+      !Number.isSafeInteger(networkTxBytes) ||
+      networkTxBytes! < 0
+    ) {
+      setNetworkRate(null);
+      return;
+    }
+
+    const sampleAt = statusUpdatedAt || Date.now();
+    const currentSample = {
+      nodeId,
+      interfaceName,
+      rxBytes: networkRxBytes!,
+      txBytes: networkTxBytes!,
+      sampleAt,
+    };
+    setNetworkRate((previous) => {
+      const baseline = {
+        ...currentSample,
+        rxBytesPerSecond: null,
+        txBytesPerSecond: null,
+      };
+      if (
+        !previous ||
+        previous.nodeId !== nodeId ||
+        previous.interfaceName !== interfaceName
+      ) {
+        return baseline;
+      }
+
+      const elapsedSeconds = (sampleAt - previous.sampleAt) / 1000;
+      if (
+        elapsedSeconds <= 0 ||
+        elapsedSeconds > 180 ||
+        networkRxBytes! < previous.rxBytes ||
+        networkTxBytes! < previous.txBytes
+      ) {
+        return baseline;
+      }
+      return {
+        ...currentSample,
+        rxBytesPerSecond: (networkRxBytes! - previous.rxBytes) / elapsedSeconds,
+        txBytesPerSecond: (networkTxBytes! - previous.txBytes) / elapsedSeconds,
+      };
+    });
+  }, [nodeId, interfaceName, networkRxBytes, networkTxBytes, statusUpdatedAt]);
 
   // Logs — only fetched when explicitly requested.
   const {
@@ -2328,6 +2400,7 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
   const cpuBarWidth = status ? Math.min(100, status.cpuPercent) : 0;
   const ramPercent  = status && status.ramTotalBytes  > 0 ? Math.min(100, Math.round((status.ramUsedBytes  / status.ramTotalBytes)  * 100)) : 0;
   const diskPercent = status && status.diskTotalBytes > 0 ? Math.min(100, Math.round((status.diskUsedBytes / status.diskTotalBytes) * 100)) : 0;
+  const currentNetworkRate = networkRate?.nodeId === nodeId ? networkRate : null;
 
   return (
     <div className="mt-3 border border-border bg-muted/30 p-4 space-y-4">
@@ -2353,11 +2426,15 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
       ) : !status ? (
         <p className="text-xs text-muted-foreground font-mono">Загрузка…</p>
       ) : (
+        <>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {/* CPU — clickable */}
           <button
             type="button"
-            onClick={() => setOpenMetric(openMetric === "cpu" ? null : "cpu")}
+            onClick={() => {
+              setOpenTrafficSource(null);
+              setOpenMetric(openMetric === "cpu" ? null : "cpu");
+            }}
             className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openMetric === "cpu" ? "border-blue-500 ring-1 ring-blue-500/30" : "border-border"}`}
             title="Показать историю CPU"
           >
@@ -2375,7 +2452,10 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
           {/* RAM — clickable */}
           <button
             type="button"
-            onClick={() => setOpenMetric(openMetric === "ram" ? null : "ram")}
+            onClick={() => {
+              setOpenTrafficSource(null);
+              setOpenMetric(openMetric === "ram" ? null : "ram");
+            }}
             className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openMetric === "ram" ? "border-violet-500 ring-1 ring-violet-500/30" : "border-border"}`}
             title="Показать историю RAM"
           >
@@ -2390,7 +2470,10 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
           {/* Disk — clickable */}
           <button
             type="button"
-            onClick={() => setOpenMetric(openMetric === "disk" ? null : "disk")}
+            onClick={() => {
+              setOpenTrafficSource(null);
+              setOpenMetric(openMetric === "disk" ? null : "disk");
+            }}
             className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openMetric === "disk" ? "border-amber-500 ring-1 ring-amber-500/30" : "border-border"}`}
             title="Показать историю диска"
           >
@@ -2408,6 +2491,72 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
             <div className="text-lg font-bold">{formatUptime(status.uptimeSeconds)}</div>
           </div>
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+          <button
+            type="button"
+            onClick={() => {
+              setOpenMetric(null);
+              setOpenTrafficSource(openTrafficSource === "interface" ? null : "interface");
+            }}
+            className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openTrafficSource === "interface" ? "border-cyan-500 ring-1 ring-cyan-500/30" : "border-border"}`}
+            title="Показать историю сетевого интерфейса"
+            data-testid="button-node-traffic-interface"
+          >
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1 flex items-center justify-between">
+              Сетевой интерфейс · {status.networkInterface || "недоступен"}
+              <LineChartIcon className="w-2.5 h-2.5 opacity-40" />
+            </div>
+            {currentNetworkRate && currentNetworkRate.rxBytesPerSecond !== null ? (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] text-muted-foreground">RX</div>
+                  <div className="text-sm font-bold" data-testid="text-node-network-rx-rate">{formatRateMbps(currentNetworkRate.rxBytesPerSecond)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-muted-foreground">TX</div>
+                  <div className="text-sm font-bold" data-testid="text-node-network-tx-rate">{formatRateMbps(currentNetworkRate.txBytesPerSecond ?? 0)}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm font-bold" data-testid="text-node-network-rate">
+                {status.networkInterface && status.networkRxBytes != null && status.networkTxBytes != null
+                  ? "Сбор данных…"
+                  : "Счётчики недоступны"}
+              </div>
+            )}
+            <div className="text-[10px] text-muted-foreground mt-1">Текущая скорость · замеры каждые 30 секунд</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpenMetric(null);
+              setOpenTrafficSource(openTrafficSource === "xray" ? null : "xray");
+            }}
+            className={`bg-background border p-3 text-left transition-colors hover:bg-muted/40 ${openTrafficSource === "xray" ? "border-violet-500 ring-1 ring-violet-500/30" : "border-border"}`}
+            title="Показать историю VPN-трафика Xray"
+            data-testid="button-node-traffic-xray"
+          >
+            <div className="text-[10px] font-mono uppercase text-muted-foreground mb-1 flex items-center justify-between">
+              VPN / Xray · за 24 часа
+              <LineChartIcon className="w-2.5 h-2.5 opacity-40" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="text-[10px] text-muted-foreground">От клиентов</div>
+                <div className="text-sm font-bold" data-testid="text-node-xray-up-24h">
+                  {status.xrayUpBytes24h == null ? "Нет данных" : formatBytesShort(status.xrayUpBytes24h)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted-foreground">К клиентам</div>
+                <div className="text-sm font-bold" data-testid="text-node-xray-down-24h">
+                  {status.xrayDownBytes24h == null ? "Нет данных" : formatBytesShort(status.xrayDownBytes24h)}
+                </div>
+              </div>
+            </div>
+          </button>
+        </div>
+        </>
       )}
 
       {/* ── Metric history panel (slides in below tiles on click) ── */}
@@ -2416,6 +2565,13 @@ function NodeManagementPanel({ nodeId }: { nodeId: number }) {
           nodeId={nodeId}
           metric={openMetric}
           onClose={() => setOpenMetric(null)}
+        />
+      )}
+      {openTrafficSource && (
+        <NodeTrafficHistoryPanel
+          nodeId={nodeId}
+          source={openTrafficSource}
+          onClose={() => setOpenTrafficSource(null)}
         />
       )}
 

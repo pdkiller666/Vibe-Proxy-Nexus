@@ -125,12 +125,42 @@ def get_stats(
 def system_status(
     x_management_secret: str | None = Header(default=None),
 ) -> dict:
-    """Return CPU%, RAM (used/total), disk (used/total), and container uptime."""
+    """Return CPU/RAM/disk/uptime and default-interface byte counters."""
     _check_secret(x_management_secret)
 
     cpu_percent = psutil.cpu_percent(interval=0.5)
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
+
+    network_interface = None
+    network_rx_bytes = None
+    network_tx_bytes = None
+    try:
+        with open("/proc/net/route", encoding="utf-8") as f:
+            routes = f.read().splitlines()[1:]
+        default_routes = []
+        for line in routes:
+            fields = line.split()
+            if len(fields) < 7 or fields[1] != "00000000":
+                continue
+            try:
+                flags = int(fields[3], 16)
+                metric = int(fields[6])
+            except ValueError:
+                continue
+            if flags & 1:
+                default_routes.append((metric, fields[0]))
+
+        if default_routes:
+            _, network_interface = min(default_routes)
+            counters = psutil.net_io_counters(pernic=True).get(network_interface)
+            if counters is not None:
+                network_rx_bytes = counters.bytes_recv
+                network_tx_bytes = counters.bytes_sent
+    except (OSError, ValueError):
+        # Network counters are optional; resource status remains available if
+        # the runtime does not expose procfs routing information.
+        pass
 
     with open("/proc/uptime") as f:
         uptime_seconds = int(float(f.read().split()[0]))
@@ -142,6 +172,9 @@ def system_status(
         "diskUsedBytes": disk.used,
         "diskTotalBytes": disk.total,
         "uptimeSeconds": uptime_seconds,
+        "networkInterface": network_interface,
+        "networkRxBytes": network_rx_bytes,
+        "networkTxBytes": network_tx_bytes,
     }
 
 

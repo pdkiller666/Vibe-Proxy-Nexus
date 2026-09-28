@@ -21,6 +21,7 @@ import { issueKeyForUser, resolveTotalSlots } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
 import { maybeRecordMetricSnapshot } from "../../lib/nodeMonitoring";
 import { getLocalSystemStatus } from "../../lib/sysStatus";
+import { readNl1InterfaceCounters } from "../../lib/nl1InterfaceCounters";
 import { bankActiveKeyUsageForRevocation } from "../../lib/trafficCarryover";
 import { afterTrafficDeltasFlushed } from "../../lib/trafficPolling";
 import { flagEmojiForNode } from "../../lib/vless";
@@ -652,7 +653,7 @@ router.get("/admin/vpn-nodes/:nodeId/system/status", requireAuth, requireAdmin, 
     // Local node — gather stats directly.
     try {
       const status = await getLocalSystemStatus();
-      res.json(status);
+      res.json({ ...status, ...await getNodeXrayTraffic24h(nodeId) });
       // Fire-and-forget snapshot (non-fatal, debounced to 5 min).
       void maybeRecordMetricSnapshot(nodeId, status);
     } catch (err: unknown) {
@@ -675,17 +676,175 @@ router.get("/admin/vpn-nodes/:nodeId/system/status", requireAuth, requireAdmin, 
       res.status(r.status).json({ error: `Remote node returned HTTP ${r.status}: ${text.slice(0, 200)}` });
       return;
     }
-    const data = await r.json();
-    res.json(data);
+    const data = await r.json() as Record<string, unknown>;
+    let statusData = data;
+    const hasNetworkCounters =
+      typeof data.networkInterface === "string" &&
+      Number.isSafeInteger(data.networkRxBytes) &&
+      Number.isSafeInteger(data.networkTxBytes);
+    if (!hasNetworkCounters) {
+      try {
+        const interfaceCounters = await readNl1InterfaceCounters(node.host);
+        if (interfaceCounters) statusData = { ...data, ...interfaceCounters };
+      } catch (err) {
+        logger.warn({ err, nodeId }, "admin node status: NL1 interface-counter fallback failed");
+      }
+    }
+    res.json({ ...statusData, ...await getNodeXrayTraffic24h(nodeId) });
     // Fire-and-forget snapshot for remote nodes too.
-    void maybeRecordMetricSnapshot(nodeId, data as Parameters<typeof maybeRecordMetricSnapshot>[1]);
+    void maybeRecordMetricSnapshot(nodeId, statusData as Parameters<typeof maybeRecordMetricSnapshot>[1]);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(502).json({ error: msg.includes("aborted") ? "Timeout (10s)" : msg });
   }
 });
 
+async function getNodeXrayTraffic24h(nodeId: number): Promise<{
+  xrayUpBytes24h: number | null;
+  xrayDownBytes24h: number | null;
+}> {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(xray_up_bytes), 0)::text AS up_bytes,
+        COALESCE(SUM(xray_down_bytes), 0)::text AS down_bytes
+      FROM node_traffic_snapshots
+      WHERE node_id = ${nodeId}
+        AND source = 'xray'
+        AND recorded_at >= NOW() - INTERVAL '24 hours'
+    `) as { rows: Array<{ up_bytes: string; down_bytes: string }> };
+    const row = result.rows[0];
+    return {
+      xrayUpBytes24h: row ? Number(row.up_bytes) : 0,
+      xrayDownBytes24h: row ? Number(row.down_bytes) : 0,
+    };
+  } catch (err) {
+    logger.warn({ err, nodeId }, "node Xray traffic summary unavailable");
+    return { xrayUpBytes24h: null, xrayDownBytes24h: null };
+  }
+}
+
 // ─── Historical metric time-series ───────────────────────────────────────────
+router.get("/admin/vpn-nodes/:nodeId/system/traffic", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const nodeId = Number(req.params["nodeId"]);
+  if (!nodeId || !Number.isInteger(nodeId)) {
+    res.status(400).json({ error: "Invalid nodeId" });
+    return;
+  }
+
+  const source = req.query["source"] as string;
+  if (source !== "interface" && source !== "xray") {
+    res.status(400).json({ error: "source must be interface or xray" });
+    return;
+  }
+
+  const now = new Date();
+  const fromRaw = req.query["from"] as string | undefined;
+  const toRaw = req.query["to"] as string | undefined;
+  const fromDate = fromRaw ? new Date(fromRaw) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const toDate = toRaw ? new Date(toRaw) : now;
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()) || toDate < fromDate) {
+    res.status(400).json({ error: "Invalid from/to date range" });
+    return;
+  }
+
+  const rangeMs = toDate.getTime() - fromDate.getTime();
+  const bucketSeconds =
+    rangeMs <= 7 * 24 * 3600 * 1000 ? 15 * 60 :
+    rangeMs <= 30 * 24 * 3600 * 1000 ? 60 * 60 :
+    4 * 3600;
+
+  let rows: Array<{ bucket: Date; in_bytes: string | number; out_bytes: string | number }>;
+  if (source === "xray") {
+    const result = await db.execute(sql`
+      SELECT
+        to_timestamp(floor(extract(epoch FROM recorded_at) / ${bucketSeconds}) * ${bucketSeconds}) AS bucket,
+        COALESCE(SUM(xray_up_bytes), 0)::text AS in_bytes,
+        COALESCE(SUM(xray_down_bytes), 0)::text AS out_bytes
+      FROM node_traffic_snapshots
+      WHERE node_id = ${nodeId}
+        AND source = 'xray'
+        AND recorded_at >= ${fromDate}
+        AND recorded_at <= ${toDate}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `) as { rows: typeof rows };
+    rows = result.rows;
+  } else {
+    const result = await db.execute(sql`
+      WITH samples AS (
+        (
+          SELECT recorded_at, interface_name, interface_rx_bytes, interface_tx_bytes
+          FROM node_traffic_snapshots
+          WHERE node_id = ${nodeId}
+            AND source = 'interface'
+            AND recorded_at < ${fromDate}
+          ORDER BY recorded_at DESC
+          LIMIT 1
+        )
+        UNION ALL
+        (
+          SELECT recorded_at, interface_name, interface_rx_bytes, interface_tx_bytes
+          FROM node_traffic_snapshots
+          WHERE node_id = ${nodeId}
+            AND source = 'interface'
+            AND recorded_at >= ${fromDate}
+            AND recorded_at <= ${toDate}
+        )
+      ),
+      sampled AS (
+        SELECT
+          recorded_at,
+          interface_name,
+          interface_rx_bytes,
+          interface_tx_bytes,
+          LAG(interface_name) OVER (ORDER BY recorded_at) AS previous_interface,
+          LAG(interface_rx_bytes) OVER (ORDER BY recorded_at) AS previous_rx,
+          LAG(interface_tx_bytes) OVER (ORDER BY recorded_at) AS previous_tx
+        FROM samples
+      ),
+      deltas AS (
+        SELECT
+          recorded_at,
+          CASE
+            WHEN interface_name = previous_interface AND interface_rx_bytes >= previous_rx
+              THEN interface_rx_bytes - previous_rx
+            WHEN interface_name = previous_interface AND interface_rx_bytes < previous_rx
+              THEN interface_rx_bytes
+            ELSE NULL
+          END AS in_bytes,
+          CASE
+            WHEN interface_name = previous_interface AND interface_tx_bytes >= previous_tx
+              THEN interface_tx_bytes - previous_tx
+            WHEN interface_name = previous_interface AND interface_tx_bytes < previous_tx
+              THEN interface_tx_bytes
+            ELSE NULL
+          END AS out_bytes
+        FROM sampled
+        WHERE recorded_at >= ${fromDate}
+      )
+      SELECT
+        to_timestamp(floor(extract(epoch FROM recorded_at) / ${bucketSeconds}) * ${bucketSeconds}) AS bucket,
+        COALESCE(SUM(in_bytes), 0)::text AS in_bytes,
+        COALESCE(SUM(out_bytes), 0)::text AS out_bytes
+      FROM deltas
+      WHERE recorded_at <= ${toDate}
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `) as { rows: typeof rows };
+    rows = result.rows;
+  }
+
+  res.json({
+    source,
+    points: rows.map((row) => ({
+      ts: new Date(row.bucket).getTime(),
+      inBytes: Number(row.in_bytes),
+      outBytes: Number(row.out_bytes),
+    })),
+  });
+});
+
 router.get("/admin/vpn-nodes/:nodeId/system/metrics", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const nodeId = Number(req.params["nodeId"]);
   if (!nodeId || isNaN(nodeId)) { res.status(400).json({ error: "Invalid nodeId" }); return; }

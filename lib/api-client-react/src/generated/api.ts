@@ -70,6 +70,7 @@ import type {
   GetAdminSystemEventsHistoryParams,
   GetVpnNodeMetricsParams,
   GetVpnNodeSystemLogsParams,
+  GetVpnNodeTrafficParams,
   HealthStatus,
   ListAdminBroadcastsParams,
   ListAdminPaymentsParams,
@@ -126,6 +127,7 @@ import type {
   VpnNodeRestartXrayResult,
   VpnNodeSystemLogs,
   VpnNodeSystemStatus,
+  VpnNodeTrafficResponse,
   VpnNodeUpdate
 } from './api.schemas';
 
@@ -6895,7 +6897,7 @@ export const getGetVpnNodeSystemStatusUrl = (nodeId: number,) => {
 }
 
 /**
- * @summary Get CPU, RAM, disk and uptime for a VPN node
+ * @summary Get system status and traffic totals for a VPN node
  */
 export const getVpnNodeSystemStatus = async (nodeId: number, options?: RequestInit): Promise<VpnNodeSystemStatus> => {
 
@@ -6942,7 +6944,7 @@ export type GetVpnNodeSystemStatusQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Get CPU, RAM, disk and uptime for a VPN node
+ * @summary Get system status and traffic totals for a VPN node
  */
 
 export function useGetVpnNodeSystemStatus<TData = Awaited<ReturnType<typeof getVpnNodeSystemStatus>>, TError = ErrorType<unknown>>(
@@ -6951,6 +6953,95 @@ export function useGetVpnNodeSystemStatus<TData = Awaited<ReturnType<typeof getV
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetVpnNodeSystemStatusQueryOptions(nodeId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetVpnNodeTrafficUrl = (nodeId: number,
+    params: GetVpnNodeTrafficParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/vpn-nodes/${nodeId}/system/traffic?${stringifiedParams}` : `/api/admin/vpn-nodes/${nodeId}/system/traffic`
+}
+
+/**
+ * @summary Get interface or Xray traffic history for a VPN node
+ */
+export const getVpnNodeTraffic = async (nodeId: number,
+    params: GetVpnNodeTrafficParams, options?: RequestInit): Promise<VpnNodeTrafficResponse> => {
+
+  return customFetch<VpnNodeTrafficResponse>(getGetVpnNodeTrafficUrl(nodeId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVpnNodeTrafficQueryKey = (nodeId: number,
+    params?: GetVpnNodeTrafficParams,) => {
+    return [
+    `/api/admin/vpn-nodes/${nodeId}/system/traffic`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetVpnNodeTrafficQueryOptions = <TData = Awaited<ReturnType<typeof getVpnNodeTraffic>>, TError = ErrorType<unknown>>(nodeId: number,
+    params: GetVpnNodeTrafficParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeTraffic>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVpnNodeTrafficQueryKey(nodeId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVpnNodeTraffic>>> = ({ signal }) => getVpnNodeTraffic(nodeId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: nodeId !== null && nodeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeTraffic>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVpnNodeTrafficQueryResult = NonNullable<Awaited<ReturnType<typeof getVpnNodeTraffic>>>
+export type GetVpnNodeTrafficQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get interface or Xray traffic history for a VPN node
+ */
+
+export function useGetVpnNodeTraffic<TData = Awaited<ReturnType<typeof getVpnNodeTraffic>>, TError = ErrorType<unknown>>(
+ nodeId: number,
+    params: GetVpnNodeTrafficParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVpnNodeTraffic>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVpnNodeTrafficQueryOptions(nodeId,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

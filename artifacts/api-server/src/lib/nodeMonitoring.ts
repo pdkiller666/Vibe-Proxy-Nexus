@@ -25,7 +25,7 @@
  */
 
 import { and, asc, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
-import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable, nodeMetricSnapshotsTable } from "@workspace/db";
+import { db, jobsDb, systemEventsTable, vpnKeysTable, vpnNodesTable, nodeMetricSnapshotsTable, nodeTrafficSnapshotsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { bankActiveKeyUsageForRevocation } from "./trafficCarryover";
 import { afterTrafficDeltasFlushed } from "./trafficPolling";
@@ -37,6 +37,7 @@ import {
 } from "./xray";
 import { addRemoteXrayClient, listRemoteXrayClients, removeRemoteXrayClient } from "./remoteNode";
 import { getLocalSystemStatus, type SystemStatus } from "./sysStatus";
+import { readNl1InterfaceCounters } from "./nl1InterfaceCounters";
 
 const NODE_MONITOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -51,7 +52,8 @@ const lastMetricWrite = new Map<number, number>(); // nodeId → lastWriteTimest
 
 export async function maybeRecordMetricSnapshot(
   nodeId: number,
-  status: { cpuPercent: number; ramUsedBytes: number; ramTotalBytes: number; diskUsedBytes: number; diskTotalBytes: number },
+  status: Pick<SystemStatus, "cpuPercent" | "ramUsedBytes" | "ramTotalBytes" | "diskUsedBytes" | "diskTotalBytes">
+    & Partial<Pick<SystemStatus, "networkInterface" | "networkRxBytes" | "networkTxBytes">>,
 ): Promise<void> {
   const now = Date.now();
   const last = lastMetricWrite.get(nodeId) ?? 0;
@@ -76,6 +78,28 @@ export async function maybeRecordMetricSnapshot(
     // Non-fatal: chart data is best-effort.
     logger.warn({ err, nodeId }, "node metrics: failed to write snapshot (ignored)");
   }
+
+  const { networkInterface, networkRxBytes, networkTxBytes } = status;
+  if (
+    networkInterface &&
+    Number.isSafeInteger(networkRxBytes) &&
+    networkRxBytes! >= 0 &&
+    Number.isSafeInteger(networkTxBytes) &&
+    networkTxBytes! >= 0
+  ) {
+    try {
+      await db.insert(nodeTrafficSnapshotsTable).values({
+        nodeId,
+        source: "interface",
+        interfaceName: networkInterface,
+        interfaceRxBytes: networkRxBytes!,
+        interfaceTxBytes: networkTxBytes!,
+      });
+    } catch (err) {
+      // Non-fatal: traffic history is best-effort, like resource history.
+      logger.warn({ err, nodeId }, "node interface traffic: failed to write snapshot (ignored)");
+    }
+  }
 }
 
 // ─── Status fetchers ──────────────────────────────────────────────────────────
@@ -83,6 +107,7 @@ export async function maybeRecordMetricSnapshot(
 async function fetchRemoteSystemStatus(
   managementApiUrl: string,
   managementApiSecret: string | null,
+  nodeHost: string | null,
 ): Promise<SystemStatus> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -96,7 +121,22 @@ async function fetchRemoteSystemStatus(
     });
     clearTimeout(timeout);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return (await r.json()) as SystemStatus;
+    const status = (await r.json()) as SystemStatus;
+    if (
+      status.networkInterface &&
+      Number.isSafeInteger(status.networkRxBytes) &&
+      Number.isSafeInteger(status.networkTxBytes)
+    ) {
+      return status;
+    }
+
+    try {
+      const interfaceCounters = await readNl1InterfaceCounters(nodeHost);
+      return interfaceCounters ? { ...status, ...interfaceCounters } : status;
+    } catch (err) {
+      logger.warn({ err, nodeHost }, "nodeMonitoring: NL1 interface-counter fallback failed");
+      return status;
+    }
   } catch (err) {
     clearTimeout(timeout);
     throw err;
@@ -666,12 +706,13 @@ async function pollNode(node: {
   consecutiveFailures: number;
   managementApiUrl: string | null;
   managementApiSecret: string | null;
+  host: string | null;
 }): Promise<void> {
   let status: SystemStatus;
 
   try {
     if (node.managementApiUrl) {
-      status = await fetchRemoteSystemStatus(node.managementApiUrl, node.managementApiSecret);
+      status = await fetchRemoteSystemStatus(node.managementApiUrl, node.managementApiSecret, node.host);
     } else {
       status = await getLocalSystemStatus();
     }
@@ -759,6 +800,9 @@ async function pollNode(node: {
     ramTotalBytes: status.ramTotalBytes,
     diskUsedBytes: status.diskUsedBytes,
     diskTotalBytes: status.diskTotalBytes,
+    networkInterface: status.networkInterface,
+    networkRxBytes: status.networkRxBytes,
+    networkTxBytes: status.networkTxBytes,
   });
 
   // If the node was previously auto-deactivated, bring it back.
@@ -841,6 +885,7 @@ async function runNodeMonitoringCycle(): Promise<void> {
       consecutiveFailures: vpnNodesTable.consecutiveFailures,
       managementApiUrl: vpnNodesTable.managementApiUrl,
       managementApiSecret: vpnNodesTable.managementApiSecret,
+      host: vpnNodesTable.host,
     })
     .from(vpnNodesTable)
     .where(

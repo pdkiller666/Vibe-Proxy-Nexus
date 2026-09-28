@@ -1805,7 +1805,7 @@ paths:
     get:
       operationId: getVpnNodeSystemStatus
       tags: [admin]
-      summary: Get CPU, RAM, disk and uptime for a VPN node
+      summary: Get system status and traffic totals for a VPN node
       parameters:
         - name: nodeId
           in: path
@@ -1819,6 +1819,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VpnNodeSystemStatus"
+
+  /admin/vpn-nodes/{nodeId}/system/traffic:
+    get:
+      operationId: getVpnNodeTraffic
+      tags: [admin]
+      summary: Get interface or Xray traffic history for a VPN node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: source
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [interface, xray]
+        - name: from
+          in: query
+          required: false
+          description: ISO-8601 start timestamp (inclusive). Defaults to 30 days ago.
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          description: ISO-8601 end timestamp (inclusive). Defaults to now.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Traffic volume per aggregated time bucket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNodeTrafficResponse"
 
   /admin/vpn-nodes/{nodeId}/system/metrics:
     get:
@@ -2685,7 +2722,8 @@ components:
         shortId: { type: ["string", "null"] }
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
-        maxUsers: { type: ["integer", "null"], minimum: 1 }
+        # 0 keeps the node available for monitoring but blocks key issuance.
+        maxUsers: { type: ["integer", "null"], minimum: 0 }
         certSha256: { type: string }
 
     VpnNodeProvisionInput:
@@ -2722,7 +2760,8 @@ components:
         shortId: { type: ["string", "null"] }
         sni: { type: string, minLength: 1 }
         isActive: { type: boolean }
-        maxUsers: { type: ["integer", "null"], minimum: 1 }
+        # 0 keeps the node available for monitoring but blocks key issuance.
+        maxUsers: { type: ["integer", "null"], minimum: 0 }
         # null = explicitly clear the pinned cert (revert to allowInsecure for IP nodes)
         certSha256: { type: ["string", "null"] }
 
@@ -3114,6 +3153,24 @@ components:
           items:
             $ref: "#/components/schemas/NodeMetricPoint"
 
+    NodeTrafficPoint:
+      type: object
+      required: [ts, inBytes, outBytes]
+      properties:
+        ts: { type: integer, description: Unix timestamp in milliseconds }
+        inBytes: { type: integer, description: Inbound bytes in this time bucket }
+        outBytes: { type: integer, description: Outbound bytes in this time bucket }
+
+    VpnNodeTrafficResponse:
+      type: object
+      required: [source, points]
+      properties:
+        source: { type: string, enum: [interface, xray] }
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeTrafficPoint"
+
     VpnNodeSystemStatus:
       type: object
       required: [cpuPercent, ramUsedBytes, ramTotalBytes, diskUsedBytes, diskTotalBytes, uptimeSeconds]
@@ -3124,6 +3181,11 @@ components:
         diskUsedBytes: { type: integer }
         diskTotalBytes: { type: integer }
         uptimeSeconds: { type: integer }
+        networkInterface: { type: [string, "null"] }
+        networkRxBytes: { type: [integer, "null"] }
+        networkTxBytes: { type: [integer, "null"] }
+        xrayUpBytes24h: { type: [integer, "null"], description: Xray client-to-node bytes recorded during the last 24 hours }
+        xrayDownBytes24h: { type: [integer, "null"], description: Xray node-to-client bytes recorded during the last 24 hours }
 
     VpnNodeSystemLogs:
       type: object

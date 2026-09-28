@@ -621,7 +621,7 @@ export interface VpnNodeInput {
   sni: string;
   isActive?: boolean;
   /**
-     * @minimum 1
+     * @minimum 0
      * @nullable
      */
   maxUsers?: number | null;
@@ -688,7 +688,7 @@ export interface VpnNodeUpdate {
   sni?: string;
   isActive?: boolean;
   /**
-     * @minimum 1
+     * @minimum 0
      * @nullable
      */
   maxUsers?: number | null;
@@ -985,6 +985,28 @@ export interface VpnNodeMetricsResponse {
   points: NodeMetricPoint[];
 }
 
+export interface NodeTrafficPoint {
+  /** Unix timestamp in milliseconds */
+  ts: number;
+  /** Inbound bytes in this time bucket */
+  inBytes: number;
+  /** Outbound bytes in this time bucket */
+  outBytes: number;
+}
+
+export type VpnNodeTrafficResponseSource = typeof VpnNodeTrafficResponseSource[keyof typeof VpnNodeTrafficResponseSource];
+
+
+export const VpnNodeTrafficResponseSource = {
+  interface: 'interface',
+  xray: 'xray',
+} as const;
+
+export interface VpnNodeTrafficResponse {
+  source: VpnNodeTrafficResponseSource;
+  points: NodeTrafficPoint[];
+}
+
 export interface VpnNodeSystemStatus {
   cpuPercent: number;
   ramUsedBytes: number;
@@ -992,6 +1014,22 @@ export interface VpnNodeSystemStatus {
   diskUsedBytes: number;
   diskTotalBytes: number;
   uptimeSeconds: number;
+  /** @nullable */
+  networkInterface?: string | null;
+  /** @nullable */
+  networkRxBytes?: number | null;
+  /** @nullable */
+  networkTxBytes?: number | null;
+  /**
+     * Xray client-to-node bytes recorded during the last 24 hours
+     * @nullable
+     */
+  xrayUpBytes24h?: number | null;
+  /**
+     * Xray node-to-client bytes recorded during the last 24 hours
+     * @nullable
+     */
+  xrayDownBytes24h?: number | null;
 }
 
 export interface VpnNodeSystemLogs {
@@ -1572,6 +1610,26 @@ recipientPageSize?: number;
  */
 search?: string;
 };
+
+export type GetVpnNodeTrafficParams = {
+source: GetVpnNodeTrafficSource;
+/**
+ * ISO-8601 start timestamp (inclusive). Defaults to 30 days ago.
+ */
+from?: string;
+/**
+ * ISO-8601 end timestamp (inclusive). Defaults to now.
+ */
+to?: string;
+};
+
+export type GetVpnNodeTrafficSource = typeof GetVpnNodeTrafficSource[keyof typeof GetVpnNodeTrafficSource];
+
+
+export const GetVpnNodeTrafficSource = {
+  interface: 'interface',
+  xray: 'xray',
+} as const;
 
 export type GetVpnNodeMetricsParams = {
 metric: GetVpnNodeMetricsMetric;

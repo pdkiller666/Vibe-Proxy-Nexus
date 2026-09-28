@@ -88,16 +88,24 @@ uses port 8444 through a private SSH tunnel instead; do not assume those access
 paths are equivalent. Verify the intended production route and firewall policy
 before running provisioning on a live VPS.
 
+**Observed 2026-09-26:** the test VPS had its Management API listening on 8444,
+and UFW allowed 8444/tcp from Anywhere, so the SSH tunnel was not its only
+network path. The application's key-issuance flow calls the node's stored
+`managementApiUrl` to add the client; if that URL targets the wrong port, the
+remote add fails and the newly created DB key is revoked.
+
 **Why:** Amvera cannot pass the raw Reality handshake, while the product
 requirement now explicitly includes normal-user assignment and migration.
 Management API exposure remains an infrastructure boundary: a mismatch can
-leave a node reachable for clients but unmanageable by the API.
+leave a node reachable for clients but unmanageable by the API; a wrong API URL
+can also make key issuance fail even while the public Reality listener works.
 
 **How to apply:** keep Reality on external raw-TCP VPS nodes, preserve WS as
 the default, and allow configured Reality nodes through normal issuance and
 migration. Before live provisioning, confirm Management API reachability and
-firewall policy; do not reconfigure an existing test or production node as part
-of a code-only change.
+firewall policy, and confirm the stored node URL matches the actual listener;
+do not reconfigure an existing test or production node as part of a code-only
+change.
 
 ## Reality connection diagnosis
 

@@ -24,3 +24,9 @@ authenticated HTTP API/admin panel over the public domain (reachable
 normally, since that's how any browser reaches it), or (3) ask the user to
 run and report a value themselves. Do not assume a "give me the DB URL as a
 secret" plan will work here before testing reachability once.
+
+For production writes, use only the authenticated production app route. The
+Replit API server and its ADMIN_PASSWORD belong to development; they do not
+authorize changes in Amvera production. A direct Xray client addition is not
+an equivalent test of the app's issuance flow because it bypasses the
+production database row and admin audit trail.

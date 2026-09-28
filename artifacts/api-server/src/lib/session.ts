@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import type { Request, Response } from "express";
-import { db, sessionsTable, usersTable, nodeMetricSnapshotsTable, type User } from "@workspace/db";
+import { db, sessionsTable, usersTable, nodeMetricSnapshotsTable, nodeTrafficSnapshotsTable, type User } from "@workspace/db";
 import { logger } from "./logger";
 import { deleteExpiredPasswordResetTokens } from "./passwordReset";
 
@@ -105,17 +105,28 @@ const METRIC_SNAPSHOTS_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 1 day
 const METRIC_SNAPSHOTS_RETENTION_DAYS = 90;
 
 export async function deleteOldMetricSnapshots(): Promise<number> {
-  const result = await db
-    .delete(nodeMetricSnapshotsTable)
-    .where(
-      lt(
-        nodeMetricSnapshotsTable.recordedAt,
-        sql`NOW() - INTERVAL '${sql.raw(String(METRIC_SNAPSHOTS_RETENTION_DAYS))} days'`,
-      ),
-    )
-    .returning({ id: nodeMetricSnapshotsTable.id });
+  const [metrics, traffic] = await Promise.all([
+    db
+      .delete(nodeMetricSnapshotsTable)
+      .where(
+        lt(
+          nodeMetricSnapshotsTable.recordedAt,
+          sql`NOW() - INTERVAL '${sql.raw(String(METRIC_SNAPSHOTS_RETENTION_DAYS))} days'`,
+        ),
+      )
+      .returning({ id: nodeMetricSnapshotsTable.id }),
+    db
+      .delete(nodeTrafficSnapshotsTable)
+      .where(
+        lt(
+          nodeTrafficSnapshotsTable.recordedAt,
+          sql`NOW() - INTERVAL '${sql.raw(String(METRIC_SNAPSHOTS_RETENTION_DAYS))} days'`,
+        ),
+      )
+      .returning({ id: nodeTrafficSnapshotsTable.id }),
+  ]);
 
-  return result.length;
+  return metrics.length + traffic.length;
 }
 
 export async function deleteExpiredSessions(): Promise<number> {

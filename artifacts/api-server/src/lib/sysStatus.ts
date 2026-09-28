@@ -24,6 +24,10 @@ export interface SystemStatus {
   diskTotalBytes: number;
   /** Node.js process uptime in seconds (since last restart, not host uptime). */
   uptimeSeconds: number;
+  /** Interface counters are optional for compatibility with older remote nodes. */
+  networkInterface?: string | null;
+  networkRxBytes?: number | null;
+  networkTxBytes?: number | null;
 }
 
 // ─── CPU helpers ──────────────────────────────────────────────────────────────
@@ -76,6 +80,60 @@ async function getCpuPercentFromCgroup(): Promise<number> {
   if (elapsedUs <= 0 || cpuLimit <= 0) return 0;
   // CPU% relative to allocated limit (0–100).
   return Math.min(100, Math.round((usedUs / elapsedUs / cpuLimit) * 1000) / 10);
+}
+
+interface NetworkCounters {
+  interfaceName: string;
+  rxBytes: number;
+  txBytes: number;
+}
+
+/**
+ * Read counters for the IPv4 default-route interface from procfs. Restricting
+ * the sample to the routed interface avoids double-counting loopback, bridge,
+ * and tunnel devices on nodes that expose several network namespaces/devices.
+ */
+async function getDefaultRouteNetworkCounters(): Promise<NetworkCounters | null> {
+  const [routeText, deviceText] = await Promise.all([
+    fs.readFile("/proc/net/route", "utf8").catch(() => ""),
+    fs.readFile("/proc/net/dev", "utf8").catch(() => ""),
+  ]);
+
+  const candidates = routeText
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim().split(/\s+/))
+    .filter((parts) => parts.length >= 7 && parts[1] === "00000000")
+    .filter((parts) => {
+      const flags = Number.parseInt(parts[3] ?? "", 16);
+      return Number.isFinite(flags) && (flags & 1) === 1;
+    })
+    .map((parts) => ({
+      interfaceName: parts[0]!,
+      metric: Number.parseInt(parts[6] ?? "", 10) || 0,
+    }))
+    .sort((a, b) => a.metric - b.metric);
+
+  for (const candidate of candidates) {
+    const deviceLine = deviceText
+      .split("\n")
+      .find((line) => line.trimStart().startsWith(`${candidate.interfaceName}:`));
+    if (!deviceLine) continue;
+
+    const counters = deviceLine.split(":")[1]?.trim().split(/\s+/).map(Number) ?? [];
+    const rxBytes = counters[0];
+    const txBytes = counters[8];
+    if (
+      Number.isSafeInteger(rxBytes) &&
+      rxBytes! >= 0 &&
+      Number.isSafeInteger(txBytes) &&
+      txBytes! >= 0
+    ) {
+      return { interfaceName: candidate.interfaceName, rxBytes: rxBytes!, txBytes: txBytes! };
+    }
+  }
+
+  return null;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -134,8 +192,21 @@ export async function getLocalSystemStatus(): Promise<SystemStatus> {
   const diskTotalBytes = parseInt(dfParts[1] ?? "0") || 0;
   const diskUsedBytes  = parseInt(dfParts[2] ?? "0") || 0;
 
+  // ── Network interface counters ──────────────────────────────────────────────
+  const network = await getDefaultRouteNetworkCounters();
+
   // ── Uptime ──────────────────────────────────────────────────────────────────
   const uptimeSeconds = Math.floor(process.uptime());
 
-  return { cpuPercent, ramUsedBytes, ramTotalBytes, diskUsedBytes, diskTotalBytes, uptimeSeconds };
+  return {
+    cpuPercent,
+    ramUsedBytes,
+    ramTotalBytes,
+    diskUsedBytes,
+    diskTotalBytes,
+    uptimeSeconds,
+    networkInterface: network?.interfaceName ?? null,
+    networkRxBytes: network?.rxBytes ?? null,
+    networkTxBytes: network?.txBytes ?? null,
+  };
 }

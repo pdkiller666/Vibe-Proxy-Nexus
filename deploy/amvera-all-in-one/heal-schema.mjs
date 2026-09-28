@@ -1228,6 +1228,46 @@ try {
   `);
   console.log("heal-schema: M-45 vpn_nodes.transport");
 
+  // ── M-46: node-level interface and Xray traffic history ─────────────────
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS node_traffic_snapshots (
+      id serial PRIMARY KEY,
+      node_id integer NOT NULL REFERENCES vpn_nodes(id) ON DELETE CASCADE,
+      recorded_at timestamptz NOT NULL DEFAULT now(),
+      source text NOT NULL,
+      interface_name text,
+      interface_rx_bytes bigint,
+      interface_tx_bytes bigint,
+      xray_up_bytes bigint,
+      xray_down_bytes bigint
+    );
+    ALTER TABLE node_traffic_snapshots
+      ADD COLUMN IF NOT EXISTS node_id integer,
+      ADD COLUMN IF NOT EXISTS recorded_at timestamptz NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS source text,
+      ADD COLUMN IF NOT EXISTS interface_name text,
+      ADD COLUMN IF NOT EXISTS interface_rx_bytes bigint,
+      ADD COLUMN IF NOT EXISTS interface_tx_bytes bigint,
+      ADD COLUMN IF NOT EXISTS xray_up_bytes bigint,
+      ADD COLUMN IF NOT EXISTS xray_down_bytes bigint;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'node_traffic_snapshots_node_id_fkey'
+           AND conrelid = 'node_traffic_snapshots'::regclass
+      ) THEN
+        ALTER TABLE node_traffic_snapshots
+          ADD CONSTRAINT node_traffic_snapshots_node_id_fkey
+          FOREIGN KEY (node_id) REFERENCES vpn_nodes(id) ON DELETE CASCADE;
+      END IF;
+    END;
+    $$;
+    CREATE INDEX IF NOT EXISTS node_traffic_snapshots_node_source_recorded_idx
+      ON node_traffic_snapshots (node_id, source, recorded_at);
+  `);
+  console.log("heal-schema: M-46 node-level interface and Xray traffic history");
+
   console.log("heal-schema: done");
 } catch (err) {
   console.error("heal-schema: FAILED", err);

@@ -1553,6 +1553,7 @@ export const ListAdminVpnNodesResponse = zod.array(ListAdminVpnNodesResponseItem
 
 
 export const createVpnNodeBodyTransportDefault = `ws`;
+export const createVpnNodeBodyMaxUsersMin = 0;
 
 
 
@@ -1568,7 +1569,7 @@ export const CreateVpnNodeBody = zod.object({
   "shortId": zod.string().nullish(),
   "sni": zod.string().min(1),
   "isActive": zod.boolean().optional(),
-  "maxUsers": zod.number().min(1).nullish(),
+  "maxUsers": zod.number().min(createVpnNodeBodyMaxUsersMin).nullish(),
   "certSha256": zod.string().optional()
 })
 
@@ -1602,6 +1603,7 @@ export const UpdateVpnNodeParams = zod.object({
 
 
 
+export const updateVpnNodeBodyMaxUsersMin = 0;
 
 
 
@@ -1617,7 +1619,7 @@ export const UpdateVpnNodeBody = zod.object({
   "shortId": zod.string().nullish(),
   "sni": zod.string().min(1).optional(),
   "isActive": zod.boolean().optional(),
-  "maxUsers": zod.number().min(1).nullish(),
+  "maxUsers": zod.number().min(updateVpnNodeBodyMaxUsersMin).nullish(),
   "certSha256": zod.string().nullish()
 })
 
@@ -2527,7 +2529,7 @@ export const GetVpnNodeHealthResponse = zod.object({
 
 
 /**
- * @summary Get CPU, RAM, disk and uptime for a VPN node
+ * @summary Get system status and traffic totals for a VPN node
  */
 export const GetVpnNodeSystemStatusParams = zod.object({
   "nodeId": zod.coerce.number()
@@ -2539,7 +2541,35 @@ export const GetVpnNodeSystemStatusResponse = zod.object({
   "ramTotalBytes": zod.number(),
   "diskUsedBytes": zod.number(),
   "diskTotalBytes": zod.number(),
-  "uptimeSeconds": zod.number()
+  "uptimeSeconds": zod.number(),
+  "networkInterface": zod.string().nullish(),
+  "networkRxBytes": zod.number().nullish(),
+  "networkTxBytes": zod.number().nullish(),
+  "xrayUpBytes24h": zod.number().nullish().describe('Xray client-to-node bytes recorded during the last 24 hours'),
+  "xrayDownBytes24h": zod.number().nullish().describe('Xray node-to-client bytes recorded during the last 24 hours')
+})
+
+
+/**
+ * @summary Get interface or Xray traffic history for a VPN node
+ */
+export const GetVpnNodeTrafficParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const GetVpnNodeTrafficQueryParams = zod.object({
+  "source": zod.enum(['interface', 'xray']),
+  "from": zod.coerce.string().optional().describe('ISO-8601 start timestamp (inclusive). Defaults to 30 days ago.'),
+  "to": zod.coerce.string().optional().describe('ISO-8601 end timestamp (inclusive). Defaults to now.')
+})
+
+export const GetVpnNodeTrafficResponse = zod.object({
+  "source": zod.enum(['interface', 'xray']),
+  "points": zod.array(zod.object({
+  "ts": zod.number().describe('Unix timestamp in milliseconds'),
+  "inBytes": zod.number().describe('Inbound bytes in this time bucket'),
+  "outBytes": zod.number().describe('Outbound bytes in this time bucket')
+}))
 })
 
 
@@ -2605,7 +2635,12 @@ export const RestartVpnNodeXrayResponse = zod.object({
   "ramTotalBytes": zod.number(),
   "diskUsedBytes": zod.number(),
   "diskTotalBytes": zod.number(),
-  "uptimeSeconds": zod.number()
+  "uptimeSeconds": zod.number(),
+  "networkInterface": zod.string().nullish(),
+  "networkRxBytes": zod.number().nullish(),
+  "networkTxBytes": zod.number().nullish(),
+  "xrayUpBytes24h": zod.number().nullish().describe('Xray client-to-node bytes recorded during the last 24 hours'),
+  "xrayDownBytes24h": zod.number().nullish().describe('Xray node-to-client bytes recorded during the last 24 hours')
 })
 })
 

@@ -9,7 +9,7 @@
  * already short-circuits to an empty map in that case.
  */
 import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { jobsDb, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
+import { jobsDb, nodeTrafficSnapshotsTable, plansTable, subscriptionsTable, vpnKeysTable, vpnNodesTable } from "@workspace/db";
 import { pollUserTrafficCounters } from "./xrayStats";
 import { isLocalXrayEnabled, removeXrayClient } from "./xray";
 import { pollRemoteNodeStats, removeRemoteXrayClient } from "./remoteNode";
@@ -28,6 +28,53 @@ export const trafficPollingHealth = {
   consecutiveFailures: 0,
   lastError: null as string | null,
 };
+
+export interface XrayAggregateTotals {
+  uplinkBytes: number;
+  downlinkBytes: number;
+}
+
+/** Sum remote counters in memory; individual client UUIDs are never persisted. */
+export function sumRemoteXrayCounters(
+  counters: Map<string, { uplinkBytes: number; downlinkBytes: number }>,
+): XrayAggregateTotals {
+  let uplinkBytes = 0;
+  let downlinkBytes = 0;
+  for (const counts of counters.values()) {
+    if (Number.isSafeInteger(counts.uplinkBytes) && counts.uplinkBytes > 0) {
+      uplinkBytes += counts.uplinkBytes;
+    }
+    if (Number.isSafeInteger(counts.downlinkBytes) && counts.downlinkBytes > 0) {
+      downlinkBytes += counts.downlinkBytes;
+    }
+  }
+  if (!Number.isSafeInteger(uplinkBytes) || !Number.isSafeInteger(downlinkBytes)) {
+    throw new Error("Aggregate Xray counters exceed the safe integer range");
+  }
+  return { uplinkBytes, downlinkBytes };
+}
+
+/**
+ * For monitor-only nodes, a decrease means a client was removed or Xray reset
+ * its in-memory counters. Rebaseline that direction without inventing traffic.
+ */
+export function calculateXrayAggregateDeltas(
+  previous: XrayAggregateTotals,
+  current: XrayAggregateTotals,
+): XrayAggregateTotals {
+  return {
+    uplinkBytes: current.uplinkBytes >= previous.uplinkBytes
+      ? current.uplinkBytes - previous.uplinkBytes
+      : 0,
+    downlinkBytes: current.downlinkBytes >= previous.downlinkBytes
+      ? current.downlinkBytes - previous.downlinkBytes
+      : 0,
+  };
+}
+
+// This is operational charting only, not billing state. After an API restart,
+// the first successful sample establishes a fresh baseline and is not credited.
+const monitorOnlyXrayBaselines = new Map<number, XrayAggregateTotals>();
 
 /**
  * Applies queried *absolute* uplink/downlink counter reads (keyed by VPN key
@@ -120,18 +167,51 @@ export async function applyTrafficDeltas(
   );
 
   await jobsDb.execute(sql`
-    update vpn_keys as vk
-    set
-      traffic_up_bytes = vk.traffic_up_bytes + (case when c.up >= vk.last_seen_up_bytes then c.up - vk.last_seen_up_bytes else c.up end),
-      traffic_down_bytes = vk.traffic_down_bytes + (case when c.down >= vk.last_seen_down_bytes then c.down - vk.last_seen_down_bytes else c.down end),
-      period_up_bytes = vk.period_up_bytes + (case when c.up >= vk.last_seen_up_bytes then c.up - vk.last_seen_up_bytes else c.up end),
-      period_down_bytes = vk.period_down_bytes + (case when c.down >= vk.last_seen_down_bytes then c.down - vk.last_seen_down_bytes else c.down end),
-      last_seen_up_bytes = c.up,
-      last_seen_down_bytes = c.down,
-      last_traffic_at = now()
-    from (values ${values}) as c(uuid, up, down)
-    where vk.uuid = c.uuid
-      and vk.revoked_at is null
+    WITH counter_values(uuid, up, down) AS (
+      VALUES ${values}
+    ),
+    deltas AS MATERIALIZED (
+      SELECT
+        vk.uuid,
+        vk.node_id,
+        CASE WHEN c.up >= vk.last_seen_up_bytes
+          THEN c.up - vk.last_seen_up_bytes ELSE c.up END AS delta_up,
+        CASE WHEN c.down >= vk.last_seen_down_bytes
+          THEN c.down - vk.last_seen_down_bytes ELSE c.down END AS delta_down,
+        c.up,
+        c.down
+      FROM vpn_keys AS vk
+      JOIN counter_values AS c ON c.uuid = vk.uuid
+      WHERE vk.revoked_at IS NULL
+      FOR UPDATE OF vk
+    ),
+    updated AS (
+      UPDATE vpn_keys AS vk
+      SET
+        traffic_up_bytes = vk.traffic_up_bytes + d.delta_up,
+        traffic_down_bytes = vk.traffic_down_bytes + d.delta_down,
+        period_up_bytes = vk.period_up_bytes + d.delta_up,
+        period_down_bytes = vk.period_down_bytes + d.delta_down,
+        last_seen_up_bytes = d.up,
+        last_seen_down_bytes = d.down,
+        last_traffic_at = now()
+      FROM deltas AS d
+      WHERE vk.uuid = d.uuid
+      RETURNING d.node_id, d.delta_up, d.delta_down
+    )
+    INSERT INTO node_traffic_snapshots (
+      node_id,
+      source,
+      xray_up_bytes,
+      xray_down_bytes
+    )
+    SELECT
+      node_id,
+      'xray',
+      sum(delta_up),
+      sum(delta_down)
+    FROM updated
+    GROUP BY node_id
   `);
 }
 
@@ -366,9 +446,12 @@ async function doFlushTrafficDeltas(): Promise<{ polledNodes: string[] }> {
   // and disjoint from local keys, so maps can be merged without collisions.
   const remoteNodes = await jobsDb
     .select({
+      id: vpnNodesTable.id,
+      host: vpnNodesTable.host,
       managementApiUrl: vpnNodesTable.managementApiUrl,
       managementApiSecret: vpnNodesTable.managementApiSecret,
       name: vpnNodesTable.name,
+      maxUsers: vpnNodesTable.maxUsers,
     })
     .from(vpnNodesTable)
     .where(and(eq(vpnNodesTable.isActive, true), isNotNull(vpnNodesTable.managementApiUrl)));
@@ -376,11 +459,62 @@ async function doFlushTrafficDeltas(): Promise<{ polledNodes: string[] }> {
   const remoteResults = await Promise.all(
     remoteNodes.map((node) => pollRemoteNodeStats(node)),
   );
+  const monitorOnlyNodeIds = remoteNodes
+    .filter((node) =>
+      process.env.NODE_ENV === "development" &&
+      node.host === "nl1.hochuto.online" &&
+      node.maxUsers === 0
+    )
+    .map((node) => node.id);
+  const activeKeyRows = monitorOnlyNodeIds.length
+    ? await jobsDb
+        .selectDistinct({ nodeId: vpnKeysTable.nodeId })
+        .from(vpnKeysTable)
+        .where(and(isNull(vpnKeysTable.revokedAt), inArray(vpnKeysTable.nodeId, monitorOnlyNodeIds)))
+    : [];
+  const nodesWithActiveKeys = new Set(activeKeyRows.map((row) => row.nodeId));
+
   for (let i = 0; i < remoteResults.length; i++) {
+    const node = remoteNodes[i]!;
+    const counters = remoteResults[i]!;
     for (const [uuid, counts] of remoteResults[i]) {
       allCounters.set(uuid, counts);
     }
-    polledNodes.push(remoteNodes[i].name);
+    polledNodes.push(node.name);
+
+    // maxUsers=0 is an explicit monitoring-only opt-in. Aggregate only when
+    // there are no active local key rows, avoiding double-counting traffic
+    // already attributed through applyTrafficDeltas().
+    if (
+      process.env.NODE_ENV !== "development" ||
+      node.host !== "nl1.hochuto.online" ||
+      node.maxUsers !== 0 ||
+      nodesWithActiveKeys.has(node.id) ||
+      counters.size === 0
+    ) continue;
+    try {
+      const current = sumRemoteXrayCounters(counters);
+      const previous = monitorOnlyXrayBaselines.get(node.id);
+      if (previous) {
+        const delta = calculateXrayAggregateDeltas(previous, current);
+        if (delta.uplinkBytes > 0 || delta.downlinkBytes > 0) {
+          try {
+            await jobsDb.insert(nodeTrafficSnapshotsTable).values({
+              nodeId: node.id,
+              source: "xray",
+              xrayUpBytes: delta.uplinkBytes,
+              xrayDownBytes: delta.downlinkBytes,
+            });
+          } catch (err) {
+            logger.warn({ err, nodeId: node.id }, "monitor-only Xray traffic snapshot failed");
+            continue;
+          }
+        }
+      }
+      monitorOnlyXrayBaselines.set(node.id, current);
+    } catch (err) {
+      logger.warn({ err, nodeId: node.id }, "monitor-only Xray counters could not be aggregated");
+    }
   }
 
   await applyTrafficDeltas(allCounters);
