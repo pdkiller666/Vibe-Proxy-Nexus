@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { jobsDb, systemEventsTable, vpnNodesTable } from "@workspace/db";
 import { logger } from "./logger";
 import { probeVpnWsIngress } from "./vpnIngressProbe";
@@ -14,20 +14,20 @@ interface NodeIngressState {
 
 const stateByNodeId = new Map<number, NodeIngressState>();
 
-async function hasUnacknowledgedFailure(nodeId: number): Promise<boolean> {
+async function hasOpenFailure(nodeId: number): Promise<boolean> {
   const rows = await jobsDb
-    .select({ id: systemEventsTable.id })
+    .select({ eventType: systemEventsTable.eventType })
     .from(systemEventsTable)
     .where(
       and(
-        eq(systemEventsTable.eventType, "vpn_ingress_unreachable"),
-        isNull(systemEventsTable.acknowledgedAt),
+        inArray(systemEventsTable.eventType, ["vpn_ingress_unreachable", "vpn_ingress_recovered"]),
         isNull(systemEventsTable.userId),
         sql`${systemEventsTable.metadata} @> ${JSON.stringify({ nodeId })}::jsonb`,
       ),
     )
+    .orderBy(desc(systemEventsTable.createdAt), desc(systemEventsTable.id))
     .limit(1);
-  return rows.length > 0;
+  return rows[0]?.eventType === "vpn_ingress_unreachable";
 }
 
 async function emitIngressEvent(
@@ -59,10 +59,12 @@ async function recordFailure(
       elapsedMs: result.elapsedMs,
     };
 
-    if (!(await hasUnacknowledgedFailure(node.id))) {
-      await emitIngressEvent("vpn_ingress_unreachable", metadata);
-      logger.error(metadata, "vpnIngressMonitoring: public WS ingress failed repeatedly");
+    if (await hasOpenFailure(node.id)) {
+      state.alertOpen = true;
+      return;
     }
+    await emitIngressEvent("vpn_ingress_unreachable", metadata);
+    logger.error(metadata, "vpnIngressMonitoring: public WS ingress failed repeatedly");
     state.alertOpen = true;
   } catch (err) {
     logger.error({ err, nodeId: node.id, nodeName: node.name }, "vpnIngressMonitoring: failed to record ingress alert");
@@ -118,7 +120,7 @@ async function checkActiveWsNodes(): Promise<void> {
       if (result.ok) {
         // Preserve the recovery notification if the process restarted during
         // an outage and lost its in-memory state.
-        if (!state.alertOpen) state.alertOpen = await hasUnacknowledgedFailure(node.id);
+        if (!state.alertOpen) state.alertOpen = await hasOpenFailure(node.id);
         await recordRecovery(node, state, result.elapsedMs);
         state.consecutiveFailures = 0;
         return;
@@ -143,6 +145,8 @@ async function checkActiveWsNodes(): Promise<void> {
     }),
   );
 }
+
+export const runVpnIngressMonitoringCycleForTests = checkActiveWsNodes;
 
 export function startVpnIngressMonitoringJob(): NodeJS.Timeout {
   let isRunning = false;
