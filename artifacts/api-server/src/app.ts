@@ -13,6 +13,7 @@ import { startSubscriptionExpiryJob } from "./lib/subscriptionLifecycle";
 import { startTrafficPollingJob } from "./lib/trafficPolling";
 import { startHourlyBillingJob } from "./lib/hourlyBilling";
 import { startNodeMonitoringJob } from "./lib/nodeMonitoring";
+import { startVpnIngressMonitoringJob } from "./lib/vpnIngressMonitoring";
 import { startReconcileBalancePaymentsJob } from "./lib/reconcileBalancePayments";
 import { startAutoRenewJob } from "./lib/autoRenew";
 import { startAuditLogCleanupJob } from "./lib/auditLogCleanup";
@@ -129,6 +130,7 @@ if (!isTestRuntime) {
   startTrafficPollingJob();
   startHourlyBillingJob();
   startNodeMonitoringJob();
+  startVpnIngressMonitoringJob();
   startReconcileBalancePaymentsJob();
   startAutoRenewJob();
   startAuditLogCleanupJob();

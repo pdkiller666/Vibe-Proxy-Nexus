@@ -1,0 +1,30 @@
+name: Public VPN ingress
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-vpn-ingress
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      VPN_INGRESS_API_URL: ${{ vars.VPN_INGRESS_API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Probe active public WS endpoints
+        run: node scripts/probe-vpn-ingress.mjs

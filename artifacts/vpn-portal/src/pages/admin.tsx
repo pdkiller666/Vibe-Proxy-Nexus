@@ -420,7 +420,9 @@ function NodeAlertsBanner() {
     e.eventType === "node_unavailable" ||
     e.eventType === "node_unreachable" ||
     e.eventType === "node_overloaded" ||
-    e.eventType === "node_recovered"
+    e.eventType === "node_recovered" ||
+    e.eventType === "vpn_ingress_unreachable" ||
+    e.eventType === "vpn_ingress_recovered"
   );
 
   if (isLoading || nodeEvents.length === 0) return null;
@@ -438,6 +440,11 @@ function NodeAlertsBanner() {
           consecutiveFailures?: number;
           lastError?: string;
           prevConsecutiveFailures?: number;
+          probeSource?: string;
+          probeStage?: string;
+          httpStatus?: number;
+          elapsedMs?: number;
+          host?: string | null;
         } | undefined;
 
         const ts = new Date(event.createdAt).toLocaleString("ru-RU", {
@@ -487,6 +494,20 @@ function NodeAlertsBanner() {
           label = `Узел «${nodeName}» восстановлен`;
           body = `Нода снова доступна. CPU: ${meta?.cpuPercent ?? "—"}%. Время события: ${ts}.`;
           hint = "Предыдущий алерт о недоступности можно закрыть.";
+        } else if (event.eventType === "vpn_ingress_unreachable") {
+          label = `Публичный VPN-вход «${nodeName}» недоступен`;
+          body = `TLS/WebSocket probe завершился ошибкой ${meta?.consecutiveFailures ?? 3} раза подряд. Этап: ${meta?.probeStage ?? "неизвестен"}${meta?.httpStatus ? `, HTTP ${meta.httpStatus}` : ""}${meta?.lastError ? `. Ошибка: ${meta.lastError}` : ""} Время события: ${ts}.`;
+          hint = "Проверьте DNS, TLS-сертификат и WS-маршрут. Эта проверка не отключает ноду и не переносит ключи.";
+        } else if (event.eventType === "vpn_ingress_recovered") {
+          colorClass = "bg-green-50 border-green-400";
+          iconColor = "text-green-600";
+          labelColor = "text-green-700";
+          bodyColor = "text-green-800";
+          hintColor = "text-green-600";
+          btnColor = "text-green-600 hover:text-green-800";
+          label = `Публичный VPN-вход «${nodeName}» восстановлен`;
+          body = `TLS/WebSocket probe снова получил HTTP 101. Время события: ${ts}.`;
+          hint = "Это подтверждает WS upgrade, но не проверяет VLESS-аутентификацию и передачу трафика.";
         }
 
         return (
@@ -3547,6 +3568,8 @@ const SYS_EVENT_LABELS: Record<string, string> = {
   node_unavailable:      "Нода недоступна",
   node_overloaded:       "Нода перегружена",
   node_recovered:        "Нода восстановлена",
+  vpn_ingress_unreachable: "Публичный VPN-вход недоступен",
+  vpn_ingress_recovered: "Публичный VPN-вход восстановлен",
   auto_renew_success:    "Авто-продление выполнено",
   auto_renew_failed:     "Ошибка авто-продления",
   auto_renew_error:      "Критическая ошибка авто-продления",
@@ -3649,7 +3672,7 @@ function NotificationBell() {
                         const meta = e.metadata as Record<string, unknown> | undefined;
                         const nodeName = typeof meta?.nodeName === "string" ? meta.nodeName : null;
                         const label = SYS_EVENT_LABELS[e.eventType] ?? e.eventType;
-                        const isOk  = e.eventType === "node_recovered" || e.eventType === "auto_renew_success";
+                        const isOk  = e.eventType === "node_recovered" || e.eventType === "vpn_ingress_recovered" || e.eventType === "auto_renew_success";
                         const isWarn = e.eventType === "node_overloaded";
                         const iconCls = isOk ? "text-green-600" : isWarn ? "text-amber-500" : "text-destructive";
                         return (
@@ -4553,7 +4576,7 @@ function EventHistoryTab() {
                 const label      = SYS_EVENT_LABELS[e.eventType] ?? e.eventType;
                 const nodeName   = typeof meta?.nodeName   === "string" ? meta.nodeName   : null;
                 const nodeId     = typeof meta?.nodeId     === "number" ? meta.nodeId     : null;
-                const isOk       = e.eventType === "node_recovered" || e.eventType === "auto_renew_success";
+                const isOk       = e.eventType === "node_recovered" || e.eventType === "vpn_ingress_recovered" || e.eventType === "auto_renew_success";
                 const isWarn     = e.eventType === "node_overloaded";
                 const isDone     = !!e.acknowledgedAt;
                 const dotCls     = isOk ? "bg-green-500" : isWarn ? "bg-amber-500" : "bg-destructive";
