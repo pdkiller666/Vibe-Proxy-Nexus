@@ -5,7 +5,7 @@
 # Build context must be the repository root.
 
 ########## Builder ##########
-FROM node:24-bookworm-slim AS builder
+FROM node:22.20-bookworm-slim AS builder
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -41,7 +41,7 @@ RUN pnpm --filter @workspace/api-server run build
 RUN pnpm --filter @workspace/db deploy --legacy /tmp/db-deploy
 
 ########## Runtime ##########
-FROM node:24-bookworm-slim AS runtime
+FROM node:22.20-bookworm-slim AS runtime
 
 ARG XRAY_VERSION=26.3.27
 
