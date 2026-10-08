@@ -8,6 +8,7 @@ Endpoints:
   POST   /clients               — add a VLESS client to Xray
   DELETE /clients/{uuid}        — remove a VLESS client from Xray
   GET    /clients               — list all active clients (diagnostic)
+  GET    /reality/identity      — public Reality identity from the loaded Xray config
   GET    /stats                 — per-UUID traffic counters (for trafficPolling.ts)
   GET    /health                — liveness probe (no auth required)
   GET    /system/status         — CPU, RAM, disk, uptime
@@ -102,6 +103,22 @@ def get_clients(
 ) -> list[dict]:
     _check_secret(x_management_secret)
     return xray_manager.list_clients()
+
+
+@app.get("/reality/identity")
+def get_reality_identity(
+    x_management_secret: str | None = Header(default=None),
+) -> dict:
+    """Expose public Reality parameters for backend consistency checks."""
+    _check_secret(x_management_secret)
+    try:
+        return xray_manager.get_reality_identity()
+    except Exception:
+        # Do not expose config contents or the Reality private key in API errors.
+        raise HTTPException(
+            status_code=503,
+            detail="Reality identity is unavailable from the loaded Xray config",
+        ) from None
 
 
 @app.get("/stats", response_model=list[TrafficStat])

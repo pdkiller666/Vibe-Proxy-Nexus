@@ -30,6 +30,7 @@ EXPECTED_ROUTES = {
     ("POST", "/clients"),
     ("DELETE", "/clients/{client_uuid}"),
     ("GET", "/clients"),
+    ("GET", "/reality/identity"),
     ("GET", "/stats"),
     ("GET", "/system/status"),
     ("GET", "/system/logs"),
@@ -51,6 +52,37 @@ def verify_running_api() -> None:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
+
+    original_path = xray_manager.CONFIG_PATH
+    original_derive = xray_manager._derive_reality_public_key
+    test_config_dir = tempfile.TemporaryDirectory(prefix="vpn-node-api-smoke-")
+    test_config_path = Path(test_config_dir.name) / "config.json"
+    test_config_path.write_text(
+        json.dumps(
+            {
+                "inbounds": [
+                    {
+                        "tag": "vless-reality",
+                        "port": 443,
+                        "streamSettings": {
+                            "network": "tcp",
+                            "security": "reality",
+                            "realitySettings": {
+                                "privateKey": "smoke-test-private-key",
+                                "serverNames": ["example.com"],
+                                "shortIds": ["0123456789abcdef"],
+                                "dest": "example.com:443",
+                            },
+                        },
+                        "settings": {"clients": []},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    xray_manager.CONFIG_PATH = test_config_path
+    xray_manager._derive_reality_public_key = lambda _private_key: "smoke-test-public-key"
 
     config = uvicorn.Config(
         api_server.app,
@@ -78,6 +110,29 @@ def verify_running_api() -> None:
         if unauthorized_status != 401:
             raise RuntimeError(f"Unauthenticated /clients returned {unauthorized_status}")
 
+        reality_unauthorized_status, _ = request_json(f"{base_url}/reality/identity")
+        if reality_unauthorized_status != 401:
+            raise RuntimeError(
+                f"Unauthenticated /reality/identity returned {reality_unauthorized_status}"
+            )
+        identity_status, identity = request_json(
+            f"{base_url}/reality/identity",
+            secret="smoke-test-only",
+        )
+        expected_identity = {
+            "publicKey": "smoke-test-public-key",
+            "port": 443,
+            "network": "tcp",
+            "security": "reality",
+            "serverNames": ["example.com"],
+            "shortIds": ["0123456789abcdef"],
+            "dest": "example.com:443",
+        }
+        if identity_status != 200 or identity != expected_identity:
+            raise RuntimeError(f"Unexpected Reality identity response: {identity_status} {identity}")
+        if "privateKey" in identity:
+            raise RuntimeError("Reality identity endpoint exposed a private key")
+
         clients_status, clients = request_json(
             f"{base_url}/clients",
             secret="smoke-test-only",
@@ -87,6 +142,9 @@ def verify_running_api() -> None:
     finally:
         server.should_exit = True
         thread.join(timeout=5)
+        xray_manager.CONFIG_PATH = original_path
+        xray_manager._derive_reality_public_key = original_derive
+        test_config_dir.cleanup()
 
     if thread.is_alive():
         raise RuntimeError("Management API did not stop cleanly")
@@ -133,8 +191,23 @@ def verify_transport_client_config() -> None:
                 raise RuntimeError("Reality client is missing Vision flow")
             if len(xray_manager.list_clients()) != 2:
                 raise RuntimeError("Expected WS and Reality clients in the inventory")
+
+            shared_uuid = "33333333-3333-4333-8333-333333333333"
+            xray_manager.add_client(shared_uuid, "test-phone", transport="ws")
+            xray_manager.add_client(shared_uuid, "test-phone", transport="reality")
+            shared_clients = [
+                client for client in xray_manager.list_clients()
+                if client.get("id") == shared_uuid
+            ]
+            if len(shared_clients) != 1 or shared_clients[0].get("transport") != "reality":
+                raise RuntimeError("Changing transport must move a UUID to one inbound only")
+            if shared_clients[0].get("flow") != "xtls-rprx-vision":
+                raise RuntimeError("Migrated Reality client is missing Vision flow")
+
             if not xray_manager.remove_client(reality_uuid):
                 raise RuntimeError("Reality client removal failed")
+            if not xray_manager.remove_client(shared_uuid):
+                raise RuntimeError("Migrated client removal failed")
             if len(xray_manager.list_clients()) != 1:
                 raise RuntimeError("Reality client removal affected the wrong inventory")
     finally:

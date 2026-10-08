@@ -101,6 +101,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { SupportMessageAttachmentDisplay } from "@/components/support-attachment-picker";
 import { NodeTrafficHistoryPanel, type TrafficSource } from "@/components/NodeTrafficHistoryPanel";
+import { RealityNodeIdentityCheck } from "@/components/RealityNodeIdentityCheck";
 import type { SubscriptionFilter } from "./admin-users";
 
 function formatDate(iso: string) {
@@ -1388,6 +1389,13 @@ interface ProvisionLog {
   level: ProvisionLogLevel;
 }
 
+function isBareIpv4Address(value: string): boolean {
+  const parts = value.trim().split(".");
+  return parts.length === 4 && parts.every((part) =>
+    /^(0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255,
+  );
+}
+
 function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -1458,7 +1466,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
-  function doStart(opts: { sshHost: string; sshUser: string; sshPassword: string; domain: string; nodeName: string; nodeRegion: string; transport: "ws" | "reality"; realitySni?: string; realityDest?: string }) {
+  function doStart(opts: { sshHost: string; sshUser: string; sshPassword: string; domain?: string; nodeName: string; nodeRegion: string; transport: "ws" | "reality"; realitySni?: string; realityDest?: string }) {
     startProvision(
       { data: opts },
       {
@@ -1474,12 +1482,24 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
     );
   }
 
+  function currentProvisionOptions() {
+    const common = { sshHost, sshUser, sshPassword, nodeName, nodeRegion, transport };
+    if (transport === "reality") {
+      return {
+        ...common,
+        realitySni,
+        ...(realityDest.trim() ? { realityDest } : {}),
+      };
+    }
+    return { ...common, domain };
+  }
+
   function handleStep2Submit() {
     setLogs([]);
     setJobStatus(null);
     setErrorMessage("");
     setNewNodeId(null);
-    doStart({ sshHost, sshUser, sshPassword, domain: transport === "ws" ? domain : realitySni, nodeName, nodeRegion, transport, realitySni: realitySni || undefined, realityDest: realityDest || undefined });
+    doStart(currentProvisionOptions());
   }
 
   function handleRetry() {
@@ -1490,7 +1510,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
     setNewNodeId(null);
     // Small delay so useEffect cleanup runs before new jobId is set
     setTimeout(() => {
-      doStart({ sshHost, sshUser, sshPassword, domain: transport === "ws" ? domain : realitySni, nodeName, nodeRegion, transport, realitySni: realitySni || undefined, realityDest: realityDest || undefined });
+      doStart(currentProvisionOptions());
     }, 50);
   }
 
@@ -1503,7 +1523,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
 
   const step1Valid = sshHost.trim() && sshUser.trim() && sshPassword.trim();
   const step2Valid = nodeName.trim() && nodeRegion.trim() &&
-    (transport === "ws" ? domain.trim() : realitySni.trim());
+    (transport === "ws" ? domain.trim() : realitySni.trim() && isBareIpv4Address(sshHost));
 
   return (
     <div className="bg-muted/30 border border-border p-4 space-y-4">
@@ -1581,7 +1601,7 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
           </p>
           {transport === "reality" && (
             <p className="text-xs text-amber-700 dark:text-amber-300">
-              Автонастройка Reality рассчитана на чистую VPS: порты 443 и 8443 должны быть свободны, а каталог /opt/vpn-node отсутствовать. Для клиентов откроется 443, Management API будет использовать существующий production-маршрут на 8443.
+              Автонастройка Reality рассчитана на чистую VPS: порты 443 и 8443 должны быть свободны, а каталог /opt/vpn-node отсутствовать. Reality использует 443, Management API — 8443. Для ограничения доступа к API backend должен иметь AMVERA_EGRESS_IP; без него 8443 откроется всем источникам.
             </p>
           )}
           <div className="grid md:grid-cols-2 gap-3">
@@ -1611,7 +1631,9 @@ function NodeProvisioningWizard({ onDone }: { onDone: () => void }) {
                   className="rounded-none"
                 />
                 <p className="text-xs text-muted-foreground col-span-2">
-                  Management API будет доступен на порту 8443 по существующему production-маршруту.
+                  {isBareIpv4Address(sshHost)
+                    ? "Адрес Reality-ноды берётся из поля IP на предыдущем шаге."
+                    : "Для Reality укажите на предыдущем шаге прямой IPv4-адрес VPS, не домен."}
                 </p>
               </>
             )}
@@ -2934,6 +2956,11 @@ function NodesManagement() {
             {managingId === node.id && (
               <div className="px-4 pb-4">
                 <NodeManagementPanel nodeId={node.id} />
+              </div>
+            )}
+            {node.transport === "reality" && (
+              <div className="px-4 pb-4">
+                <RealityNodeIdentityCheck nodeId={node.id} />
               </div>
             )}
           </div>

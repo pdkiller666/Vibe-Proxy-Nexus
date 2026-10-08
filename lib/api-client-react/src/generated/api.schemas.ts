@@ -637,14 +637,17 @@ export const VpnNodeProvisionInputTransport = {
 } as const;
 
 export interface VpnNodeProvisionInput {
-  /** IP address of the VPS */
+  /** Bare IPv4 address for Reality; hostname or IPv4 for WebSocket */
   sshHost: string;
   /** SSH username (usually root) */
   sshUser: string;
   /** SSH password (used once, never stored) */
   sshPassword: string;
-  /** Technical domain pointing to the VPS IP */
-  domain: string;
+  /**
+     * Required for WebSocket; omitted for Reality
+     * @nullable
+     */
+  domain?: string | null;
   /** @minLength 1 */
   nodeName: string;
   /** @minLength 1 */
@@ -962,6 +965,54 @@ export interface VpnNodeHealthResult {
   latencyMs?: number | null;
   /** @nullable */
   error?: string | null;
+}
+
+export type RealityNodeSavedProfileTransport = typeof RealityNodeSavedProfileTransport[keyof typeof RealityNodeSavedProfileTransport];
+
+
+export const RealityNodeSavedProfileTransport = {
+  ws: 'ws',
+  reality: 'reality',
+} as const;
+
+export interface RealityNodeSavedProfile {
+  transport: RealityNodeSavedProfileTransport;
+  /** @nullable */
+  host: string | null;
+  port: number;
+  sni: string;
+  /** @nullable */
+  publicKey: string | null;
+  /** @nullable */
+  shortId: string | null;
+}
+
+export interface RealityNodeLiveProfile {
+  publicKey: string;
+  port: number;
+  network: string;
+  security: string;
+  serverNames: string[];
+  shortIds: string[];
+  /** @nullable */
+  dest: string | null;
+}
+
+export interface RealityNodeIdentityMatches {
+  publicKey: boolean;
+  port: boolean;
+  sni: boolean;
+  shortId: boolean;
+  transport: boolean;
+  all: boolean;
+}
+
+export interface VpnNodeRealityIdentityCheck {
+  nodeId: number;
+  nodeName: string;
+  stored: RealityNodeSavedProfile;
+  live: RealityNodeLiveProfile;
+  matches: RealityNodeIdentityMatches;
 }
 
 export interface NodeMetricPoint {

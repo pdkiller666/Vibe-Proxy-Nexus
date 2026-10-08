@@ -124,6 +124,7 @@ import type {
   VpnNodeMetricsResponse,
   VpnNodeProvisionInput,
   VpnNodeProvisionStarted,
+  VpnNodeRealityIdentityCheck,
   VpnNodeRestartXrayResult,
   VpnNodeSystemLogs,
   VpnNodeSystemStatus,
@@ -6876,6 +6877,83 @@ export function useGetVpnNodeHealth<TData = Awaited<ReturnType<typeof getVpnNode
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetVpnNodeHealthQueryOptions(nodeId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminVpnNodeRealityIdentityUrl = (nodeId: number,) => {
+
+
+
+
+  return `/api/admin/vpn-nodes/${nodeId}/reality-identity`
+}
+
+/**
+ * @summary Compare a saved Reality node profile with its live Xray configuration
+ */
+export const getAdminVpnNodeRealityIdentity = async (nodeId: number, options?: RequestInit): Promise<VpnNodeRealityIdentityCheck> => {
+
+  return customFetch<VpnNodeRealityIdentityCheck>(getGetAdminVpnNodeRealityIdentityUrl(nodeId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminVpnNodeRealityIdentityQueryKey = (nodeId: number,) => {
+    return [
+    `/api/admin/vpn-nodes/${nodeId}/reality-identity`
+    ] as const;
+    }
+
+
+export const getGetAdminVpnNodeRealityIdentityQueryOptions = <TData = Awaited<ReturnType<typeof getAdminVpnNodeRealityIdentity>>, TError = ErrorType<void>>(nodeId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminVpnNodeRealityIdentity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminVpnNodeRealityIdentityQueryKey(nodeId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminVpnNodeRealityIdentity>>> = ({ signal }) => getAdminVpnNodeRealityIdentity(nodeId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: nodeId !== null && nodeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminVpnNodeRealityIdentity>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminVpnNodeRealityIdentityQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminVpnNodeRealityIdentity>>>
+export type GetAdminVpnNodeRealityIdentityQueryError = ErrorType<void>
+
+
+/**
+ * @summary Compare a saved Reality node profile with its live Xray configuration
+ */
+
+export function useGetAdminVpnNodeRealityIdentity<TData = Awaited<ReturnType<typeof getAdminVpnNodeRealityIdentity>>, TError = ErrorType<void>>(
+ nodeId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminVpnNodeRealityIdentity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminVpnNodeRealityIdentityQueryOptions(nodeId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

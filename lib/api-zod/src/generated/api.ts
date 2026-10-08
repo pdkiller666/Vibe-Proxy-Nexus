@@ -1507,10 +1507,10 @@ export const RefundPaymentResponse = zod.object({
 export const provisionVpnNodeBodyTransportDefault = `ws`;
 
 export const ProvisionVpnNodeBody = zod.object({
-  "sshHost": zod.string().describe('IP address of the VPS'),
+  "sshHost": zod.string().describe('Bare IPv4 address for Reality; hostname or IPv4 for WebSocket'),
   "sshUser": zod.string().describe('SSH username (usually root)'),
   "sshPassword": zod.string().describe('SSH password (used once, never stored)'),
-  "domain": zod.string().describe('Technical domain pointing to the VPS IP'),
+  "domain": zod.string().nullish().describe('Required for WebSocket; omitted for Reality'),
   "nodeName": zod.string().min(1),
   "nodeRegion": zod.string().min(1),
   "transport": zod.enum(['ws', 'reality']).default(provisionVpnNodeBodyTransportDefault),
@@ -2525,6 +2525,44 @@ export const GetVpnNodeHealthResponse = zod.object({
   "ok": zod.boolean(),
   "latencyMs": zod.number().nullish(),
   "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Compare a saved Reality node profile with its live Xray configuration
+ */
+export const GetAdminVpnNodeRealityIdentityParams = zod.object({
+  "nodeId": zod.coerce.number()
+})
+
+export const GetAdminVpnNodeRealityIdentityResponse = zod.object({
+  "nodeId": zod.number(),
+  "nodeName": zod.string(),
+  "stored": zod.object({
+  "transport": zod.enum(['ws', 'reality']),
+  "host": zod.string().nullable(),
+  "port": zod.number(),
+  "sni": zod.string(),
+  "publicKey": zod.string().nullable(),
+  "shortId": zod.string().nullable()
+}),
+  "live": zod.object({
+  "publicKey": zod.string(),
+  "port": zod.number(),
+  "network": zod.string(),
+  "security": zod.string(),
+  "serverNames": zod.array(zod.string()),
+  "shortIds": zod.array(zod.string()),
+  "dest": zod.string().nullable()
+}),
+  "matches": zod.object({
+  "publicKey": zod.boolean(),
+  "port": zod.boolean(),
+  "sni": zod.boolean(),
+  "shortId": zod.boolean(),
+  "transport": zod.boolean(),
+  "all": zod.boolean()
+})
 })
 
 

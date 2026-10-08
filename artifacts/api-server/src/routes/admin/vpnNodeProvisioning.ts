@@ -30,25 +30,28 @@ function isHostPort(value: string): boolean {
 
 // Defined inline to avoid workspace-package resolution issues during tsc.
 // The shape must stay in sync with the openapi.yaml VpnNodeProvisionInput schema.
-const ProvisionVpnNodeBody = z.object({
+export const ProvisionVpnNodeBody = z.object({
   sshHost:     z.string().trim().min(1),
   sshUser:     z.string().min(1),
   sshPassword: z.string().min(1),
-  domain:      z.string().trim().min(1),
+  domain:      z.string().trim().min(1).nullable().optional(),
   nodeName:    z.string().min(1),
   nodeRegion:  z.string().min(1),
   transport: z.enum(["ws", "reality"]).default("ws"),
   realitySni: z.string().trim().min(1).max(253).optional(),
   realityDest: z.string().trim().min(1).optional(),
 }).superRefine((value, ctx) => {
-  if (!isProvisioningHost(value.sshHost)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sshHost"], message: "SSH host must be a valid DNS hostname or IPv4 address" });
-  }
   if (value.transport !== "reality") {
-    if (!isProvisioningHost(value.domain)) {
+    if (!isProvisioningHost(value.sshHost)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sshHost"], message: "SSH host must be a valid DNS hostname or IPv4 address" });
+    }
+    if (!value.domain || !isProvisioningHost(value.domain)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["domain"], message: "WS node hostname must be a valid DNS hostname or IPv4 address" });
     }
     return;
+  }
+  if (isIP(value.sshHost.trim()) !== 4) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sshHost"], message: "Reality nodes require a bare IPv4 address" });
   }
   if (!isDnsHostname(value.realitySni ?? "")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["realitySni"], message: "Reality SNI must be a valid DNS hostname" });
@@ -76,7 +79,10 @@ router.post(
       return;
     }
 
-    const jobId = await startProvisioning(parsed.data);
+    const jobId = await startProvisioning({
+      ...parsed.data,
+      domain: parsed.data.domain?.trim() || parsed.data.realitySni?.trim() || "",
+    });
     res.status(202).json({ jobId });
   },
 );

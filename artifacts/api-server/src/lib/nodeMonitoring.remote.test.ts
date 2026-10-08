@@ -41,6 +41,17 @@ describe("remote Xray client reconciliation", () => {
     name: `Remote reconcile ${suffix}`,
     managementApiUrl: "https://remote.example.com",
     managementApiSecret: "test-secret",
+    transport: "ws" as const,
+    port: 443,
+    sni: `remote-reconcile-${suffix}.example.com`,
+    publicKey: null,
+    shortId: null,
+  });
+  const realityNode = () => ({
+    ...node(),
+    transport: "reality" as const,
+    publicKey: "test-public-key",
+    shortId: "0123456789abcdef",
   });
 
   beforeAll(async () => {
@@ -154,7 +165,7 @@ describe("remote Xray client reconciliation", () => {
 
   it("restores missing clients and leaves unknown clients untouched", async () => {
     remoteMocks.list.mockResolvedValueOnce([
-      { uuid: foreignUuid, label: "Foreign node device", limitIp: 1 },
+      { uuid: foreignUuid, label: "Foreign node device", limitIp: 1, transport: "ws" },
     ]);
 
     await reconcileRemoteXrayNode(node());
@@ -168,12 +179,31 @@ describe("remote Xray client reconciliation", () => {
     expect(remoteMocks.remove).not.toHaveBeenCalled();
   });
 
+  it("moves an active client from WS to the configured Reality inbound without deleting first", async () => {
+    remoteMocks.list.mockResolvedValueOnce([
+      { uuid: activeUuid, label: activeUuid, limitIp: 1, transport: "ws" },
+    ]);
+
+    await reconcileRemoteXrayNode(realityNode());
+
+    expect(remoteMocks.add).toHaveBeenCalledWith(
+      expect.objectContaining({ transport: "reality" }),
+      activeUuid,
+      activeUuid,
+      1,
+    );
+    expect(remoteMocks.remove).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: node().name }),
+      activeUuid,
+    );
+  });
+
   it("removes stale own clients and repairs duplicate active clients", async () => {
     remoteMocks.list.mockResolvedValueOnce([
-      { uuid: activeUuid, label: "Active remote device", limitIp: 1 },
-      { uuid: activeUuid, label: "Active remote device", limitIp: 1 },
-      { uuid: staleUuid, label: "Revoked remote device", limitIp: 1 },
-      { uuid: foreignUuid, label: "Foreign node device", limitIp: 1 },
+      { uuid: activeUuid, label: "Active remote device", limitIp: 1, transport: "ws" },
+      { uuid: activeUuid, label: "Active remote device", limitIp: 1, transport: "ws" },
+      { uuid: staleUuid, label: "Revoked remote device", limitIp: 1, transport: "ws" },
+      { uuid: foreignUuid, label: "Foreign node device", limitIp: 1, transport: "ws" },
     ]);
 
     await reconcileRemoteXrayNode(node());
@@ -200,7 +230,7 @@ describe("remote Xray client reconciliation", () => {
 
   it("repairs a singleton client whose identity or IP limit is not canonical", async () => {
     remoteMocks.list.mockResolvedValueOnce([
-      { uuid: activeUuid, label: "Legacy device label", limitIp: null },
+      { uuid: activeUuid, label: "Legacy device label", limitIp: null, transport: "ws" },
     ]);
 
     await reconcileRemoteXrayNode(node());
@@ -261,8 +291,8 @@ describe("remote Xray client reconciliation", () => {
         .set({ revokedAt: new Date(), revokedReason: "admin" })
         .where(eq(vpnKeysTable.uuid, activeUuid));
       return [
-        { uuid: activeUuid, label: activeUuid, limitIp: 1 },
-        { uuid: activeUuid, label: activeUuid, limitIp: 1 },
+        { uuid: activeUuid, label: activeUuid, limitIp: 1, transport: "ws" },
+        { uuid: activeUuid, label: activeUuid, limitIp: 1, transport: "ws" },
       ];
     });
 
@@ -281,7 +311,7 @@ describe("remote Xray client reconciliation", () => {
         .update(vpnKeysTable)
         .set({ revokedAt: new Date(), revokedReason: "admin" })
         .where(eq(vpnKeysTable.uuid, activeUuid));
-      return [{ uuid: activeUuid, label: activeUuid, limitIp: 1 }];
+      return [{ uuid: activeUuid, label: activeUuid, limitIp: 1, transport: "ws" }];
     });
 
     await reconcileRemoteXrayNode(node());

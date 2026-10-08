@@ -250,6 +250,7 @@ describe("buildXrayClientConfig — Reality outbound", () => {
     }]);
     const outbound = (config.outbounds as Array<Record<string, unknown>>)
       .find((item) => item.protocol === "vless")!;
+    expect(outbound.mux).toEqual({ enabled: false, concurrency: -1 });
     const settings = outbound.settings as {
       vnext: Array<{ address: string; port: number; users: Array<{ flow: string }> }>;
     };

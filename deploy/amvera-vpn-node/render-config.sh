@@ -28,7 +28,8 @@ set -e
 if [ "${REALITY_ENABLED:-false}" = "true" ]; then
   : "${REALITY_PRIVATE_KEY:?REALITY_PRIVATE_KEY is required when REALITY_ENABLED=true}"
   : "${REALITY_SHORT_ID:?REALITY_SHORT_ID is required when REALITY_ENABLED=true}"
-  : "${REALITY_SERVER_NAME:?REALITY_SERVER_NAME is required when REALITY_ENABLED=true}"
+  export REALITY_SNI="${REALITY_SNI:-${REALITY_SERVER_NAME:-}}"
+  : "${REALITY_SNI:?REALITY_SNI is required when REALITY_ENABLED=true}"
   : "${REALITY_DEST:?REALITY_DEST is required when REALITY_ENABLED=true}"
   case "$REALITY_PRIVATE_KEY" in *[!A-Za-z0-9_-]*|"") echo "REALITY_PRIVATE_KEY must be an Xray base64url key" >&2; exit 1;; esac
   case "$REALITY_SHORT_ID" in *[!0-9a-fA-F]*|"") echo "REALITY_SHORT_ID must be 1-16 hexadecimal characters" >&2; exit 1;; esac
@@ -40,21 +41,21 @@ if [ "${REALITY_ENABLED:-false}" = "true" ]; then
   case "$REALITY_DEST" in *:* ) ;; *) echo "REALITY_DEST must be host:port" >&2; exit 1;; esac
   case "$reality_dest_host" in ""|*[!A-Za-z0-9.-]*) echo "REALITY_DEST host is invalid" >&2; exit 1;; esac
   case "$reality_dest_port" in ""|*[!0-9]*) echo "REALITY_DEST port must be numeric" >&2; exit 1;; esac
-  case "$REALITY_SERVER_NAME" in *[!A-Za-z0-9.-]*) echo "REALITY_SERVER_NAME must be a DNS name" >&2; exit 1;; esac
-  if [ -z "$REALITY_SERVER_NAME" ]; then
-    echo "REALITY_SERVER_NAME must be a DNS name" >&2
+  case "$REALITY_SNI" in *[!A-Za-z0-9.-]*) echo "REALITY_SNI must be a DNS name" >&2; exit 1;; esac
+  if [ -z "$REALITY_SNI" ]; then
+    echo "REALITY_SNI must be a DNS name" >&2
     exit 1
   fi
 fi
 
-# Reality owns the public TCP 8443 by default. Move the management API to
-# 8444 only for this opt-in mode; existing WS nodes retain PORT=8443.
+# Reality uses public TCP 443 and the Management API uses TCP 8443 by default.
+# REALITY_SERVER_NAME remains a legacy alias for existing node environments.
 if [ "${REALITY_ENABLED:-false}" = "true" ]; then
-  export REALITY_PORT="${REALITY_PORT:-8443}"
-  export PORT="${PORT:-8444}"
+  export REALITY_PORT="${REALITY_PORT:-443}"
+  export PORT="${PORT:-8443}"
   case "$REALITY_PORT" in ""|*[!0-9]*) echo "REALITY_PORT must be numeric" >&2; exit 1;; esac
   if [ "$PORT" = "$REALITY_PORT" ]; then
-    echo "PORT and REALITY_PORT conflict; set the management API to another port (8444 by default)" >&2
+    echo "PORT and REALITY_PORT conflict; use 443 for Reality and 8443 for the Management API by default" >&2
     exit 1
   fi
 else
@@ -88,7 +89,7 @@ if [ -f "${XRAY_CONFIG_PATH:-/etc/xray/config.json}" ]; then
        if (process.env.REALITY_ENABLED === "true") {
          const reality = {
            tag: "vless-reality", listen: "0.0.0.0",
-           port: Number(process.env.REALITY_PORT || 8443), protocol: "vless",
+           port: Number(process.env.REALITY_PORT || 443), protocol: "vless",
            settings: {
              clients: oldByTag.get("vless-reality")?.settings?.clients || [],
              decryption: "none"
@@ -97,7 +98,7 @@ if [ -f "${XRAY_CONFIG_PATH:-/etc/xray/config.json}" ]; then
              network: "tcp", security: "reality",
              realitySettings: {
                show: false, dest: process.env.REALITY_DEST, xver: 0,
-               serverNames: [process.env.REALITY_SERVER_NAME],
+               serverNames: [process.env.REALITY_SNI],
                privateKey: process.env.REALITY_PRIVATE_KEY,
                shortIds: [process.env.REALITY_SHORT_ID]
              },
@@ -129,13 +130,13 @@ if [ "${REALITY_ENABLED:-false}" = "true" ]; then
     if (!c.inbounds.some(i => i.tag === "vless-reality")) {
       c.inbounds.push({
         tag: "vless-reality", listen: "0.0.0.0",
-        port: Number(process.env.REALITY_PORT || 8443), protocol: "vless",
+        port: Number(process.env.REALITY_PORT || 443), protocol: "vless",
         settings: { clients: [], decryption: "none" },
         streamSettings: {
           network: "tcp", security: "reality",
           realitySettings: {
             show: false, dest: process.env.REALITY_DEST, xver: 0,
-            serverNames: [process.env.REALITY_SERVER_NAME],
+            serverNames: [process.env.REALITY_SNI],
             privateKey: process.env.REALITY_PRIVATE_KEY,
             shortIds: [process.env.REALITY_SHORT_ID]
           },

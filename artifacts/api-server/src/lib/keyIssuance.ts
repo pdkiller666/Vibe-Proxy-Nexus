@@ -557,7 +557,15 @@ async function issueKeyForUserInner(
       } catch (dbErr) {
         logger.error({ err: dbErr, uuid }, "issueKeyForUser: DB revoke also failed — orphaned key in DB");
       }
-      return { ok: false, status: 502, error: "Failed to provision VPN key on the node" };
+      const isRealityConfigurationError =
+        err instanceof Error && err.name === "RemoteNodeConfigurationError";
+      return {
+        ok: false,
+        status: isRealityConfigurationError ? 409 : 502,
+        error: isRealityConfigurationError
+          ? err.message
+          : "Failed to provision VPN key on the node",
+      };
     }
   }
 

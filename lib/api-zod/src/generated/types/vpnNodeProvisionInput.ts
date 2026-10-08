@@ -8,14 +8,17 @@
 import type { VpnNodeProvisionInputTransport } from './vpnNodeProvisionInputTransport';
 
 export interface VpnNodeProvisionInput {
-  /** IP address of the VPS */
+  /** Bare IPv4 address for Reality; hostname or IPv4 for WebSocket */
   sshHost: string;
   /** SSH username (usually root) */
   sshUser: string;
   /** SSH password (used once, never stored) */
   sshPassword: string;
-  /** Technical domain pointing to the VPS IP */
-  domain: string;
+  /**
+     * Required for WebSocket; omitted for Reality
+     * @nullable
+     */
+  domain?: string | null;
   /** @minLength 1 */
   nodeName: string;
   /** @minLength 1 */

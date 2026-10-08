@@ -10,13 +10,14 @@ import {
   DeleteVpnNodeResponse,
   MigrateVpnNodeKeysParams,
   MigrateVpnNodeKeysResponse,
+  GetAdminVpnNodeRealityIdentityResponse,
   UpdateVpnNodeBody,
   UpdateVpnNodeParams,
   UpdateVpnNodeResponse,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../../lib/auth";
 import { isLocalXrayEnabled, removeXrayClient } from "../../lib/xray";
-import { removeRemoteXrayClient } from "../../lib/remoteNode";
+import { getRemoteRealityIdentity, removeRemoteXrayClient } from "../../lib/remoteNode";
 import { issueKeyForUser, resolveTotalSlots } from "../../lib/keyIssuance";
 import { logger } from "../../lib/logger";
 import { maybeRecordMetricSnapshot } from "../../lib/nodeMonitoring";
@@ -623,6 +624,63 @@ router.get("/admin/vpn-nodes/:nodeId/health", requireAuth, requireAdmin, async (
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.json({ ok: false, latencyMs: null, error: msg.includes("aborted") ? "Timeout (5s)" : msg });
+  }
+});
+
+router.get("/admin/vpn-nodes/:nodeId/reality-identity", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const nodeId = Number(req.params["nodeId"]);
+  if (!Number.isInteger(nodeId) || nodeId < 1) {
+    res.status(400).json({ error: "Invalid nodeId" });
+    return;
+  }
+
+  const [node] = await db.select().from(vpnNodesTable).where(eq(vpnNodesTable.id, nodeId));
+  if (!node) {
+    res.status(404).json({ error: "Node not found" });
+    return;
+  }
+  if (node.transport !== "reality") {
+    res.status(400).json({ error: "Node is not configured for Reality" });
+    return;
+  }
+  if (!node.managementApiUrl || !node.managementApiSecret) {
+    res.status(409).json({ error: "Reality node management API is not configured" });
+    return;
+  }
+
+  try {
+    const live = await getRemoteRealityIdentity(node);
+    const matches = {
+      publicKey: Boolean(node.publicKey?.trim()) && node.publicKey!.trim() === live.publicKey,
+      port: node.port === live.port,
+      sni: Boolean(node.sni.trim()) && live.serverNames.some(
+        (serverName) => serverName.toLowerCase() === node.sni.trim().toLowerCase(),
+      ),
+      shortId: Boolean(node.shortId?.trim()) && live.shortIds.includes(node.shortId!.trim()),
+      transport: live.network === "tcp" && live.security === "reality",
+      all: false,
+    };
+    matches.all = matches.publicKey && matches.port && matches.sni && matches.shortId && matches.transport;
+
+    const result = GetAdminVpnNodeRealityIdentityResponse.parse({
+      nodeId: node.id,
+      nodeName: node.name,
+      stored: {
+        transport: node.transport,
+        host: node.host,
+        port: node.port,
+        sni: node.sni,
+        publicKey: node.publicKey,
+        shortId: node.shortId,
+      },
+      live,
+      matches,
+    });
+    res.json(result);
+  } catch {
+    // Do not return remote management details, error bodies, or credentials.
+    logger.warn({ nodeId }, "Reality identity comparison failed");
+    res.status(502).json({ error: "Не удалось получить публичные параметры Reality с узла" });
   }
 });
 

@@ -15,11 +15,12 @@
 
 | Процесс | Адрес | Назначение |
 |---|---|---|
-| **xray** | `127.0.0.1:10000` | VLESS+WebSocket, слушает только loopback |
+| **xray** | `127.0.0.1:10000` (WS), `0.0.0.0:443` (Reality) | VLESS+WebSocket или отдельный Reality inbound |
 | **mgmt-api** | `0.0.0.0:$PORT` (дефолт 8443) | HTTP REST API для управления ключами из основного сервера |
 | **telegram-bot** | — | Опциональный бот для проверки статуса ноды; **не запускается автоматически** |
 
-TLS-терминацию выполняет **Nginx/Caddy на хосте** — Xray работает в plain-WS, наружу торчит только прокси.
+Для WS TLS-терминацию выполняет **Nginx/Caddy на хосте** — Xray работает в plain-WS.
+В режиме Reality Xray сам слушает raw TCP 443; на том же IP и порту прокси WS/TLS работать не может.
 
 ---
 
@@ -31,24 +32,39 @@ TLS-терминацию выполняет **Nginx/Caddy на хосте** — 
 | `PORT` | — | Порт management API внутри контейнера (дефолт `8443`) |
 | `TELEGRAM_BOT_TOKEN` | — | Токен бота; если не задан — telegram-bot не запускается |
 | `TELEGRAM_ADMIN_CHAT_ID` | — | Ограничивает бот одним чатом администратора |
+| `REALITY_ENABLED` | — | Включает дополнительный VLESS+Reality inbound; по умолчанию выключен |
+| `REALITY_PORT` | — | Публичный TCP-порт Reality (дефолт `443`) |
+| `REALITY_PRIVATE_KEY` | при Reality | X25519 private key; хранить только в `.env` ноды |
+| `REALITY_SHORT_ID` | при Reality | Short ID длиной 1–16 hex-символов |
+| `REALITY_SNI` | при Reality | Имя из Reality `serverNames`; legacy fallback: `REALITY_SERVER_NAME` |
+| `REALITY_DEST` | при Reality | Fallback `host:port` для Reality inbound |
 
 По умолчанию транспорт — VLESS+WebSocket; production-поведение не меняется.
 Для отдельного тестового VPS можно явно включить VLESS+Reality:
 
 ```dotenv
 REALITY_ENABLED=true
-REALITY_PORT=8443
+REALITY_PORT=443
 REALITY_PRIVATE_KEY=<private key generated on this VPS>
 REALITY_SHORT_ID=<1-16 hex characters>
-REALITY_SERVER_NAME=<configured SNI>
+REALITY_SNI=<configured SNI>
 REALITY_DEST=<fallback-host>:443
-PORT=8444
+PORT=8443
 ```
 
+`AMVERA_EGRESS_IP` задаётся в окружении backend-сервера, а не в `.env` VPS:
+автопровижионер ограничит TCP 8443 этим IP/CIDR. Если переменная не задана,
+он оставит общий доступ на 8443 и выдаст предупреждение.
+
 Private key хранится только в `.env` тестовой ноды и не передаётся в БД.
-`REALITY_PUBLIC_KEY` на сервере не нужен. Reality занимает raw TCP `8443`,
-поэтому существующий Nginx WS/TLS на 443 не изменяется. Отсутствующие или
-некорректные параметры завершают запуск с явной ошибкой.
+`REALITY_PUBLIC_KEY` на сервере не нужен. Reality занимает raw TCP `443`;
+этот порт должен быть свободен, так как Nginx/Caddy для WS/TLS не может
+одновременно обслуживать Reality на том же IP и порту. При этой стандартной
+схеме Management API работает на `8443`. Старые конфигурации, где Reality
+занимает `8443`, а API — `8444`, сохраняют прежние явно заданные порты; для
+новых установок используйте `443/8443`. Старое имя `REALITY_SERVER_NAME`
+временно принимается как fallback для SNI. Отсутствующие или некорректные
+параметры завершают запуск с явной ошибкой.
 
 ---
 
@@ -75,9 +91,10 @@ Private key хранится только в `.env` тестовой ноды и
 
 Убедитесь, что у VPS:
 - ОС: **Ubuntu 22.04 или 24.04**
-- Открыты порты: **80, 443** (WS/TLS), **8443** (Management API по умолчанию
-  или Reality при включении), **8444** (Management API в Reality-режиме) и
-  **9090** (Cockpit, если нужен снаружи)
+- Открыты порты: **80** (ACME), **443** (WS/TLS или Reality), **8443**
+  (Management API по умолчанию) и **9090** (Cockpit, если нужен снаружи).
+  Reality и WS/TLS не могут одновременно слушать один IP:443;
+  `8444` нужен только старым установкам с явно заданным legacy-профилем.
 - Доступ: SSH от root или пользователя с `sudo`
 
 Определитесь с вариантом:
@@ -141,7 +158,7 @@ node.example.com {
         reverse_proxy localhost:10000
     }
     handle {
-        reverse_proxy localhost:8443 # change to 8444 when Reality is enabled
+        reverse_proxy localhost:8443
     }
 }
 EOF
@@ -208,7 +225,7 @@ chmod +x setup-vps.sh && sudo ./setup-vps.sh
 | Host | IP-адрес VPS или домен (если есть Let's Encrypt сертификат) |
 | Port | `443` |
 | SNI | То же, что Host |
-| Management API URL | `http://IP:8443` (WS) / `http://IP:8444` (Reality), or `https://домен` with Caddy upstream on `$PORT` |
+| Management API URL | `http://IP:8443` (WS and new Reality); legacy Reality may use `http://IP:8444` |
 | Management API Secret | Значение `MGMT_API_SECRET` из `.env` |
 | Public Key / Short ID | Оставить пустыми (не используются для VLESS+WS) |
 | Cert SHA256 | SHA-256 fingerprint самоподписанного сертификата — только для bare-IP нод без домена; домены с Let's Encrypt оставьте пустым |
@@ -264,7 +281,7 @@ docker system prune -af --volumes=false
 # Логи всех процессов
 docker compose logs -f
 
-# Проверить management API (для Reality-режима замените 8443 на 8444)
+# Проверить management API (для новых WS и Reality-установок)
 curl http://localhost:8443/health
 
 # Проверить список клиентов в Xray

@@ -531,12 +531,69 @@ function normalizeProvisioningHost(value: string, fieldName: string): string {
   throw new Error(`${fieldName} must be a valid DNS hostname or IPv4 address`);
 }
 
+function normalizeProvisioningIpv4Address(value: string, fieldName: string): string {
+  const host = value.trim();
+  if (isIP(host) !== 4) {
+    throw new Error(`${fieldName} must be a bare IPv4 address`);
+  }
+  return host;
+}
+
 function normalizeProvisioningDnsHostname(value: string, fieldName: string): string {
   const host = value.trim().replace(/\.$/, "");
   if (isIP(host) !== 0 || !isDnsHostname(host)) {
     throw new Error(`${fieldName} must be a valid DNS hostname`);
   }
   return host;
+}
+
+export function normalizeAmveraEgressIp(value: string | undefined | null): string | null {
+  const candidate = value?.trim();
+  if (!candidate) return null;
+
+  const parts = candidate.split("/");
+  if (parts.length > 2) {
+    throw new Error("AMVERA_EGRESS_IP must be an IP address or CIDR");
+  }
+
+  const address = parts[0]!;
+  const family = isIP(address);
+  if (family === 0) {
+    throw new Error("AMVERA_EGRESS_IP must be an IP address or CIDR");
+  }
+
+  if (parts.length === 2) {
+    const prefix = parts[1]!;
+    const prefixLength = Number(prefix);
+    const maxPrefix = family === 4 ? 32 : 128;
+    if (!/^\d+$/.test(prefix) || prefixLength < 0 || prefixLength > maxPrefix) {
+      throw new Error("AMVERA_EGRESS_IP contains an invalid CIDR prefix");
+    }
+  }
+
+  return candidate;
+}
+
+export function buildRealityUfwCommands(amveraEgressIp: string | null): string[] {
+  const commands = [
+    "ufw allow 22/tcp comment SSH",
+    "ufw allow 443/tcp comment VPN-Reality",
+  ];
+
+  if (amveraEgressIp) {
+    commands.push(
+      "(ufw --force delete allow 8443/tcp >/dev/null 2>&1 || true)",
+      `ufw allow from ${shellQuote(amveraEgressIp)} to any port 8443 proto tcp comment VPN-MgmtAPI`,
+    );
+  } else {
+    commands.push("ufw allow 8443/tcp comment VPN-MgmtAPI");
+  }
+
+  commands.push(
+    "ufw --force enable",
+    "ufw status | grep -q 'Status: active'",
+  );
+  return commands;
 }
 
 /**
@@ -581,6 +638,17 @@ async function provisionRealityAsync(
   opts: ProvisioningOpts,
   conn: Client,
 ): Promise<void> {
+  const amveraEgressIp = normalizeAmveraEgressIp(process.env.AMVERA_EGRESS_IP);
+  if (amveraEgressIp) {
+    emitLog(job, "Management API firewall will allow only the configured Amvera egress address.");
+  } else {
+    logger.warn(
+      { jobId: job.id },
+      "AMVERA_EGRESS_IP is not configured; Reality provisioning will leave port 8443 open to all sources",
+    );
+    emitLog(job, "⚠️ AMVERA_EGRESS_IP не задан — порт 8443 будет открыт для всех источников.");
+  }
+
   const managementApiUrl = `http://${opts.sshHost}:8443`;
   const existing = await db
     .select({ id: vpnNodesTable.id })
@@ -700,21 +768,15 @@ async function provisionRealityAsync(
     "REALITY_PORT=443",
     `REALITY_PRIVATE_KEY=${privateKey}`,
     `REALITY_SHORT_ID=${shortId}`,
-    `REALITY_SERVER_NAME=${sni}`,
+    `REALITY_SNI=${sni}`,
     `REALITY_DEST=${destination}`,
     "",
   ].join("\n");
   await writeRemoteFileViaExec(conn, "/opt/vpn-node/.env", env, job);
   await runCommand(conn, "chmod 600 /opt/vpn-node/.env", job);
 
-  emitStep(job, "🔒 Настройка firewall по существующей схеме удалённых нод...");
-  await runCommand(conn, [
-    "ufw allow 22/tcp comment SSH",
-    "ufw allow 443/tcp comment VPN-Reality",
-    "ufw allow 8443/tcp comment VPN-MgmtAPI",
-    "ufw --force enable",
-    "ufw status | grep -q 'Status: active'",
-  ].join(" && "), job, { timeoutMs: 30_000 });
+  emitStep(job, "🔒 Настройка firewall для Reality и Management API...");
+  await runCommand(conn, buildRealityUfwCommands(amveraEgressIp).join(" && "), job, { timeoutMs: 30_000 });
 
   emitStep(job, "🐳 Запуск Reality и Management API...");
   await runCommand(conn, "cd /opt/vpn-node && docker compose up -d", job, { timeoutMs: 10 * 60_000 });
@@ -773,7 +835,9 @@ async function provisionAsync(job: ProvisioningJob, opts: ProvisioningOpts): Pro
   const heartbeat = setInterval(() => emitLog(job, "  ⏳ ..."), 25_000);
 
   try {
-    const sshHost = normalizeProvisioningHost(opts.sshHost, "SSH host");
+    const sshHost = opts.transport === "reality"
+      ? normalizeProvisioningIpv4Address(opts.sshHost, "Reality SSH host")
+      : normalizeProvisioningHost(opts.sshHost, "SSH host");
     const domain = opts.transport === "reality"
       ? normalizeProvisioningDnsHostname(opts.realitySni?.trim() || opts.domain, "Reality SNI")
       : normalizeProvisioningHost(opts.domain, "Node hostname");

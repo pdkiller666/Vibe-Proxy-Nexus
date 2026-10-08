@@ -1801,6 +1801,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/VpnNodeHealthResult"
 
+  /admin/vpn-nodes/{nodeId}/reality-identity:
+    get:
+      operationId: getAdminVpnNodeRealityIdentity
+      tags: [admin]
+      summary: Compare a saved Reality node profile with its live Xray configuration
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Saved and live public Reality parameters with comparison results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VpnNodeRealityIdentityCheck"
+        "400":
+          description: The node is not a Reality node
+        "404":
+          description: VPN node not found
+        "409":
+          description: The node has no remote Management API configuration
+        "502":
+          description: The live Reality identity could not be retrieved
+
   /admin/vpn-nodes/{nodeId}/system/status:
     get:
       operationId: getVpnNodeSystemStatus
@@ -2728,12 +2755,12 @@ components:
 
     VpnNodeProvisionInput:
       type: object
-      required: [sshHost, sshUser, sshPassword, domain, nodeName, nodeRegion]
+      required: [sshHost, sshUser, sshPassword, nodeName, nodeRegion]
       properties:
-        sshHost:     { type: string, description: "IP address of the VPS" }
+        sshHost:     { type: string, description: "Bare IPv4 address for Reality; hostname or IPv4 for WebSocket" }
         sshUser:     { type: string, description: "SSH username (usually root)" }
         sshPassword: { type: string, description: "SSH password (used once, never stored)" }
-        domain:      { type: string, description: "Technical domain pointing to the VPS IP" }
+        domain:      { type: ["string", "null"], description: "Required for WebSocket; omitted for Reality" }
         nodeName:    { type: string, minLength: 1 }
         nodeRegion:  { type: string, minLength: 1 }
         transport:   { type: string, enum: [ws, reality], default: ws }
@@ -3135,6 +3162,57 @@ components:
         ok: { type: boolean }
         latencyMs: { type: ["integer", "null"] }
         error: { type: ["string", "null"] }
+
+    RealityNodeSavedProfile:
+      type: object
+      required: [transport, host, port, sni, publicKey, shortId]
+      properties:
+        transport: { type: string, enum: [ws, reality] }
+        host: { type: ["string", "null"] }
+        port: { type: integer }
+        sni: { type: string }
+        publicKey: { type: ["string", "null"] }
+        shortId: { type: ["string", "null"] }
+
+    RealityNodeLiveProfile:
+      type: object
+      required: [publicKey, port, network, security, serverNames, shortIds, dest]
+      properties:
+        publicKey: { type: string }
+        port: { type: integer }
+        network: { type: string }
+        security: { type: string }
+        serverNames:
+          type: array
+          items: { type: string }
+        shortIds:
+          type: array
+          items: { type: string }
+        dest: { type: ["string", "null"] }
+
+    RealityNodeIdentityMatches:
+      type: object
+      required: [publicKey, port, sni, shortId, transport, all]
+      properties:
+        publicKey: { type: boolean }
+        port: { type: boolean }
+        sni: { type: boolean }
+        shortId: { type: boolean }
+        transport: { type: boolean }
+        all: { type: boolean }
+
+    VpnNodeRealityIdentityCheck:
+      type: object
+      required: [nodeId, nodeName, stored, live, matches]
+      properties:
+        nodeId: { type: integer }
+        nodeName: { type: string }
+        stored:
+          $ref: "#/components/schemas/RealityNodeSavedProfile"
+        live:
+          $ref: "#/components/schemas/RealityNodeLiveProfile"
+        matches:
+          $ref: "#/components/schemas/RealityNodeIdentityMatches"
 
     NodeMetricPoint:
       type: object

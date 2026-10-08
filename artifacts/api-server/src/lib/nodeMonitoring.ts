@@ -296,6 +296,11 @@ type RemoteReconciliationNode = {
   name: string;
   managementApiUrl: string | null;
   managementApiSecret: string | null;
+  transport: "ws" | "reality";
+  port: number;
+  sni: string;
+  publicKey: string | null;
+  shortId: string | null;
 };
 
 async function getCurrentRemoteKeyState(uuid: string): Promise<{
@@ -398,6 +403,8 @@ export async function reconcileRemoteXrayNode(node: RemoteReconciliationNode): P
     let removed = 0;
     let repaired = 0;
 
+    const expectedTransport = node.transport ?? "ws";
+
     // Restore active DB keys missing from the remote config.
     for (const key of activeKeys) {
       if (remoteByUuid.has(key.uuid)) continue;
@@ -429,6 +436,7 @@ export async function reconcileRemoteXrayNode(node: RemoteReconciliationNode): P
 
       const canonical =
         clients.length === 1 &&
+        clients[0]!.transport === expectedTransport &&
         clients[0]!.label === uuid &&
         clients[0]!.limitIp === 1;
 
@@ -439,6 +447,19 @@ export async function reconcileRemoteXrayNode(node: RemoteReconciliationNode): P
         if (!current || current.nodeId !== node.id) continue;
         const isActiveHere = current.revokedAt === null;
         if (isActiveHere && canonical) continue;
+
+        if (
+          isActiveHere &&
+          clients.some((client) => client.transport !== expectedTransport)
+        ) {
+          // The remote POST handler is an atomic upsert/move between the
+          // managed inbounds. Do not DELETE first: Reality profile validation
+          // can fail, and the existing client must remain untouched then.
+          if (await addCanonicalRemoteClientIfStillActive(node, uuid)) {
+            repaired++;
+          }
+          continue;
+        }
 
         await removeRemoteXrayClient(node, uuid);
         removed++;
@@ -481,6 +502,11 @@ export async function reconcileRemoteXrayClients(): Promise<void> {
       name: vpnNodesTable.name,
       managementApiUrl: vpnNodesTable.managementApiUrl,
       managementApiSecret: vpnNodesTable.managementApiSecret,
+      transport: vpnNodesTable.transport,
+      port: vpnNodesTable.port,
+      sni: vpnNodesTable.sni,
+      publicKey: vpnNodesTable.publicKey,
+      shortId: vpnNodesTable.shortId,
     })
     .from(vpnNodesTable)
     .where(and(eq(vpnNodesTable.isActive, true), isNotNull(vpnNodesTable.managementApiUrl)));

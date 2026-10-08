@@ -98,4 +98,52 @@ describe("key issuance transport selection", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.nodeName).toBe(`Reality selection ${suffix}`);
   });
+
+  it("revokes the pending DB key and returns a clear conflict when live Reality identity differs", async () => {
+    const before = await db
+      .select({ id: vpnKeysTable.id, nodeId: vpnKeysTable.nodeId, revokedAt: vpnKeysTable.revokedAt })
+      .from(vpnKeysTable)
+      .where(eq(vpnKeysTable.userId, userId));
+    const activeRealityKeysBefore = before.filter(
+      (key) => key.nodeId === realityNodeId && key.revokedAt === null,
+    ).length;
+    remoteMocks.add.mockRejectedValueOnce(
+      Object.assign(
+        new Error("Reality node settings do not match the running Xray configuration"),
+        { name: "RemoteNodeConfigurationError" },
+      ),
+    );
+
+    const result = await issueKeyForUserUnlockedForTests(
+      userId,
+      3,
+      realityNodeId,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      status: 409,
+      error: "Reality node settings do not match the running Xray configuration",
+    });
+    const after = await db
+      .select({
+        id: vpnKeysTable.id,
+        nodeId: vpnKeysTable.nodeId,
+        revokedAt: vpnKeysTable.revokedAt,
+        provisionedAt: vpnKeysTable.provisionedAt,
+      })
+      .from(vpnKeysTable)
+      .where(eq(vpnKeysTable.userId, userId));
+    expect(
+      after.filter((key) => key.nodeId === realityNodeId && key.revokedAt === null),
+    ).toHaveLength(activeRealityKeysBefore);
+    expect(
+      after.some(
+        (key) =>
+          key.nodeId === realityNodeId &&
+          key.revokedAt !== null &&
+          key.provisionedAt === null,
+      ),
+    ).toBe(true);
+  });
 });

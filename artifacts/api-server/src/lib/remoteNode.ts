@@ -30,14 +30,37 @@ export type RemoteNodeRef = Pick<
   VpnNode,
   "managementApiUrl" | "managementApiSecret" | "name"
 > &
-  Partial<Pick<VpnNode, "transport">>;
+  Partial<
+    Pick<
+      VpnNode,
+      "transport" | "port" | "sni" | "publicKey" | "shortId"
+    >
+  >;
 
 const REMOTE_FETCH_TIMEOUT_MS = 15_000;
+
+export class RemoteNodeConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RemoteNodeConfigurationError";
+  }
+}
 
 export interface RemoteXrayClient {
   uuid: string;
   label: string | null;
   limitIp: number | null;
+  transport: "ws" | "reality";
+}
+
+export interface RemoteRealityIdentity {
+  publicKey: string;
+  port: number;
+  network: string;
+  security: string;
+  serverNames: string[];
+  shortIds: string[];
+  dest: string | null;
 }
 
 async function remoteNodeFetch(
@@ -59,6 +82,84 @@ async function remoteNodeFetch(
   }
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+export async function getRemoteRealityIdentity(
+  node: RemoteNodeRef,
+): Promise<RemoteRealityIdentity> {
+  const res = await remoteNodeFetch(node, "/reality/identity", { method: "GET" });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `Remote node ${node.name}: HTTP ${res.status} on GET /reality/identity: ${text}`,
+    );
+  }
+
+  const raw = await res.json().catch(() => null);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`Remote node ${node.name}: invalid Reality identity response`);
+  }
+  const record = raw as Record<string, unknown>;
+  if (
+    typeof record.publicKey !== "string" ||
+    typeof record.port !== "number" ||
+    typeof record.network !== "string" ||
+    typeof record.security !== "string" ||
+    !isStringArray(record.serverNames) ||
+    !isStringArray(record.shortIds) ||
+    (record.dest !== null && typeof record.dest !== "string")
+  ) {
+    throw new Error(`Remote node ${node.name}: incomplete Reality identity response`);
+  }
+
+  return {
+    publicKey: record.publicKey,
+    port: record.port,
+    network: record.network,
+    security: record.security,
+    serverNames: record.serverNames,
+    shortIds: record.shortIds,
+    dest: record.dest,
+  };
+}
+
+async function assertRemoteRealityProfileMatches(node: RemoteNodeRef): Promise<void> {
+  if (
+    !node.publicKey?.trim() ||
+    !node.shortId?.trim() ||
+    !node.sni?.trim() ||
+    !node.port
+  ) {
+    throw new RemoteNodeConfigurationError(
+      "Reality node settings are incomplete; no VPN key was issued.",
+    );
+  }
+
+  let identity: RemoteRealityIdentity;
+  try {
+    identity = await getRemoteRealityIdentity(node);
+  } catch {
+    throw new RemoteNodeConfigurationError(
+      "The running Reality node identity could not be verified; no VPN key was issued.",
+    );
+  }
+
+  const matches =
+    identity.publicKey === node.publicKey.trim() &&
+    identity.port === node.port &&
+    identity.network === "tcp" &&
+    identity.security === "reality" &&
+    identity.serverNames.includes(node.sni.trim()) &&
+    identity.shortIds.includes(node.shortId.trim());
+  if (!matches) {
+    throw new RemoteNodeConfigurationError(
+      "Reality node settings do not match the running Xray configuration; no VPN key was issued.",
+    );
+  }
+}
+
 /**
  * Adds a VLESS client to a remote node via POST /clients.
  * Throws on HTTP error — callers must catch and compensate (revoke DB row).
@@ -69,10 +170,18 @@ export async function addRemoteXrayClient(
   label: string,
   limitIp?: number,
 ): Promise<void> {
+  const transport = node.transport ?? "ws";
+  let uuidExistedBefore = false;
+  if (transport === "reality") {
+    await assertRemoteRealityProfileMatches(node);
+    const before = await listRemoteXrayClients(node);
+    uuidExistedBefore = before.some((client) => client.uuid === uuid);
+  }
+
   const body: Record<string, unknown> = {
     uuid,
     label,
-    transport: node.transport ?? "ws",
+    transport,
   };
   if (limitIp !== undefined) body.limitIp = limitIp;
   const res = await remoteNodeFetch(node, "/clients", {
@@ -83,6 +192,30 @@ export async function addRemoteXrayClient(
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Remote node ${node.name}: HTTP ${res.status} on POST /clients: ${text}`);
+  }
+
+  if (transport === "reality") {
+    const after = await listRemoteXrayClients(node);
+    const clientsForUuid = after.filter((client) => client.uuid === uuid);
+    const installedCorrectly =
+      clientsForUuid.length === 1 && clientsForUuid[0]?.transport === "reality";
+    if (!installedCorrectly) {
+      // A new UUID can be safely cleaned up if an old node image ignored the
+      // requested transport. Preserve pre-existing clients on failed upgrades.
+      if (!uuidExistedBefore) {
+        try {
+          await removeRemoteXrayClient(node, uuid);
+        } catch (cleanupError) {
+          logger.error(
+            { err: cleanupError, nodeName: node.name },
+            "remoteNode: failed to clean up incorrectly provisioned Reality client",
+          );
+        }
+      }
+      throw new RemoteNodeConfigurationError(
+        "The node did not install the client exclusively on the Reality inbound; no VPN key was issued.",
+      );
+    }
   }
 }
 
@@ -137,6 +270,16 @@ export async function listRemoteXrayClients(node: RemoteNodeRef): Promise<Remote
     if (!uuid) {
       throw new Error(`Remote node ${node.name}: client entry has no UUID`);
     }
+    const rawTransport = record.transport;
+    const transport =
+      rawTransport === "ws" || rawTransport === "reality"
+        ? rawTransport
+        : rawTransport == null && (node.transport ?? "ws") === "ws"
+          ? "ws"
+          : null;
+    if (!transport) {
+      throw new Error(`Remote node ${node.name}: client entry has no valid transport`);
+    }
 
     clients.push({
       uuid,
@@ -146,6 +289,7 @@ export async function listRemoteXrayClients(node: RemoteNodeRef): Promise<Remote
           ? record.label
           : null,
       limitIp: typeof record.limitIp === "number" ? record.limitIp : null,
+      transport,
     });
   }
   return clients;

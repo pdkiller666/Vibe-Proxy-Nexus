@@ -158,6 +158,7 @@ function buildVlessOutbound(
     return {
       protocol: "vless",
       tag,
+      mux: { enabled: false, concurrency: -1 },
       settings: {
         vnext: [
           {

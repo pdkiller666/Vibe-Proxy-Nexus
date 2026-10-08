@@ -1,9 +1,37 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSelfSignedCertificateCommand,
+  buildRealityUfwCommands,
+  normalizeAmveraEgressIp,
   parseSha256CertificateFingerprint,
   parseRealityX25519Output,
 } from "./sshProvisioner";
+
+describe("AMVERA_EGRESS_IP firewall configuration", () => {
+  it("accepts a single IP address or valid IPv4/IPv6 CIDR", () => {
+    expect(normalizeAmveraEgressIp(" 203.0.113.10 ")).toBe("203.0.113.10");
+    expect(normalizeAmveraEgressIp("203.0.113.0/24")).toBe("203.0.113.0/24");
+    expect(normalizeAmveraEgressIp("2001:db8::/48")).toBe("2001:db8::/48");
+  });
+
+  it("treats an empty value as unset and rejects invalid or injectable values", () => {
+    expect(normalizeAmveraEgressIp(undefined)).toBeNull();
+    expect(normalizeAmveraEgressIp("  ")).toBeNull();
+    expect(() => normalizeAmveraEgressIp("203.0.113.1/33")).toThrow("invalid CIDR prefix");
+    expect(() => normalizeAmveraEgressIp("203.0.113.1; touch /tmp/pwned")).toThrow("IP address or CIDR");
+  });
+
+  it("removes the broad API rule and permits only the configured source", () => {
+    const commands = buildRealityUfwCommands("203.0.113.10/32").join(" && ");
+    expect(commands).toContain("ufw --force delete allow 8443/tcp");
+    expect(commands).toContain("ufw allow from '203.0.113.10/32' to any port 8443 proto tcp");
+    expect(commands).not.toContain("ufw allow 8443/tcp comment VPN-MgmtAPI");
+  });
+
+  it("preserves the documented open fallback when no Amvera egress address is set", () => {
+    expect(buildRealityUfwCommands(null)).toContain("ufw allow 8443/tcp comment VPN-MgmtAPI");
+  });
+});
 
 describe("buildSelfSignedCertificateCommand", () => {
   it("adds a DNS SAN for a domain-backed self-signed certificate", () => {
